@@ -127,4 +127,8 @@ async def neo_collective(query: str, problem: str, max_agents: int = 4) -> dict:
 async def health(_: Request):
     return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.5"})
 
-app = mcp.streamable_http_app(\n    json_response=True,\n    stateless_http=True,\n    host="0.0.0.0",\n)
+app = mcp.streamable_http_app(
+    json_response=True,
+    stateless_http=True,
+    host="0.0.0.0",
+)
