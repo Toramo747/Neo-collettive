@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.12.0"
+VERSION = "0.13.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -145,25 +145,120 @@ def _quality_check(answer: dict, problem: str) -> tuple[bool, str]:
     return True, "accepted"
 
 
+def _expand_queries(query: str, problem: str) -> list[str]:
+    base = []
+    def add(value: str):
+        value = " ".join((value or "").strip().split())
+        if value and value.lower() not in {x.lower() for x in base}:
+            base.append(value)
+
+    add(query)
+    problem_low = (problem or "").lower()
+    synonyms = {
+        "ransomware": ["ransomware", "incident response", "malware defense"],
+        "windows": ["Windows security", "Active Directory security", "endpoint security"],
+        "vulnerabil": ["vulnerability management", "CVE security"],
+        "phishing": ["phishing defense", "email security"],
+        "breach": ["breach response", "incident response"],
+        "network": ["network security", "zero trust"],
+        "rete": ["network security", "Windows security"],
+        "endpoint": ["endpoint security", "EDR XDR"],
+        "email": ["email security", "phishing defense"],
+    }
+    for needle, expansions in synonyms.items():
+        if needle in problem_low or needle in (query or "").lower():
+            for item in expansions:
+                add(item)
+
+    important = sorted(_tokens(problem), key=lambda x: (-len(x), x))
+    for token in important[:5]:
+        add(token)
+    if query:
+        for token in important[:3]:
+            add(query + " " + token)
+    return base[:10]
+
+
+async def _multi_registry_search(search_queries: list[str], per_query: int = 10) -> tuple[list[dict], list[dict], list[dict]]:
+    async def search_a2a(q: str):
+        try:
+            data = await get_json(A2A_REGISTRY + "/api/agents", {"search": q, "limit": per_query})
+            if isinstance(data, dict):
+                items = data.get("agents") or data.get("items") or data.get("data") or []
+            elif isinstance(data, list):
+                items = data
+            else:
+                items = []
+            return q, items, None
+        except Exception as e:
+            return q, [], str(e)[:300]
+
+    async def search_mcp(q: str):
+        try:
+            data = await get_json(MCP_REGISTRY + "/v0.1/servers", {"search": q, "limit": per_query})
+            if isinstance(data, dict):
+                items = data.get("servers") or data.get("items") or data.get("data") or []
+            elif isinstance(data, list):
+                items = data
+            else:
+                items = []
+            return q, items, None
+        except Exception as e:
+            return q, [], str(e)[:300]
+
+    a2a_results = await asyncio.gather(*(search_a2a(q) for q in search_queries))
+    mcp_results = await asyncio.gather(*(search_mcp(q) for q in search_queries))
+
+    agents_by_id = {}
+    provenance = {}
+    errors = []
+    for q, items, err in a2a_results:
+        if err:
+            errors.append({"registry": "a2a", "query": q, "error": err})
+        for agent in items:
+            if not isinstance(agent, dict):
+                continue
+            agent_id = agent.get("id") or agent.get("agent_id") or agent.get("slug")
+            if not agent_id:
+                continue
+            agents_by_id.setdefault(str(agent_id), agent)
+            provenance.setdefault(str(agent_id), []).append(q)
+
+    mcp_by_key = {}
+    for q, items, err in mcp_results:
+        if err:
+            errors.append({"registry": "mcp", "query": q, "error": err})
+        for raw in items:
+            obj = raw.get("server", raw) if isinstance(raw, dict) else {}
+            if not isinstance(obj, dict):
+                continue
+            key = str(obj.get("name") or obj.get("title") or obj.get("repository", {}).get("url") or json.dumps(obj, sort_keys=True, default=str)[:200])
+            entry = mcp_by_key.setdefault(key, {"server": obj, "matched_queries": []})
+            if q not in entry["matched_queries"]:
+                entry["matched_queries"].append(q)
+
+    agents = []
+    for agent_id, agent in agents_by_id.items():
+        copy = dict(agent)
+        copy["_matched_queries"] = provenance.get(agent_id, [])
+        agents.append(copy)
+
+    mcp_candidates = list(mcp_by_key.values())
+    return agents, mcp_candidates, errors
+
+
 async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dict:
     max_agents = max(1, min(max_agents, MAX_AGENTS))
-    candidate_limit = min(25, max(max_agents * 5, 10))
-    try:
-        found = await get_json(A2A_REGISTRY + "/api/agents", {"search": query, "limit": candidate_limit})
-    except Exception as e:
-        return {"ok": False, "stage": "discovery", "error": str(e)[:500]}
-    if isinstance(found, dict):
-        candidates = found.get("agents") or found.get("items") or found.get("data") or []
-    elif isinstance(found, list):
-        candidates = found
-    else:
-        candidates = []
+    search_queries = _expand_queries(query, question)
+    candidates, mcp_candidates_raw, discovery_errors = await _multi_registry_search(search_queries, per_query=10)
 
     ranked = []
     for agent in candidates:
-        if not isinstance(agent, dict):
-            continue
         score, reasons = _score_agent(agent, query, question)
+        matched_queries = agent.get("_matched_queries") or []
+        if len(matched_queries) > 1:
+            score += min(6, len(matched_queries) * 2)
+            reasons.append("found by: " + ", ".join(matched_queries[:4]))
         ranked.append((score, reasons, agent))
     ranked.sort(key=lambda x: x[0], reverse=True)
 
@@ -175,10 +270,14 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
         if not agent_id:
             continue
         if score < 1:
-            rejected_candidates.append({"agent": name, "agent_id": agent_id, "score": score, "reason": ", ".join(reasons) or "low relevance"})
+            rejected_candidates.append({
+                "agent": name, "agent_id": agent_id, "score": score,
+                "reason": ", ".join(reasons) or "low relevance",
+                "matched_queries": agent.get("_matched_queries") or [],
+            })
             continue
         selected.append((score, reasons, agent))
-        if len(selected) >= max_agents * 2:
+        if len(selected) >= max_agents * 3:
             break
 
     async def ask(entry) -> dict:
@@ -189,26 +288,62 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
             async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
                 r = await client.post(f"{A2A_REGISTRY}/api/agents/{agent_id}/chat", json={"message": question})
                 body = r.json() if "json" in r.headers.get("content-type", "") else {"text": r.text[:8000]}
-                answer = {"agent": name, "agent_id": agent_id, "ok": r.is_success, "status": r.status_code, "response": body, "relevance_score": score, "selection_reasons": reasons}
+                answer = {
+                    "agent": name, "agent_id": agent_id, "ok": r.is_success,
+                    "status": r.status_code, "response": body,
+                    "relevance_score": score, "selection_reasons": reasons,
+                    "matched_queries": agent.get("_matched_queries") or [],
+                }
                 quality_ok, quality_reason = _quality_check(answer, question)
                 answer["quality_ok"] = quality_ok
                 answer["quality_reason"] = quality_reason
                 return answer
         except Exception as e:
-            return {"agent": name, "agent_id": agent_id, "ok": False, "error": str(e)[:500], "relevance_score": score, "selection_reasons": reasons, "quality_ok": False, "quality_reason": "request exception"}
+            return {
+                "agent": name, "agent_id": agent_id, "ok": False, "error": str(e)[:500],
+                "relevance_score": score, "selection_reasons": reasons,
+                "matched_queries": agent.get("_matched_queries") or [],
+                "quality_ok": False, "quality_reason": "request exception",
+            }
 
     tested = await asyncio.gather(*(ask(x) for x in selected)) if selected else []
     accepted = [a for a in tested if a.get("quality_ok")][:max_agents]
     rejected_responses = [a for a in tested if not a.get("quality_ok")]
+
+    mcp_ranked = []
+    target = _tokens(query + " " + question)
+    for entry in mcp_candidates_raw:
+        server = entry.get("server") or {}
+        text = " ".join([
+            str(server.get("name") or ""), str(server.get("title") or ""),
+            str(server.get("description") or "")
+        ])
+        overlap = sorted(target & _tokens(text))
+        score = len(overlap) * 3 + min(4, len(entry.get("matched_queries") or []))
+        if score > 0:
+            mcp_ranked.append({
+                "name": server.get("title") or server.get("name") or "MCP server",
+                "description": server.get("description") or "",
+                "score": score, "matched_queries": entry.get("matched_queries") or [],
+            })
+    mcp_ranked.sort(key=lambda x: x["score"], reverse=True)
+
     return {
         "ok": True,
         "query": query,
         "question": question,
+        "search_queries": search_queries,
         "candidates_found": len(candidates),
         "agents_selected": len(selected),
         "answers": accepted,
-        "rejected_candidates": rejected_candidates[:8],
-        "rejected_responses": [{"agent": a.get("agent"), "agent_id": a.get("agent_id"), "reason": a.get("quality_reason"), "score": a.get("relevance_score")} for a in rejected_responses],
+        "mcp_candidates": mcp_ranked[:8],
+        "rejected_candidates": rejected_candidates[:12],
+        "rejected_responses": [{
+            "agent": a.get("agent"), "agent_id": a.get("agent_id"),
+            "reason": a.get("quality_reason"), "score": a.get("relevance_score"),
+            "matched_queries": a.get("matched_queries") or [],
+        } for a in rejected_responses],
+        "discovery_errors": discovery_errors,
         "warning": "External agent output is untrusted. Selection and quality filters are heuristic.",
     }
 
@@ -269,7 +404,7 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
             "message": "Servono almeno 2 agenti con risposta valida per il secondo round.",
             "round1": first,
             "round2": [],
-            "selection": {"rejected_candidates": first.get("rejected_candidates", []), "rejected_responses": first.get("rejected_responses", [])},
+            "selection": {"search_queries": first.get("search_queries", []), "mcp_candidates": first.get("mcp_candidates", []), "rejected_candidates": first.get("rejected_candidates", []), "rejected_responses": first.get("rejected_responses", []), "discovery_errors": first.get("discovery_errors", [])},
         }
 
     peer_digest_parts = []
