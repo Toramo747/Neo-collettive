@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: neo-collective-cloud
+    runtime: docker
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NEO_MAX_AGENTS
+        value: "4"
+      - key: NEO_TIMEOUT
+        value: "25"
