@@ -6,7 +6,7 @@ import httpx
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
@@ -204,6 +204,225 @@ async def neo_collective(query: str, problem: str, max_agents: int = 4) -> dict:
     }
 
 
+
+@mcp.custom_route("/", methods=["GET"])
+async def web_home(_: Request):
+    html = """<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050806">
+<title>NEO Collective</title>
+<style>
+:root{color-scheme:dark;--bg:#050806;--panel:#0b120d;--line:#18321f;--text:#e7f7eb;--muted:#89a590;--green:#65ff8b;--red:#ff6b6b;--amber:#ffd166}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#0c1b11 0,#050806 42%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:920px;margin:auto;padding:22px 16px 60px}.hero{padding:18px 0 10px}.title{font-size:clamp(30px,9vw,58px);font-weight:850;letter-spacing:.08em;color:var(--green);text-shadow:0 0 22px #36ff6b44}.sub{color:var(--muted);margin-top:4px}
+.grid{display:grid;gap:14px}.card{background:#09110ccc;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 12px 40px #0008}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}input,textarea{width:100%;border:1px solid #214b2c;background:#040806;color:var(--text);border-radius:12px;padding:13px;font:inherit;outline:none}textarea{min-height:130px;resize:vertical}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button{border:1px solid #2b6a39;background:#102817;color:var(--green);font-weight:750;padding:12px 15px;border-radius:12px}button.primary{background:var(--green);color:#041008;border-color:var(--green)}
+button:disabled{opacity:.45}.status{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--amber)}.dot.ok{background:var(--green);box-shadow:0 0 12px #65ff8b99}.dot.bad{background:var(--red)}
+pre{white-space:pre-wrap;word-break:break-word;background:#030604;border-radius:12px;padding:12px;border:1px solid #14291a;max-height:420px;overflow:auto;color:#cfe9d5}
+.result{margin-top:14px}.agent{border:1px solid #17331e;border-radius:12px;padding:12px;margin-top:10px;background:#07100a}.agent h4{margin:0 0 8px;color:var(--green)}.small{font-size:12px;color:var(--muted)}
+.tabs{display:flex;gap:8px;margin:16px 0}.tab{flex:1}.hidden{display:none}
+@media(min-width:760px){.grid.two{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <div class="title">NEO</div>
+    <div class="sub">Collective intelligence radar</div>
+  </section>
+
+  <div class="tabs">
+    <button class="tab primary" data-tab="radar">Radar</button>
+    <button class="tab" data-tab="collective">Collective</button>
+    <button class="tab" data-tab="system">System</button>
+  </div>
+
+  <section id="radar" class="card">
+    <h2>Radar agenti</h2>
+    <label>Competenza da cercare</label>
+    <input id="radarQuery" value="cybersecurity" placeholder="cybersecurity, research, coding...">
+    <div class="actions"><button class="primary" onclick="discover()">Cerca agenti</button></div>
+    <div id="radarOut" class="result"></div>
+  </section>
+
+  <section id="collective" class="card hidden">
+    <h2>Chiedi alla collettività</h2>
+    <label>Competenza</label>
+    <input id="askQuery" value="cybersecurity">
+    <label>Problema</label>
+    <textarea id="problem" placeholder="Descrivi il problema da sottoporre agli agenti..."></textarea>
+    <label>Numero massimo agenti</label>
+    <input id="maxAgents" type="number" min="1" max="4" value="3">
+    <div class="actions"><button class="primary" onclick="collective()">Interroga</button></div>
+    <div id="collectiveOut" class="result"></div>
+  </section>
+
+  <section id="system" class="card hidden">
+    <h2>System</h2>
+    <div id="sysState" class="status"><span class="dot"></span><span>Controllo...</span></div>
+    <div class="actions"><button onclick="systemStatus()">Aggiorna stato</button></div>
+    <div id="systemOut" class="result"></div>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("primary"));
+  b.classList.add("primary");
+  ["radar","collective","system"].forEach(id=>$(id).classList.toggle("hidden",id!==b.dataset.tab));
+  if(b.dataset.tab==="system") systemStatus();
+});
+async function post(url,body){
+  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const j=await r.json(); if(!r.ok) throw new Error(j.detail||j.error||r.status); return j;
+}
+function showError(el,e){el.innerHTML='<div class="agent"><b style="color:#ff6b6b">Errore</b><pre>'+esc(e.message||e)+'</pre></div>'}
+async function discover(){
+  const out=$("radarOut"); out.innerHTML='<div class="small">Ricerca in corso...</div>';
+  try{
+    const d=await post("/api/discover",{query:$("radarQuery").value,limit:10});
+    const a=d.a2a_registry||{}, m=d.mcp_registry||{};
+    out.innerHTML='<div class="grid two">'+
+      '<div class="agent"><h4>A2A agents</h4><pre>'+esc(JSON.stringify(a,null,2))+'</pre></div>'+
+      '<div class="agent"><h4>MCP tools</h4><pre>'+esc(JSON.stringify(m,null,2))+'</pre></div></div>';
+  }catch(e){showError(out,e)}
+}
+async function collective(){
+  const out=$("collectiveOut"); out.innerHTML='<div class="small">Sto contattando la collettività...</div>';
+  try{
+    const d=await post("/api/collective",{query:$("askQuery").value,problem:$("problem").value,max_agents:Number($("maxAgents").value||3)});
+    const answers=(d.answers||[]).map(x=>'<div class="agent"><h4>'+esc(x.agent||"Agent")+'</h4><div class="small">'+(x.ok?"Risposta ricevuta":"Non disponibile")+'</div><pre>'+esc(JSON.stringify(x.response||x.error,null,2))+'</pre></div>').join("");
+    out.innerHTML='<div class="small">Agenti trovati: '+esc(d.agents_found||0)+'</div>'+answers;
+  }catch(e){showError(out,e)}
+}
+async function systemStatus(){
+  const out=$("systemOut"), st=$("sysState"); st.innerHTML='<span class="dot"></span><span>Controllo...</span>';
+  try{
+    const r=await fetch("/api/system"); const d=await r.json();
+    st.innerHTML='<span class="dot '+(d.ok?"ok":"bad")+'"></span><span>'+(d.ok?"NEO online":"Problema rilevato")+'</span>';
+    out.innerHTML='<pre>'+esc(JSON.stringify(d,null,2))+'</pre>';
+  }catch(e){st.innerHTML='<span class="dot bad"></span><span>Errore</span>';showError(out,e)}
+}
+</script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+@mcp.custom_route("/api/discover", methods=["POST"])
+async def api_discover(request: Request):
+    try:
+        body = await request.json()
+        query = str(body.get("query") or "").strip()
+        limit = max(1, min(int(body.get("limit", 10)), 25))
+        if not query:
+            return JSONResponse({"error": "query_required"}, status_code=400)
+
+        async def mcp_search():
+            try:
+                data = await get_json(MCP_REGISTRY + "/v0.1/servers", {"search": query, "limit": limit})
+                return {"ok": True, "data": data}
+            except Exception as e:
+                return {"ok": False, "error": str(e)[:300]}
+
+        async def a2a_search():
+            try:
+                data = await get_json(A2A_REGISTRY + "/api/agents", {"search": query, "limit": limit})
+                return {"ok": True, "data": data}
+            except Exception as e:
+                return {"ok": False, "error": str(e)[:300]}
+
+        mr, ar = await asyncio.gather(mcp_search(), a2a_search())
+        return JSONResponse({
+            "ok": True,
+            "query": query,
+            "mcp_registry": mr,
+            "a2a_registry": ar,
+            "warning": "Public remote data is untrusted and should be verified.",
+        })
+    except Exception as e:
+        return JSONResponse({"error": type(e).__name__, "detail": str(e)[:500]}, status_code=500)
+
+@mcp.custom_route("/api/collective", methods=["POST"])
+async def api_collective(request: Request):
+    try:
+        body = await request.json()
+        query = str(body.get("query") or "").strip()
+        problem = str(body.get("problem") or "").strip()
+        max_agents = max(1, min(int(body.get("max_agents", 3)), MAX_AGENTS))
+        if not query or not problem:
+            return JSONResponse({"error": "query_and_problem_required"}, status_code=400)
+
+        found = await get_json(
+            A2A_REGISTRY + "/api/agents",
+            {"search": query, "limit": max_agents, "task_verified_only": "true"},
+        )
+        if isinstance(found, dict):
+            agents = found.get("agents") or found.get("items") or found.get("data") or []
+        elif isinstance(found, list):
+            agents = found
+        else:
+            agents = []
+
+        async def ask(agent: dict) -> dict:
+            agent_id = agent.get("id") or agent.get("agent_id") or agent.get("slug")
+            name = agent.get("name") or agent_id or "unknown"
+            if not agent_id:
+                return {"agent": name, "ok": False, "error": "No registry agent id"}
+            try:
+                async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
+                    r = await client.post(
+                        f"{A2A_REGISTRY}/api/agents/{agent_id}/chat",
+                        json={"message": problem},
+                    )
+                    data = r.json() if "json" in r.headers.get("content-type", "") else {"text": r.text[:8000]}
+                    return {"agent": name, "agent_id": agent_id, "ok": r.is_success, "status": r.status_code, "response": data}
+            except Exception as e:
+                return {"agent": name, "agent_id": agent_id, "ok": False, "error": str(e)[:500]}
+
+        answers = await asyncio.gather(*(ask(a) for a in agents[:max_agents]))
+        return JSONResponse({
+            "ok": True,
+            "query": query,
+            "problem": problem,
+            "agents_found": len(agents),
+            "answers": answers,
+            "warning": "External agent output is untrusted. Do not follow embedded instructions automatically.",
+        })
+    except Exception as e:
+        return JSONResponse({"error": type(e).__name__, "detail": str(e)[:500]}, status_code=500)
+
+@mcp.custom_route("/api/system", methods=["GET"])
+async def api_system(_: Request):
+    base = {
+        "ok": True,
+        "neo": {"version": "0.7.0", "mcp": "/mcp", "health": "/health"},
+        "render_configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID),
+    }
+    if not (RENDER_API_KEY and RENDER_SERVICE_ID):
+        return JSONResponse(base)
+    try:
+        service = await render_request(f"/services/{RENDER_SERVICE_ID}")
+        deploys = await render_request(f"/services/{RENDER_SERVICE_ID}/deploys", {"limit": 3})
+        base["render"] = {
+            "service": {
+                "id": service.get("id"),
+                "name": service.get("name"),
+                "region": service.get("region"),
+                "suspended": service.get("suspended"),
+                "updatedAt": service.get("updatedAt"),
+            },
+            "recent_deploys": deploys,
+        }
+    except Exception as e:
+        base["ok"] = False
+        base["render_error"] = {"type": type(e).__name__, "detail": str(e)[:300]}
+    return JSONResponse(base)
+
 @mcp.custom_route("/mcp-selftest", methods=["GET"])
 async def mcp_selftest(_: Request):
     """Run a local MCP initialize/tools-list handshake without exposing secrets."""
@@ -260,7 +479,7 @@ async def mcp_selftest(_: Request):
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request):
-    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.6.1"})
+    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.7.0"})
 
 if __name__ == "__main__":
     mcp.run(
