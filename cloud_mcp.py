@@ -344,6 +344,25 @@ async def web_radar(request: Request):
         "warning": "Public remote data is untrusted and should be verified."
     })
 
+@mcp.custom_route("/radar-ui", methods=["GET"])
+async def radar_ui(request: Request):
+    import html
+    q = (request.query_params.get("q") or "cybersecurity").strip()
+    try:
+        data = await get_json(MCP_REGISTRY + "/v0.1/servers", {"search": q, "limit": 10})
+        servers = data.get("servers", []) if isinstance(data, dict) else []
+        cards = []
+        for raw in servers[:10]:
+            obj = raw.get("server", raw) if isinstance(raw, dict) else {}
+            name = obj.get("title") or obj.get("name") or "MCP server"
+            desc = obj.get("description") or ""
+            cards.append("<article><b>MCP</b><h3>" + html.escape(str(name)) + "</h3><p>" + html.escape(str(desc)) + "</p></article>")
+        body = "".join(cards) or "<article>Nessun risultato</article>"
+        page = "<!doctype html><meta name=viewport content=\"width=device-width,initial-scale=1\"><style>body{background:#050806;color:#e7f7eb;font-family:system-ui;padding:18px;max-width:850px;margin:auto}h1,b,a{color:#65ff8b}form{display:flex;gap:8px}input{flex:1;padding:12px;background:#07100a;color:white;border:1px solid #24522f;border-radius:10px}button{padding:12px;background:#65ff8b;border:0;border-radius:10px;font-weight:bold}article{background:#09110c;border:1px solid #18321f;border-radius:14px;padding:14px;margin:10px 0}p{color:#b7c9bc}</style><a href=\"/\">← NEO</a><h1>RADAR</h1><form><input name=q value=\"" + html.escape(q, quote=True) + "\"><button>Cerca</button></form>" + body
+        return HTMLResponse(page)
+    except Exception as e:
+        return HTMLResponse("<h2>NEO Radar</h2><pre>" + html.escape(str(e)) + "</pre>", status_code=502)
+
 @mcp.custom_route("/api/discover", methods=["POST"])
 async def api_discover(request: Request):
     try:
@@ -431,7 +450,7 @@ async def api_collective(request: Request):
 async def api_system(_: Request):
     base = {
         "ok": True,
-        "neo": {"version": "0.7.1", "mcp": "/mcp", "health": "/health"},
+        "neo": {"version": "0.8.0", "mcp": "/mcp", "health": "/health"},
         "render_configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID),
     }
     if not (RENDER_API_KEY and RENDER_SERVICE_ID):
@@ -510,7 +529,7 @@ async def mcp_selftest(_: Request):
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request):
-    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.7.0"})
+    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.8.0"})
 
 if __name__ == "__main__":
     mcp.run(
