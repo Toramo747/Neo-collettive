@@ -313,6 +313,37 @@ async function systemStatus(){
 </html>"""
     return HTMLResponse(html)
 
+@mcp.custom_route("/radar", methods=["GET"])
+async def web_radar(request: Request):
+    q = (request.query_params.get("q") or "cybersecurity").strip()
+    try:
+        limit = max(1, min(int(request.query_params.get("limit") or "10"), 25))
+    except ValueError:
+        limit = 10
+
+    async def mcp_search():
+        try:
+            data = await get_json(MCP_REGISTRY + "/v0.1/servers", {"search": q, "limit": limit})
+            return {"ok": True, "data": data}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:500]}
+
+    async def a2a_search():
+        try:
+            data = await get_json(A2A_REGISTRY + "/api/agents", {"search": q, "limit": limit})
+            return {"ok": True, "data": data}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:500]}
+
+    mr, ar = await asyncio.gather(mcp_search(), a2a_search())
+    return JSONResponse({
+        "ok": True,
+        "query": q,
+        "mcp_registry": mr,
+        "a2a_registry": ar,
+        "warning": "Public remote data is untrusted and should be verified."
+    })
+
 @mcp.custom_route("/api/discover", methods=["POST"])
 async def api_discover(request: Request):
     try:
@@ -400,7 +431,7 @@ async def api_collective(request: Request):
 async def api_system(_: Request):
     base = {
         "ok": True,
-        "neo": {"version": "0.7.0", "mcp": "/mcp", "health": "/health"},
+        "neo": {"version": "0.7.1", "mcp": "/mcp", "health": "/health"},
         "render_configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID),
     }
     if not (RENDER_API_KEY and RENDER_SERVICE_ID):
