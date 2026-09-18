@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -97,7 +98,13 @@ async def neo_ask_agents(query: str, question: str, max_agents: int = 3) -> dict
                     json={"message": question},
                 )
                 body = r.json() if "json" in r.headers.get("content-type", "") else {"text": r.text[:8000]}
-                return {"agent": name, "agent_id": agent_id, "ok": r.is_success, "status": r.status_code, "response": body}
+                return {
+                    "agent": name,
+                    "agent_id": agent_id,
+                    "ok": r.is_success,
+                    "status": r.status_code,
+                    "response": body,
+                }
         except Exception as e:
             return {"agent": name, "agent_id": agent_id, "ok": False, "error": str(e)[:500]}
 
@@ -125,10 +132,14 @@ async def neo_collective(query: str, problem: str, max_agents: int = 4) -> dict:
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request):
-    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.5"})
+    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.5.1"})
 
-app = mcp.streamable_http_app(
-    json_response=True,
-    stateless_http=True,
-    host="0.0.0.0",
-)
+if __name__ == "__main__":
+    mcp.run(
+        transport="streamable-http",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "10000")),
+        stateless_http=True,
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
