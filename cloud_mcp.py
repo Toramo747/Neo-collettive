@@ -203,9 +203,64 @@ async def neo_collective(query: str, problem: str, max_agents: int = 4) -> dict:
         ),
     }
 
+
+@mcp.custom_route("/mcp-selftest", methods=["GET"])
+async def mcp_selftest(_: Request):
+    """Run a local MCP initialize/tools-list handshake without exposing secrets."""
+    port = int(os.getenv("PORT", "10000"))
+    url = f"http://127.0.0.1:{port}/mcp"
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+    }
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "neo-selftest", "version": "1.0"},
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r1 = await client.post(url, headers=headers, json=initialize)
+            init_type = r1.headers.get("content-type", "")
+            init_body = r1.text[:4000]
+            session_id = r1.headers.get("mcp-session-id")
+
+            list_headers = dict(headers)
+            if session_id:
+                list_headers["mcp-session-id"] = session_id
+            tools_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+            r2 = await client.post(url, headers=list_headers, json=tools_req)
+            tools_body = r2.text[:6000]
+
+        return JSONResponse({
+            "ok": r1.is_success and r2.is_success,
+            "initialize": {
+                "status": r1.status_code,
+                "content_type": init_type,
+                "session_id_present": bool(session_id),
+                "body": init_body,
+            },
+            "tools_list": {
+                "status": r2.status_code,
+                "content_type": r2.headers.get("content-type", ""),
+                "body": tools_body,
+            },
+        })
+    except Exception as e:
+        return JSONResponse({
+            "ok": False,
+            "error": type(e).__name__,
+            "detail": str(e)[:800],
+        }, status_code=500)
+
 @mcp.custom_route("/health", methods=["GET"])
 async def health(_: Request):
-    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.6.0"})
+    return JSONResponse({"status": "ok", "service": "neo-collective", "version": "0.6.1"})
 
 if __name__ == "__main__":
     mcp.run(
