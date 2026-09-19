@@ -2,6 +2,7 @@ import asyncio
 import html
 import json
 import os
+import secrets
 import ipaddress
 from datetime import datetime, timezone
 from urllib.parse import urlparse, quote_plus
@@ -18,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.40.1"
+VERSION = "0.40.2"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
