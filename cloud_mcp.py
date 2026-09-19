@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.37.1"
+VERSION = "0.38.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -32,6 +32,8 @@ RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.
 STATE_SNAPSHOT_PATH = os.getenv("NEO_STATE_SNAPSHOT_PATH", "/tmp/neo-autopilot-state.json")
 STATE_ENV_KEY = "NEO_STATE_JSON"
 STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
+HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
+HEARTBEAT_TOKEN = (os.getenv("NEO_HEARTBEAT_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
 AUTOPILOT_ENABLED = (os.getenv("NEO_SELF_MANAGMENT", "true").strip().lower() in {"1","true","yes","on"})
@@ -2114,6 +2116,45 @@ async def api_director_run(request: Request):
     return JSONResponse({"ok":True,"autopilot":True,"result":compact})
 
 
+def _iso_age_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return max(0.0, (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds())
+    except Exception:
+        return None
+
+
+async def api_heartbeat(request: Request):
+    """Wake-safe idempotent trigger for an external free scheduler."""
+    if HEARTBEAT_TOKEN:
+        supplied = (request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or "").strip()
+        if supplied != HEARTBEAT_TOKEN:
+            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+
+    age = _iso_age_seconds(AUTOPILOT_STATE.get("last_started_utc"))
+    busy = AUTOPILOT_LOCK.locked()
+    cooldown = age is not None and age < HEARTBEAT_MIN_SECONDS
+    started = False
+
+    if AUTOPILOT_ENABLED and not busy and not cooldown:
+        asyncio.create_task(_autopilot_cycle())
+        started = True
+
+    return JSONResponse({
+        "ok": True,
+        "started": started,
+        "busy": busy,
+        "cooldown": cooldown,
+        "cooldown_seconds": HEARTBEAT_MIN_SECONDS,
+        "last_started_age_seconds": age,
+        "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+        "last_status": AUTOPILOT_STATE.get("last_status"),
+        "last_error": AUTOPILOT_STATE.get("last_error"),
+    })
+
+
 async def _autopilot_cycle() -> None:
     if not AUTOPILOT_ENABLED:
         return
@@ -2127,6 +2168,8 @@ async def _autopilot_cycle() -> None:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
+            _save_local_state()
+            AUTOPILOT_STATE["last_checkpoint"] = await _checkpoint_state_to_render()
         except Exception as e:
             AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:500]
         finally:
@@ -2246,6 +2289,7 @@ app = Starlette(
         Route("/api/director/run", api_director_run, methods=["GET"]),
         Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
+        Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
