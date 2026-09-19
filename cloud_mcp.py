@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.34.0"
+VERSION = "0.34.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -47,7 +47,13 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "last_started_utc": None,
     "last_finished_utc": None,
     "last_status": None,
-    "last_error": None,\n    "cycles_completed": 0,\n    "recent_sectors": [],\n    "last_search_strategy": None,\n}
+    "last_error": None,
+    "cycles_completed": 0,
+    "recent_sectors": [],
+    "last_search_strategy": None,
+    "family_performance": {},
+    "stagnation_cycles": 0,
+}
 
 mcp = MCPServer(
     name="NEO Collective",
