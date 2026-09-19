@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -168,12 +168,61 @@ def _quality_snapshot(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _collective_snapshot(context: dict[str, Any]) -> dict[str, Any]:
+    summary = context.get("collective_summary") or {}
+    review = context.get("collective_review") or {}
+    if not isinstance(summary, dict):
+        summary = {}
+    if not isinstance(review, dict):
+        review = {}
+
+    round2 = review.get("round2") or []
+    valid_round2 = [x for x in round2 if isinstance(x, dict) and x.get("ok")]
+    texts = []
+    for item in valid_round2[:3]:
+        payload = item.get("response")
+        if isinstance(payload, dict):
+            text = payload.get("response") or payload.get("text") or json.dumps(payload, ensure_ascii=False, default=str)
+        else:
+            text = str(payload or "")
+        if text:
+            texts.append(text[:2500])
+
+    combined = " ".join(texts).lower()
+    caution_markers = [x for x in (
+        "unsupported", "not supported", "insufficient evidence", "weak evidence",
+        "contradiction", "contradict", "single source", "false positive",
+        "do not proceed", "non procedere", "evidenza insufficiente", "contraddizione"
+    ) if x in combined]
+    support_markers = [x for x in (
+        "validate", "test", "experiment", "pilot", "proceed", "small experiment",
+        "micro-esperimento", "esperimento", "pilot"
+    ) if x in combined]
+
+    round1_valid = int(summary.get("round1_valid") or 0)
+    round2_valid = int(summary.get("round2_valid") or len(valid_round2))
+    collective_ok = bool(summary.get("ok")) and round1_valid >= 2 and round2_valid >= 2
+
+    return {
+        "ran": bool(summary.get("ran")),
+        "ok": bool(summary.get("ok")),
+        "round1_valid": round1_valid,
+        "round2_valid": round2_valid,
+        "collective_gate": collective_ok,
+        "caution_markers": sorted(set(caution_markers)),
+        "support_markers": sorted(set(support_markers)),
+        "review_excerpt_count": len(texts),
+    }
+
+
+
 def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     answers = _flatten_answers(context)
     scout_evidence = _flatten_evidence_scouts(context)
     web_evidence = _flatten_web_research(context)
     quality = _quality_snapshot(context)
     product_candidate = context.get("product_candidate") if isinstance(context.get("product_candidate"), dict) else {}
+    collective = _collective_snapshot(context)
 
     vendors = [a for a in answers if a["vendor"]]
     independent_agents = [a for a in answers if (not a["vendor"]) and a["evidence_markers"]]
@@ -241,11 +290,17 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
         and selected_cluster
         and selected_cluster in set(qualified_names)
     )
-    decision = "VALIDATE" if gate_pass else "SEARCH_MORE"
+    collective_required = bool(product_candidate and product_candidate.get("status") == "PILOT_READY")
+    collective_pass = (not collective_required) or collective.get("collective_gate", False)
+    final_gate_pass = bool(gate_pass and collective_pass)
+    decision = "VALIDATE" if final_gate_pass else ("COLLECTIVE_REVIEW" if gate_pass and collective_required else "SEARCH_MORE")
 
-    if gate_pass:
+    if final_gate_pass:
         evidence_state = "QUALIFIED_FOR_EXPERIMENT"
         next_experiment = opportunities[0]["next_free_test"]
+    elif gate_pass and collective_required:
+        evidence_state = "AWAITING_COLLECTIVE_CONFIRMATION"
+        next_experiment = "Non costruire ancora: completare una revisione collettiva con almeno 2 agenti validi nel secondo round."
     elif answers or scout_evidence or web_evidence:
         evidence_state = "PARTIAL_EVIDENCE"
         next_experiment = "Non costruire ancora sulla base del volume: raccogli fonti indipendenti convergenti sullo stesso problema e almeno un segnale di domanda pagante."
@@ -266,6 +321,7 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             "unique_source_keys": len(all_unique_sources),
             "neo_quality_gate": quality.get("quality_gate", False),
             "qualified_problem_clusters": len(qualified_names),
+            "collective_gate": collective.get("collective_gate", False),
         },
         "inputs_consumed": {
             "external_research": True,
@@ -273,6 +329,7 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             "evidence_scouts": True,
             "evidence_quality": True,
             "product_candidate": bool(product_candidate),
+            "collective_review": bool(collective.get("ran")),
         },
         "vendor_responses": [
             {"agent": a["agent"], "query": a["query"], "markers": a["vendor_markers"]}
@@ -305,6 +362,9 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
                 "has_selected_cluster": bool(selected_cluster),
                 "selected_cluster_is_qualified": bool(selected_cluster and selected_cluster in set(qualified_names)),
                 "neo_quality_gate_passed": bool(quality.get("quality_gate")),
+                "collective_required": collective_required,
+                "collective_gate_passed": bool(collective.get("collective_gate")),
+                "final_gate_passed": final_gate_pass,
             },
             "rejected_clusters": rejected_clusters[:10],
             "deduplication_note": "Il conteggio usa domini/source_key unici; piu risultati dello stesso dominio non diventano automaticamente evidenze indipendenti.",
@@ -314,8 +374,9 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             "status": product_candidate.get("status"),
             "family": product_candidate.get("family"),
             "name": product_candidate.get("name"),
-            "accepted_for_experiment": bool(gate_pass and product_candidate.get("family") == selected_cluster),
+            "accepted_for_experiment": bool(final_gate_pass and product_candidate.get("family") == selected_cluster),
         },
+        "collective_review": collective,
         "next_search_queries": [
             "customer pain evidence",
             "explicit buying intent",
