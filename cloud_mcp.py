@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.36.3"
+VERSION = "0.37.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -130,6 +130,33 @@ async def _checkpoint_state_to_render() -> dict:
 
 AUTOPILOT_STATE["restore_source"] = _restore_state()
 AUTOPILOT_STATE["last_checkpoint"] = None
+
+
+MANUAL_RUN_STATE: dict[str, Any] = {
+    "running": False,
+    "last_started_utc": None,
+    "last_finished_utc": None,
+    "last_error": None,
+    "last_status": None,
+}
+
+
+async def _manual_director_cycle(goal: str, budget: float, hours: int) -> None:
+    if AUTOPILOT_LOCK.locked():
+        MANUAL_RUN_STATE["last_error"] = "director_busy"
+        return
+    async with AUTOPILOT_LOCK:
+        MANUAL_RUN_STATE["running"] = True
+        MANUAL_RUN_STATE["last_started_utc"] = datetime.now(timezone.utc).isoformat()
+        MANUAL_RUN_STATE["last_error"] = None
+        try:
+            result = await director_run(goal, budget, hours, 3)
+            MANUAL_RUN_STATE["last_status"] = result.get("status")
+        except Exception as e:
+            MANUAL_RUN_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:1000]
+        finally:
+            MANUAL_RUN_STATE["running"] = False
+            MANUAL_RUN_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
 
 
 mcp = MCPServer(
@@ -1972,7 +1999,8 @@ async def collective(request: Request):
 
 
 async def director(request: Request):
-    goal = (request.query_params.get("goal") or "").strip()
+    requested_goal = (request.query_params.get("goal") or "").strip()
+    goal = requested_goal or AUTOPILOT_GOAL
     try:
         budget = max(0.0, float(request.query_params.get("budget") or "0"))
     except ValueError:
@@ -1981,34 +2009,30 @@ async def director(request: Request):
         hours = max(1, min(int(request.query_params.get("hours") or "5"), 80))
     except ValueError:
         hours = 5
+
+    should_start = request.query_params.get("run") == "1" or bool(requested_goal)
+    if should_start and not MANUAL_RUN_STATE.get("running") and not AUTOPILOT_LOCK.locked():
+        asyncio.create_task(_manual_director_cycle(goal, budget, hours))
+
     form = (
         '<section class="card"><span class="tag">DIRECTOR</span><h2>Obiettivo economico</h2>'
-        '<p class="muted">NEO cerca e coordina competenze. Spese, contatti, pubblicazioni e transazioni richiedono approvazione umana.</p>'
-        '<form method="get" action="/director"><label>Obiettivo</label><textarea name="goal">' + html.escape(goal) + '</textarea>'
+        '<p class="muted">NEO lavora in background. Spese, contatti, pubblicazioni e transazioni richiedono approvazione umana.</p>'
+        '<form method="get" action="/director"><input type="hidden" name="run" value="1"><label>Obiettivo</label><textarea name="goal">' + html.escape(goal) + '</textarea>'
         '<label>Budget massimo iniziale EUR</label><input name="budget" type="number" min="0" step="1" value="' + str(budget) + '">'
         '<label>Ore disponibili a settimana</label><input name="hours" type="number" min="1" max="80" value="' + str(hours) + '">'
-        '<button type="submit">Avvia ricerca</button></form></section>'
+        '<button type="submit">Avvia ciclo in background</button></form></section>'
     )
-    if not goal:
-        return layout("Director", form)
-    result = await director_run(goal, budget, hours, 3)
-    summary = (
-        '<section class="card"><h2>Missione</h2><p><b>Metrica:</b> profitto netto verificabile.</p>'
-        '<p><b>Stato:</b> ' + html.escape(str(result.get("status"))) + '</p>'
-        '<p><b>Risposte esterne valide:</b> ' + str(result.get("valid_external_answers", 0)) + '</p></section>'
+
+    run_state = dict(MANUAL_RUN_STATE)
+    run_state["autopilot_busy"] = AUTOPILOT_LOCK.locked()
+    rows = _load_recent_results(1)
+    latest = rows[-1] if rows else None
+    status_html = (
+        '<section class="card"><h2>Stato Director</h2><pre>' +
+        html.escape(json.dumps({"manual_run": run_state, "latest_result": latest}, ensure_ascii=False, indent=2, default=str)) +
+        '</pre><p><a class="btn" href="/director">Aggiorna stato</a> <a class="btn" href="/results">Apri risultati</a></p></section>'
     )
-    plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
-    jarvis_html = '<section class="card"><h2>Jarvis</h2><pre>' + html.escape(json.dumps(result.get("jarvis"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
-    quality = result.get("evidence_quality") or {}
-    quality_view = {"quality_gate":quality.get("quality_gate"),"gate_rule":quality.get("gate_rule"),"qualified_problem_clusters":quality.get("qualified_problem_clusters"),"independent_domains":quality.get("independent_domains"),"strong_commercial_domains":quality.get("strong_commercial_domains"),"clusters":quality.get("clusters")}
-    web_html = '<section class="card"><h2>Evidenza commerciale</h2><p><b>Risultati web grezzi:</b> ' + str(result.get("web_source_count", 0)) + '</p><pre>' + html.escape(json.dumps(quality_view, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
-    scout_preview = [{"source":x.get("source"),"query":x.get("query"),"title":x.get("title"),"url":x.get("url")} for x in (result.get("evidence_scouts") or [])[:10] if isinstance(x,dict)]
-    evidence_html = '<section class="card"><h2>Evidence Scouts</h2><p><b>Segnali raccolti:</b> ' + str(result.get("evidence_scout_count", 0)) + '</p><pre>' + html.escape(json.dumps(scout_preview, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
-    research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
-    for group in result.get("research", []):
-        compact = {"query":group.get("query"),"valid_answers":len(group.get("answers") or []),"mcp_candidates":len(group.get("mcp_candidates") or []),"rejected_responses":len(group.get("rejected_responses") or []),"discovery_errors":group.get("discovery_errors") or []}
-        research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(compact, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
-    return layout("Director", form + summary + plan_html + jarvis_html + evidence_html + web_html + research_html)
+    return layout("Director", form + status_html)
 
 
 async def results_page(request: Request):
@@ -2120,7 +2144,7 @@ async def api_autopilot_status(request: Request):
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
-    return JSONResponse({"ok": True, "autopilot": state})
+    return JSONResponse({"ok": True, "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
 
 async def venture(request: Request):
