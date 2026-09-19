@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.34.1"
+VERSION = "0.35.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -29,6 +29,9 @@ RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID")
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
+STATE_SNAPSHOT_PATH = os.getenv("NEO_STATE_SNAPSHOT_PATH", "/tmp/neo-autopilot-state.json")
+STATE_ENV_KEY = "NEO_STATE_JSON"
+STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
 AUTOPILOT_ENABLED = (os.getenv("NEO_SELF_MANAGMENT", "true").strip().lower() in {"1","true","yes","on"})
@@ -54,6 +57,80 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "family_performance": {},
     "stagnation_cycles": 0,
 }
+
+
+def _state_payload() -> dict:
+    return {
+        "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
+        "recent_sectors": list(AUTOPILOT_STATE.get("recent_sectors") or [])[-12:],
+        "stagnation_cycles": int(AUTOPILOT_STATE.get("stagnation_cycles") or 0),
+        "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+    }
+
+
+def _merge_state_payload(payload: dict | None) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    perf = payload.get("family_performance")
+    recent = payload.get("recent_sectors")
+    if isinstance(perf, dict):
+        AUTOPILOT_STATE["family_performance"] = perf
+    if isinstance(recent, list):
+        AUTOPILOT_STATE["recent_sectors"] = [str(x) for x in recent][-12:]
+    AUTOPILOT_STATE["stagnation_cycles"] = max(0, min(20, int(payload.get("stagnation_cycles") or 0)))
+    AUTOPILOT_STATE["cycles_completed"] = max(0, int(payload.get("cycles_completed") or 0))
+    return True
+
+
+def _restore_state() -> str:
+    raw = (os.getenv(STATE_ENV_KEY) or "").strip()
+    if raw:
+        try:
+            if _merge_state_payload(json.loads(raw)):
+                return "render_env"
+        except Exception:
+            pass
+    try:
+        with open(STATE_SNAPSHOT_PATH, "r", encoding="utf-8") as fh:
+            if _merge_state_payload(json.load(fh)):
+                return "local_snapshot"
+    except Exception:
+        pass
+    return "fresh"
+
+
+def _save_local_state() -> None:
+    try:
+        with open(STATE_SNAPSHOT_PATH, "w", encoding="utf-8") as fh:
+            json.dump(_state_payload(), fh, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        pass
+
+
+async def _checkpoint_state_to_render() -> dict:
+    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return {"ok": False, "reason": "render_api_not_configured"}
+    value = json.dumps(_state_payload(), ensure_ascii=False, separators=(",", ":"))
+    headers = {
+        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
+            r = await client.put(
+                f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{STATE_ENV_KEY}",
+                headers=headers,
+                json={"value": value},
+            )
+            return {"ok": r.is_success, "status": r.status_code}
+    except Exception as e:
+        return {"ok": False, "reason": type(e).__name__ + ": " + str(e)[:220]}
+
+
+AUTOPILOT_STATE["restore_source"] = _restore_state()
+AUTOPILOT_STATE["last_checkpoint"] = None
+
 
 mcp = MCPServer(
     name="NEO Collective",
@@ -1349,6 +1426,46 @@ def _load_recent_results(limit: int = 10) -> list[dict]:
     return rows[-limit:]
 
 
+
+def _collective_problem(product_candidate: dict, evidence_quality: dict) -> tuple[str, str]:
+    family = str(product_candidate.get("family") or "")
+    cluster = (evidence_quality.get("clusters") or {}).get(family) or {}
+    signals = cluster.get("signals") or []
+    evidence_lines = []
+    for row in signals[:5]:
+        if isinstance(row, dict):
+            evidence_lines.append(
+                "- " + str(row.get("title") or row.get("domain") or "signal") +
+                " | " + str(row.get("domain") or "") +
+                " | " + ",".join(row.get("signal_types") or [])
+            )
+    problem = (
+        "Valuta criticamente questa opportunita candidata prima di un micro-esperimento. "
+        "Non assumere che sia valida. Cerca contraddizioni, alternative, dipendenze da una sola fonte, "
+        "falsi segnali di domanda e motivi per NON procedere. "
+        "Famiglia: " + family + ". Offerta candidata: " + str(product_candidate.get("offer") or "") +
+        ". Evidenze sintetiche:\n" + "\n".join(evidence_lines)
+    )
+    return family or "business validation", problem
+
+
+def _collective_summary(review: dict) -> dict:
+    if not isinstance(review, dict):
+        return {"ran": False}
+    r1 = review.get("round1") or []
+    r2 = review.get("round2") or []
+    valid_r2 = [x for x in r2 if isinstance(x, dict) and x.get("ok")]
+    return {
+        "ran": True,
+        "ok": bool(review.get("ok")),
+        "stage": review.get("stage"),
+        "round1_valid": len(r1) if isinstance(r1, list) else 0,
+        "round2_valid": len(valid_r2),
+        "query": review.get("query"),
+        "warning": review.get("warning"),
+    }
+
+
 async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     plan = director_plan(goal, budget, hours_per_week)
     research_question = (
@@ -1414,6 +1531,12 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     evidence_quality = _commercial_evidence_quality(web_research, demand_evidence)
     family_performance = _update_family_performance(evidence_quality)
     product_candidate = build_candidate(evidence_quality)
+
+    collective_review = {"ok": False, "ran": False, "reason": "no qualified candidate"}
+    if product_candidate.get("status") == "PILOT_READY":
+        collective_query, collective_problem = _collective_problem(product_candidate, evidence_quality)
+        collective_review = await collective_two_rounds(collective_query, collective_problem, min(3, max_agents))
+
     jarvis_review = await ask_jarvis(
         jarvis_message,
         {
@@ -1425,6 +1548,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "evidence_quality": evidence_quality,
             "family_performance": family_performance,
             "product_candidate": product_candidate,
+            "collective_review": collective_review,
+            "collective_summary": _collective_summary(collective_review),
             "evidence_scouts": demand_evidence,
             "valid_external_answers": len(valid),
             "initial_jarvis_brief": jarvis_brief,
@@ -1442,6 +1567,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_quality": evidence_quality,
         "family_performance": family_performance,
         "product_candidate": product_candidate,
+        "collective_review": collective_review,
+        "collective_summary": _collective_summary(collective_review),
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
@@ -1460,6 +1587,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
     }
     _record_director_result(result)
+    _save_local_state()
     return result
 
 async def render_request(path: str, params: dict[str, Any] | None = None) -> Any:
