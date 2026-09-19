@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.14.0"
+VERSION = "0.15.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -604,6 +604,58 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
     }
 
 
+def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
+    goal = (goal or "").strip()
+    tracks = [
+        {"id": "micro_saas", "name": "Micro-SaaS / automazione B2B", "skills": ["market research", "B2B SaaS", "automation", "software development", "sales"], "validation": "interviste/lead + landing page + disponibilita a pagare"},
+        {"id": "service", "name": "Servizio B2B productizzato", "skills": ["B2B services", "lead generation", "sales", "automation"], "validation": "problema ripetuto + 5 prospect + offerta pilota"},
+        {"id": "digital", "name": "Prodotto digitale", "skills": ["market research", "digital products", "content marketing", "SEO"], "validation": "domanda osservabile + prevendita/lista attesa"},
+        {"id": "marketplace", "name": "Opportunita marketplace", "skills": ["marketplace research", "ecommerce", "pricing", "competitor analysis"], "validation": "spread/margine reale + domanda + costi completi"},
+    ]
+    return {
+        "goal": goal, "budget_eur": max(0.0, budget), "hours_per_week": max(1, hours_per_week),
+        "north_star": "profitto netto verificabile, non numero di idee o agenti",
+        "tracks": tracks,
+        "gates": [
+            "evidenza di domanda", "cliente identificabile", "canale di acquisizione",
+            "margine plausibile", "esperimento economico e reversibile"
+        ],
+        "human_approval_required": ["spese", "pagamenti", "contratti", "pubblicazioni", "messaggi commerciali", "account esterni"],
+    }
+
+
+async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
+    plan = director_plan(goal, budget, hours_per_week)
+    research_question = (
+        "Obiettivo economico: " + goal + "\n"
+        "Individua opportunita legali e realistiche per generare ricavi con capitale iniziale massimo EUR " + str(max(0.0, budget)) + ". "
+        "Privilegia problemi per cui esiste domanda verificabile, clienti identificabili, time-to-revenue breve e costi bassi. "
+        "Non proporre guadagni garantiti, trading speculativo, gioco d azzardo, spam o pratiche ingannevoli. "
+        "Per ogni opportunita indica cliente, problema, offerta, prezzo ipotetico, prova della domanda da raccogliere, costi, rischi e un esperimento di validazione. "
+        "Non effettuare acquisti, contatti, pubblicazioni o transazioni."
+    )
+    searches = ["market research", "business opportunities", "B2B SaaS", "lead generation", "digital products", "automation", "sales"]
+    evidence = []
+    for q in searches:
+        result = await ask_agents_data(q, research_question, max_agents)
+        evidence.append({
+            "query": q,
+            "answers": result.get("answers", []),
+            "mcp_candidates": result.get("mcp_candidates", [])[:4],
+            "rejected_responses": result.get("rejected_responses", [])[:4],
+        })
+    valid = []
+    for group in evidence:
+        for answer in group.get("answers", []):
+            valid.append(answer)
+    return {
+        "ok": True, "mode": "director", "plan": plan, "research": evidence,
+        "valid_external_answers": len(valid),
+        "status": "EVIDENCE_READY" if valid else "NEEDS_MORE_SOURCES",
+        "next_gate": "Scegliere e validare un esperimento; nessuna azione economica viene eseguita automaticamente.",
+        "warning": "Le stime economiche degli agenti sono ipotesi finche non sono validate con evidenze reali.",
+    }
+
 async def render_request(path: str, params: dict[str, Any] | None = None) -> Any:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         raise RuntimeError("Render API is not configured")
@@ -653,6 +705,11 @@ async def neo_inspect_mcp(query: str, limit: int = 4) -> dict:
     inspected = await inspect_mcp_candidates(raw_mcp, limit=max(1, min(limit, 6)))
     return {"ok": True, "query": query, "inspected": inspected, "errors": errors}
 
+
+@mcp.tool()
+async def neo_director(goal: str, budget_eur: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
+    """Coordinate external agents to research revenue opportunities. Research-only; no spending or external actions."""
+    return await director_run(goal, budget_eur, hours_per_week, max_agents)
 
 @mcp.tool()
 async def neo_render_status() -> dict:
@@ -727,14 +784,14 @@ def layout(title: str, body: str) -> HTMLResponse:
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050806">
 <title>{html.escape(title)} - NEO</title><style>{BASE_CSS}</style></head><body><main>
 <div class="brand">NEO</div><div class="sub">Collective intelligence radar · v{VERSION}</div>
-<nav><a href="/">Home</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
+<nav><a href="/">Home</a><a href="/director">Director</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
 {body}</main></body></html>"""
     return HTMLResponse(page)
 
 
 async def home(request: Request):
     body = """
-<section class="card"><h2>Radar agenti</h2>
+<section class="card"><h2>NEO Director</h2><p>Coordina agenti e strumenti per cercare opportunita di ricavo, raccogliere prove e proporre esperimenti.</p><a class="btn" href="/director">Apri Director</a></section>\n<section class="card"><h2>Radar agenti</h2>
 <form method="get" action="/radar"><label>Competenza da cercare</label>
 <input name="q" value="cybersecurity"><button type="submit">Cerca agenti</button></form></section>
 <section class="card"><h2>Collettività</h2><p>Interroga più agenti pubblici sullo stesso problema e confronta le risposte.</p>
@@ -929,6 +986,38 @@ async def collective(request: Request):
     return layout("Collective", form + round1_html + round2_html)
 
 
+async def director(request: Request):
+    goal = (request.query_params.get("goal") or "").strip()
+    try:
+        budget = max(0.0, float(request.query_params.get("budget") or "0"))
+    except ValueError:
+        budget = 0.0
+    try:
+        hours = max(1, min(int(request.query_params.get("hours") or "5"), 80))
+    except ValueError:
+        hours = 5
+    form = (
+        '<section class="card"><span class="tag">DIRECTOR</span><h2>Obiettivo economico</h2>'
+        '<p class="muted">NEO cerca e coordina competenze. Spese, contatti, pubblicazioni e transazioni richiedono approvazione umana.</p>'
+        '<form method="get" action="/director"><label>Obiettivo</label><textarea name="goal">' + html.escape(goal) + '</textarea>'
+        '<label>Budget massimo iniziale EUR</label><input name="budget" type="number" min="0" step="1" value="' + str(budget) + '">'
+        '<label>Ore disponibili a settimana</label><input name="hours" type="number" min="1" max="80" value="' + str(hours) + '">'
+        '<button type="submit">Avvia ricerca</button></form></section>'
+    )
+    if not goal:
+        return layout("Director", form)
+    result = await director_run(goal, budget, hours, 3)
+    summary = (
+        '<section class="card"><h2>Missione</h2><p><b>Metrica:</b> profitto netto verificabile.</p>'
+        '<p><b>Stato:</b> ' + html.escape(str(result.get("status"))) + '</p>'
+        '<p><b>Risposte esterne valide:</b> ' + str(result.get("valid_external_answers", 0)) + '</p></section>'
+    )
+    plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
+    for group in result.get("research", []):
+        research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(group, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
+    return layout("Director", form + summary + plan_html + research_html)
+
 async def system(request: Request):
     render_info: Any = {"configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID)}
     if RENDER_API_KEY and RENDER_SERVICE_ID:
@@ -990,7 +1079,7 @@ async def lifespan(app: Starlette):
 app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
-        Route("/radar", radar, methods=["GET"]),
+        Route("/director", director, methods=["GET"]),\n        Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
         Route("/system", system, methods=["GET"]),
