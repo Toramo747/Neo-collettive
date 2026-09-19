@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.25.0"
+VERSION = "0.26.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -650,22 +650,32 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
     if JARVIS_API_KEY:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
     payload = {"message": message, "source": "neo", "context": context or {}}
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
-            r = await client.post(endpoint, headers=headers, json=payload)
-            if "json" in (r.headers.get("content-type") or ""):
-                body = r.json()
-            else:
-                body = {"text": r.text[:12000]}
-            return {
-                "configured": True,
-                "endpoint": endpoint,
-                "ok": r.is_success,
-                "status": r.status_code,
-                "response": body,
-            }
-    except Exception as e:
-        return {"configured": True, "endpoint": endpoint, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:500]}
+    last = None
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
+                r = await client.post(endpoint, headers=headers, json=payload)
+                if "json" in (r.headers.get("content-type") or ""):
+                    body = r.json()
+                else:
+                    body = {"text": r.text[:12000]}
+                result = {
+                    "configured": True,
+                    "endpoint": endpoint,
+                    "ok": r.is_success,
+                    "status": r.status_code,
+                    "attempt": attempt + 1,
+                    "response": body,
+                }
+                if r.is_success or r.status_code not in (502,503,504):
+                    return result
+                last = result
+                await asyncio.sleep(1.0)
+        except Exception as e:
+            last = {"configured": True, "endpoint": endpoint, "ok": False, "attempt": attempt + 1, "reason": type(e).__name__ + ": " + str(e)[:500]}
+            if attempt == 0:
+                await asyncio.sleep(1.0)
+    return last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
 
 
 def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
@@ -693,14 +703,14 @@ def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> di
 def _director_searches(goal: str) -> list[str]:
     """Evidence-oriented business searches rather than generic business keywords."""
     searches = [
-        '"looking for" "automation" freelancer',
-        '"need help" "manual data entry" business',
-        '"looking for" "spreadsheet automation"',
-        '"need" "workflow automation" small business',
-        '"hiring" automation freelancer',
-        '"budget" "automation" small business',
-        '"pay for" "manual process" automation',
-        '"looking for" "CRM automation"',
+        'site:upwork.com/freelance-jobs automation spreadsheet',
+        'site:upwork.com/freelance-jobs crm automation',
+        'site:freelancer.com/projects automation excel',
+        'site:reddit.com "looking for" "spreadsheet automation"',
+        'site:reddit.com "need help" "workflow automation"',
+        '"hiring" "automation" freelancer small business',
+        '"budget" "manual data entry" automation',
+        '"will pay" automation spreadsheet crm',
     ]
     low = (goal or "").lower()
     if "online" in low or "digit" in low:
@@ -725,6 +735,31 @@ def _commercial_family(text: str) -> str:
         if any(n in low for n in needles):
             return family
     return "other"
+
+
+def _demand_signal_type(title: str, body: str) -> list[str]:
+    text=((title or "")+" "+(body or "")).lower()
+    tags=[]
+    if any(x in text for x in ("pain","problem","manual","repetitive","time consuming","frustrat","tired of","waste time")):
+        tags.append("PAIN")
+    if any(x in text for x in ("looking for","need help","need a","seeking","want someone","recommend a","how can i automate","request:")):
+        tags.append("BUY_INTENT")
+    if any(x in text for x in ("budget","paid","paying","will pay","price","pricing","hire","hiring","freelance","contract","quote","rate","per hour","per month")):
+        tags.append("PAID_DEMAND")
+    if any(x in text for x in ("pricing","price","subscription","plans","book a call","enterprise","free trial","one-time purchase","per month","per year")):
+        tags.append("COMPETITION")
+    return tags
+
+
+def _gap_score(tags: list[str], domains: int, strong_domains: int) -> int:
+    score=0
+    if "PAIN" in tags: score+=20
+    if "BUY_INTENT" in tags: score+=30
+    if "PAID_DEMAND" in tags: score+=35
+    if "COMPETITION" in tags: score-=10
+    score+=min(15,max(0,domains-1)*5)
+    score+=min(10,strong_domains*5)
+    return max(0,min(100,score))
 
 
 def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | None = None) -> dict:
@@ -754,8 +789,9 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         # A generic vendor/reference page is not commercial proof merely because it says customer/automation.
         if not weak and not strong:
             return
+        signal_types=_demand_signal_type(title,body)
         row={"domain":host,"source":source,"family":family,"title":title or "","url":url or "",
-             "strong_markers":strong[:8],"weak_markers":weak[:8]}
+             "strong_markers":strong[:8],"weak_markers":weak[:8],"signal_types":signal_types}
         useful.append(row)
         cl=clusters.setdefault(family,{"domains":set(),"strong_domains":set(),"signals":[]})
         cl["domains"].add(host)
@@ -785,10 +821,17 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         all_domains.update(domains)
         all_strong.update(strong_domains)
         ok=len(domains)>=3 and len(strong_domains)>=1
+        cluster_tags=sorted({tag for s in cl["signals"] for tag in (s.get("signal_types") or [])})
+        gap=_gap_score(cluster_tags,len(domains),len(strong_domains))
+        commercially_actionable=("PAID_DEMAND" in cluster_tags and ("BUY_INTENT" in cluster_tags or "PAIN" in cluster_tags))
+        ok=len(domains)>=2 and commercially_actionable
         public_clusters[family]={
             "independent_domains":len(domains),
             "strong_commercial_domains":len(strong_domains),
             "qualified":ok,
+            "signal_types":cluster_tags,
+            "gap_score":gap,
+            "commercially_actionable":commercially_actionable,
             "domains":domains[:10],
             "signals":cl["signals"][:6],
         }
@@ -801,7 +844,7 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         "qualified_problem_clusters":qualified,
         "clusters":public_clusters,
         "quality_gate":bool(qualified),
-        "gate_rule":"same problem: >=3 independent domains AND >=1 strong commercial/buying signal",
+        "gate_rule":"same problem: >=2 independent domains AND PAID_DEMAND + (BUY_INTENT or PAIN)",
         "useful_results":useful[:20],
     }
 
@@ -937,11 +980,11 @@ def build_candidate(evidence_quality: dict) -> dict:
     ranked=[]
     for family,data in clusters.items():
         if isinstance(data,dict) and data.get("qualified"):
-            ranked.append((int(data.get("strong_commercial_domains") or 0),int(data.get("independent_domains") or 0),family))
+            ranked.append((int(data.get("gap_score") or 0),int(data.get("strong_commercial_domains") or 0),int(data.get("independent_domains") or 0),family))
     ranked.sort(reverse=True)
     if not ranked:
         return {"status":"WAITING_FOR_DEMAND","message":"Nessun problema ha ancora superato il gate commerciale."}
-    family=ranked[0][2]
+    family=ranked[0][3]
     products={
         "spreadsheet_process":("SheetFlow Audit","Analisi automatica dei processi Excel/Google Sheets per individuare lavoro manuale automatizzabile."),
         "workflow_automation":("Workflow Friction Audit","Analisi di un workflow manuale e generazione di un piano MVP di automazione."),
