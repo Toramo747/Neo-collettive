@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.35.1"
+VERSION = "0.36.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1560,7 +1560,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         },
     )
 
-    result = {
+    jarvis_analysis = ((jarvis_review.get("response") or {}).get("analysis") or {}) if isinstance(jarvis_review, dict) else {}\n    jarvis_decision = str(jarvis_analysis.get("decision") or "")\n    collective_summary = _collective_summary(collective_review)\n    build_ready = bool(\n        product_candidate.get("status") == "PILOT_READY"\n        and collective_summary.get("ok")\n        and int(collective_summary.get("round2_valid") or 0) >= 2\n        and jarvis_decision == "VALIDATE"\n    )\n\n    result = {
         "ok": True,
         "mode": "director",
         "coordinator": "jarvis-free",
@@ -1576,19 +1576,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
-        "status": (
-            "BUILD_READY"
-            if product_candidate.get("status") == "PILOT_READY"
-            else "SELECT"
-        ),
-        "lifecycle": {
-            "current": ("BUILD" if product_candidate.get("status") == "PILOT_READY" else "SELECT"),
+        "status": ("BUILD_READY" if build_ready else ("COLLECTIVE_REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),\n        "build_gate": {\n            "passed": build_ready,\n            "candidate_pilot_ready": product_candidate.get("status") == "PILOT_READY",\n            "collective_ok": bool(collective_summary.get("ok")),\n            "collective_round2_valid": int(collective_summary.get("round2_valid") or 0),\n            "jarvis_decision": jarvis_decision,\n        },\n        "lifecycle": {
+            "current": ("BUILD" if build_ready else ("REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),
             "stages": ["SELECT","BUILD","LAUNCH","MEASURE","IMPROVE"],
             "launch_policy": "MVP pubblico sul perimetro NEO autorizzato; promozione organica non-spam; nessuna spesa, contratto o account personale senza approvazione",
         },
         "jarvis": jarvis_review,
-        "next_gate": ("BUILD: genera e pubblica un MVP reversibile sul perimetro NEO autorizzato, poi misura interesse e conversioni." if product_candidate.get("status") == "PILOT_READY" else "SELECT: scegli la migliore opportunita a costo zero/minimo disponibile e prepara un MVP testabile."),
-        "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
+        "next_gate": ("BUILD: genera un MVP reversibile sul perimetro NEO autorizzato, poi misura interesse e conversioni." if build_ready else ("REVIEW: il candidato deve superare mente collettiva e Jarvis prima del BUILD." if product_candidate.get("status") == "PILOT_READY" else "SELECT: raccogli evidenza convergente e prepara un candidato testabile.")),\n        "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
     }
     _record_director_result(result)
     _save_local_state()
