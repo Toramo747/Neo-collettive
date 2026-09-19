@@ -3,7 +3,8 @@ import html
 import json
 import os
 import ipaddress
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -16,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.18.0"
+VERSION = "0.19.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -711,6 +712,72 @@ def _director_searches(goal: str) -> list[str]:
     return out[:8]
 
 
+async def free_web_search(query: str, limit: int = 6) -> dict:
+    """Free public web discovery via Bing RSS. No API key and no paid provider."""
+    q = " ".join((query or "").strip().split())
+    if not q:
+        return {"ok": False, "query": q, "results": [], "error": "empty_query"}
+    url = "https://www.bing.com/search?format=rss&q=" + quote_plus(q)
+    try:
+        async with httpx.AsyncClient(
+            timeout=min(TIMEOUT, 12),
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 NEO-Collective/" + VERSION},
+        ) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            root = ET.fromstring(r.text)
+            results = []
+            seen = set()
+            for item in root.findall(".//item"):
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                desc = (item.findtext("description") or "").strip()
+                if not link or link in seen:
+                    continue
+                safe, why = _safe_public_https(link)
+                if not safe:
+                    continue
+                seen.add(link)
+                results.append({
+                    "title": title[:300],
+                    "url": link,
+                    "snippet": desc[:1200],
+                    "source": "bing-rss-free",
+                })
+                if len(results) >= max(1, min(limit, 10)):
+                    break
+            return {"ok": True, "query": q, "results": results, "count": len(results)}
+    except Exception as e:
+        return {
+            "ok": False, "query": q, "results": [],
+            "error": type(e).__name__ + ": " + str(e)[:300],
+        }
+
+
+def _jarvis_next_queries(jarvis_result: dict) -> list[str]:
+    try:
+        response = jarvis_result.get("response") or {}
+        analysis = response.get("analysis") or {}
+        values = analysis.get("next_search_queries") or []
+        if isinstance(values, list):
+            return [" ".join(str(x).split()) for x in values if str(x).strip()][:5]
+    except Exception:
+        pass
+    return []
+
+
+async def _free_web_research(queries: list[str], per_query: int = 5) -> list[dict]:
+    clean = []
+    for q in queries:
+        q = " ".join((q or "").strip().split())
+        if q and q.lower() not in {x.lower() for x in clean}:
+            clean.append(q)
+    if not clean:
+        return []
+    return await asyncio.gather(*(free_web_search(q, per_query) for q in clean[:10]))
+
+
 async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     plan = director_plan(goal, budget, hours_per_week)
     research_question = (
@@ -732,9 +799,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
 
     searches = _director_searches(goal)
 
-    # Scouts run concurrently to keep the free Render instance responsive.
-    scout_results = await asyncio.gather(
-        *(ask_agents_data(q, research_question, max_agents) for q in searches)
+    # Free web evidence runs alongside public agent discovery. No paid API key is used.
+    # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
+    followup_queries = _jarvis_next_queries(jarvis_brief)
+    web_queries = searches + followup_queries
+    scout_results, web_research = await asyncio.gather(
+        asyncio.gather(*(ask_agents_data(q, research_question, max_agents) for q in searches)),
+        _free_web_research(web_queries, per_query=5),
     )
     evidence = []
     seen_answers = set()
@@ -765,12 +836,15 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "indica cliente, problema, offerta, costo iniziale, primo test senza spesa o a costo minimo, metrica di successo e rischio principale. "
         "Non dichiarare un guadagno come certo. Non effettuare acquisti, contatti, pubblicazioni o transazioni.\n\nOBIETTIVO:\n" + goal
     )
+    web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
     jarvis_review = await ask_jarvis(
         jarvis_message,
         {
             "phase": "review",
             "plan": plan,
             "external_research": evidence,
+            "web_research": web_research,
+            "web_source_count": web_source_count,
             "valid_external_answers": len(valid),
             "initial_jarvis_brief": jarvis_brief,
         },
@@ -783,8 +857,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "plan": plan,
         "jarvis_brief": jarvis_brief,
         "research": evidence,
+        "web_research": web_research,
+        "web_source_count": web_source_count,
         "valid_external_answers": len(valid),
-        "status": "EVIDENCE_READY" if valid else "NEEDS_MORE_SOURCES",
+        "status": "EVIDENCE_READY" if (valid or web_source_count >= 3) else "NEEDS_MORE_SOURCES",
         "jarvis": jarvis_review,
         "next_gate": "Validare un esperimento; nessuna azione economica viene eseguita automaticamente.",
         "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
@@ -838,6 +914,12 @@ async def neo_inspect_mcp(query: str, limit: int = 4) -> dict:
     _, raw_mcp, errors = await _multi_registry_search(searches, per_query=10)
     inspected = await inspect_mcp_candidates(raw_mcp, limit=max(1, min(limit, 6)))
     return {"ok": True, "query": query, "inspected": inspected, "errors": errors}
+
+
+@mcp.tool()
+async def neo_web_search(query: str, limit: int = 6) -> dict:
+    """Search the public web using a free RSS search surface. No paid API key."""
+    return await free_web_search(query, limit)
 
 
 @mcp.tool()
@@ -1160,10 +1242,11 @@ async def director(request: Request):
     )
     plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     jarvis_html = '<section class="card"><h2>Jarvis</h2><pre>' + html.escape(json.dumps(result.get("jarvis"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    web_html = '<section class="card"><h2>Web gratuito</h2><p><b>Fonti raccolte:</b> ' + str(result.get("web_source_count", 0)) + '</p><pre>' + html.escape(json.dumps(result.get("web_research"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
     for group in result.get("research", []):
         research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(group, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
-    return layout("Director", form + summary + plan_html + jarvis_html + research_html)
+    return layout("Director", form + summary + plan_html + jarvis_html + web_html + research_html)
 
 async def system(request: Request):
     render_info: Any = {"configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID)}
