@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.38.0"
+VERSION = "0.39.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -32,6 +32,7 @@ RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.
 STATE_SNAPSHOT_PATH = os.getenv("NEO_STATE_SNAPSHOT_PATH", "/tmp/neo-autopilot-state.json")
 STATE_ENV_KEY = "NEO_STATE_JSON"
 STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
+POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
 HEARTBEAT_TOKEN = (os.getenv("NEO_HEARTBEAT_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
@@ -833,6 +834,95 @@ def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> di
         "target_state":"NEO seleziona il business, costruisce e pubblica l MVP sul proprio perimetro autorizzato, prepara la distribuzione organica, misura i risultati e migliora; il proprietario interviene sulle azioni protette.",
     }
 
+DEFAULT_POLICY = {
+    "policy_version": 1,
+    "exploration_base": 4,
+    "exploration_stagnant": 5,
+    "stagnation_threshold": 3,
+    "max_exploitation_slots": 2,
+    "smoothing_old_weight": 0.65,
+    "minimum_observations_for_exploitation": 2
+}
+
+
+def _load_policy() -> dict:
+    policy = dict(DEFAULT_POLICY)
+    try:
+        with open(POLICY_PATH, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+        if isinstance(raw, dict):
+            policy.update(raw)
+    except Exception:
+        pass
+    policy["exploration_base"] = max(2, min(6, int(policy.get("exploration_base") or 4)))
+    policy["exploration_stagnant"] = max(policy["exploration_base"], min(7, int(policy.get("exploration_stagnant") or 5)))
+    policy["stagnation_threshold"] = max(1, min(8, int(policy.get("stagnation_threshold") or 3)))
+    policy["max_exploitation_slots"] = max(1, min(3, int(policy.get("max_exploitation_slots") or 2)))
+    policy["smoothing_old_weight"] = max(0.50, min(0.85, float(policy.get("smoothing_old_weight") or 0.65)))
+    policy["minimum_observations_for_exploitation"] = max(1, min(6, int(policy.get("minimum_observations_for_exploitation") or 2)))
+    return policy
+
+
+def _self_improvement_proposal() -> dict:
+    """Return bounded policy changes only; no arbitrary source edits."""
+    policy = _load_policy()
+    perf = AUTOPILOT_STATE.get("family_performance") or {}
+    stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
+    cycles = int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    if cycles < 4:
+        return {"ready": False, "reason": "insufficient_cycles", "cycles_completed": cycles, "policy": policy}
+
+    ranked = sorted(
+        [
+            (float(v.get("score") or 0.0), int(v.get("observations") or 0), k)
+            for k, v in perf.items() if isinstance(v, dict)
+        ],
+        reverse=True,
+    )
+    top = ranked[0] if ranked else (0.0, 0, None)
+    changes = {}
+    rationale = []
+
+    if stagnation >= int(policy["stagnation_threshold"]):
+        new_explore = min(6, int(policy["exploration_base"]) + 1)
+        if new_explore != int(policy["exploration_base"]):
+            changes["exploration_base"] = new_explore
+            rationale.append("increase exploration after sustained stagnation")
+
+    if top[2] and top[0] >= 75 and top[1] >= 3:
+        new_min_obs = min(6, max(2, int(policy["minimum_observations_for_exploitation"])))
+        if new_min_obs != int(policy["minimum_observations_for_exploitation"]):
+            changes["minimum_observations_for_exploitation"] = new_min_obs
+        new_exploit = min(3, int(policy["max_exploitation_slots"]) + 1)
+        if new_exploit != int(policy["max_exploitation_slots"]):
+            changes["max_exploitation_slots"] = new_exploit
+            rationale.append("allow more exploitation only after repeated high-quality evidence")
+
+    if not changes and stagnation == 0 and cycles >= 12:
+        new_weight = min(0.80, round(float(policy["smoothing_old_weight"]) + 0.05, 2))
+        if new_weight != float(policy["smoothing_old_weight"]):
+            changes["smoothing_old_weight"] = new_weight
+            rationale.append("make learning more conservative after stable operation")
+
+    return {
+        "ready": bool(changes),
+        "changes": changes,
+        "rationale": rationale,
+        "cycles_completed": cycles,
+        "stagnation_cycles": stagnation,
+        "top_family": {"family": top[2], "score": top[0], "observations": top[1]},
+        "policy": policy,
+        "allowed_keys": [
+            "exploration_base",
+            "exploration_stagnant",
+            "stagnation_threshold",
+            "max_exploitation_slots",
+            "smoothing_old_weight",
+            "minimum_observations_for_exploitation"
+        ]
+    }
+
+
 ENTROPY_SECTORS = [
     {"id":"spreadsheet_ops","terms":["spreadsheet automation","Excel workflow","Google Sheets process"]},
     {"id":"document_ops","terms":["document processing","PDF data extraction","form processing"]},
@@ -887,6 +977,7 @@ def _sector_family(sector_id: str) -> str:
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
     count = max(4, min(count, 10))
+    policy = _load_policy()
     recent = list(AUTOPILOT_STATE.get("recent_sectors") or [])
     recent_set = set(recent[-6:])
     rng = secrets.SystemRandom()
@@ -898,14 +989,16 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     )
     exploit_pool = [
         x for x in ranked
-        if _performance_score(_sector_family(x["id"])) > 0 and x["id"] not in recent_set
+        if _performance_score(_sector_family(x["id"])) > 0
+        and int((AUTOPILOT_STATE.get("family_performance") or {}).get(_sector_family(x["id"]), {}).get("observations") or 0) >= int(policy["minimum_observations_for_exploitation"])
+        and x["id"] not in recent_set
     ]
     if not exploit_pool:
         exploit_pool = [x for x in ranked if _performance_score(_sector_family(x["id"])) > 0]
 
     stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
-    exploration_slots = 5 if stagnation >= 3 else 4
-    exploitation_slots = max(1, min(2, count - exploration_slots - 1))
+    exploration_slots = int(policy["exploration_stagnant"] if stagnation >= int(policy["stagnation_threshold"]) else policy["exploration_base"])
+    exploitation_slots = max(1, min(int(policy["max_exploitation_slots"]), count - exploration_slots - 1))
 
     chosen = []
     for sector in exploit_pool[:exploitation_slots]:
@@ -951,6 +1044,7 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "exploitation_slots": exploitation_slots,
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
         "policy": "exploit evidence-producing families while preserving majority exploration; increase exploration after stagnation",
+        "adaptive_policy": policy,
     }
     AUTOPILOT_STATE["last_search_strategy"] = strategy
     return strategy
@@ -982,7 +1076,9 @@ def _update_family_performance(evidence_quality: dict) -> dict:
         )
         cycle_score = max(0, min(100, cycle_score))
         previous_score = float(old.get("score") or 0.0)
-        smoothed = cycle_score if observations == 1 else round(previous_score * 0.65 + cycle_score * 0.35, 2)
+        policy = _load_policy()
+        old_weight = float(policy["smoothing_old_weight"])
+        smoothed = cycle_score if observations == 1 else round(previous_score * old_weight + cycle_score * (1.0 - old_weight), 2)
         best = max(int(old.get("best_gap_score") or 0), gap)
         qualified_hits = int(old.get("qualified_hits") or 0) + (1 if qualified else 0)
         perf[family] = {
@@ -2126,6 +2222,11 @@ def _iso_age_seconds(value: str | None) -> float | None:
         return None
 
 
+async def api_self_improvement_proposal(request: Request):
+    proposal = _self_improvement_proposal()
+    return JSONResponse({"ok": True, "neo_version": VERSION, "proposal": proposal})
+
+
 async def api_heartbeat(request: Request):
     """Wake-safe idempotent trigger for an external free scheduler."""
     if HEARTBEAT_TOKEN:
@@ -2290,6 +2391,7 @@ app = Starlette(
         Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
+        Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
