@@ -1,0 +1,87 @@
+name: NEO Self Evolution
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neo-self-evolution
+  cancel-in-progress: false
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ask NEO for bounded policy proposal
+        id: proposal
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --retry 2 --max-time 90 \
+            "https://neo-collettive.onrender.com/api/self-improvement/proposal" > /tmp/proposal.json
+          python - <<'PY'
+          import json
+          p=json.load(open("/tmp/proposal.json",encoding="utf-8")).get("proposal",{})
+          allowed={"exploration_base","exploration_stagnant","stagnation_threshold","max_exploitation_slots","smoothing_old_weight","minimum_observations_for_exploitation"}
+          changes=p.get("changes") or {}
+          if not p.get("ready") or not changes:
+              open("/tmp/ready","w").write("0")
+              raise SystemExit
+          if not set(changes) <= allowed:
+              raise SystemExit("proposal contains forbidden keys")
+          policy=json.load(open("neo_policy.json",encoding="utf-8"))
+          policy.update(changes)
+          policy["exploration_base"]=max(2,min(6,int(policy["exploration_base"])))
+          policy["exploration_stagnant"]=max(policy["exploration_base"],min(7,int(policy["exploration_stagnant"])))
+          policy["stagnation_threshold"]=max(1,min(8,int(policy["stagnation_threshold"])))
+          policy["max_exploitation_slots"]=max(1,min(3,int(policy["max_exploitation_slots"])))
+          policy["smoothing_old_weight"]=max(.50,min(.85,float(policy["smoothing_old_weight"])))
+          policy["minimum_observations_for_exploitation"]=max(1,min(6,int(policy["minimum_observations_for_exploitation"])))
+          policy["policy_version"]=int(policy.get("policy_version",0))+1
+          with open("neo_policy.json","w",encoding="utf-8") as f:
+              json.dump(policy,f,indent=2,ensure_ascii=False); f.write("\n")
+          open("/tmp/ready","w").write("1")
+          PY
+
+      - name: Increment patch version
+        run: |
+          set -euo pipefail
+          [ "$(cat /tmp/ready)" = "1" ] || exit 0
+          python - <<'PY'
+          import re
+          p="cloud_mcp.py"
+          s=open(p,encoding="utf-8").read()
+          m=re.search(r'^VERSION = "(\d+)\.(\d+)\.(\d+)"',s,re.M)
+          if not m: raise SystemExit("VERSION not found")
+          a,b,c=map(int,m.groups())
+          s=s[:m.start()]+f'VERSION = "{a}.{b}.{c+1}"'+s[m.end():]
+          open(p,"w",encoding="utf-8").write(s)
+          PY
+
+      - name: Validate source and policy
+        run: |
+          set -euo pipefail
+          [ "$(cat /tmp/ready)" = "1" ] || exit 0
+          python -m py_compile cloud_mcp.py jarvis_service/app.py
+          python -m json.tool neo_policy.json >/dev/null
+          git diff --exit-code -- .github/workflows || true
+          CHANGED="$(git diff --name-only)"
+          FORBIDDEN="$(printf '%s\n' "$CHANGED" | grep -Ev '^(cloud_mcp.py|neo_policy.json)$' || true)"
+          [ -z "$FORBIDDEN" ] || { echo "Forbidden files changed: $FORBIDDEN"; exit 1; }
+
+      - name: Commit safe evolution
+        run: |
+          set -euo pipefail
+          [ "$(cat /tmp/ready)" = "1" ] || exit 0
+          git config user.name "NEO Self Evolution"
+          git config user.email "actions@users.noreply.github.com"
+          git add cloud_mcp.py neo_policy.json
+          git diff --cached --quiet && exit 0
+          git commit -m "NEO autonomous bounded policy evolution"
+          git push
