@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -63,13 +63,49 @@ def _flatten_answers(context: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _flatten_evidence_scouts(context: dict[str, Any]) -> list[dict[str, Any]]:
+    out = []
+    scouts = context.get("evidence_scouts") or []
+    if not isinstance(scouts, list):
+        return out
+    for item in scouts:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "")
+        text = str(item.get("text") or item.get("snippet") or "")
+        source = str(item.get("source") or "unknown")
+        url = str(item.get("url") or "")
+        low = (title + " " + text).lower()
+        pain_markers = [m for m in [
+            "manual", "repetitive", "time consuming", "spreadsheet", "data entry",
+            "workflow", "crm", "lead", "automation", "automate", "waste time",
+            "looking for", "need help", "problem", "pain", "hours", "freelance",
+            "consultant", "job", "hiring"
+        ] if m in low]
+        commercial_markers = [m for m in [
+            "pricing", "budget", "paid", "contract", "freelance", "job", "hiring",
+            "consultant", "service", "quote", "cost", "rate"
+        ] if m in low]
+        if pain_markers:
+            out.append({
+                "source": source,
+                "title": title[:300],
+                "url": url,
+                "text": text[:4000],
+                "pain_markers": sorted(set(pain_markers)),
+                "commercial_markers": sorted(set(commercial_markers)),
+            })
+    return out
+
+
 def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     answers = _flatten_answers(context)
+    scout_evidence = _flatten_evidence_scouts(context)
     vendors = [a for a in answers if a["vendor"]]
     independent = [a for a in answers if (not a["vendor"]) and a["evidence_markers"]]
     noise = [a for a in answers if (not a["vendor"]) and (not a["evidence_markers"])]
 
-    corpus = " ".join(a["text"].lower() for a in independent)
+    corpus = " ".join(a["text"].lower() for a in independent) + " " + " ".join(a["text"].lower() for a in scout_evidence)
     opportunity_defs = [
         {
             "id": "lead_automation",
@@ -109,7 +145,10 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             })
     opportunities.sort(key=lambda x: x["signal_count"], reverse=True)
 
-    if independent:
+    distinct_sources = sorted({a["source"] for a in scout_evidence})
+    commercial_scouts = [a for a in scout_evidence if a["commercial_markers"]]
+
+    if independent or scout_evidence:
         evidence_state = "PARTIAL_EVIDENCE"
     elif answers:
         evidence_state = "VENDOR_NOISE_ONLY"
@@ -124,6 +163,9 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             "vendor_responses": len(vendors),
             "independent_signals": len(independent),
             "noise_responses": len(noise),
+            "evidence_scout_signals": len(scout_evidence),
+            "evidence_scout_sources": len(distinct_sources),
+            "commercial_scout_signals": len(commercial_scouts),
         },
         "vendor_responses": [
             {"agent": a["agent"], "query": a["query"], "markers": a["vendor_markers"]}
@@ -133,8 +175,9 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             {"agent": a["agent"], "query": a["query"], "markers": a["evidence_markers"]}
             for a in independent
         ],
+        "evidence_scouts": scout_evidence[:20],
         "opportunities": opportunities,
-        "decision": "VALIDATE" if independent and opportunities else "SEARCH_MORE",
+        "decision": "VALIDATE" if opportunities and ((len(distinct_sources) >= 2 and len(scout_evidence) >= 3) or independent) else "SEARCH_MORE",
         "next_search_queries": [
             "customer pain evidence",
             "market demand",
