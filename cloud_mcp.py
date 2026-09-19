@@ -5,7 +5,7 @@ import os
 import secrets
 import ipaddress
 from datetime import datetime, timezone
-from urllib.parse import urlparse, quote_plus
+from urllib.parse import urlparse, quote_plus, parse_qs
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.41.0"
+VERSION = "0.42.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1497,7 +1497,13 @@ def build_candidate(evidence_quality: dict) -> dict:
     name,offer=products.get(family,products["workflow_automation"])
     return {"status":"PILOT_READY","family":family,"name":name,"offer":offer,"price":"pilot gratuito","delivery":"report automatico","payment":"disabled until validated","evidence":clusters.get(family,{})}
 
-def run_pilot(process: str, family: str, minutes_each: float = 0.0, weekly_runs: float = 0.0) -> dict:
+def run_pilot(
+    process: str,
+    family: str,
+    minutes_each: float = 0.0,
+    weekly_runs: float = 0.0,
+    weekly_errors: float = 0.0,
+) -> dict:
     text=" ".join((process or "").strip().split())
     low=text.lower()
     manual=["manual","manualmente","copia","incolla","excel","spreadsheet","foglio","google sheets","email","crm","pdf","portale","ripetitivo","csv"]
@@ -1506,24 +1512,46 @@ def run_pilot(process: str, family: str, minutes_each: float = 0.0, weekly_runs:
     mh=sorted({x for x in manual if x in low})
     ih=sorted({x for x in integration if x in low})
     rh=sorted({x for x in risks if x in low})
+
     score=min(100,max(10,20+10*len(mh)+5*len(ih)-(20 if len(text)<40 else 0)))
     weekly_minutes=max(0.0,minutes_each)*max(0.0,weekly_runs)
     conservative_saving=round(weekly_minutes*0.35,1) if weekly_minutes else None
     likely_saving=round(weekly_minutes*0.60,1) if weekly_minutes else None
+    annual_hours_low=round((conservative_saving or 0)*52/60,1) if weekly_minutes else None
+    annual_hours_high=round((likely_saving or 0)*52/60,1) if weekly_minutes else None
+    weekly_errors=max(0.0,weekly_errors)
+    estimated_errors_avoided=[
+        round(weekly_errors*0.25,1),
+        round(weekly_errors*0.55,1),
+    ] if weekly_errors else None
 
-    steps=[]
+    candidates=[]
+    def add_candidate(name: str, reason: str, impact: int, effort: int, risk: str="low"):
+        priority=max(1,min(100,int(impact*12-effort*6+(10 if risk=="low" else 0))))
+        candidates.append({
+            "name":name,
+            "reason":reason,
+            "impact":impact,
+            "effort":effort,
+            "risk":risk,
+            "priority_score":priority,
+        })
+
     if any(x in low for x in ["excel","spreadsheet","foglio","sheets","csv"]):
-        steps.append("normalizzare input e colonne del foglio")
+        add_candidate("Normalizzazione input foglio","Ridurre formati incoerenti, colonne manuali e controlli ripetitivi.",5,2)
     if any(x in low for x in ["copia","incolla","data entry","manualmente","manual"]):
-        steps.append("eliminare copia/incolla con importazione o regole automatiche")
+        add_candidate("Eliminazione copia/incolla","Sostituire trasferimenti manuali con importazione o regole controllate.",5,2)
     if "email" in low:
-        steps.append("estrarre/alimentare automaticamente i dati provenienti da email")
+        add_candidate("Acquisizione dati da email","Estrarre allegati o campi e prepararli per il flusso successivo.",4,3)
     if "pdf" in low:
-        steps.append("estrarre campi strutturati dai PDF con verifica umana")
+        add_candidate("Estrazione campi da PDF","Estrarre dati strutturati mantenendo verifica umana.",4,4,"medium")
     if "crm" in low or "gestionale" in low:
-        steps.append("sincronizzare foglio e gestionale/CRM tramite API, CSV o passaggio controllato")
-    if not steps:
-        steps=["mappare input, trasformazioni e output","identificare il passaggio manuale piu ripetitivo"]
+        add_candidate("Sincronizzazione gestionale/CRM","Ridurre doppio inserimento con API, CSV o passaggio controllato.",5,4,"medium")
+    if not candidates:
+        add_candidate("Mappatura processo","Separare input, regole, controlli e output prima di automatizzare.",3,1)
+        add_candidate("Automazione del passaggio piu ripetitivo","Scegliere un solo passaggio reversibile da testare.",4,2)
+
+    candidates.sort(key=lambda x:(x["priority_score"],x["impact"]),reverse=True)
 
     complexity="bassa"
     if len(ih)>=3 or rh:
@@ -1531,36 +1559,52 @@ def run_pilot(process: str, family: str, minutes_each: float = 0.0, weekly_runs:
     if len(rh)>=2:
         complexity="alta"
 
+    blockers=[]
+    if len(text)<40:
+        blockers.append("Descrizione troppo breve per una stima affidabile.")
+    if rh:
+        blockers.append("Sono presenti indicatori di dati sensibili: usare dati fittizi o minimizzati nel pilot.")
+    if not weekly_minutes:
+        blockers.append("Aggiungere tempo e frequenza per misurare il beneficio prima/dopo.")
+
     return {
-      "pilot":"SheetFlow Audit" if family=="spreadsheet_process" else "NEO Automation Audit",
+      "mvp":"SheetFlow Audit",
+      "mvp_version":"1.0",
       "family":family,
+      "status":"AUDIT_READY",
       "automation_readiness":score,
       "complexity":complexity,
       "manual_signals":mh,
       "integration_signals":ih,
       "risk_signals":rh,
-      "automation_candidates":steps[:5],
-      "time_model":{
-        "minutes_each":max(0.0,minutes_each),
-        "weekly_runs":max(0.0,weekly_runs),
+      "automation_candidates":candidates[:5],
+      "measurement":{
         "current_weekly_minutes":round(weekly_minutes,1),
         "estimated_weekly_minutes_saved_range":[conservative_saving,likely_saving] if weekly_minutes else None,
-        "note":"Stima preliminare basata sui dati dichiarati, da verificare con una misurazione reale."
+        "estimated_annual_hours_saved_range":[annual_hours_low,annual_hours_high] if weekly_minutes else None,
+        "current_weekly_errors":weekly_errors,
+        "estimated_weekly_errors_avoided_range":estimated_errors_avoided,
+        "confidence":"preliminary",
+        "rule":"Confrontare dati reali prima/dopo sullo stesso processo."
       },
-      "recommended_mvp":[
-        "mappare input, output e regole",
-        "misurare frequenza, volume, errori e tempo attuale",
-        "automatizzare un solo passaggio reversibile",
+      "build_plan":[
+        "documentare input, output e regole",
+        "acquisire una misura baseline di tempo ed errori",
+        "automatizzare il candidato con priorita piu alta",
         "mantenere controllo umano e log",
-        "confrontare tempo/errori prima e dopo il pilot"
+        "eseguire il pilot su dati non sensibili o minimizzati",
+        "confrontare baseline e risultato prima di estendere l'automazione"
       ],
-      "pilot_offer":{
-        "price":"gratuito",
-        "delivery":"report automatico con priorita di automazione",
-        "payment":"disabled",
-        "success_metric":"tempo o errori ridotti su un singolo processo reale"
+      "blockers":blockers,
+      "safety":{
+        "spending":False,
+        "payments":False,
+        "commercial_outreach":False,
+        "external_publishing":False,
+        "contracts":False,
+        "personal_accounts":False,
       },
-      "note":"Analisi pilota; non inviare password, credenziali, dati sanitari o altri dati sensibili."
+      "note":"MVP di audit tecnico. Non inserire password, credenziali, dati sanitari o altri dati sensibili."
     }
 
 
@@ -2411,23 +2455,61 @@ async def api_autopilot_status(request: Request):
     return JSONResponse({"ok": True, "neo_version": VERSION, "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
 
+async def _venture_payload(request: Request) -> dict:
+    if request.method == "POST":
+        ctype=(request.headers.get("content-type") or "").lower()
+        if "application/json" in ctype:
+            try:
+                raw=await request.json()
+                return raw if isinstance(raw,dict) else {}
+            except Exception:
+                return {}
+        try:
+            body=(await request.body()).decode("utf-8","replace")
+            parsed=parse_qs(body,keep_blank_values=True)
+            return {k:(v[-1] if isinstance(v,list) and v else "") for k,v in parsed.items()}
+        except Exception:
+            return {}
+    return dict(request.query_params)
+
+
+def _float_value(raw: Any) -> float:
+    try:
+        return max(0.0,float(raw or 0))
+    except (TypeError,ValueError):
+        return 0.0
+
+
 async def venture(request: Request):
-    family=(request.query_params.get("family") or "spreadsheet_process").strip()
-    process=(request.query_params.get("process") or "").strip()
-    try:
-        minutes_each=max(0.0,float(request.query_params.get("minutes_each") or "0"))
-    except ValueError:
-        minutes_each=0.0
-    try:
-        weekly_runs=max(0.0,float(request.query_params.get("weekly_runs") or "0"))
-    except ValueError:
-        weekly_runs=0.0
-    body='<section class="card"><span class="tag">FACTORY</span><h2>SheetFlow Audit</h2><p>Pilot gratuito: descrivi un processo Excel/Google Sheets e NEO individua passaggi manuali, automazioni possibili, rischi e una stima preliminare del tempo recuperabile.</p><p class="muted">Non inserire password, credenziali o dati sensibili. Pagamenti disabilitati.</p></section>'
-    body+='<section class="card"><form method="get" action="/venture"><input type="hidden" name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo attuale</label><textarea name="process" placeholder="Esempio: ricevo un CSV via email, copio le righe in Excel, controllo alcune colonne e poi aggiorno il CRM...">'+html.escape(process)+'</textarea><label>Minuti impiegati ogni volta (facoltativo)</label><input name="minutes_each" type="number" min="0" step="1" value="'+str(minutes_each)+'"><label>Quante volte a settimana (facoltativo)</label><input name="weekly_runs" type="number" min="0" step="1" value="'+str(weekly_runs)+'"><button type="submit">Genera audit gratuito</button></form></section>'
+    payload=await _venture_payload(request)
+    family=str(payload.get("family") or "spreadsheet_process").strip()
+    process=str(payload.get("process") or "").strip()
+    minutes_each=_float_value(payload.get("minutes_each"))
+    weekly_runs=_float_value(payload.get("weekly_runs"))
+    weekly_errors=_float_value(payload.get("weekly_errors"))
+
+    body='<section class="card"><span class="tag">FACTORY · MVP</span><h2>SheetFlow Audit</h2><p>Descrivi un processo Excel/Google Sheets: NEO individua i passaggi manuali, ordina le automazioni per priorita e prepara una baseline misurabile.</p><p class="muted">Nessuna spesa o pagamento. Non inserire password, credenziali o dati sensibili.</p></section>'
+    body+='<section class="card"><form method="post" action="/venture"><input type="hidden" name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo attuale</label><textarea name="process" placeholder="Esempio: ricevo un CSV via email, copio le righe in Excel, controllo alcune colonne e aggiorno il CRM...">'+html.escape(process)+'</textarea><label>Minuti impiegati ogni volta</label><input name="minutes_each" type="number" min="0" step="1" value="'+str(minutes_each)+'"><label>Quante volte a settimana</label><input name="weekly_runs" type="number" min="0" step="1" value="'+str(weekly_runs)+'"><label>Errori/correzioni medi a settimana</label><input name="weekly_errors" type="number" min="0" step="1" value="'+str(weekly_errors)+'"><button type="submit">Genera audit MVP</button></form></section>'
     if process:
-        pilot=run_pilot(process,family,minutes_each,weekly_runs)
-        body+='<section class="card"><h2>Report SheetFlow</h2><pre>'+html.escape(json.dumps(pilot,ensure_ascii=False,indent=2))+'</pre><p class="muted">Questo e un pilot di validazione: le stime devono essere verificate su un processo reale prima di attribuire valore economico.</p></section>'
+        audit=run_pilot(process,family,minutes_each,weekly_runs,weekly_errors)
+        body+='<section class="card"><h2>Report SheetFlow MVP</h2><pre>'+html.escape(json.dumps(audit,ensure_ascii=False,indent=2))+'</pre><p class="muted">Le stime restano preliminari finche non vengono confrontate con misure reali prima/dopo.</p></section>'
     return layout("SheetFlow Audit",body)
+
+
+async def api_venture_audit(request: Request):
+    payload=await _venture_payload(request)
+    process=str(payload.get("process") or "").strip()
+    if not process:
+        return JSONResponse({"ok":False,"error":"process_required"},status_code=400)
+    family=str(payload.get("family") or "spreadsheet_process").strip()
+    audit=run_pilot(
+        process,
+        family,
+        _float_value(payload.get("minutes_each")),
+        _float_value(payload.get("weekly_runs")),
+        _float_value(payload.get("weekly_errors")),
+    )
+    return JSONResponse({"ok":True,"neo_version":VERSION,"audit":audit})
 
 
 async def system(request: Request):
@@ -2512,7 +2594,8 @@ app = Starlette(
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
-        Route("/venture", venture, methods=["GET"]),
+        Route("/venture", venture, methods=["GET","POST"]),
+        Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
