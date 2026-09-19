@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.19.0"
+VERSION = "0.20.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -689,22 +689,20 @@ def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> di
 
 
 def _director_searches(goal: str) -> list[str]:
-    """Business-oriented discovery terms. Kept separate from cybersecurity query expansion."""
+    """Evidence-oriented business searches rather than generic business keywords."""
     searches = [
-        "market research",
-        "small business automation",
-        "B2B services",
-        "B2B SaaS",
-        "lead generation",
-        "digital products",
-        "workflow automation",
-        "sales",
+        '"manual repetitive tasks" small business automation',
+        '"spreadsheet" "manual process" business problem',
+        '"automation" freelance jobs small business',
+        '"workflow automation" pricing small business',
+        '"AI automation" service pricing business',
+        '"CRM" manual data entry small business',
+        '"lead management" manual process small business',
+        '"business automation" case study time saved',
     ]
     low = (goal or "").lower()
-    if "ai" in low or "agent" in low or "automat" in low:
-        searches = ["AI automation", "AI agents business", "workflow automation"] + searches
     if "online" in low or "digit" in low:
-        searches = ["online business", "digital products"] + searches
+        searches += ['"digital product" customer demand evidence', '"online service" small business pain point']
     out = []
     for q in searches:
         if q.lower() not in {x.lower() for x in out}:
@@ -860,7 +858,11 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "web_research": web_research,
         "web_source_count": web_source_count,
         "valid_external_answers": len(valid),
-        "status": "EVIDENCE_READY" if (valid or web_source_count >= 3) else "NEEDS_MORE_SOURCES",
+        "status": (
+            "EVIDENCE_READY"
+            if (((jarvis_review.get("response") or {}).get("analysis") or {}).get("decision") == "VALIDATE")
+            else "NEEDS_MORE_SOURCES"
+        ),
         "jarvis": jarvis_review,
         "next_gate": "Validare un esperimento; nessuna azione economica viene eseguita automaticamente.",
         "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
