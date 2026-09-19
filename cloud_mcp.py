@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.30.0"
+VERSION = "0.31.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1701,6 +1701,27 @@ async def api_director_results(request: Request):
     return JSONResponse({"ok": True, "count": len(rows), "latest": rows[-1] if rows else None, "results": rows})
 
 
+async def api_director_run(request: Request):
+    """Run one autonomous, zero-budget Director cycle and return the compact result."""
+    goal=(request.query_params.get("goal") or (
+        "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
+        "con investimento iniziale minimo. Coordina Jarvis, agenti ed evidence scouts. Privilegia domanda pagante verificabile, "
+        "costi fissi bassi e automazione. Procedi solo con esperimenti reversibili a costo zero/minimo. "
+        "Non effettuare spese, pagamenti, contratti, outreach commerciale, uso di account personali o transazioni senza approvazione umana."
+    )).strip()
+    try:
+        budget=max(0.0,float(request.query_params.get("budget") or "0"))
+    except ValueError:
+        budget=0.0
+    try:
+        hours=max(1,min(int(request.query_params.get("hours") or "5"),80))
+    except ValueError:
+        hours=5
+    result=await director_run(goal,budget,hours,3)
+    compact=_compact_director_result(result)
+    return JSONResponse({"ok":True,"autopilot":True,"result":compact})
+
+
 async def venture(request: Request):
     family=(request.query_params.get("family") or "spreadsheet_process").strip()
     process=(request.query_params.get("process") or "").strip()
@@ -1786,6 +1807,7 @@ app = Starlette(
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
+        Route("/api/director/run", api_director_run, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
