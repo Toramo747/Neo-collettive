@@ -135,13 +135,13 @@ jobs:
       - name: Publish runtime snapshot
         run: |
           set -euo pipefail
+          cp neo_latest_result.json /tmp/neo_latest_result.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/neo_latest_result.json neo_latest_result.json
           git add neo_latest_result.json
           git diff --cached --quiet && exit 0
           git config user.name "NEO Runtime Snapshot"
           git config user.email "actions@users.noreply.github.com"
           git commit -m "NEO runtime snapshot"
-          git fetch origin main
-          git reset --soft origin/main
-          git add neo_latest_result.json
-          git commit -m "NEO runtime snapshot" || true
           git push origin HEAD:main
