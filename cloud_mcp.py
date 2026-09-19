@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.43.0"
+VERSION = "0.44.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -280,12 +280,21 @@ def _score_agent(agent: dict, query: str, problem: str) -> tuple[int, list[str]]
         reasons.append("match: " + ", ".join(overlap[:8]))
     task_info = agent.get("task_conformance") or {}
     category = task_info.get("category") if isinstance(task_info, dict) else None
-    if agent.get("task_verified") or category == "WORKING":
-        score += 4
+    if category == "WORKING":
+        score += 14
+        reasons.append("A2A message/send verified WORKING")
+    elif agent.get("task_verified"):
+        score += 10
         reasons.append("task verified")
+    if agent.get("conformance") is True:
+        score += 4
+        reasons.append("standard A2A card")
     if agent.get("is_healthy") is True:
-        score += 2
+        score += 4
         reasons.append("healthy")
+    if category and category != "WORKING":
+        score -= 10
+        reasons.append("task_conformance=" + str(category))
     desc = _agent_text(agent).lower()
     narrow_markers = ["breach lookup", "check an exact verified email", "solana", "payment", "deal flow", "product hunt launch window", "owner protection"]
     if any(m in desc for m in narrow_markers) and len(overlap) < 2:
@@ -294,14 +303,42 @@ def _score_agent(agent: dict, query: str, problem: str) -> tuple[int, list[str]]
     return score, reasons
 
 
+def _extract_text_fragments(value: Any, depth: int = 0) -> list[str]:
+    if depth > 6:
+        return []
+    if isinstance(value,str):
+        text=value.strip()
+        return [text] if text else []
+    if isinstance(value,list):
+        out=[]
+        for item in value[:20]:
+            out.extend(_extract_text_fragments(item,depth+1))
+        return out
+    if not isinstance(value,dict):
+        return []
+    out=[]
+    preferred=("text","response","content","message","result","output","parts","artifacts","history","data")
+    for key in preferred:
+        if key in value:
+            out.extend(_extract_text_fragments(value.get(key),depth+1))
+    if not out:
+        for key,val in list(value.items())[:30]:
+            if key in {"id","messageId","taskId","contextId","status","role","kind","type","metadata"}:
+                continue
+            out.extend(_extract_text_fragments(val,depth+1))
+    return out
+
+
 def _response_text(answer: dict) -> str:
-    payload = answer.get("response")
-    if isinstance(payload, dict):
-        if isinstance(payload.get("response"), str):
-            return payload["response"]
-        if isinstance(payload.get("text"), str):
-            return payload["text"]
-    return json.dumps(payload, ensure_ascii=False, default=str)
+    payload=answer.get("response")
+    fragments=_extract_text_fragments(payload)
+    if fragments:
+        seen=[]
+        for x in fragments:
+            if x not in seen:
+                seen.append(x)
+        return "\n".join(seen)[:12000]
+    return json.dumps(payload, ensure_ascii=False, default=str)[:12000]
 
 
 def _quality_check(answer: dict, problem: str) -> tuple[bool, str]:
@@ -357,17 +394,46 @@ def _expand_queries(query: str, problem: str) -> list[str]:
 
 async def _multi_registry_search(search_queries: list[str], per_query: int = 10) -> tuple[list[dict], list[dict], list[dict]]:
     async def search_a2a(q: str):
-        try:
-            data = await get_json(A2A_REGISTRY + "/api/agents", {"search": q, "limit": per_query})
-            if isinstance(data, dict):
-                items = data.get("agents") or data.get("items") or data.get("data") or []
-            elif isinstance(data, list):
-                items = data
-            else:
-                items = []
-            return q, items, None
-        except Exception as e:
-            return q, [], str(e)[:300]
+        attempts=[
+            {"search":q,"limit":per_query,"conformance":"standard","task_verified":"true"},
+            {"search":q,"limit":per_query,"conformance":"standard"},
+            {"search":q,"limit":per_query},
+        ]
+        last_error=None
+        for params in attempts:
+            try:
+                data=await get_json(A2A_REGISTRY + "/api/agents",params)
+                if isinstance(data,dict):
+                    items=data.get("agents") or data.get("items") or data.get("data") or []
+                elif isinstance(data,list):
+                    items=data
+                else:
+                    items=[]
+                if items:
+                    return q,items,None
+            except Exception as e:
+                last_error=str(e)[:300]
+        return q,[],last_error
+
+    async def search_a2a_generalists():
+        fallback_queries=["research analysis","LLM orchestration","critical review","business analysis"]
+        rows=[]
+        for q in fallback_queries:
+            try:
+                data=await get_json(A2A_REGISTRY + "/api/agents",{
+                    "search":q,"limit":min(per_query,8),
+                    "conformance":"standard","task_verified":"true"
+                })
+                if isinstance(data,dict):
+                    items=data.get("agents") or data.get("items") or data.get("data") or []
+                elif isinstance(data,list):
+                    items=data
+                else:
+                    items=[]
+                rows.extend([x for x in items if isinstance(x,dict)])
+            except Exception:
+                continue
+        return rows
 
     async def search_mcp(q: str):
         try:
@@ -383,6 +449,7 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
             return q, [], str(e)[:300]
 
     a2a_results = await asyncio.gather(*(search_a2a(q) for q in search_queries))
+    generalists = await search_a2a_generalists()
     mcp_results = await asyncio.gather(*(search_mcp(q) for q in search_queries))
 
     agents_by_id = {}
@@ -399,6 +466,14 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
                 continue
             agents_by_id.setdefault(str(agent_id), agent)
             provenance.setdefault(str(agent_id), []).append(q)
+
+    for agent in generalists:
+        agent_id=agent.get("id") or agent.get("agent_id") or agent.get("slug")
+        if not agent_id:
+            continue
+        key=str(agent_id)
+        agents_by_id.setdefault(key,agent)
+        provenance.setdefault(key,[]).append("verified_generalist_fallback")
 
     mcp_by_key = {}
     for q, items, err in mcp_results:
@@ -471,6 +546,76 @@ def _update_agent_trust(tested: list[dict]) -> dict:
     return trust
 
 
+
+def _a2a_message_payload(question: str) -> dict:
+    return {
+        "jsonrpc":"2.0",
+        "id":"neo-"+secrets.token_hex(8),
+        "method":"message/send",
+        "params":{
+            "message":{
+                "role":"user",
+                "parts":[{"kind":"text","text":question}],
+                "messageId":"neo-msg-"+secrets.token_hex(8),
+            }
+        },
+    }
+
+
+async def _ask_a2a_transport(agent: dict, question: str) -> dict:
+    agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
+    name=agent.get("name") or agent_id or "unknown"
+    attempts=[]
+
+    # Registry proxy is preferred because it normalizes independently operated agents.
+    if agent_id:
+        attempts.append(("registry_chat",f"{A2A_REGISTRY}/api/agents/{agent_id}/chat",{"message":question}))
+
+    # Direct A2A message/send fallback using the normalized card URL.
+    direct_url=str(agent.get("url") or "").strip()
+    if direct_url:
+        safe,why=_safe_public_https(direct_url)
+        if safe:
+            attempts.append(("direct_message_send",direct_url,_a2a_message_payload(question)))
+
+    errors=[]
+    async with httpx.AsyncClient(timeout=TIMEOUT,follow_redirects=True) as client:
+        for transport_name,url,payload in attempts:
+            try:
+                r=await client.post(url,json=payload,headers={"Accept":"application/json"})
+                if "json" in (r.headers.get("content-type") or "").lower():
+                    try:
+                        body=r.json()
+                    except Exception:
+                        body={"text":r.text[:12000]}
+                else:
+                    body={"text":r.text[:12000]}
+                answer={
+                    "agent":name,"agent_id":agent_id,"ok":r.is_success,
+                    "status":r.status_code,"response":body,
+                    "transport":transport_name,
+                }
+                quality_ok,quality_reason=_quality_check(answer,question)
+                answer["quality_ok"]=quality_ok
+                answer["quality_reason"]=quality_reason
+                if r.is_success and quality_ok:
+                    return answer
+                errors.append({
+                    "transport":transport_name,
+                    "status":r.status_code,
+                    "quality_reason":quality_reason,
+                })
+            except Exception as e:
+                errors.append({"transport":transport_name,"error":type(e).__name__+": "+str(e)[:300]})
+
+    return {
+        "agent":name,"agent_id":agent_id,"ok":False,
+        "quality_ok":False,
+        "quality_reason":"all A2A transports failed quality/transport checks",
+        "transport_errors":errors,
+    }
+
+
 async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dict:
     max_agents = max(1, min(max_agents, MAX_AGENTS))
     search_queries = _expand_queries(query, question)
@@ -510,30 +655,12 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
             break
 
     async def ask(entry) -> dict:
-        score, reasons, agent = entry
-        agent_id = agent.get("id") or agent.get("agent_id") or agent.get("slug")
-        name = agent.get("name") or agent_id or "unknown"
-        try:
-            async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
-                r = await client.post(f"{A2A_REGISTRY}/api/agents/{agent_id}/chat", json={"message": question})
-                body = r.json() if "json" in r.headers.get("content-type", "") else {"text": r.text[:8000]}
-                answer = {
-                    "agent": name, "agent_id": agent_id, "ok": r.is_success,
-                    "status": r.status_code, "response": body,
-                    "relevance_score": score, "selection_reasons": reasons,
-                    "matched_queries": agent.get("_matched_queries") or [],
-                }
-                quality_ok, quality_reason = _quality_check(answer, question)
-                answer["quality_ok"] = quality_ok
-                answer["quality_reason"] = quality_reason
-                return answer
-        except Exception as e:
-            return {
-                "agent": name, "agent_id": agent_id, "ok": False, "error": str(e)[:500],
-                "relevance_score": score, "selection_reasons": reasons,
-                "matched_queries": agent.get("_matched_queries") or [],
-                "quality_ok": False, "quality_reason": "request exception",
-            }
+        score,reasons,agent=entry
+        answer=await _ask_a2a_transport(agent,question)
+        answer["relevance_score"]=score
+        answer["selection_reasons"]=reasons
+        answer["matched_queries"]=agent.get("_matched_queries") or []
+        return answer
 
     tested = await asyncio.gather(*(ask(x) for x in selected)) if selected else []
     _update_agent_trust(tested)
@@ -585,6 +712,8 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
         "rejected_responses": [{
             "agent": a.get("agent"), "agent_id": a.get("agent_id"),
             "reason": a.get("quality_reason"), "score": a.get("relevance_score"),
+            "transport": a.get("transport"),
+            "transport_errors": a.get("transport_errors") or [],
             "matched_queries": a.get("matched_queries") or [],
         } for a in rejected_responses],
         "discovery_errors": discovery_errors,
@@ -745,38 +874,15 @@ async def a2a_health(agent_id: str) -> dict:
 
 async def ask_agent_by_id(agent_id: str, question: str) -> dict:
     try:
-        detail = await get_json(f"{A2A_REGISTRY}/api/agents/{agent_id}")
-        name = detail.get("name") or detail.get("id") or agent_id if isinstance(detail, dict) else agent_id
+        detail=await get_json(f"{A2A_REGISTRY}/api/agents/{agent_id}")
+        if not isinstance(detail,dict):
+            detail={"id":agent_id,"name":agent_id}
     except Exception:
-        detail = {}
-        name = agent_id
-
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
-            r = await client.post(
-                f"{A2A_REGISTRY}/api/agents/{agent_id}/chat",
-                json={"message": question},
-            )
-            if "json" in r.headers.get("content-type", ""):
-                payload = r.json()
-            else:
-                payload = {"text": r.text[:8000]}
-            return {
-                "ok": r.is_success,
-                "agent": name,
-                "agent_id": agent_id,
-                "status": r.status_code,
-                "response": payload,
-                "detail": detail,
-            }
-    except Exception as e:
-        return {
-            "ok": False,
-            "agent": name,
-            "agent_id": agent_id,
-            "error": str(e)[:500],
-            "detail": detail,
-        }
+        detail={"id":agent_id,"name":agent_id}
+    answer=await _ask_a2a_transport(detail,question)
+    answer["detail"]=detail
+    _update_agent_trust([answer])
+    return answer
 
 
 
@@ -2784,6 +2890,24 @@ async def api_venture_audit(request: Request):
     return JSONResponse({"ok":True,"neo_version":VERSION,"audit":audit})
 
 
+async def api_agents_diagnostics(request: Request):
+    trust=AUTOPILOT_STATE.get("agent_trust") or {}
+    rows=sorted(
+        trust.values(),
+        key=lambda x:(int(x.get("observations") or 0),float(x.get("trust") or 0)),
+        reverse=True
+    )
+    working=[x for x in rows if int(x.get("accepted") or 0)>0]
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "tracked_agents":len(rows),
+        "agents_with_valid_answers":len(working),
+        "top_trusted":sorted(rows,key=lambda x:float(x.get("trust") or 0),reverse=True)[:20],
+        "note":"Trust is observational and derived from transport success, relevance and NEO quality checks.",
+    })
+
+
 async def api_memory_status(request: Request):
     trust=AUTOPILOT_STATE.get("agent_trust") or {}
     top=sorted(trust.values(),key=lambda x:(float(x.get("trust") or 0),int(x.get("observations") or 0)),reverse=True)[:20]
@@ -2942,6 +3066,7 @@ app = Starlette(
         Route("/venture", venture, methods=["GET","POST"]),
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
         Route("/api/memory/status", api_memory_status, methods=["GET"]),
+        Route("/api/agents/diagnostics", api_agents_diagnostics, methods=["GET"]),
         Route("/api/builder/status", api_builder_status, methods=["GET"]),
         Route("/api/autonomy/status", api_autonomy_status, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
