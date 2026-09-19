@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.33.2"
+VERSION = "0.34.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -748,15 +748,63 @@ ENTROPY_PATTERNS = [
 ]
 
 
+def _performance_score(family: str) -> float:
+    perf = AUTOPILOT_STATE.get("family_performance") or {}
+    row = perf.get(family) or {}
+    return float(row.get("score") or 0.0)
+
+
+def _sector_family(sector_id: str) -> str:
+    mapping = {
+        "spreadsheet_ops": "spreadsheet_process",
+        "document_ops": "manual_data_entry",
+        "small_business_admin": "workflow_automation",
+        "ecommerce_ops": "workflow_automation",
+        "reporting_compliance": "workflow_automation",
+        "it_hygiene": "it_hygiene",
+        "customer_support": "customer_support",
+        "data_cleanup": "data_cleanup",
+        "website_quality": "website_audit",
+        "local_business_ops": "workflow_automation",
+        "content_ops": "content_ops",
+        "lead_ops": "crm_lead_ops",
+    }
+    return mapping.get(sector_id, "other")
+
+
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
-    """Generate a bounded, diverse search portfolio for each Director cycle."""
+    """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
     count = max(4, min(count, 10))
     recent = list(AUTOPILOT_STATE.get("recent_sectors") or [])
     recent_set = set(recent[-6:])
-    unexplored = [x for x in ENTROPY_SECTORS if x["id"] not in recent_set]
-    pool = unexplored if len(unexplored) >= 4 else ENTROPY_SECTORS[:]
     rng = secrets.SystemRandom()
-    chosen = rng.sample(pool, k=min(4, len(pool)))
+
+    ranked = sorted(
+        ENTROPY_SECTORS,
+        key=lambda x: (_performance_score(_sector_family(x["id"])), x["id"]),
+        reverse=True,
+    )
+    exploit_pool = [
+        x for x in ranked
+        if _performance_score(_sector_family(x["id"])) > 0 and x["id"] not in recent_set
+    ]
+    if not exploit_pool:
+        exploit_pool = [x for x in ranked if _performance_score(_sector_family(x["id"])) > 0]
+
+    stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
+    exploration_slots = 5 if stagnation >= 3 else 4
+    exploitation_slots = max(1, min(2, count - exploration_slots - 1))
+
+    chosen = []
+    for sector in exploit_pool[:exploitation_slots]:
+        if sector not in chosen:
+            chosen.append(sector)
+
+    exploration_pool = [x for x in ENTROPY_SECTORS if x["id"] not in recent_set and x not in chosen]
+    if len(exploration_pool) < exploration_slots:
+        exploration_pool = [x for x in ENTROPY_SECTORS if x not in chosen]
+    rng.shuffle(exploration_pool)
+    chosen.extend(exploration_pool[:exploration_slots])
 
     queries = []
     sectors = []
@@ -766,18 +814,7 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         pattern = rng.choice(ENTROPY_PATTERNS)
         queries.append(pattern.format(term=term))
 
-    # Exploration: deliberately sample sectors outside the current automation-heavy baseline.
-    remaining = [x for x in ENTROPY_SECTORS if x["id"] not in set(sectors)]
-    rng.shuffle(remaining)
-    for sector in remaining:
-        if len(queries) >= count - 2:
-            break
-        sectors.append(sector["id"])
-        term = rng.choice(sector["terms"])
-        pattern = rng.choice(ENTROPY_PATTERNS)
-        queries.append(pattern.format(term=term))
-
-    # Exploitation anchors: keep explicit buying-intent searches in every cycle.
+    # Always retain explicit buying-intent probes.
     queries.extend([
         '"will pay" "manual process" small business',
         '"hiring" freelancer "repetitive task" automation',
@@ -791,16 +828,70 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
 
     AUTOPILOT_STATE["recent_sectors"] = (recent + sectors)[-12:]
     strategy = {
-        "mode": "entropy_explore_exploit",
+        "mode": "adaptive_entropy_explore_exploit",
         "entropy_source": "system_random",
         "queries": out[:count],
         "sectors": sectors[:count],
+        "sector_families": {sid: _sector_family(sid) for sid in sectors[:count]},
         "recent_sector_memory": AUTOPILOT_STATE["recent_sectors"],
-        "exploration_target": "rotate sectors and avoid repeating the same opportunity family every cycle",
-        "exploitation_anchors": 2,
+        "stagnation_cycles": stagnation,
+        "exploration_slots": exploration_slots,
+        "exploitation_slots": exploitation_slots,
+        "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
+        "policy": "exploit evidence-producing families while preserving majority exploration; increase exploration after stagnation",
     }
     AUTOPILOT_STATE["last_search_strategy"] = strategy
     return strategy
+
+
+def _update_family_performance(evidence_quality: dict) -> dict:
+    """Update bounded evidence performance memory after each Director cycle."""
+    perf = dict(AUTOPILOT_STATE.get("family_performance") or {})
+    clusters = evidence_quality.get("clusters") or {}
+    any_progress = False
+
+    for family, data in clusters.items():
+        if not isinstance(data, dict):
+            continue
+        old = dict(perf.get(family) or {})
+        observations = int(old.get("observations") or 0) + 1
+        domains = int(data.get("independent_domains") or 0)
+        strong = int(data.get("strong_commercial_domains") or 0)
+        gap = int(data.get("gap_score") or 0)
+        tags = set(data.get("signal_types") or [])
+        qualified = bool(data.get("qualified"))
+        cycle_score = (
+            min(35, gap)
+            + min(20, domains * 5)
+            + min(15, strong * 5)
+            + (15 if "BUY_INTENT" in tags else 0)
+            + (20 if "PAID_DEMAND" in tags else 0)
+            + (10 if qualified else 0)
+        )
+        cycle_score = max(0, min(100, cycle_score))
+        previous_score = float(old.get("score") or 0.0)
+        smoothed = cycle_score if observations == 1 else round(previous_score * 0.65 + cycle_score * 0.35, 2)
+        best = max(int(old.get("best_gap_score") or 0), gap)
+        qualified_hits = int(old.get("qualified_hits") or 0) + (1 if qualified else 0)
+        perf[family] = {
+            "score": smoothed,
+            "observations": observations,
+            "best_gap_score": best,
+            "qualified_hits": qualified_hits,
+            "last_gap_score": gap,
+            "last_domains": domains,
+            "last_strong_domains": strong,
+            "last_signal_types": sorted(tags),
+        }
+        if gap > int(old.get("last_gap_score") or 0) or qualified:
+            any_progress = True
+
+    AUTOPILOT_STATE["family_performance"] = perf
+    if any_progress:
+        AUTOPILOT_STATE["stagnation_cycles"] = 0
+    else:
+        AUTOPILOT_STATE["stagnation_cycles"] = min(20, int(AUTOPILOT_STATE.get("stagnation_cycles") or 0) + 1)
+    return perf
 
 
 def _director_searches(goal: str) -> list[str]:
@@ -810,11 +901,15 @@ def _director_searches(goal: str) -> list[str]:
 def _commercial_family(text: str) -> str:
     low=(text or "").lower()
     families=[
-        ("manual_data_entry", ("manual data entry","data entry","document parser","extracting it from pdf","pdf","form filling")),
-        ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow")),
-        ("crm_lead_ops", ("crm","lead management","sales ops","lead","follow up","follow-up")),
-        ("spreadsheet_process", ("spreadsheet","excel","google sheets","manual process")),
-        ("website_audit", ("website audit","site audit","seo audit","technical audit")),
+        ("manual_data_entry", ("manual data entry","data entry","document parser","extracting it from pdf","pdf","form filling","document processing")),
+        ("spreadsheet_process", ("spreadsheet","excel","google sheets","manual process","csv cleanup")),
+        ("crm_lead_ops", ("crm","lead management","sales ops","lead qualification","follow up","follow-up")),
+        ("website_audit", ("website audit","site audit","seo audit","technical audit","accessibility audit","broken link audit","website qa")),
+        ("it_hygiene", ("it inventory","patch reporting","security hygiene","asset inventory")),
+        ("customer_support", ("customer support","support triage","faq workflow","support ticket")),
+        ("data_cleanup", ("data cleanup","duplicate data","csv cleanup","deduplication")),
+        ("content_ops", ("content repurposing","catalog description","localization workflow")),
+        ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow","back office","ecommerce operations","reporting automation","appointment admin","quote preparation","booking admin")),
     ]
     for family, needles in families:
         if any(n in low for n in needles):
@@ -1311,6 +1406,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     )
     web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
     evidence_quality = _commercial_evidence_quality(web_research, demand_evidence)
+    family_performance = _update_family_performance(evidence_quality)
     product_candidate = build_candidate(evidence_quality)
     jarvis_review = await ask_jarvis(
         jarvis_message,
@@ -1321,6 +1417,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "web_research": web_research,
             "web_source_count": web_source_count,
             "evidence_quality": evidence_quality,
+            "family_performance": family_performance,
             "product_candidate": product_candidate,
             "evidence_scouts": demand_evidence,
             "valid_external_answers": len(valid),
@@ -1337,6 +1434,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "research": evidence,\n        "search_strategy": search_strategy,\n        "web_research": web_research,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
+        "family_performance": family_performance,
         "product_candidate": product_candidate,
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
