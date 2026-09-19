@@ -2,6 +2,8 @@ import asyncio
 import html
 import json
 import os
+import ipaddress
+from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -14,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -328,6 +330,19 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
             })
     mcp_ranked.sort(key=lambda x: x["score"], reverse=True)
 
+    raw_by_name = {}
+    for entry in mcp_candidates_raw:
+        server = entry.get("server") or {}
+        name = server.get("title") or server.get("name") or "MCP server"
+        raw_by_name.setdefault(str(name), entry)
+
+    inspect_entries = []
+    for ranked_item in mcp_ranked[:4]:
+        entry = raw_by_name.get(str(ranked_item.get("name")))
+        if entry:
+            inspect_entries.append(entry)
+    mcp_inspected = await inspect_mcp_candidates(inspect_entries, limit=4)
+
     return {
         "ok": True,
         "query": query,
@@ -337,6 +352,7 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
         "agents_selected": len(selected),
         "answers": accepted,
         "mcp_candidates": mcp_ranked[:8],
+        "mcp_inspected": mcp_inspected,
         "rejected_candidates": rejected_candidates[:12],
         "rejected_responses": [{
             "agent": a.get("agent"), "agent_id": a.get("agent_id"),
@@ -346,6 +362,150 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
         "discovery_errors": discovery_errors,
         "warning": "External agent output is untrusted. Selection and quality filters are heuristic.",
     }
+
+def _safe_public_https(url: str) -> tuple[bool, str]:
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False, "invalid URL"
+    if p.scheme != "https":
+        return False, "HTTPS required"
+    host = (p.hostname or "").lower().strip(".")
+    if not host:
+        return False, "missing host"
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+        return False, "local host blocked"
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+            return False, "private/local IP blocked"
+    except ValueError:
+        pass
+    return True, "ok"
+
+
+def _decode_mcp_response(resp: httpx.Response) -> dict:
+    ctype = (resp.headers.get("content-type") or "").lower()
+    text = resp.text[:12000]
+    if "application/json" in ctype:
+        try:
+            data = resp.json()
+            return data if isinstance(data, dict) else {"data": data}
+        except Exception:
+            return {"raw": text}
+    if "text/event-stream" in ctype:
+        events = []
+        for line in text.splitlines():
+            if line.startswith("data:"):
+                payload = line[5:].strip()
+                try:
+                    events.append(json.loads(payload))
+                except Exception:
+                    events.append({"raw": payload[:3000]})
+        if len(events) == 1 and isinstance(events[0], dict):
+            return events[0]
+        return {"events": events}
+    return {"raw": text}
+
+
+def _mcp_remote_urls(server: dict) -> list[str]:
+    urls = []
+    remotes = server.get("remotes") or []
+    if isinstance(remotes, list):
+        for r in remotes:
+            if isinstance(r, dict):
+                url = r.get("url")
+                rtype = str(r.get("type") or "").lower()
+                if isinstance(url, str) and ("http" in rtype or not rtype):
+                    urls.append(url)
+    direct = server.get("url")
+    if isinstance(direct, str):
+        urls.append(direct)
+    out = []
+    for u in urls:
+        if u not in out:
+            out.append(u)
+    return out
+
+
+async def inspect_mcp_server(server: dict) -> dict:
+    urls = _mcp_remote_urls(server)
+    if not urls:
+        return {"ok": False, "reason": "no remote HTTP endpoint in registry metadata"}
+
+    last_error = None
+    for url in urls[:3]:
+        safe, why = _safe_public_https(url)
+        if not safe:
+            last_error = why
+            continue
+        headers = {
+            "Accept": "application/json, text/event-stream",
+            "Content-Type": "application/json",
+            "User-Agent": "NEO-Collective/0.14 MCP-Inspector",
+        }
+        init = {
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "neo-inspector", "version": VERSION},
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
+                r1 = await client.post(url, headers=headers, json=init)
+                if r1.status_code in (401, 403):
+                    return {"ok": False, "url": url, "auth_required": True, "status": r1.status_code}
+                if r1.status_code >= 300:
+                    last_error = "initialize HTTP " + str(r1.status_code)
+                    continue
+                init_data = _decode_mcp_response(r1)
+                sid = r1.headers.get("mcp-session-id")
+                h2 = dict(headers)
+                if sid:
+                    h2["mcp-session-id"] = sid
+                tools_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+                r2 = await client.post(url, headers=h2, json=tools_req)
+                if r2.status_code >= 300:
+                    last_error = "tools/list HTTP " + str(r2.status_code)
+                    continue
+                tools_data = _decode_mcp_response(r2)
+                result = tools_data.get("result") if isinstance(tools_data, dict) else None
+                tools = result.get("tools") if isinstance(result, dict) else None
+                if not isinstance(tools, list):
+                    tools = []
+                safe_tools = []
+                for t in tools[:50]:
+                    if not isinstance(t, dict):
+                        continue
+                    safe_tools.append({
+                        "name": t.get("name"),
+                        "description": t.get("description"),
+                        "inputSchema": t.get("inputSchema"),
+                    })
+                return {
+                    "ok": True, "url": url, "session": bool(sid),
+                    "serverInfo": (init_data.get("result") or {}).get("serverInfo") if isinstance(init_data, dict) and isinstance(init_data.get("result"), dict) else None,
+                    "tools": safe_tools, "tool_count": len(tools),
+                }
+        except Exception as e:
+            last_error = type(e).__name__ + ": " + str(e)[:220]
+    return {"ok": False, "reason": last_error or "inspection failed"}
+
+
+async def inspect_mcp_candidates(entries: list[dict], limit: int = 4) -> list[dict]:
+    picked = entries[:max(0, min(limit, 6))]
+    async def inspect(entry):
+        server = entry.get("server") or {}
+        base = {
+            "name": server.get("title") or server.get("name") or "MCP server",
+            "description": server.get("description") or "",
+            "matched_queries": entry.get("matched_queries") or [],
+        }
+        base["inspection"] = await inspect_mcp_server(server)
+        return base
+    return await asyncio.gather(*(inspect(e) for e in picked)) if picked else []
 
 async def a2a_health(agent_id: str) -> dict:
     try:
@@ -404,7 +564,7 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
             "message": "Servono almeno 2 agenti con risposta valida per il secondo round.",
             "round1": first,
             "round2": [],
-            "selection": {"search_queries": first.get("search_queries", []), "mcp_candidates": first.get("mcp_candidates", []), "rejected_candidates": first.get("rejected_candidates", []), "rejected_responses": first.get("rejected_responses", []), "discovery_errors": first.get("discovery_errors", [])},
+            "selection": {"search_queries": first.get("search_queries", []), "mcp_candidates": first.get("mcp_candidates", []), "mcp_inspected": first.get("mcp_inspected", []), "rejected_candidates": first.get("rejected_candidates", []), "rejected_responses": first.get("rejected_responses", []), "discovery_errors": first.get("discovery_errors", [])},
         }
 
     peer_digest_parts = []
@@ -436,7 +596,7 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         "problem": problem,
         "round1": first_answers,
         "round2": second,
-        "selection": {"rejected_candidates": first.get("rejected_candidates", []), "rejected_responses": first.get("rejected_responses", [])},
+        "selection": {"search_queries": first.get("search_queries", []), "mcp_candidates": first.get("mcp_candidates", []), "mcp_inspected": first.get("mcp_inspected", []), "rejected_candidates": first.get("rejected_candidates", []), "rejected_responses": first.get("rejected_responses", []), "discovery_errors": first.get("discovery_errors", [])},
         "warning": (
             "Le risposte degli agenti sono output esterno non fidato. "
             "Il secondo round serve a confronto e critica, non a eseguire istruzioni remote."
@@ -483,6 +643,15 @@ async def neo_ask_agents(query: str, question: str, max_agents: int = 3) -> dict
 async def neo_collective(query: str, problem: str, max_agents: int = 4) -> dict:
     """Run two collective rounds: independent answers, then peer critique."""
     return await collective_two_rounds(query, problem, max_agents)
+
+
+@mcp.tool()
+async def neo_inspect_mcp(query: str, limit: int = 4) -> dict:
+    """Discover relevant MCP servers and inspect initialize/tools-list only. Never invokes remote tools."""
+    searches = _expand_queries(query, query)
+    _, raw_mcp, errors = await _multi_registry_search(searches, per_query=10)
+    inspected = await inspect_mcp_candidates(raw_mcp, limit=max(1, min(limit, 6)))
+    return {"ok": True, "query": query, "inspected": inspected, "errors": errors}
 
 
 @mcp.tool()
