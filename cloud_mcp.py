@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -24,6 +24,8 @@ TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID")
+JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
+JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 
 mcp = MCPServer(
     name="NEO Collective",
@@ -604,6 +606,46 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
     }
 
 
+async def jarvis_status() -> dict:
+    if not JARVIS_URL:
+        return {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
+    safe, why = _safe_public_https(JARVIS_URL)
+    if not safe:
+        return {"configured": True, "ok": False, "reason": why}
+    headers = {"Accept": "application/json"}
+    if JARVIS_API_KEY:
+        headers["Authorization"] = "Bearer " + JARVIS_API_KEY
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
+            r = await client.get(JARVIS_URL, headers=headers)
+            body = r.json() if "json" in (r.headers.get("content-type") or "") else {"text": r.text[:2000]}
+            return {"configured": True, "ok": r.is_success, "status": r.status_code, "response": body}
+    except Exception as e:
+        return {"configured": True, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:300]}
+
+
+async def ask_jarvis(message: str, context: dict | None = None) -> dict:
+    if not JARVIS_URL:
+        return {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
+    safe, why = _safe_public_https(JARVIS_URL)
+    if not safe:
+        return {"configured": True, "ok": False, "reason": why}
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if JARVIS_API_KEY:
+        headers["Authorization"] = "Bearer " + JARVIS_API_KEY
+    payload = {"message": message, "source": "neo", "context": context or {}}
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
+            r = await client.post(JARVIS_URL, headers=headers, json=payload)
+            if "json" in (r.headers.get("content-type") or ""):
+                body = r.json()
+            else:
+                body = {"text": r.text[:12000]}
+            return {"configured": True, "ok": r.is_success, "status": r.status_code, "response": body}
+    except Exception as e:
+        return {"configured": True, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:500]}
+
+
 def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
     goal = (goal or "").strip()
     tracks = [
@@ -648,10 +690,27 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     for group in evidence:
         for answer in group.get("answers", []):
             valid.append(answer)
+
+    jarvis_review = {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
+    if JARVIS_URL:
+        jarvis_message = (
+            "Sei Jarvis, consulente interno di NEO. Analizza questa missione economica e la ricerca esterna. "
+            "Distingui prove reali da autopromozione dei vendor. Individua opportunita concrete, rischi, "
+            "e il prossimo esperimento a costo minimo. Non effettuare acquisti, contatti, pubblicazioni o transazioni.\n\n"
+            "OBIETTIVO:\n" + goal
+        )
+        jarvis_context = {
+            "plan": plan,
+            "external_research": evidence,
+            "valid_external_answers": len(valid),
+        }
+        jarvis_review = await ask_jarvis(jarvis_message, jarvis_context)
+
     return {
         "ok": True, "mode": "director", "plan": plan, "research": evidence,
         "valid_external_answers": len(valid),
         "status": "EVIDENCE_READY" if valid else "NEEDS_MORE_SOURCES",
+        "jarvis": jarvis_review,
         "next_gate": "Scegliere e validare un esperimento; nessuna azione economica viene eseguita automaticamente.",
         "warning": "Le stime economiche degli agenti sono ipotesi finche non sono validate con evidenze reali.",
     }
@@ -704,6 +763,18 @@ async def neo_inspect_mcp(query: str, limit: int = 4) -> dict:
     _, raw_mcp, errors = await _multi_registry_search(searches, per_query=10)
     inspected = await inspect_mcp_candidates(raw_mcp, limit=max(1, min(limit, 6)))
     return {"ok": True, "query": query, "inspected": inspected, "errors": errors}
+
+
+@mcp.tool()
+async def neo_jarvis(message: str, context_json: str = "") -> dict:
+    """Ask the configured internal Jarvis endpoint. Requires JARVIS_URL on Render."""
+    context = {}
+    if context_json:
+        try:
+            context = json.loads(context_json)
+        except Exception:
+            context = {"raw": context_json}
+    return await ask_jarvis(message, context)
 
 
 @mcp.tool()
@@ -1013,10 +1084,11 @@ async def director(request: Request):
         '<p><b>Risposte esterne valide:</b> ' + str(result.get("valid_external_answers", 0)) + '</p></section>'
     )
     plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    jarvis_html = '<section class="card"><h2>Jarvis</h2><pre>' + html.escape(json.dumps(result.get("jarvis"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
     for group in result.get("research", []):
         research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(group, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
-    return layout("Director", form + summary + plan_html + research_html)
+    return layout("Director", form + summary + plan_html + jarvis_html + research_html)
 
 async def system(request: Request):
     render_info: Any = {"configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID)}
@@ -1038,10 +1110,12 @@ async def system(request: Request):
         except Exception as e:
             render_info = {"configured": True, "error": str(e)[:500]}
 
+    jarvis_info = await jarvis_status()
     body = (
         '<section class="card"><h2>System</h2><p>NEO v' + VERSION + '</p>'
         '<p>MCP endpoint: <code>/mcp</code></p><p>Health: <a href="/health">/health</a></p>'
-        '<pre>' + html.escape(json.dumps(render_info, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+        '<h3>Render</h3><pre>' + html.escape(json.dumps(render_info, ensure_ascii=False, indent=2, default=str)) + '</pre>'
+        '<h3>Jarvis</h3><pre>' + html.escape(json.dumps(jarvis_info, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     )
     return layout("System", body)
 
