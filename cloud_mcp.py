@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.36.2"
+VERSION = "0.36.3"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2033,6 +2033,42 @@ async def api_director_results(request: Request):
     return JSONResponse({"ok": True, "count": len(rows), "latest": rows[-1] if rows else None, "results": rows})
 
 
+async def api_render_errors(request: Request):
+    """Return a small sanitized slice of recent Render error logs for self-diagnostics."""
+    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return JSONResponse({"ok": False, "error": "render_api_not_configured"}, status_code=503)
+    try:
+        service = await render_request(f"/services/{RENDER_SERVICE_ID}")
+        owner_id = service.get("ownerId") or service.get("owner_id")
+        if not owner_id:
+            return JSONResponse({"ok": False, "error": "owner_id_missing"}, status_code=502)
+        data = await render_request(
+            "/logs",
+            {
+                "ownerId": owner_id,
+                "resource": RENDER_SERVICE_ID,
+                "direction": "backward",
+                "limit": 80,
+            },
+        )
+        raw = data.get("logs") if isinstance(data, dict) else data
+        rows = raw if isinstance(raw, list) else []
+        keep = []
+        secrets_to_redact = [x for x in (RENDER_API_KEY, JARVIS_API_KEY) if x]
+        for row in rows:
+            text = json.dumps(row, ensure_ascii=False, default=str)
+            low = text.lower()
+            if any(k in low for k in ("traceback", "error", "exception", "internal server error", "status 500")):
+                for secret in secrets_to_redact:
+                    text = text.replace(secret, "[REDACTED]")
+                keep.append(text[:3000])
+            if len(keep) >= 20:
+                break
+        return JSONResponse({"ok": True, "count": len(keep), "errors": keep})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": type(e).__name__, "detail": str(e)[:300]}, status_code=502)
+
+
 async def api_director_run(request: Request):
     """Run one autonomous, zero-budget Director cycle and return the compact result."""
     goal=(request.query_params.get("goal") or (
@@ -2183,7 +2219,7 @@ app = Starlette(
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
-        Route("/api/director/run", api_director_run, methods=["GET"]),
+        Route("/api/director/run", api_director_run, methods=["GET"]),\n        Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
