@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-09-19T21:45:32.708342+00:00",
+  "captured_at_utc": "2026-09-19T23:19:53.314517+00:00",
   "snapshot_schema": 3,
   "neo_version": "0.41.0",
   "policy": {
@@ -14,64 +14,103 @@
   "heartbeat": {
     "ok": true,
     "started": false,
-    "busy": true,
+    "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 7.89023,
-    "cycles_completed": 0,
-    "last_status": null,
+    "last_started_age_seconds": 293.416853,
+    "cycles_completed": 1,
+    "last_status": "BUILD_READY",
     "last_error": null
   },
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "35471331396",
+    "github_run_id": "35475817244",
     "github_run_attempt": "1"
   },
   "autopilot": {
     "enabled": true,
-    "running": true,
-    "cycles_completed": 0,
-    "last_started_utc": "2026-09-19T21:45:24.275373+00:00",
-    "last_finished_utc": null,
-    "last_status": null,
+    "running": false,
+    "cycles_completed": 1,
+    "last_started_utc": "2026-09-19T23:14:59.576608+00:00",
+    "last_finished_utc": "2026-09-19T23:15:29.770003+00:00",
+    "last_status": "BUILD_READY",
     "last_error": null,
     "stagnation_cycles": 0,
     "recent_sectors": [
-      "lead_ops",
-      "local_business_ops",
+      "document_ops",
       "reporting_compliance",
-      "ecommerce_ops"
+      "spreadsheet_ops",
+      "local_business_ops"
     ],
-    "family_performance": {},
+    "family_performance": {
+      "workflow_automation": {
+        "score": 55,
+        "observations": 1,
+        "best_gap_score": 35,
+        "qualified_hits": 0,
+        "last_gap_score": 35,
+        "last_domains": 4,
+        "last_strong_domains": 0,
+        "last_signal_types": [
+          "PAIN"
+        ]
+      },
+      "spreadsheet_process": {
+        "score": 100,
+        "observations": 1,
+        "best_gap_score": 70,
+        "qualified_hits": 1,
+        "last_gap_score": 70,
+        "last_domains": 4,
+        "last_strong_domains": 3,
+        "last_signal_types": [
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
+        ]
+      },
+      "manual_data_entry": {
+        "score": 25,
+        "observations": 1,
+        "best_gap_score": 20,
+        "qualified_hits": 0,
+        "last_gap_score": 20,
+        "last_domains": 1,
+        "last_strong_domains": 0,
+        "last_signal_types": [
+          "PAIN"
+        ]
+      }
+    },
     "last_search_strategy": {
       "mode": "adaptive_entropy_explore_exploit",
       "entropy_source": "system_random",
       "queries": [
-        "site:upwork.com/freelance-jobs lead qualification automation",
-        "\"budget\" appointment admin workflow",
-        "\"budget\" recurring reporting automation",
-        "site:upwork.com/freelance-jobs order operations",
+        "site:reddit.com \"looking for\" document processing",
+        "\"hiring\" freelancer compliance reporting workflow",
+        "\"budget\" Excel workflow",
+        "\"will pay\" quote preparation small business",
         "\"will pay\" \"manual process\" small business",
         "\"hiring\" freelancer \"repetitive task\" automation"
       ],
       "sectors": [
-        "lead_ops",
-        "local_business_ops",
+        "document_ops",
         "reporting_compliance",
-        "ecommerce_ops"
+        "spreadsheet_ops",
+        "local_business_ops"
       ],
       "sector_families": {
-        "lead_ops": "crm_lead_ops",
-        "local_business_ops": "workflow_automation",
+        "document_ops": "manual_data_entry",
         "reporting_compliance": "workflow_automation",
-        "ecommerce_ops": "workflow_automation"
+        "spreadsheet_ops": "spreadsheet_process",
+        "local_business_ops": "workflow_automation"
       },
       "recent_sector_memory": [
-        "lead_ops",
-        "local_business_ops",
+        "document_ops",
         "reporting_compliance",
-        "ecommerce_ops"
+        "spreadsheet_ops",
+        "local_business_ops"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
@@ -96,5 +135,371 @@
     "last_error": null,
     "last_status": null
   },
-  "latest_result": null
+  "latest_result": {
+    "timestamp_utc": "2026-09-19T23:15:29.769076+00:00",
+    "neo_version": "0.41.0",
+    "status": "BUILD_READY",
+    "next_gate": "BUILD: genera un MVP reversibile sul perimetro NEO autorizzato, poi misura interesse e conversioni.",
+    "valid_external_answers": 0,
+    "web_source_count": 30,
+    "evidence_scout_count": 15,
+    "search_strategy": {
+      "mode": "adaptive_entropy_explore_exploit",
+      "entropy_source": "system_random",
+      "queries": [
+        "site:reddit.com \"looking for\" document processing",
+        "\"hiring\" freelancer compliance reporting workflow",
+        "\"budget\" Excel workflow",
+        "\"will pay\" quote preparation small business",
+        "\"will pay\" \"manual process\" small business",
+        "\"hiring\" freelancer \"repetitive task\" automation"
+      ],
+      "sectors": [
+        "document_ops",
+        "reporting_compliance",
+        "spreadsheet_ops",
+        "local_business_ops"
+      ],
+      "sector_families": {
+        "document_ops": "manual_data_entry",
+        "reporting_compliance": "workflow_automation",
+        "spreadsheet_ops": "spreadsheet_process",
+        "local_business_ops": "workflow_automation"
+      },
+      "recent_sector_memory": [
+        "document_ops",
+        "reporting_compliance",
+        "spreadsheet_ops",
+        "local_business_ops"
+      ],
+      "stagnation_cycles": 0,
+      "exploration_slots": 4,
+      "exploitation_slots": 2,
+      "family_performance": {},
+      "policy": "exploit evidence-producing families while preserving majority exploration; increase exploration after stagnation",
+      "adaptive_policy": {
+        "policy_version": 1,
+        "exploration_base": 4,
+        "exploration_stagnant": 5,
+        "stagnation_threshold": 3,
+        "max_exploitation_slots": 2,
+        "smoothing_old_weight": 0.65,
+        "minimum_observations_for_exploitation": 2
+      }
+    },
+    "family_performance": {
+      "workflow_automation": {
+        "score": 55,
+        "observations": 1,
+        "best_gap_score": 35,
+        "qualified_hits": 0,
+        "last_gap_score": 35,
+        "last_domains": 4,
+        "last_strong_domains": 0,
+        "last_signal_types": [
+          "PAIN"
+        ]
+      },
+      "spreadsheet_process": {
+        "score": 100,
+        "observations": 1,
+        "best_gap_score": 70,
+        "qualified_hits": 1,
+        "last_gap_score": 70,
+        "last_domains": 4,
+        "last_strong_domains": 3,
+        "last_signal_types": [
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
+        ]
+      },
+      "manual_data_entry": {
+        "score": 25,
+        "observations": 1,
+        "best_gap_score": 20,
+        "qualified_hits": 0,
+        "last_gap_score": 20,
+        "last_domains": 1,
+        "last_strong_domains": 0,
+        "last_signal_types": [
+          "PAIN"
+        ]
+      }
+    },
+    "collective_summary": {
+      "ran": true,
+      "ok": true,
+      "stage": null,
+      "round1_valid": 3,
+      "round2_valid": 2,
+      "query": "spreadsheet_process",
+      "warning": "Local reviewers are deterministic evidence checks, not independent external sources."
+    },
+    "quality_gate": true,
+    "gate_rule": "same problem: >=2 independent domains AND PAID_DEMAND + (BUY_INTENT or PAIN)",
+    "qualified_problem_clusters": [
+      "spreadsheet_process"
+    ],
+    "clusters": {
+      "workflow_automation": {
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 35,
+        "independent_domains": 4,
+        "strong_commercial_domains": 0,
+        "signal_types": [
+          "PAIN"
+        ],
+        "domains": [
+          "github.com",
+          "news.ycombinator.com",
+          "theframenews.org",
+          "tomosu.ai"
+        ],
+        "signals": [
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "title": "Open-source Python framework for AI agents, workflows, and automations",
+            "url": "https://github.com/BindBrain/BindAI",
+            "signal_types": []
+          },
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "title": "Show HN: Open-sourced solution to AI manage Playwright automations",
+            "url": "https://github.com/rakutentech/sorify",
+            "signal_types": []
+          },
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "title": "Show HN: In Meeting – A native macOS Mic/Cam observer for home automation",
+            "url": "https://github.com/fellowgeek/in-meeting",
+            "signal_types": []
+          },
+          {
+            "domain": "tomosu.ai",
+            "source": "hackernews",
+            "title": "Code review automation fixed the wrong problem",
+            "url": "https://tomosu.ai/blogs/code-review-automation.html",
+            "signal_types": [
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "theframenews.org",
+            "source": "hackernews",
+            "title": "AI Startup launches a faster and cheaper alternative to LLMs for AI automation",
+            "url": "https://theframenews.org/en/typesafe-jev-faster-cheaper-llm-alternative/",
+            "signal_types": []
+          },
+          {
+            "domain": "news.ycombinator.com",
+            "source": "hackernews",
+            "title": "The paradox of AI automation at the workplace",
+            "url": "https://news.ycombinator.com/item?id=49738100",
+            "signal_types": []
+          }
+        ]
+      },
+      "spreadsheet_process": {
+        "qualified": true,
+        "commercially_actionable": true,
+        "gap_score": 70,
+        "independent_domains": 4,
+        "strong_commercial_domains": 3,
+        "signal_types": [
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "domains": [
+          "github.com",
+          "meetthecluster.github.io",
+          "news.ycombinator.com",
+          "punchy.live"
+        ],
+        "signals": [
+          {
+            "domain": "news.ycombinator.com",
+            "source": "hackernews",
+            "title": "Show HN: vNetMap – A zero-knowledge E2E encrypted network topology mapper",
+            "url": "https://news.ycombinator.com/item?id=49758959",
+            "signal_types": [
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "title": "Launch HN: Vendo (YC S26) – Let users build features on top of your product",
+            "url": "https://github.com/runvendo/vendo",
+            "signal_types": [
+              "PAIN",
+              "COMPETITION"
+            ]
+          },
+          {
+            "domain": "punchy.live",
+            "source": "hackernews",
+            "title": "Show HN: A punch clock to help with hourly household workers",
+            "url": "https://www.punchy.live/",
+            "signal_types": [
+              "PAIN",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "meetthecluster.github.io",
+            "source": "hackernews",
+            "title": "Show HN: My Fable 5 Project Was a Multiraft Database and Blob Store",
+            "url": "https://meetthecluster.github.io/",
+            "signal_types": [
+              "PAIN",
+              "PAID_DEMAND",
+              "COMPETITION"
+            ]
+          }
+        ]
+      },
+      "manual_data_entry": {
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 20,
+        "independent_domains": 1,
+        "strong_commercial_domains": 0,
+        "signal_types": [
+          "PAIN"
+        ],
+        "domains": [
+          "docmind.neomindintelligence.com"
+        ],
+        "signals": [
+          {
+            "domain": "docmind.neomindintelligence.com",
+            "source": "hackernews",
+            "title": "DocMind – I built an AI document parser to end manual data entry solo",
+            "url": "https://docmind.neomindintelligence.com/",
+            "signal_types": [
+              "PAIN"
+            ]
+          }
+        ]
+      }
+    },
+    "product_candidate": {
+      "status": "PILOT_READY",
+      "family": "spreadsheet_process",
+      "name": "SheetFlow Audit",
+      "offer": "Analisi automatica dei processi Excel/Google Sheets per individuare lavoro manuale automatizzabile.",
+      "price": "pilot gratuito",
+      "delivery": "report automatico",
+      "payment": "disabled until validated",
+      "evidence": {
+        "independent_domains": 4,
+        "strong_commercial_domains": 3,
+        "qualified": true,
+        "signal_types": [
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "gap_score": 70,
+        "commercially_actionable": true,
+        "domains": [
+          "github.com",
+          "meetthecluster.github.io",
+          "news.ycombinator.com",
+          "punchy.live"
+        ],
+        "signals": [
+          {
+            "domain": "news.ycombinator.com",
+            "source": "hackernews",
+            "family": "spreadsheet_process",
+            "title": "Show HN: vNetMap – A zero-knowledge E2E encrypted network topology mapper",
+            "url": "https://news.ycombinator.com/item?id=49758959",
+            "strong_markers": [],
+            "weak_markers": [
+              "client",
+              "manual"
+            ],
+            "signal_types": [
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "family": "spreadsheet_process",
+            "title": "Launch HN: Vendo (YC S26) – Let users build features on top of your product",
+            "url": "https://github.com/runvendo/vendo",
+            "strong_markers": [
+              "book a call"
+            ],
+            "weak_markers": [
+              "customer",
+              "workflow",
+              "spreadsheet",
+              "automation",
+              "problem"
+            ],
+            "signal_types": [
+              "PAIN",
+              "COMPETITION"
+            ]
+          },
+          {
+            "domain": "punchy.live",
+            "source": "hackernews",
+            "family": "spreadsheet_process",
+            "title": "Show HN: A punch clock to help with hourly household workers",
+            "url": "https://www.punchy.live/",
+            "strong_markers": [
+              "cost",
+              "paid"
+            ],
+            "weak_markers": [
+              "spreadsheet",
+              "pain"
+            ],
+            "signal_types": [
+              "PAIN",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "meetthecluster.github.io",
+            "source": "hackernews",
+            "family": "spreadsheet_process",
+            "title": "Show HN: My Fable 5 Project Was a Multiraft Database and Blob Store",
+            "url": "https://meetthecluster.github.io/",
+            "strong_markers": [
+              "subscription",
+              "budget"
+            ],
+            "weak_markers": [
+              "spreadsheet",
+              "problem"
+            ],
+            "signal_types": [
+              "PAIN",
+              "PAID_DEMAND",
+              "COMPETITION"
+            ]
+          }
+        ]
+      }
+    },
+    "jarvis": {
+      "version": null,
+      "evidence_state": null,
+      "decision": null,
+      "summary": {},
+      "opportunities": [],
+      "next_experiment": null
+    }
+  }
 }
