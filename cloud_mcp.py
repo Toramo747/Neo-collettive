@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.24.0"
+VERSION = "0.25.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -931,6 +931,40 @@ async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
     return out
 
 
+
+def build_candidate(evidence_quality: dict) -> dict:
+    clusters=evidence_quality.get("clusters") or {}
+    ranked=[]
+    for family,data in clusters.items():
+        if isinstance(data,dict) and data.get("qualified"):
+            ranked.append((int(data.get("strong_commercial_domains") or 0),int(data.get("independent_domains") or 0),family))
+    ranked.sort(reverse=True)
+    if not ranked:
+        return {"status":"WAITING_FOR_DEMAND","message":"Nessun problema ha ancora superato il gate commerciale."}
+    family=ranked[0][2]
+    products={
+        "spreadsheet_process":("SheetFlow Audit","Analisi automatica dei processi Excel/Google Sheets per individuare lavoro manuale automatizzabile."),
+        "workflow_automation":("Workflow Friction Audit","Analisi di un workflow manuale e generazione di un piano MVP di automazione."),
+        "crm_lead_ops":("LeadFlow Audit","Analisi del percorso dei lead per individuare perdite e passaggi automatizzabili."),
+        "manual_data_entry":("DataEntry Fix Audit","Analisi dei passaggi di inserimento dati e proposta di automazione con controlli QA."),
+        "website_audit":("Website Process Audit","Analisi strutturata di un processo web e delle opportunita di automazione."),
+    }
+    name,offer=products.get(family,products["workflow_automation"])
+    return {"status":"PILOT_READY","family":family,"name":name,"offer":offer,"price":"pilot gratuito","delivery":"report automatico","payment":"disabled until validated","evidence":clusters.get(family,{})}
+
+def run_pilot(process: str, family: str) -> dict:
+    text=" ".join((process or "").strip().split())
+    low=text.lower()
+    manual=["manual","manualmente","copia","incolla","excel","spreadsheet","foglio","email","crm","pdf","portale","ripetitivo"]
+    integration=["api","webhook","csv","excel","sheets","crm","email","database","gestionale"]
+    risks=["password","credenzial","iban","carta","sanitari","dati personali","gdpr"]
+    mh=sorted({x for x in manual if x in low}); ih=sorted({x for x in integration if x in low}); rh=sorted({x for x in risks if x in low})
+    score=min(100,max(10,20+10*len(mh)+5*len(ih)-(20 if len(text)<40 else 0)))
+    return {"automation_readiness":score,"manual_signals":mh,"integration_signals":ih,"risk_signals":rh,
+      "recommended_mvp":["mappare input, output e regole","misurare frequenza, volume e tempo attuale","automatizzare un solo passaggio reversibile","mantenere controllo umano e log","misurare errori e tempo risparmiato prima di estendere il flusso"],
+      "note":"Analisi pilota; non inviare password, credenziali o dati sensibili."}
+
+
 async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     plan = director_plan(goal, budget, hours_per_week)
     research_question = (
@@ -994,6 +1028,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     )
     web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
     evidence_quality = _commercial_evidence_quality(web_research, demand_evidence)
+    product_candidate = build_candidate(evidence_quality)
     jarvis_review = await ask_jarvis(
         jarvis_message,
         {
@@ -1003,6 +1038,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "web_research": web_research,
             "web_source_count": web_source_count,
             "evidence_quality": evidence_quality,
+            "product_candidate": product_candidate,
             "evidence_scouts": demand_evidence,
             "valid_external_answers": len(valid),
             "initial_jarvis_brief": jarvis_brief,
@@ -1019,6 +1055,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "web_research": web_research,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
+        "product_candidate": product_candidate,
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
@@ -1178,7 +1215,7 @@ def layout(title: str, body: str) -> HTMLResponse:
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050806">
 <title>{html.escape(title)} - NEO</title><style>{BASE_CSS}</style></head><body><main>
 <div class="brand">NEO</div><div class="sub">Collective intelligence radar · v{VERSION}</div>
-<nav><a href="/">Home</a><a href="/director">Director</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
+<nav><a href="/">Home</a><a href="/director">Director</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
 {body}</main></body></html>"""
     return HTMLResponse(page)
 
@@ -1419,6 +1456,17 @@ async def director(request: Request):
         research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(compact, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
     return layout("Director", form + summary + plan_html + jarvis_html + evidence_html + web_html + research_html)
 
+
+async def venture(request: Request):
+    family=(request.query_params.get("family") or "workflow_automation").strip()
+    process=(request.query_params.get("process") or "").strip()
+    body='<section class="card"><span class="tag">FACTORY</span><h2>NEO Product Factory</h2><p>Prototipo pubblico per testare un micro-servizio prima di abilitarne la vendita.</p></section>'
+    body+='<section class="card"><form method="get" action="/venture"><label>Tipo</label><input name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo da automatizzare</label><textarea name="process">'+html.escape(process)+'</textarea><button type="submit">Esegui pilot</button></form></section>'
+    if process:
+        body+='<section class="card"><h2>Risultato</h2><pre>'+html.escape(json.dumps(run_pilot(process,family),ensure_ascii=False,indent=2))+'</pre></section>'
+    return layout("Product Factory",body)
+
+
 async def system(request: Request):
     render_info: Any = {"configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID)}
     if RENDER_API_KEY and RENDER_SERVICE_ID:
@@ -1483,6 +1531,7 @@ app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
         Route("/director", director, methods=["GET"]),
+        Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
