@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.22.0"
+VERSION = "0.23.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -710,30 +710,98 @@ def _director_searches(goal: str) -> list[str]:
     return out[:8]
 
 
-def _evidence_quality(web_research: list[dict]) -> dict:
-    domains=set()
-    commercial_domains=set()
-    useful=[]
+def _commercial_family(text: str) -> str:
+    low=(text or "").lower()
+    families=[
+        ("manual_data_entry", ("manual data entry","data entry","document parser","extracting it from pdf","pdf","form filling")),
+        ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow")),
+        ("crm_lead_ops", ("crm","lead management","sales ops","lead","follow up","follow-up")),
+        ("spreadsheet_process", ("spreadsheet","excel","google sheets","manual process")),
+        ("website_audit", ("website audit","site audit","seo audit","technical audit")),
+    ]
+    for family, needles in families:
+        if any(n in low for n in needles):
+            return family
+    return "other"
+
+
+def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | None = None) -> dict:
+    """Require convergent evidence: 3 independent domains on one problem + >=1 strong buying signal."""
     noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
-    terms=("pricing","price","cost","customer","client","paid","subscription","case study","manual","workflow","crm","spreadsheet","automation","freelance","job")
+    strong_terms=(
+        "pricing","price","priced","cost","costs","charge","charged","paid","paying","subscription",
+        "per month","per year","one time purchase","one-time purchase","contract","budget","hire","hiring",
+        "freelance","customer pays","customers pay","book a call","enterprise deployments"
+    )
+    weak_terms=("customer","client","manual","workflow","crm","spreadsheet","automation","problem","pain")
+    clusters={}
+    useful=[]
+
+    def ingest(url: str, title: str, body: str, source: str):
+        host=(urlparse(url or "").hostname or "").lower()
+        if host.startswith("www."):
+            host=host[4:]
+        if not host or any(host==n or host.endswith("."+n) for n in noise):
+            return
+        text=((title or "")+" "+(body or "")).lower()
+        family=_commercial_family(text)
+        if family=="other":
+            return
+        strong=[t for t in strong_terms if t in text]
+        weak=[t for t in weak_terms if t in text]
+        # A generic vendor/reference page is not commercial proof merely because it says customer/automation.
+        if not weak and not strong:
+            return
+        row={"domain":host,"source":source,"family":family,"title":title or "","url":url or "",
+             "strong_markers":strong[:8],"weak_markers":weak[:8]}
+        useful.append(row)
+        cl=clusters.setdefault(family,{"domains":set(),"strong_domains":set(),"signals":[]})
+        cl["domains"].add(host)
+        if strong:
+            cl["strong_domains"].add(host)
+        if len(cl["signals"])<12:
+            cl["signals"].append(row)
+
     for group in web_research:
         if not isinstance(group,dict):
             continue
         for item in group.get("results") or []:
-            if not isinstance(item,dict):
-                continue
-            host=(urlparse(item.get("url") or "").hostname or "").lower()
-            if host.startswith("www."):
-                host=host[4:]
-            if not host or any(host==n or host.endswith("."+n) for n in noise):
-                continue
-            domains.add(host)
-            text=((item.get("title") or "")+" "+(item.get("snippet") or "")).lower()
-            hits=[term for term in terms if term in text]
-            if hits:
-                commercial_domains.add(host)
-                useful.append({"domain":host,"title":item.get("title") or "","url":item.get("url") or "","markers":hits[:8]})
-    return {"independent_domains":len(domains),"commercial_domains":len(commercial_domains),"useful_results":useful[:20],"quality_gate":len(commercial_domains)>=3}
+            if isinstance(item,dict):
+                ingest(item.get("url") or "",item.get("title") or "",item.get("snippet") or "","web")
+
+    for item in scouts or []:
+        if isinstance(item,dict):
+            ingest(item.get("url") or "",item.get("title") or "",item.get("text") or "",item.get("source") or "scout")
+
+    public_clusters={}
+    qualified=[]
+    all_domains=set()
+    all_strong=set()
+    for family,cl in clusters.items():
+        domains=sorted(cl["domains"])
+        strong_domains=sorted(cl["strong_domains"])
+        all_domains.update(domains)
+        all_strong.update(strong_domains)
+        ok=len(domains)>=3 and len(strong_domains)>=1
+        public_clusters[family]={
+            "independent_domains":len(domains),
+            "strong_commercial_domains":len(strong_domains),
+            "qualified":ok,
+            "domains":domains[:10],
+            "signals":cl["signals"][:6],
+        }
+        if ok:
+            qualified.append(family)
+
+    return {
+        "independent_domains":len(all_domains),
+        "strong_commercial_domains":len(all_strong),
+        "qualified_problem_clusters":qualified,
+        "clusters":public_clusters,
+        "quality_gate":bool(qualified),
+        "gate_rule":"same problem: >=3 independent domains AND >=1 strong commercial/buying signal",
+        "useful_results":useful[:20],
+    }
 
 
 async def free_web_search(query: str, limit: int = 6) -> dict:
@@ -921,7 +989,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "Non dichiarare un guadagno come certo. Non effettuare acquisti, contatti, pubblicazioni o transazioni.\n\nOBIETTIVO:\n" + goal
     )
     web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
-    evidence_quality = _evidence_quality(web_research)
+    evidence_quality = _commercial_evidence_quality(web_research, demand_evidence)
     jarvis_review = await ask_jarvis(
         jarvis_message,
         {
@@ -956,7 +1024,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             else "NEEDS_MORE_SOURCES"
         ),
         "jarvis": jarvis_review,
-        "next_gate": "Validare un esperimento; nessuna azione economica viene eseguita automaticamente.",
+        "next_gate": ("Validare manualmente il cluster qualificato con 5 prospect prima di costruire." if evidence_quality.get("quality_gate") else "Raccogliere almeno 3 fonti indipendenti sullo stesso problema e almeno un forte segnale commerciale."),
         "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
     }
 
@@ -1336,11 +1404,15 @@ async def director(request: Request):
     )
     plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     jarvis_html = '<section class="card"><h2>Jarvis</h2><pre>' + html.escape(json.dumps(result.get("jarvis"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
-    web_html = '<section class="card"><h2>Web gratuito</h2><p><b>Risultati grezzi:</b> ' + str(result.get("web_source_count", 0)) + '</p><p><b>Qualita evidenze:</b></p><pre>' + html.escape(json.dumps(result.get("evidence_quality"), ensure_ascii=False, indent=2, default=str)) + '</pre><details><summary>Mostra risultati grezzi</summary><pre>' + html.escape(json.dumps(result.get("web_research"), ensure_ascii=False, indent=2, default=str)) + '</pre></details></section>'
-    evidence_html = '<section class="card"><h2>Evidence Scouts</h2><p><b>Segnali raccolti:</b> ' + str(result.get("evidence_scout_count", 0)) + '</p><pre>' + html.escape(json.dumps(result.get("evidence_scouts"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    quality = result.get("evidence_quality") or {}
+    quality_view = {"quality_gate":quality.get("quality_gate"),"gate_rule":quality.get("gate_rule"),"qualified_problem_clusters":quality.get("qualified_problem_clusters"),"independent_domains":quality.get("independent_domains"),"strong_commercial_domains":quality.get("strong_commercial_domains"),"clusters":quality.get("clusters")}
+    web_html = '<section class="card"><h2>Evidenza commerciale</h2><p><b>Risultati web grezzi:</b> ' + str(result.get("web_source_count", 0)) + '</p><pre>' + html.escape(json.dumps(quality_view, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    scout_preview = [{"source":x.get("source"),"query":x.get("query"),"title":x.get("title"),"url":x.get("url")} for x in (result.get("evidence_scouts") or [])[:10] if isinstance(x,dict)]
+    evidence_html = '<section class="card"><h2>Evidence Scouts</h2><p><b>Segnali raccolti:</b> ' + str(result.get("evidence_scout_count", 0)) + '</p><pre>' + html.escape(json.dumps(scout_preview, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
     for group in result.get("research", []):
-        research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(group, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
+        compact = {"query":group.get("query"),"valid_answers":len(group.get("answers") or []),"mcp_candidates":len(group.get("mcp_candidates") or []),"rejected_responses":len(group.get("rejected_responses") or []),"discovery_errors":group.get("discovery_errors") or []}
+        research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(compact, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
     return layout("Director", form + summary + plan_html + jarvis_html + evidence_html + web_html + research_html)
 
 async def system(request: Request):
