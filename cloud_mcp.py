@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.17.0"
+VERSION = "0.18.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -606,10 +606,18 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
     }
 
 
+def _jarvis_endpoint() -> str:
+    raw = (JARVIS_URL or "").strip().rstrip("/")
+    if not raw:
+        return ""
+    return raw if raw.endswith("/ask") else raw + "/ask"
+
+
 async def jarvis_status() -> dict:
-    if not JARVIS_URL:
+    endpoint = _jarvis_endpoint()
+    if not endpoint:
         return {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
-    safe, why = _safe_public_https(JARVIS_URL)
+    safe, why = _safe_public_https(endpoint)
     if not safe:
         return {"configured": True, "ok": False, "reason": why}
     headers = {"Accept": "application/json"}
@@ -617,17 +625,24 @@ async def jarvis_status() -> dict:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
     try:
         async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
-            r = await client.get(JARVIS_URL, headers=headers)
+            r = await client.get(endpoint, headers=headers)
             body = r.json() if "json" in (r.headers.get("content-type") or "") else {"text": r.text[:2000]}
-            return {"configured": True, "ok": r.is_success, "status": r.status_code, "response": body}
+            return {
+                "configured": True,
+                "endpoint": endpoint,
+                "ok": r.is_success,
+                "status": r.status_code,
+                "response": body,
+            }
     except Exception as e:
-        return {"configured": True, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:300]}
+        return {"configured": True, "endpoint": endpoint, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:300]}
 
 
 async def ask_jarvis(message: str, context: dict | None = None) -> dict:
-    if not JARVIS_URL:
+    endpoint = _jarvis_endpoint()
+    if not endpoint:
         return {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
-    safe, why = _safe_public_https(JARVIS_URL)
+    safe, why = _safe_public_https(endpoint)
     if not safe:
         return {"configured": True, "ok": False, "reason": why}
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
@@ -636,14 +651,20 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
     payload = {"message": message, "source": "neo", "context": context or {}}
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
-            r = await client.post(JARVIS_URL.rstrip("/") + "/ask", headers=headers, json=payload)
+            r = await client.post(endpoint, headers=headers, json=payload)
             if "json" in (r.headers.get("content-type") or ""):
                 body = r.json()
             else:
                 body = {"text": r.text[:12000]}
-            return {"configured": True, "ok": r.is_success, "status": r.status_code, "response": body}
+            return {
+                "configured": True,
+                "endpoint": endpoint,
+                "ok": r.is_success,
+                "status": r.status_code,
+                "response": body,
+            }
     except Exception as e:
-        return {"configured": True, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:500]}
+        return {"configured": True, "endpoint": endpoint, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:500]}
 
 
 def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
