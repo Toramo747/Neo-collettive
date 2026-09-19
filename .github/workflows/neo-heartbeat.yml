@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "cloud_mcp.py"
+      - "neo_policy.json"
+      - ".github/workflows/neo-heartbeat.yml"
 
 permissions:
   contents: write
@@ -15,16 +21,18 @@ concurrency:
 jobs:
   wake-neo:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
 
       - name: Wake NEO
+        id: wake
+        continue-on-error: true
         env:
           HEARTBEAT_URL: https://neo-collettive.onrender.com/api/heartbeat
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if [ -n "${HEARTBEAT_TOKEN}" ]; then
             curl --fail --show-error --silent \
               --retry 2 --retry-delay 5 --max-time 90 \
@@ -35,28 +43,76 @@ jobs:
               --retry 2 --retry-delay 5 --max-time 90 \
               "${HEARTBEAT_URL}" > /tmp/heartbeat.json
           fi
-          cat /tmp/heartbeat.json
+          cat /tmp/heartbeat.json || true
 
-      - name: Wait for cycle progress
-        run: sleep 60
+      - name: Poll NEO runtime
+        id: poll
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          : > /tmp/status-errors.txt
+          for i in $(seq 1 12); do
+            if curl --fail --show-error --silent --max-time 30 \
+              "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
+              python - <<'PY'
+          import json
+          p="/tmp/status.json"
+          try:
+              d=json.load(open(p,encoding="utf-8"))
+              ap=d.get("autopilot") or {}
+              print("poll", {"version":d.get("neo_version"),"running":ap.get("running"),"cycles":ap.get("cycles_completed"),"status":ap.get("last_status"),"error":ap.get("last_error")})
+          except Exception as e:
+              print("status parse error",e)
+          PY
+              if python - <<'PY'
+          import json,sys
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          sys.exit(0 if (not ap.get("running") and ap.get("last_finished_utc")) else 1)
+          PY
+              then
+                break
+              fi
+            else
+              echo "poll $i failed" >> /tmp/status-errors.txt
+            fi
+            sleep 20
+          done
 
-      - name: Capture NEO runtime snapshot
+      - name: Build runtime snapshot
         run: |
           set -euo pipefail
-          curl --fail --show-error --silent \
-            --retry 2 --retry-delay 5 --max-time 90 \
-            "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json
           python - <<'PY'
-          import json
+          import json, os
           from datetime import datetime, timezone
 
-          raw=json.load(open("/tmp/status.json",encoding="utf-8"))
+          def load(path, default):
+              try:
+                  return json.load(open(path,encoding="utf-8"))
+              except Exception:
+                  return default
+
+          raw=load("/tmp/status.json",{})
+          hb=load("/tmp/heartbeat.json",{})
           ap=raw.get("autopilot") or {}
-          latest=ap.get("latest_result")
+          err=""
+          try:
+              err=open("/tmp/status-errors.txt",encoding="utf-8").read().strip()
+          except Exception:
+              pass
+
           snapshot={
               "captured_at_utc": datetime.now(timezone.utc).isoformat(),
+              "snapshot_schema": 2,
               "neo_version": raw.get("neo_version"),
               "policy": raw.get("policy") or {},
+              "heartbeat": hb,
+              "diagnostics": {
+                  "status_endpoint_reached": bool(raw),
+                  "poll_errors": err,
+                  "github_run_id": os.getenv("GITHUB_RUN_ID"),
+                  "github_run_attempt": os.getenv("GITHUB_RUN_ATTEMPT")
+              },
               "autopilot": {
                   "enabled": ap.get("enabled"),
                   "running": ap.get("running"),
@@ -70,14 +126,15 @@ jobs:
                   "family_performance": ap.get("family_performance") or {},
                   "last_search_strategy": ap.get("last_search_strategy")
               },
-              "latest_result": latest
+              "manual_run": raw.get("manual_run") or {},
+              "latest_result": ap.get("latest_result")
           }
           with open("neo_latest_result.json","w",encoding="utf-8") as f:
               json.dump(snapshot,f,indent=2,ensure_ascii=False,default=str)
               f.write("\n")
           PY
 
-      - name: Publish changed snapshot
+      - name: Publish runtime snapshot
         run: |
           set -euo pipefail
           git add neo_latest_result.json
@@ -85,5 +142,5 @@ jobs:
           git config user.name "NEO Runtime Snapshot"
           git config user.email "actions@users.noreply.github.com"
           git commit -m "NEO runtime snapshot"
-          git pull --rebase
-          git push
+          git pull --rebase origin main
+          git push origin HEAD:main
