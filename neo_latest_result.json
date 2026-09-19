@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-09-19T23:28:09.049154+00:00",
+  "captured_at_utc": "2026-09-19T23:28:47.273809+00:00",
   "snapshot_schema": 3,
   "neo_version": "0.42.0",
   "policy": {
@@ -14,10 +14,10 @@
   "heartbeat": {
     "ok": true,
     "started": false,
-    "busy": false,
+    "busy": true,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 302.626036,
+    "last_started_age_seconds": 9.188269,
     "cycles_completed": 1,
     "last_status": "BUILD_READY",
     "last_error": null
@@ -25,14 +25,14 @@
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "35476199790",
+    "github_run_id": "35476224621",
     "github_run_attempt": "1"
   },
   "autopilot": {
     "enabled": true,
-    "running": false,
+    "running": true,
     "cycles_completed": 1,
-    "last_started_utc": "2026-09-19T23:23:06.075526+00:00",
+    "last_started_utc": "2026-09-19T23:28:36.789333+00:00",
     "last_finished_utc": "2026-09-19T23:23:36.788225+00:00",
     "last_status": "BUILD_READY",
     "last_error": null,
@@ -41,7 +41,13 @@
       "it_hygiene",
       "small_business_admin",
       "customer_support",
-      "document_ops"
+      "document_ops",
+      "spreadsheet_ops",
+      "document_ops",
+      "data_cleanup",
+      "lead_ops",
+      "content_ops",
+      "reporting_compliance"
     ],
     "family_performance": {
       "workflow_automation": {
@@ -101,35 +107,100 @@
       "mode": "adaptive_entropy_explore_exploit",
       "entropy_source": "system_random",
       "queries": [
-        "site:reddit.com \"looking for\" patch reporting",
-        "\"budget\" manual office process",
-        "\"will pay\" FAQ workflow",
-        "\"will pay\" PDF data extraction",
+        "site:freelancer.com/projects Google Sheets process",
+        "site:upwork.com/freelance-jobs form processing",
+        "\"budget\" duplicate data cleanup",
+        "\"budget\" CRM follow up workflow",
+        "site:upwork.com/freelance-jobs localization workflow",
+        "\"will pay\" recurring reporting automation",
         "\"will pay\" \"manual process\" small business",
         "\"hiring\" freelancer \"repetitive task\" automation"
       ],
       "sectors": [
-        "it_hygiene",
-        "small_business_admin",
-        "customer_support",
-        "document_ops"
+        "spreadsheet_ops",
+        "document_ops",
+        "data_cleanup",
+        "lead_ops",
+        "content_ops",
+        "reporting_compliance"
       ],
       "sector_families": {
-        "it_hygiene": "it_hygiene",
-        "small_business_admin": "workflow_automation",
-        "customer_support": "customer_support",
-        "document_ops": "manual_data_entry"
+        "spreadsheet_ops": "spreadsheet_process",
+        "document_ops": "manual_data_entry",
+        "data_cleanup": "data_cleanup",
+        "lead_ops": "crm_lead_ops",
+        "content_ops": "content_ops",
+        "reporting_compliance": "workflow_automation"
       },
       "recent_sector_memory": [
         "it_hygiene",
         "small_business_admin",
         "customer_support",
-        "document_ops"
+        "document_ops",
+        "spreadsheet_ops",
+        "document_ops",
+        "data_cleanup",
+        "lead_ops",
+        "content_ops",
+        "reporting_compliance"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
       "exploitation_slots": 2,
-      "family_performance": {},
+      "family_performance": {
+        "workflow_automation": {
+          "score": 5,
+          "observations": 1,
+          "best_gap_score": 0,
+          "qualified_hits": 0,
+          "last_gap_score": 0,
+          "last_domains": 1,
+          "last_strong_domains": 0,
+          "last_signal_types": []
+        },
+        "spreadsheet_process": {
+          "score": 90,
+          "observations": 1,
+          "best_gap_score": 65,
+          "qualified_hits": 1,
+          "last_gap_score": 65,
+          "last_domains": 3,
+          "last_strong_domains": 2,
+          "last_signal_types": [
+            "COMPETITION",
+            "PAID_DEMAND",
+            "PAIN"
+          ]
+        },
+        "manual_data_entry": {
+          "score": 80,
+          "observations": 1,
+          "best_gap_score": 55,
+          "qualified_hits": 1,
+          "last_gap_score": 55,
+          "last_domains": 2,
+          "last_strong_domains": 1,
+          "last_signal_types": [
+            "COMPETITION",
+            "PAID_DEMAND",
+            "PAIN"
+          ]
+        },
+        "crm_lead_ops": {
+          "score": 65,
+          "observations": 1,
+          "best_gap_score": 50,
+          "qualified_hits": 0,
+          "last_gap_score": 50,
+          "last_domains": 1,
+          "last_strong_domains": 1,
+          "last_signal_types": [
+            "COMPETITION",
+            "PAID_DEMAND",
+            "PAIN"
+          ]
+        }
+      },
       "policy": "exploit evidence-producing families while preserving majority exploration; increase exploration after stagnation",
       "adaptive_policy": {
         "policy_version": 1,
@@ -140,7 +211,13 @@
         "smoothing_old_weight": 0.65,
         "minimum_observations_for_exploitation": 2
       }
-    }
+    },
+    "agent_trust": {},
+    "build_history": [],
+    "last_build": null,
+    "measurement_history": [],
+    "last_measurement": null,
+    "venture_metrics": {}
   },
   "manual_run": {
     "running": false,
