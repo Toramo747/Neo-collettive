@@ -2814,6 +2814,49 @@ async def api_builder_status(request: Request):
     })
 
 
+async def api_autonomy_status(request: Request):
+    rows=_load_recent_results(1)
+    latest=rows[-1] if rows else None
+    build=(latest or {}).get("build") or AUTOPILOT_STATE.get("last_build") or {}
+    measurement=(latest or {}).get("measurement") or AUTOPILOT_STATE.get("last_measurement") or {}
+    jarvis=(latest or {}).get("jarvis") or {}
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "autopilot":{
+            "enabled":AUTOPILOT_STATE.get("enabled"),
+            "running":AUTOPILOT_STATE.get("running"),
+            "cycles_completed":AUTOPILOT_STATE.get("cycles_completed"),
+            "last_status":AUTOPILOT_STATE.get("last_status"),
+            "last_error":AUTOPILOT_STATE.get("last_error"),
+        },
+        "lifecycle":(latest or {}).get("lifecycle") or {},
+        "coordinator":{
+            "jarvis_decision":jarvis.get("decision"),
+            "transport_ok":jarvis.get("transport_ok"),
+            "decision_source":((latest or {}).get("build_gate") or {}).get("jarvis_decision_source"),
+        },
+        "builder":{
+            "enabled":bool(_load_policy().get("autonomous_builder_enabled",True)),
+            "last_build":build,
+        },
+        "measurement":measurement,
+        "memory":{
+            "restore_source":AUTOPILOT_STATE.get("restore_source"),
+            "trusted_agents":len(AUTOPILOT_STATE.get("agent_trust") or {}),
+            "family_count":len(AUTOPILOT_STATE.get("family_performance") or {}),
+        },
+        "guardrails":{
+            "spending":False,
+            "payments":False,
+            "contracts":False,
+            "commercial_outreach":False,
+            "external_publishing":False,
+            "personal_accounts":False,
+        },
+    })
+
+
 async def system(request: Request):
     render_info: Any = {"configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID)}
     if RENDER_API_KEY and RENDER_SERVICE_ID:
@@ -2900,6 +2943,7 @@ app = Starlette(
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
         Route("/api/memory/status", api_memory_status, methods=["GET"]),
         Route("/api/builder/status", api_builder_status, methods=["GET"]),
+        Route("/api/autonomy/status", api_autonomy_status, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
