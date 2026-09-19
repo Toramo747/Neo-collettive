@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.31.0"
+VERSION = "0.32.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -30,6 +30,25 @@ JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
+AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
+AUTOPILOT_ENABLED = (os.getenv("NEO_SELF_MANAGMENT", "true").strip().lower() in {"1","true","yes","on"})
+AUTOPILOT_GOAL = os.getenv(
+    "NEO_AUTOPILOT_GOAL",
+    "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
+    "con investimento iniziale minimo. Coordina Jarvis, agenti ed evidence scouts. Privilegia domanda pagante verificabile, "
+    "costi fissi bassi e automazione. Procedi solo con esperimenti reversibili a costo zero/minimo. "
+    "Non effettuare spese, pagamenti, contratti, outreach commerciale, uso di account personali o transazioni senza approvazione umana."
+)
+AUTOPILOT_LOCK = asyncio.Lock()
+AUTOPILOT_STATE: dict[str, Any] = {
+    "enabled": AUTOPILOT_ENABLED,
+    "interval_seconds": AUTOPILOT_INTERVAL_SECONDS,
+    "running": False,
+    "last_started_utc": None,
+    "last_finished_utc": None,
+    "last_status": None,
+    "last_error": None,
+}
 
 mcp = MCPServer(
     name="NEO Collective",
@@ -1722,6 +1741,38 @@ async def api_director_run(request: Request):
     return JSONResponse({"ok":True,"autopilot":True,"result":compact})
 
 
+async def _autopilot_cycle() -> None:
+    if not AUTOPILOT_ENABLED:
+        return
+    if AUTOPILOT_LOCK.locked():
+        return
+    async with AUTOPILOT_LOCK:
+        AUTOPILOT_STATE["running"] = True
+        AUTOPILOT_STATE["last_started_utc"] = datetime.now(timezone.utc).isoformat()
+        AUTOPILOT_STATE["last_error"] = None
+        try:
+            result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
+            AUTOPILOT_STATE["last_status"] = result.get("status")
+        except Exception as e:
+            AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:500]
+        finally:
+            AUTOPILOT_STATE["running"] = False
+            AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
+
+
+async def _autopilot_loop() -> None:
+    while True:
+        await _autopilot_cycle()
+        await asyncio.sleep(AUTOPILOT_INTERVAL_SECONDS)
+
+
+async def api_autopilot_status(request: Request):
+    state = dict(AUTOPILOT_STATE)
+    rows = _load_recent_results(1)
+    state["latest_result"] = rows[-1] if rows else None
+    return JSONResponse({"ok": True, "autopilot": state})
+
+
 async def venture(request: Request):
     family=(request.query_params.get("family") or "spreadsheet_process").strip()
     process=(request.query_params.get("process") or "").strip()
@@ -1797,8 +1848,19 @@ mcp_app = mcp.streamable_http_app(
 
 @asynccontextmanager
 async def lifespan(app: Starlette):
+    autopilot_task = None
     async with mcp.session_manager.run():
-        yield
+        if AUTOPILOT_ENABLED:
+            autopilot_task = asyncio.create_task(_autopilot_loop())
+        try:
+            yield
+        finally:
+            if autopilot_task:
+                autopilot_task.cancel()
+                try:
+                    await autopilot_task
+                except asyncio.CancelledError:
+                    pass
 
 
 app = Starlette(
@@ -1808,6 +1870,7 @@ app = Starlette(
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
         Route("/api/director/run", api_director_run, methods=["GET"]),
+        Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
