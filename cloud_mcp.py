@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.32.0"
+VERSION = "0.33.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -722,26 +722,90 @@ def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> di
         "target_state":"NEO seleziona il business, costruisce e pubblica l MVP sul proprio perimetro autorizzato, prepara la distribuzione organica, misura i risultati e migliora; il proprietario interviene sulle azioni protette.",
     }
 
-def _director_searches(goal: str) -> list[str]:
-    """Evidence-oriented business searches rather than generic business keywords."""
-    searches = [
-        'site:upwork.com/freelance-jobs automation spreadsheet',
-        'site:upwork.com/freelance-jobs crm automation',
-        'site:freelancer.com/projects automation excel',
-        'site:reddit.com "looking for" "spreadsheet automation"',
-        'site:reddit.com "need help" "workflow automation"',
-        '"hiring" "automation" freelancer small business',
-        '"budget" "manual data entry" automation',
-        '"will pay" automation spreadsheet crm',
-    ]
-    low = (goal or "").lower()
-    if "online" in low or "digit" in low:
-        searches += ['"digital product" customer demand evidence', '"online service" small business pain point']
+ENTROPY_SECTORS = [
+    {"id":"spreadsheet_ops","terms":["spreadsheet automation","Excel workflow","Google Sheets process"]},
+    {"id":"document_ops","terms":["document processing","PDF data extraction","form processing"]},
+    {"id":"small_business_admin","terms":["small business admin automation","back office repetitive tasks","manual office process"]},
+    {"id":"ecommerce_ops","terms":["ecommerce operations automation","catalog data cleanup","order operations"]},
+    {"id":"reporting_compliance","terms":["recurring reporting automation","compliance reporting workflow","audit evidence collection"]},
+    {"id":"it_hygiene","terms":["IT inventory audit","patch reporting","security hygiene audit"]},
+    {"id":"customer_support","terms":["customer support repetitive questions","support triage automation","FAQ workflow"]},
+    {"id":"data_cleanup","terms":["data cleanup service","CSV cleanup","duplicate data cleanup"]},
+    {"id":"website_quality","terms":["website accessibility audit","website QA audit","broken link audit"]},
+    {"id":"local_business_ops","terms":["appointment admin workflow","quote preparation small business","manual booking admin"]},
+    {"id":"content_ops","terms":["content repurposing workflow","catalog description workflow","localization workflow"]},
+    {"id":"lead_ops","terms":["CRM follow up workflow","lead qualification automation","sales admin automation"]},
+]
+
+ENTROPY_PATTERNS = [
+    'site:reddit.com "need help" {term}',
+    'site:reddit.com "looking for" {term}',
+    '"will pay" {term}',
+    '"budget" {term}',
+    '"hiring" freelancer {term}',
+    'site:upwork.com/freelance-jobs {term}',
+    'site:freelancer.com/projects {term}',
+    '"manual" "time consuming" {term}',
+]
+
+
+def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
+    """Generate a bounded, diverse search portfolio for each Director cycle."""
+    count = max(4, min(count, 10))
+    recent = list(AUTOPILOT_STATE.get("recent_sectors") or [])
+    recent_set = set(recent[-6:])
+    unexplored = [x for x in ENTROPY_SECTORS if x["id"] not in recent_set]
+    pool = unexplored if len(unexplored) >= 4 else ENTROPY_SECTORS[:]
+    rng = secrets.SystemRandom()
+    chosen = rng.sample(pool, k=min(4, len(pool)))
+
+    queries = []
+    sectors = []
+    for sector in chosen:
+        sectors.append(sector["id"])
+        term = rng.choice(sector["terms"])
+        pattern = rng.choice(ENTROPY_PATTERNS)
+        queries.append(pattern.format(term=term))
+
+    # Exploration: deliberately sample sectors outside the current automation-heavy baseline.
+    remaining = [x for x in ENTROPY_SECTORS if x["id"] not in set(sectors)]
+    rng.shuffle(remaining)
+    for sector in remaining:
+        if len(queries) >= count - 2:
+            break
+        sectors.append(sector["id"])
+        term = rng.choice(sector["terms"])
+        pattern = rng.choice(ENTROPY_PATTERNS)
+        queries.append(pattern.format(term=term))
+
+    # Exploitation anchors: keep explicit buying-intent searches in every cycle.
+    queries.extend([
+        '"will pay" "manual process" small business',
+        '"hiring" freelancer "repetitive task" automation',
+    ])
+
     out = []
-    for q in searches:
+    for q in queries:
+        q = " ".join(q.split())
         if q.lower() not in {x.lower() for x in out}:
             out.append(q)
-    return out[:8]
+
+    AUTOPILOT_STATE["recent_sectors"] = (recent + sectors)[-12:]
+    strategy = {
+        "mode": "entropy_explore_exploit",
+        "entropy_source": "system_random",
+        "queries": out[:count],
+        "sectors": sectors[:count],
+        "recent_sector_memory": AUTOPILOT_STATE["recent_sectors"],
+        "exploration_target": "rotate sectors and avoid repeating the same opportunity family every cycle",
+        "exploitation_anchors": 2,
+    }
+    AUTOPILOT_STATE["last_search_strategy"] = strategy
+    return strategy
+
+
+def _director_searches(goal: str) -> list[str]:
+    return _entropy_search_strategy(goal, 8)["queries"]
 
 
 def _commercial_family(text: str) -> str:
