@@ -9,6 +9,7 @@ on:
     paths:
       - "cloud_mcp.py"
       - "neo_policy.json"
+      - "render.yaml"
       - ".github/workflows/neo-heartbeat.yml"
 
 permissions:
@@ -56,19 +57,16 @@ jobs:
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
               python - <<'PY'
           import json
-          p="/tmp/status.json"
-          try:
-              d=json.load(open(p,encoding="utf-8"))
-              ap=d.get("autopilot") or {}
-              print("poll", {"version":d.get("neo_version"),"running":ap.get("running"),"cycles":ap.get("cycles_completed"),"status":ap.get("last_status"),"error":ap.get("last_error")})
-          except Exception as e:
-              print("status parse error",e)
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          print("poll", {"version":d.get("neo_version"),"enabled":ap.get("enabled"),"running":ap.get("running"),"cycles":ap.get("cycles_completed"),"status":ap.get("last_status"),"error":ap.get("last_error")})
           PY
               if python - <<'PY'
           import json,sys
           d=json.load(open("/tmp/status.json",encoding="utf-8"))
           ap=d.get("autopilot") or {}
-          sys.exit(0 if (not ap.get("running") and ap.get("last_finished_utc")) else 1)
+          healthy = bool(ap.get("enabled")) and (bool(ap.get("running")) or bool(ap.get("last_finished_utc")))
+          sys.exit(0 if healthy else 1)
           PY
               then
                 break
@@ -103,7 +101,7 @@ jobs:
 
           snapshot={
               "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-              "snapshot_schema": 2,
+              "snapshot_schema": 3,
               "neo_version": raw.get("neo_version"),
               "policy": raw.get("policy") or {},
               "heartbeat": hb,
