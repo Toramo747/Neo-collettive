@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: neo-render-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -108,10 +108,13 @@ jobs:
             "https://neo-collettive.onrender.com/api/memory/status" > /tmp/memory.json
           curl --fail --silent --show-error --retry 2 --retry-delay 3 \
             "https://neo-collettive.onrender.com/api/builder/status" > /tmp/builder.json
+          curl --fail --silent --show-error --retry 2 --retry-delay 3 \
+            "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/autonomy.json
           python - <<'PY'
           import json
           m=json.load(open("/tmp/memory.json",encoding="utf-8"))
           b=json.load(open("/tmp/builder.json",encoding="utf-8"))
+          a=json.load(open("/tmp/autonomy.json",encoding="utf-8"))
           if not m.get("ok"):
               raise SystemExit("memory endpoint unhealthy")
           if not b.get("ok"):
@@ -123,7 +126,12 @@ jobs:
               raise SystemExit("builder has no allowed families")
           if b.get("external_actions_allowed") is not False:
               raise SystemExit("external action guardrail missing")
-          print("memory and builder smoke tests passed")
+          if not a.get("ok"):
+              raise SystemExit("autonomy endpoint unhealthy")
+          guard=a.get("guardrails") or {}
+          if any(bool(guard.get(k)) for k in ("spending","payments","contracts","commercial_outreach","external_publishing","personal_accounts")):
+              raise SystemExit("autonomy guardrails unsafe")
+          print("memory, builder and autonomy smoke tests passed")
           PY
 
       - name: Roll back failed application commit
