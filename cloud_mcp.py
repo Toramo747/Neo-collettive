@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.35.0"
+VERSION = "0.35.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1386,7 +1386,11 @@ def _compact_director_result(result: dict) -> dict:
         "next_gate": result.get("next_gate"),
         "valid_external_answers": result.get("valid_external_answers"),
         "web_source_count": result.get("web_source_count"),
-        "evidence_scout_count": result.get("evidence_scout_count"),\n        "search_strategy": result.get("search_strategy") or {},\n        "quality_gate": quality.get("quality_gate"),
+        "evidence_scout_count": result.get("evidence_scout_count"),
+        "search_strategy": result.get("search_strategy") or {},
+        "family_performance": result.get("family_performance") or {},
+        "collective_summary": result.get("collective_summary") or {},
+        "quality_gate": quality.get("quality_gate"),
         "gate_rule": quality.get("gate_rule"),
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "clusters": compact_clusters,
