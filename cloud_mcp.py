@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.21.0"
+VERSION = "0.22.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -710,6 +710,32 @@ def _director_searches(goal: str) -> list[str]:
     return out[:8]
 
 
+def _evidence_quality(web_research: list[dict]) -> dict:
+    domains=set()
+    commercial_domains=set()
+    useful=[]
+    noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
+    terms=("pricing","price","cost","customer","client","paid","subscription","case study","manual","workflow","crm","spreadsheet","automation","freelance","job")
+    for group in web_research:
+        if not isinstance(group,dict):
+            continue
+        for item in group.get("results") or []:
+            if not isinstance(item,dict):
+                continue
+            host=(urlparse(item.get("url") or "").hostname or "").lower()
+            if host.startswith("www."):
+                host=host[4:]
+            if not host or any(host==n or host.endswith("."+n) for n in noise):
+                continue
+            domains.add(host)
+            text=((item.get("title") or "")+" "+(item.get("snippet") or "")).lower()
+            hits=[term for term in terms if term in text]
+            if hits:
+                commercial_domains.add(host)
+                useful.append({"domain":host,"title":item.get("title") or "","url":item.get("url") or "","markers":hits[:8]})
+    return {"independent_domains":len(domains),"commercial_domains":len(commercial_domains),"useful_results":useful[:20],"quality_gate":len(commercial_domains)>=3}
+
+
 async def free_web_search(query: str, limit: int = 6) -> dict:
     """Free public web discovery via Bing RSS. No API key and no paid provider."""
     q = " ".join((query or "").strip().split())
@@ -814,18 +840,24 @@ async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
         except Exception:
             return []
 
-    batches = await asyncio.gather(*(hn(t) for t in terms), *(github(t) for t in terms))
+    hn_batches, gh_batches = await asyncio.gather(
+        asyncio.gather(*(hn(t) for t in terms)),
+        asyncio.gather(*(github(t) for t in terms)),
+    )
     seen=set()
     out=[]
-    for batch in batches:
-        for item in batch:
-            key=(item.get("url") or "") + "|" + (item.get("title") or "")
-            if not key or key in seen:
+    for i in range(max(len(hn_batches),len(gh_batches))):
+        for source_batches in (hn_batches,gh_batches):
+            if i>=len(source_batches):
                 continue
-            seen.add(key)
-            out.append(item)
-            if len(out)>=max(1,min(limit,30)):
-                return out
+            for item in source_batches[i][:3]:
+                key=(item.get("url") or "") + "|" + (item.get("title") or "")
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                out.append(item)
+                if len(out)>=max(1,min(limit,30)):
+                    return out
     return out
 
 
@@ -889,6 +921,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "Non dichiarare un guadagno come certo. Non effettuare acquisti, contatti, pubblicazioni o transazioni.\n\nOBIETTIVO:\n" + goal
     )
     web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
+    evidence_quality = _evidence_quality(web_research)
     jarvis_review = await ask_jarvis(
         jarvis_message,
         {
@@ -897,6 +930,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "external_research": evidence,
             "web_research": web_research,
             "web_source_count": web_source_count,
+            "evidence_quality": evidence_quality,
             "evidence_scouts": demand_evidence,
             "valid_external_answers": len(valid),
             "initial_jarvis_brief": jarvis_brief,
@@ -912,12 +946,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "research": evidence,
         "web_research": web_research,
         "web_source_count": web_source_count,
+        "evidence_quality": evidence_quality,
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
         "status": (
             "EVIDENCE_READY"
-            if (((jarvis_review.get("response") or {}).get("analysis") or {}).get("decision") == "VALIDATE")
+            if (((jarvis_review.get("response") or {}).get("analysis") or {}).get("decision") == "VALIDATE" and evidence_quality.get("quality_gate"))
             else "NEEDS_MORE_SOURCES"
         ),
         "jarvis": jarvis_review,
@@ -1301,7 +1336,7 @@ async def director(request: Request):
     )
     plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     jarvis_html = '<section class="card"><h2>Jarvis</h2><pre>' + html.escape(json.dumps(result.get("jarvis"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
-    web_html = '<section class="card"><h2>Web gratuito</h2><p><b>Fonti raccolte:</b> ' + str(result.get("web_source_count", 0)) + '</p><pre>' + html.escape(json.dumps(result.get("web_research"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    web_html = '<section class="card"><h2>Web gratuito</h2><p><b>Risultati grezzi:</b> ' + str(result.get("web_source_count", 0)) + '</p><p><b>Qualita evidenze:</b></p><pre>' + html.escape(json.dumps(result.get("evidence_quality"), ensure_ascii=False, indent=2, default=str)) + '</pre><details><summary>Mostra risultati grezzi</summary><pre>' + html.escape(json.dumps(result.get("web_research"), ensure_ascii=False, indent=2, default=str)) + '</pre></details></section>'
     evidence_html = '<section class="card"><h2>Evidence Scouts</h2><p><b>Segnali raccolti:</b> ' + str(result.get("evidence_scout_count", 0)) + '</p><pre>' + html.escape(json.dumps(result.get("evidence_scouts"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
     for group in result.get("research", []):
