@@ -23,6 +23,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve expected NEO version
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          s=open("cloud_mcp.py",encoding="utf-8").read()
+          m=re.search(r'^VERSION = "([^"]+)"',s,re.M)
+          if not m:
+              raise SystemExit("VERSION not found")
+          open("/tmp/neo_version","w").write(m.group(1))
+          print("expected_version="+m.group(1))
+          PY
+
       - name: Validate Render deploy hook
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
@@ -38,38 +53,42 @@ jobs:
           curl --fail --show-error --silent --max-time 60 "$RENDER_DEPLOY_HOOK" > /tmp/deploy.txt
           cat /tmp/deploy.txt || true
 
-      - name: Wait for NEO v0.41.0
+      - name: Wait for expected NEO version
         run: |
           set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
           for i in $(seq 1 40); do
-            if curl --fail --silent --show-error --max-time 30               "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
+            if curl --fail --silent --show-error --max-time 30 \
+              "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
               cat /tmp/health.json
-              if python - <<'PY'
-          import json,sys
+              if EXPECTED="$expected" python - <<'PY'
+          import json,os,sys
           d=json.load(open("/tmp/health.json",encoding="utf-8"))
-          sys.exit(0 if str(d.get("version") or "") == "0.41.0" else 1)
+          sys.exit(0 if str(d.get("version") or "") == os.environ["EXPECTED"] else 1)
           PY
               then
-                echo "NEO v0.41.0 is live"
+                echo "NEO v$expected is live"
                 exit 0
               fi
             fi
             sleep 15
           done
-          echo "Timed out waiting for NEO v0.41.0"
+          echo "Timed out waiting for NEO v$expected"
           cat /tmp/health.json || true
           exit 5
 
       - name: Verify autopilot runtime
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --retry 3 --retry-delay 5             "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json
+          expected="$(cat /tmp/neo_version)"
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+            "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json
           cat /tmp/status.json
-          python - <<'PY'
-          import json
+          EXPECTED="$expected" python - <<'PY'
+          import json,os
           d=json.load(open("/tmp/status.json",encoding="utf-8"))
           ap=d.get("autopilot") or {}
-          if str(d.get("neo_version") or "") != "0.41.0":
+          if str(d.get("neo_version") or "") != os.environ["EXPECTED"]:
               raise SystemExit("wrong runtime version")
           if not ap.get("enabled"):
               raise SystemExit("autopilot disabled")
