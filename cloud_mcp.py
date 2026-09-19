@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.28.0"
+VERSION = "0.29.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -998,21 +998,102 @@ def build_candidate(evidence_quality: dict) -> dict:
     name,offer=products.get(family,products["workflow_automation"])
     return {"status":"PILOT_READY","family":family,"name":name,"offer":offer,"price":"pilot gratuito","delivery":"report automatico","payment":"disabled until validated","evidence":clusters.get(family,{})}
 
-def run_pilot(process: str, family: str) -> dict:
+def run_pilot(process: str, family: str, minutes_each: float = 0.0, weekly_runs: float = 0.0) -> dict:
     text=" ".join((process or "").strip().split())
     low=text.lower()
-    manual=["manual","manualmente","copia","incolla","excel","spreadsheet","foglio","email","crm","pdf","portale","ripetitivo"]
-    integration=["api","webhook","csv","excel","sheets","crm","email","database","gestionale"]
+    manual=["manual","manualmente","copia","incolla","excel","spreadsheet","foglio","google sheets","email","crm","pdf","portale","ripetitivo","csv"]
+    integration=["api","webhook","csv","excel","sheets","google sheets","crm","email","database","gestionale","sharepoint","onedrive"]
     risks=["password","credenzial","iban","carta","sanitari","dati personali","gdpr"]
-    mh=sorted({x for x in manual if x in low}); ih=sorted({x for x in integration if x in low}); rh=sorted({x for x in risks if x in low})
+    mh=sorted({x for x in manual if x in low})
+    ih=sorted({x for x in integration if x in low})
+    rh=sorted({x for x in risks if x in low})
     score=min(100,max(10,20+10*len(mh)+5*len(ih)-(20 if len(text)<40 else 0)))
-    return {"automation_readiness":score,"manual_signals":mh,"integration_signals":ih,"risk_signals":rh,
-      "recommended_mvp":["mappare input, output e regole","misurare frequenza, volume e tempo attuale","automatizzare un solo passaggio reversibile","mantenere controllo umano e log","misurare errori e tempo risparmiato prima di estendere il flusso"],
-      "note":"Analisi pilota; non inviare password, credenziali o dati sensibili."}
+    weekly_minutes=max(0.0,minutes_each)*max(0.0,weekly_runs)
+    conservative_saving=round(weekly_minutes*0.35,1) if weekly_minutes else None
+    likely_saving=round(weekly_minutes*0.60,1) if weekly_minutes else None
+
+    steps=[]
+    if any(x in low for x in ["excel","spreadsheet","foglio","sheets","csv"]):
+        steps.append("normalizzare input e colonne del foglio")
+    if any(x in low for x in ["copia","incolla","data entry","manualmente","manual"]):
+        steps.append("eliminare copia/incolla con importazione o regole automatiche")
+    if "email" in low:
+        steps.append("estrarre/alimentare automaticamente i dati provenienti da email")
+    if "pdf" in low:
+        steps.append("estrarre campi strutturati dai PDF con verifica umana")
+    if "crm" in low or "gestionale" in low:
+        steps.append("sincronizzare foglio e gestionale/CRM tramite API, CSV o passaggio controllato")
+    if not steps:
+        steps=["mappare input, trasformazioni e output","identificare il passaggio manuale piu ripetitivo"]
+
+    complexity="bassa"
+    if len(ih)>=3 or rh:
+        complexity="media"
+    if len(rh)>=2:
+        complexity="alta"
+
+    return {
+      "pilot":"SheetFlow Audit" if family=="spreadsheet_process" else "NEO Automation Audit",
+      "family":family,
+      "automation_readiness":score,
+      "complexity":complexity,
+      "manual_signals":mh,
+      "integration_signals":ih,
+      "risk_signals":rh,
+      "automation_candidates":steps[:5],
+      "time_model":{
+        "minutes_each":max(0.0,minutes_each),
+        "weekly_runs":max(0.0,weekly_runs),
+        "current_weekly_minutes":round(weekly_minutes,1),
+        "estimated_weekly_minutes_saved_range":[conservative_saving,likely_saving] if weekly_minutes else None,
+        "note":"Stima preliminare basata sui dati dichiarati, da verificare con una misurazione reale."
+      },
+      "recommended_mvp":[
+        "mappare input, output e regole",
+        "misurare frequenza, volume, errori e tempo attuale",
+        "automatizzare un solo passaggio reversibile",
+        "mantenere controllo umano e log",
+        "confrontare tempo/errori prima e dopo il pilot"
+      ],
+      "pilot_offer":{
+        "price":"gratuito",
+        "delivery":"report automatico con priorita di automazione",
+        "payment":"disabled",
+        "success_metric":"tempo o errori ridotti su un singolo processo reale"
+      },
+      "note":"Analisi pilota; non inviare password, credenziali, dati sanitari o altri dati sensibili."
+    }
+
+
+def _jarvis_snapshot(result: dict) -> dict:
+    """Extract Jarvis metadata even if the transport response is nested or the review failed."""
+    candidates=[]
+    for root in (result.get("jarvis"),result.get("jarvis_brief")):
+        cur=root
+        for _ in range(4):
+            if not isinstance(cur,dict):
+                break
+            candidates.append(cur)
+            nxt=cur.get("response")
+            if not isinstance(nxt,dict) or nxt is cur:
+                break
+            cur=nxt
+    for item in candidates:
+        analysis=item.get("analysis")
+        if isinstance(analysis,dict):
+            return {
+                "version":item.get("version"),
+                "evidence_state":analysis.get("evidence_state"),
+                "decision":analysis.get("decision"),
+                "summary":analysis.get("summary") or {},
+                "opportunities":analysis.get("opportunities") or [],
+                "next_experiment":analysis.get("next_experiment"),
+            }
+    return {"version":None,"evidence_state":None,"decision":None,"summary":{},"opportunities":[],"next_experiment":None}
 
 
 def _compact_director_result(result: dict) -> dict:
-    jarvis_analysis = (((result.get("jarvis") or {}).get("response") or {}).get("analysis") or {})
+    jarvis_snapshot = _jarvis_snapshot(result)
     quality = result.get("evidence_quality") or {}
     clusters = quality.get("clusters") or {}
     compact_clusters = {}
@@ -1051,14 +1132,7 @@ def _compact_director_result(result: dict) -> dict:
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "clusters": compact_clusters,
         "product_candidate": result.get("product_candidate") or {},
-        "jarvis": {
-            "version": ((result.get("jarvis") or {}).get("response") or {}).get("version"),
-            "evidence_state": jarvis_analysis.get("evidence_state"),
-            "decision": jarvis_analysis.get("decision"),
-            "summary": jarvis_analysis.get("summary") or {},
-            "opportunities": jarvis_analysis.get("opportunities") or [],
-            "next_experiment": jarvis_analysis.get("next_experiment"),
-        },
+        "jarvis": jarvis_snapshot,
     }
 
 
@@ -1616,13 +1690,22 @@ async def api_director_results(request: Request):
 
 
 async def venture(request: Request):
-    family=(request.query_params.get("family") or "workflow_automation").strip()
+    family=(request.query_params.get("family") or "spreadsheet_process").strip()
     process=(request.query_params.get("process") or "").strip()
-    body='<section class="card"><span class="tag">FACTORY</span><h2>NEO Product Factory</h2><p>Prototipo pubblico per testare un micro-servizio prima di abilitarne la vendita.</p></section>'
-    body+='<section class="card"><form method="get" action="/venture"><label>Tipo</label><input name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo da automatizzare</label><textarea name="process">'+html.escape(process)+'</textarea><button type="submit">Esegui pilot</button></form></section>'
+    try:
+        minutes_each=max(0.0,float(request.query_params.get("minutes_each") or "0"))
+    except ValueError:
+        minutes_each=0.0
+    try:
+        weekly_runs=max(0.0,float(request.query_params.get("weekly_runs") or "0"))
+    except ValueError:
+        weekly_runs=0.0
+    body='<section class="card"><span class="tag">FACTORY</span><h2>SheetFlow Audit</h2><p>Pilot gratuito: descrivi un processo Excel/Google Sheets e NEO individua passaggi manuali, automazioni possibili, rischi e una stima preliminare del tempo recuperabile.</p><p class="muted">Non inserire password, credenziali o dati sensibili. Pagamenti disabilitati.</p></section>'
+    body+='<section class="card"><form method="get" action="/venture"><input type="hidden" name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo attuale</label><textarea name="process" placeholder="Esempio: ricevo un CSV via email, copio le righe in Excel, controllo alcune colonne e poi aggiorno il CRM...">'+html.escape(process)+'</textarea><label>Minuti impiegati ogni volta (facoltativo)</label><input name="minutes_each" type="number" min="0" step="1" value="'+str(minutes_each)+'"><label>Quante volte a settimana (facoltativo)</label><input name="weekly_runs" type="number" min="0" step="1" value="'+str(weekly_runs)+'"><button type="submit">Genera audit gratuito</button></form></section>'
     if process:
-        body+='<section class="card"><h2>Risultato</h2><pre>'+html.escape(json.dumps(run_pilot(process,family),ensure_ascii=False,indent=2))+'</pre></section>'
-    return layout("Product Factory",body)
+        pilot=run_pilot(process,family,minutes_each,weekly_runs)
+        body+='<section class="card"><h2>Report SheetFlow</h2><pre>'+html.escape(json.dumps(pilot,ensure_ascii=False,indent=2))+'</pre><p class="muted">Questo e un pilot di validazione: le stime devono essere verificate su un processo reale prima di attribuire valore economico.</p></section>'
+    return layout("SheetFlow Audit",body)
 
 
 async def system(request: Request):
