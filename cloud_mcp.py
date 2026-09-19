@@ -17,7 +17,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.20.0"
+VERSION = "0.21.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -776,6 +776,59 @@ async def _free_web_research(queries: list[str], per_query: int = 5) -> list[dic
     return await asyncio.gather(*(free_web_search(q, per_query) for q in clean[:10]))
 
 
+async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
+    """Collect demand/problem signals from public Hacker News and GitHub APIs."""
+    terms = ["workflow automation", "manual data entry", "spreadsheet automation", "CRM automation", "AI automation"]
+    low = (goal or "").lower()
+    if "online" in low:
+        terms += ["small business software", "freelance automation"]
+    terms = terms[:5]
+
+    async def hn(term: str):
+        try:
+            data = await get_json("https://hn.algolia.com/api/v1/search_by_date", {"query": term, "tags": "story", "hitsPerPage": 5})
+            out = []
+            for x in (data.get("hits") or [])[:5]:
+                if not isinstance(x, dict):
+                    continue
+                url = x.get("url") or ("https://news.ycombinator.com/item?id=" + str(x.get("objectID") or ""))
+                out.append({"source":"hackernews","query":term,"title":x.get("title") or "","url":url,"text":x.get("story_text") or x.get("title") or ""})
+            return out
+        except Exception:
+            return []
+
+    async def github(term: str):
+        try:
+            headers={"Accept":"application/vnd.github+json","User-Agent":"NEO-Collective/"+VERSION}
+            async with httpx.AsyncClient(timeout=min(TIMEOUT,12), follow_redirects=False, headers=headers) as client:
+                r=await client.get("https://api.github.com/search/issues",params={"q":term+" is:issue","sort":"updated","order":"desc","per_page":5})
+                if not r.is_success:
+                    return []
+                data=r.json()
+            out=[]
+            for x in (data.get("items") or [])[:5]:
+                if not isinstance(x,dict):
+                    continue
+                out.append({"source":"github-issues","query":term,"title":x.get("title") or "","url":x.get("html_url") or "","text":x.get("body") or x.get("title") or ""})
+            return out
+        except Exception:
+            return []
+
+    batches = await asyncio.gather(*(hn(t) for t in terms), *(github(t) for t in terms))
+    seen=set()
+    out=[]
+    for batch in batches:
+        for item in batch:
+            key=(item.get("url") or "") + "|" + (item.get("title") or "")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+            if len(out)>=max(1,min(limit,30)):
+                return out
+    return out
+
+
 async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     plan = director_plan(goal, budget, hours_per_week)
     research_question = (
@@ -796,8 +849,9 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     )
 
     searches = _director_searches(goal)
+    demand_evidence = await evidence_scouts(goal, limit=20)
 
-    # Free web evidence runs alongside public agent discovery. No paid API key is used.
+    # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
     followup_queries = _jarvis_next_queries(jarvis_brief)
     web_queries = searches + followup_queries
@@ -843,6 +897,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "external_research": evidence,
             "web_research": web_research,
             "web_source_count": web_source_count,
+            "evidence_scouts": demand_evidence,
             "valid_external_answers": len(valid),
             "initial_jarvis_brief": jarvis_brief,
         },
@@ -857,6 +912,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "research": evidence,
         "web_research": web_research,
         "web_source_count": web_source_count,
+        "evidence_scouts": demand_evidence,
+        "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
         "status": (
             "EVIDENCE_READY"
@@ -1245,10 +1302,11 @@ async def director(request: Request):
     plan_html = '<section class="card"><h2>Piano Director</h2><pre>' + html.escape(json.dumps(result.get("plan"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     jarvis_html = '<section class="card"><h2>Jarvis</h2><pre>' + html.escape(json.dumps(result.get("jarvis"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     web_html = '<section class="card"><h2>Web gratuito</h2><p><b>Fonti raccolte:</b> ' + str(result.get("web_source_count", 0)) + '</p><pre>' + html.escape(json.dumps(result.get("web_research"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    evidence_html = '<section class="card"><h2>Evidence Scouts</h2><p><b>Segnali raccolti:</b> ' + str(result.get("evidence_scout_count", 0)) + '</p><pre>' + html.escape(json.dumps(result.get("evidence_scouts"), ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
     research_html = '<section class="card"><h2>Ricerca delegata</h2></section>'
     for group in result.get("research", []):
         research_html += '<article><span class="tag">SCOUT</span><h3>' + html.escape(str(group.get("query"))) + '</h3><pre>' + html.escape(json.dumps(group, ensure_ascii=False, indent=2, default=str)) + '</pre></article>'
-    return layout("Director", form + summary + plan_html + jarvis_html + web_html + research_html)
+    return layout("Director", form + summary + plan_html + jarvis_html + evidence_html + web_html + research_html)
 
 async def system(request: Request):
     render_info: Any = {"configured": bool(RENDER_API_KEY and RENDER_SERVICE_ID)}
