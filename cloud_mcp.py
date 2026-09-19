@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.36.1"
+VERSION = "0.36.2"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1490,7 +1490,9 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         {"plan": plan, "phase": "planning"},
     )
 
-    search_strategy = _entropy_search_strategy(goal, 8)\n    searches = search_strategy["queries"]\n    demand_evidence = await evidence_scouts(goal, limit=20)
+    search_strategy = _entropy_search_strategy(goal, 8)
+    searches = search_strategy["queries"]
+    demand_evidence = await evidence_scouts(goal, limit=20)
 
     # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
@@ -1560,13 +1562,25 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         },
     )
 
-    jarvis_analysis = ((jarvis_review.get("response") or {}).get("analysis") or {}) if isinstance(jarvis_review, dict) else {}\n    jarvis_decision = str(jarvis_analysis.get("decision") or "")\n    collective_summary = _collective_summary(collective_review)\n    build_ready = bool(\n        product_candidate.get("status") == "PILOT_READY"\n        and collective_summary.get("ok")\n        and int(collective_summary.get("round2_valid") or 0) >= 2\n        and jarvis_decision == "VALIDATE"\n    )\n\n    result = {
+    jarvis_analysis = ((jarvis_review.get("response") or {}).get("analysis") or {}) if isinstance(jarvis_review, dict) else {}
+    jarvis_decision = str(jarvis_analysis.get("decision") or "")
+    collective_summary = _collective_summary(collective_review)
+    build_ready = bool(
+        product_candidate.get("status") == "PILOT_READY"
+        and collective_summary.get("ok")
+        and int(collective_summary.get("round2_valid") or 0) >= 2
+        and jarvis_decision == "VALIDATE"
+    )
+
+    result = {
         "ok": True,
         "mode": "director",
         "coordinator": "jarvis-free",
         "plan": plan,
         "jarvis_brief": jarvis_brief,
-        "research": evidence,\n        "search_strategy": search_strategy,\n        "web_research": web_research,
+        "research": evidence,
+        "search_strategy": search_strategy,
+        "web_research": web_research,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
         "family_performance": family_performance,
@@ -1576,13 +1590,22 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
-        "status": ("BUILD_READY" if build_ready else ("COLLECTIVE_REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),\n        "build_gate": {\n            "passed": build_ready,\n            "candidate_pilot_ready": product_candidate.get("status") == "PILOT_READY",\n            "collective_ok": bool(collective_summary.get("ok")),\n            "collective_round2_valid": int(collective_summary.get("round2_valid") or 0),\n            "jarvis_decision": jarvis_decision,\n        },\n        "lifecycle": {
+        "status": ("BUILD_READY" if build_ready else ("COLLECTIVE_REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),
+        "build_gate": {
+            "passed": build_ready,
+            "candidate_pilot_ready": product_candidate.get("status") == "PILOT_READY",
+            "collective_ok": bool(collective_summary.get("ok")),
+            "collective_round2_valid": int(collective_summary.get("round2_valid") or 0),
+            "jarvis_decision": jarvis_decision,
+        },
+        "lifecycle": {
             "current": ("BUILD" if build_ready else ("REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),
             "stages": ["SELECT","BUILD","LAUNCH","MEASURE","IMPROVE"],
             "launch_policy": "MVP pubblico sul perimetro NEO autorizzato; promozione organica non-spam; nessuna spesa, contratto o account personale senza approvazione",
         },
         "jarvis": jarvis_review,
-        "next_gate": ("BUILD: genera un MVP reversibile sul perimetro NEO autorizzato, poi misura interesse e conversioni." if build_ready else ("REVIEW: il candidato deve superare mente collettiva e Jarvis prima del BUILD." if product_candidate.get("status") == "PILOT_READY" else "SELECT: raccogli evidenza convergente e prepara un candidato testabile.")),\n        "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
+        "next_gate": ("BUILD: genera un MVP reversibile sul perimetro NEO autorizzato, poi misura interesse e conversioni." if build_ready else ("REVIEW: il candidato deve superare mente collettiva e Jarvis prima del BUILD." if product_candidate.get("status") == "PILOT_READY" else "SELECT: raccogli evidenza convergente e prepara un candidato testabile.")),
+        "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
     }
     _record_director_result(result)
     _save_local_state()
@@ -2042,7 +2065,9 @@ async def _autopilot_cycle() -> None:
         AUTOPILOT_STATE["last_error"] = None
         try:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
-            AUTOPILOT_STATE["last_status"] = result.get("status")\n            AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1\n        except Exception as e:
+            AUTOPILOT_STATE["last_status"] = result.get("status")
+            AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
+        except Exception as e:
             AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:500]
         finally:
             AUTOPILOT_STATE["running"] = False
