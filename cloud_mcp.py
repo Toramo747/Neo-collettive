@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.33.1"
+VERSION = "0.33.2"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -47,8 +47,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "last_started_utc": None,
     "last_finished_utc": None,
     "last_status": None,
-    "last_error": None,
-}
+    "last_error": None,\n    "cycles_completed": 0,\n    "recent_sectors": [],\n    "last_search_strategy": None,\n}
 
 mcp = MCPServer(
     name="NEO Collective",
@@ -1209,8 +1208,7 @@ def _compact_director_result(result: dict) -> dict:
         "next_gate": result.get("next_gate"),
         "valid_external_answers": result.get("valid_external_answers"),
         "web_source_count": result.get("web_source_count"),
-        "evidence_scout_count": result.get("evidence_scout_count"),
-        "quality_gate": quality.get("quality_gate"),
+        "evidence_scout_count": result.get("evidence_scout_count"),\n        "search_strategy": result.get("search_strategy") or {},\n        "quality_gate": quality.get("quality_gate"),
         "gate_rule": quality.get("gate_rule"),
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "clusters": compact_clusters,
@@ -1270,8 +1268,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         {"plan": plan, "phase": "planning"},
     )
 
-    searches = _director_searches(goal)
-    demand_evidence = await evidence_scouts(goal, limit=20)
+    search_strategy = _entropy_search_strategy(goal, 8)\n    searches = search_strategy["queries"]\n    demand_evidence = await evidence_scouts(goal, limit=20)
 
     # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
@@ -1337,8 +1334,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "coordinator": "jarvis-free",
         "plan": plan,
         "jarvis_brief": jarvis_brief,
-        "research": evidence,
-        "web_research": web_research,
+        "research": evidence,\n        "search_strategy": search_strategy,\n        "web_research": web_research,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
         "product_candidate": product_candidate,
@@ -1816,8 +1812,7 @@ async def _autopilot_cycle() -> None:
         AUTOPILOT_STATE["last_error"] = None
         try:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
-            AUTOPILOT_STATE["last_status"] = result.get("status")
-        except Exception as e:
+            AUTOPILOT_STATE["last_status"] = result.get("status")\n            AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1\n        except Exception as e:
             AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:500]
         finally:
             AUTOPILOT_STATE["running"] = False
