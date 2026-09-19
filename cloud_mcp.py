@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.37.0"
+VERSION = "0.37.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2243,7 +2243,8 @@ app = Starlette(
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
-        Route("/api/director/run", api_director_run, methods=["GET"]),\n        Route("/api/render/errors", api_render_errors, methods=["GET"]),
+        Route("/api/director/run", api_director_run, methods=["GET"]),
+        Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
