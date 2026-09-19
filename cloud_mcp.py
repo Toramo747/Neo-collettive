@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.29.0"
+VERSION = "0.30.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1351,6 +1351,18 @@ async def neo_jarvis(message: str, context_json: str = "") -> dict:
 async def neo_director(goal: str, budget_eur: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     """Coordinate external agents to research revenue opportunities. Research-only; no spending or external actions."""
     return await director_run(goal, budget_eur, hours_per_week, max_agents)
+
+@mcp.tool()
+async def neo_director_results(limit: int = 5) -> dict:
+    """Return recent compact Director results from the runtime log."""
+    rows = _load_recent_results(max(1, min(limit, 20)))
+    return {
+        "ok": True,
+        "count": len(rows),
+        "latest": rows[-1] if rows else None,
+        "results": rows,
+    }
+
 
 @mcp.tool()
 async def neo_render_status() -> dict:
