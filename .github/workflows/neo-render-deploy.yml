@@ -12,7 +12,7 @@ on:
       - ".github/workflows/neo-render-deploy.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: neo-render-deploy
@@ -24,6 +24,12 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate source before deploy
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py jarvis_service/app.py
+          python -m json.tool neo_policy.json >/dev/null
 
       - name: Resolve expected NEO version
         run: |
@@ -94,3 +100,51 @@ jobs:
               raise SystemExit("autopilot disabled")
           print("autopilot enabled; cycles_completed="+str(ap.get("cycles_completed")))
           PY
+
+      - name: Smoke test autonomous subsystems
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --retry-delay 3 \
+            "https://neo-collettive.onrender.com/api/memory/status" > /tmp/memory.json
+          curl --fail --silent --show-error --retry 2 --retry-delay 3 \
+            "https://neo-collettive.onrender.com/api/builder/status" > /tmp/builder.json
+          python - <<'PY'
+          import json
+          m=json.load(open("/tmp/memory.json",encoding="utf-8"))
+          b=json.load(open("/tmp/builder.json",encoding="utf-8"))
+          if not m.get("ok"):
+              raise SystemExit("memory endpoint unhealthy")
+          if not b.get("ok"):
+              raise SystemExit("builder endpoint unhealthy")
+          policy=b.get("policy") or {}
+          if not policy.get("enabled"):
+              raise SystemExit("autonomous builder disabled")
+          if not policy.get("allowed_families"):
+              raise SystemExit("builder has no allowed families")
+          if b.get("external_actions_allowed") is not False:
+              raise SystemExit("external action guardrail missing")
+          print("memory and builder smoke tests passed")
+          PY
+
+      - name: Roll back failed application commit
+        if: failure()
+        env:
+          FAILED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+          current="$(git rev-parse HEAD)"
+          if [ "$current" != "$FAILED_SHA" ]; then
+            echo "Main advanced to $current; skip automatic rollback of $FAILED_SHA"
+            exit 0
+          fi
+          changed="$(git show --pretty='' --name-only "$FAILED_SHA")"
+          if printf '%s\n' "$changed" | grep -q '^\.github/workflows/'; then
+            echo "Workflow-changing commit: automatic rollback skipped"
+            exit 0
+          fi
+          git config user.name "NEO Safe Rollback"
+          git config user.email "actions@users.noreply.github.com"
+          git revert --no-edit "$FAILED_SHA"
+          git push origin HEAD:main
