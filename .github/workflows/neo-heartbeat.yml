@@ -140,5 +140,8 @@ jobs:
           git config user.name "NEO Runtime Snapshot"
           git config user.email "actions@users.noreply.github.com"
           git commit -m "NEO runtime snapshot"
-          git pull --rebase origin main
+          git fetch origin main
+          git reset --soft origin/main
+          git add neo_latest_result.json
+          git commit -m "NEO runtime snapshot" || true
           git push origin HEAD:main
