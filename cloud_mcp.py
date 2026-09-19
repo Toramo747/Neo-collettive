@@ -18,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.39.0"
+VERSION = "0.40.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2288,7 +2288,7 @@ async def api_autopilot_status(request: Request):
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
-    return JSONResponse({"ok": True, "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
+    return JSONResponse({"ok": True, "neo_version": VERSION, "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
 
 async def venture(request: Request):
