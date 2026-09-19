@@ -3,6 +3,7 @@ import html
 import json
 import os
 import ipaddress
+from datetime import datetime, timezone
 from urllib.parse import urlparse, quote_plus
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
@@ -17,7 +18,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.26.0"
+VERSION = "0.27.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -27,6 +28,8 @@ RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID")
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
+RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
+DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 
 mcp = MCPServer(
     name="NEO Collective",
@@ -1008,6 +1011,88 @@ def run_pilot(process: str, family: str) -> dict:
       "note":"Analisi pilota; non inviare password, credenziali o dati sensibili."}
 
 
+def _compact_director_result(result: dict) -> dict:
+    jarvis_analysis = (((result.get("jarvis") or {}).get("response") or {}).get("analysis") or {})
+    quality = result.get("evidence_quality") or {}
+    clusters = quality.get("clusters") or {}
+    compact_clusters = {}
+    for family, data in clusters.items():
+        if not isinstance(data, dict):
+            continue
+        compact_clusters[family] = {
+            "qualified": data.get("qualified"),
+            "commercially_actionable": data.get("commercially_actionable"),
+            "gap_score": data.get("gap_score"),
+            "independent_domains": data.get("independent_domains"),
+            "strong_commercial_domains": data.get("strong_commercial_domains"),
+            "signal_types": data.get("signal_types") or [],
+            "domains": data.get("domains") or [],
+            "signals": [
+                {
+                    "domain": x.get("domain"),
+                    "source": x.get("source"),
+                    "title": x.get("title"),
+                    "url": x.get("url"),
+                    "signal_types": x.get("signal_types") or [],
+                }
+                for x in (data.get("signals") or [])[:6] if isinstance(x, dict)
+            ],
+        }
+    return {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "neo_version": VERSION,
+        "status": result.get("status"),
+        "next_gate": result.get("next_gate"),
+        "valid_external_answers": result.get("valid_external_answers"),
+        "web_source_count": result.get("web_source_count"),
+        "evidence_scout_count": result.get("evidence_scout_count"),
+        "quality_gate": quality.get("quality_gate"),
+        "gate_rule": quality.get("gate_rule"),
+        "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
+        "clusters": compact_clusters,
+        "product_candidate": result.get("product_candidate") or {},
+        "jarvis": {
+            "version": ((result.get("jarvis") or {}).get("response") or {}).get("version"),
+            "evidence_state": jarvis_analysis.get("evidence_state"),
+            "decision": jarvis_analysis.get("decision"),
+            "summary": jarvis_analysis.get("summary") or {},
+            "opportunities": jarvis_analysis.get("opportunities") or [],
+            "next_experiment": jarvis_analysis.get("next_experiment"),
+        },
+    }
+
+
+def _record_director_result(result: dict) -> dict:
+    entry = _compact_director_result(result)
+    DIRECTOR_RESULT_LOG.append(entry)
+    del DIRECTOR_RESULT_LOG[:-25]
+    try:
+        with open(RESULTS_LOG_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+    return entry
+
+
+def _load_recent_results(limit: int = 10) -> list[dict]:
+    limit = max(1, min(limit, 25))
+    if DIRECTOR_RESULT_LOG:
+        return DIRECTOR_RESULT_LOG[-limit:]
+    rows = []
+    try:
+        with open(RESULTS_LOG_PATH, "r", encoding="utf-8") as fh:
+            for line in fh:
+                try:
+                    row = json.loads(line)
+                    if isinstance(row, dict):
+                        rows.append(row)
+                except Exception:
+                    continue
+    except Exception:
+        return []
+    return rows[-limit:]
+
+
 async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     plan = director_plan(goal, budget, hours_per_week)
     research_question = (
@@ -1088,7 +1173,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         },
     )
 
-    return {
+    result = {
         "ok": True,
         "mode": "director",
         "coordinator": "jarvis-free",
@@ -1111,6 +1196,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "next_gate": ("COLLECTIVE_REVIEW: verificare domanda, fattibilita, concorrenza e margine; poi generare un MVP nel perimetro autorizzato." if evidence_quality.get("quality_gate") else "DEMAND_HUNT: trovare richieste reali e segnali economici riferiti allo stesso problema."),
         "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
     }
+    _record_director_result(result)
+    return result
 
 async def render_request(path: str, params: dict[str, Any] | None = None) -> Any:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
@@ -1258,7 +1345,7 @@ def layout(title: str, body: str) -> HTMLResponse:
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050806">
 <title>{html.escape(title)} - NEO</title><style>{BASE_CSS}</style></head><body><main>
 <div class="brand">NEO</div><div class="sub">Collective intelligence radar · v{VERSION}</div>
-<nav><a href="/">Home</a><a href="/director">Director</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
+<nav><a href="/">Home</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
 {body}</main></body></html>"""
     return HTMLResponse(page)
 
@@ -1500,6 +1587,28 @@ async def director(request: Request):
     return layout("Director", form + summary + plan_html + jarvis_html + evidence_html + web_html + research_html)
 
 
+async def results_page(request: Request):
+    rows = _load_recent_results(10)
+    if not rows:
+        return layout("Results", '<section class="card"><h2>Director Results</h2><p>Nessun risultato registrato in questa istanza.</p></section>')
+    latest = rows[-1]
+    cards = '<section class="card"><h2>Director Results</h2><p class="muted">Log compatto dei risultati. I dati grezzi restano fuori pagina per evitare output enormi.</p></section>'
+    cards += '<section class="card"><h3>Ultimo risultato</h3><pre>' + html.escape(json.dumps(latest, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    if len(rows) > 1:
+        history = [{"timestamp_utc":x.get("timestamp_utc"),"status":x.get("status"),"qualified_problem_clusters":x.get("qualified_problem_clusters"),"product_candidate":x.get("product_candidate")} for x in rows[:-1]]
+        cards += '<section class="card"><h3>Storico recente</h3><pre>' + html.escape(json.dumps(history, ensure_ascii=False, indent=2, default=str)) + '</pre></section>'
+    return layout("Results", cards)
+
+
+async def api_director_results(request: Request):
+    try:
+        limit = int(request.query_params.get("limit") or "5")
+    except ValueError:
+        limit = 5
+    rows = _load_recent_results(limit)
+    return JSONResponse({"ok": True, "count": len(rows), "latest": rows[-1] if rows else None, "results": rows})
+
+
 async def venture(request: Request):
     family=(request.query_params.get("family") or "workflow_automation").strip()
     process=(request.query_params.get("process") or "").strip()
@@ -1574,6 +1683,8 @@ app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
         Route("/director", director, methods=["GET"]),
+        Route("/results", results_page, methods=["GET"]),
+        Route("/api/director/results", api_director_results, methods=["GET"]),
         Route("/venture", venture, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
