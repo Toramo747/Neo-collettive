@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.42.0"
+VERSION = "0.43.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -60,6 +60,16 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "last_search_strategy": None,
     "family_performance": {},
     "stagnation_cycles": 0,
+    "agent_trust": {},
+    "build_history": [],
+    "last_build": None,
+    "measurement_history": [],
+    "last_measurement": None,
+    "venture_metrics": {
+        "audits_total": 0,
+        "audits_with_baseline": 0,
+        "audits_with_error_baseline": 0,
+    },
 }
 
 
@@ -69,6 +79,12 @@ def _state_payload() -> dict:
         "recent_sectors": list(AUTOPILOT_STATE.get("recent_sectors") or [])[-12:],
         "stagnation_cycles": int(AUTOPILOT_STATE.get("stagnation_cycles") or 0),
         "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+        "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
+        "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
+        "last_build": AUTOPILOT_STATE.get("last_build"),
+        "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
+        "last_measurement": AUTOPILOT_STATE.get("last_measurement"),
+        "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
     }
 
 
@@ -83,6 +99,18 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["recent_sectors"] = [str(x) for x in recent][-12:]
     AUTOPILOT_STATE["stagnation_cycles"] = max(0, min(20, int(payload.get("stagnation_cycles") or 0)))
     AUTOPILOT_STATE["cycles_completed"] = max(0, int(payload.get("cycles_completed") or 0))
+    if isinstance(payload.get("agent_trust"), dict):
+        AUTOPILOT_STATE["agent_trust"] = payload.get("agent_trust") or {}
+    if isinstance(payload.get("build_history"), list):
+        AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
+    if isinstance(payload.get("last_build"), dict):
+        AUTOPILOT_STATE["last_build"] = payload.get("last_build")
+    if isinstance(payload.get("measurement_history"), list):
+        AUTOPILOT_STATE["measurement_history"] = payload.get("measurement_history")[-30:]
+    if isinstance(payload.get("last_measurement"), dict):
+        AUTOPILOT_STATE["last_measurement"] = payload.get("last_measurement")
+    if isinstance(payload.get("venture_metrics"), dict):
+        AUTOPILOT_STATE["venture_metrics"] = payload.get("venture_metrics") or {}
     return True
 
 
@@ -98,6 +126,14 @@ def _restore_state() -> str:
         with open(STATE_SNAPSHOT_PATH, "r", encoding="utf-8") as fh:
             if _merge_state_payload(json.load(fh)):
                 return "local_snapshot"
+    except Exception:
+        pass
+    try:
+        with open("neo_latest_result.json", "r", encoding="utf-8") as fh:
+            snap=json.load(fh)
+        durable=(snap.get("autopilot") or {}) if isinstance(snap,dict) else {}
+        if _merge_state_payload(durable):
+            return "repo_snapshot"
     except Exception:
         pass
     return "fresh"
@@ -387,6 +423,54 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
     return agents, mcp_candidates, errors
 
 
+
+def _agent_trust_bonus(agent_id: str) -> tuple[int, str | None]:
+    row=(AUTOPILOT_STATE.get("agent_trust") or {}).get(str(agent_id)) or {}
+    observations=int(row.get("observations") or 0)
+    trust=float(row.get("trust") or 50.0)
+    if observations < 2:
+        return 0, None
+    bonus=max(-8,min(8,round((trust-50.0)/6.25)))
+    return int(bonus), "trust=" + str(round(trust,1)) + "/100"
+
+
+def _update_agent_trust(tested: list[dict]) -> dict:
+    trust=dict(AUTOPILOT_STATE.get("agent_trust") or {})
+    now=datetime.now(timezone.utc).isoformat()
+    for answer in tested:
+        if not isinstance(answer,dict):
+            continue
+        agent_id=str(answer.get("agent_id") or "").strip()
+        if not agent_id:
+            continue
+        old=dict(trust.get(agent_id) or {})
+        observations=int(old.get("observations") or 0)+1
+        accepted=int(old.get("accepted") or 0)+(1 if answer.get("quality_ok") else 0)
+        transport_success=int(old.get("transport_success") or 0)+(1 if answer.get("ok") else 0)
+        relevance_total=float(old.get("relevance_total") or 0.0)+max(0.0,float(answer.get("relevance_score") or 0.0))
+        quality_rate=accepted/observations
+        transport_rate=transport_success/observations
+        avg_relevance=relevance_total/observations
+        score=max(0.0,min(100.0,quality_rate*60.0+transport_rate*20.0+min(20.0,avg_relevance*1.5)))
+        trust[agent_id]={
+            "agent":answer.get("agent") or agent_id,
+            "observations":observations,
+            "accepted":accepted,
+            "transport_success":transport_success,
+            "relevance_total":round(relevance_total,2),
+            "avg_relevance":round(avg_relevance,2),
+            "trust":round(score,2),
+            "last_quality_ok":bool(answer.get("quality_ok")),
+            "last_quality_reason":answer.get("quality_reason"),
+            "last_seen_utc":now,
+        }
+    if len(trust)>100:
+        ranked=sorted(trust.items(),key=lambda kv:(int(kv[1].get("observations") or 0),str(kv[1].get("last_seen_utc") or "")),reverse=True)[:100]
+        trust=dict(ranked)
+    AUTOPILOT_STATE["agent_trust"]=trust
+    return trust
+
+
 async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dict:
     max_agents = max(1, min(max_agents, MAX_AGENTS))
     search_queries = _expand_queries(query, question)
@@ -395,6 +479,11 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
     ranked = []
     for agent in candidates:
         score, reasons = _score_agent(agent, query, question)
+        agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
+        trust_bonus, trust_reason = _agent_trust_bonus(agent_id)
+        score += trust_bonus
+        if trust_reason:
+            reasons.append(trust_reason)
         matched_queries = agent.get("_matched_queries") or []
         if len(matched_queries) > 1:
             score += min(6, len(matched_queries) * 2)
@@ -447,6 +536,7 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
             }
 
     tested = await asyncio.gather(*(ask(x) for x in selected)) if selected else []
+    _update_agent_trust(tested)
     accepted = [a for a in tested if a.get("quality_ok")][:max_agents]
     rejected_responses = [a for a in tested if not a.get("quality_ok")]
 
@@ -955,7 +1045,16 @@ DEFAULT_POLICY = {
     "stagnation_threshold": 3,
     "max_exploitation_slots": 2,
     "smoothing_old_weight": 0.65,
-    "minimum_observations_for_exploitation": 2
+    "minimum_observations_for_exploitation": 2,
+    "autonomous_builder_enabled": true,
+    "builder_min_readiness": 45,
+    "builder_allowed_families": [
+        "spreadsheet_process",
+        "workflow_automation",
+        "crm_lead_ops",
+        "manual_data_entry",
+        "website_audit"
+    ]
 }
 
 
@@ -1608,6 +1707,139 @@ def run_pilot(
     }
 
 
+
+BUILD_RECIPES = {
+    "spreadsheet_process": {
+        "sample_process":"Ricevo un CSV via email, copio manualmente le righe in Excel, verifico colonne e aggiorno il CRM.",
+        "minutes_each":25,"weekly_runs":10,"weekly_errors":3,
+    },
+    "workflow_automation": {
+        "sample_process":"Ricevo richieste via email, copio manualmente i dati in un foglio, controllo lo stato e preparo un report settimanale.",
+        "minutes_each":20,"weekly_runs":12,"weekly_errors":2,
+    },
+    "crm_lead_ops": {
+        "sample_process":"Ricevo lead via email e foglio Excel, copio manualmente i dati nel CRM e aggiorno lo stato dopo ogni contatto.",
+        "minutes_each":12,"weekly_runs":20,"weekly_errors":3,
+    },
+    "manual_data_entry": {
+        "sample_process":"Ricevo PDF e CSV, copio manualmente alcuni campi in Excel e poi nel gestionale, con controlli finali.",
+        "minutes_each":18,"weekly_runs":15,"weekly_errors":4,
+    },
+    "website_audit": {
+        "sample_process":"Esporto dati del sito in CSV, confronto manualmente pagine e problemi in Excel e preparo un report.",
+        "minutes_each":30,"weekly_runs":4,"weekly_errors":1,
+    },
+}
+
+
+def _builder_allowed(family: str) -> bool:
+    policy=_load_policy()
+    allowed=policy.get("builder_allowed_families") or []
+    return bool(policy.get("autonomous_builder_enabled",True)) and family in {str(x) for x in allowed}
+
+
+def _autonomous_build(product_candidate: dict, evidence_quality: dict, collective_summary: dict, jarvis_decision: str, jarvis_source: str) -> dict:
+    family=str(product_candidate.get("family") or "")
+    if product_candidate.get("status")!="PILOT_READY":
+        return {"ok":False,"status":"NOT_READY","reason":"candidate_not_pilot_ready"}
+    if not _builder_allowed(family):
+        return {"ok":False,"status":"NEEDS_RECIPE","reason":"family_not_allowed","family":family}
+    if not evidence_quality.get("quality_gate") or not collective_summary.get("ok") or jarvis_decision!="VALIDATE":
+        return {"ok":False,"status":"BLOCKED_BY_GATE","family":family}
+
+    last=AUTOPILOT_STATE.get("last_build")
+    if isinstance(last,dict) and last.get("family")==family and last.get("product_name")==product_candidate.get("name") and last.get("tests_passed"):
+        reused=dict(last)
+        reused["reused"]=True
+        return reused
+
+    recipe=BUILD_RECIPES.get(family)
+    if not recipe:
+        return {"ok":False,"status":"NEEDS_RECIPE","reason":"recipe_missing","family":family}
+
+    audit=run_pilot(
+        recipe["sample_process"],family,
+        recipe["minutes_each"],recipe["weekly_runs"],recipe["weekly_errors"]
+    )
+    min_readiness=int(_load_policy().get("builder_min_readiness") or 45)
+    tests={
+        "audit_status":audit.get("status")=="AUDIT_READY",
+        "readiness":int(audit.get("automation_readiness") or 0)>=min_readiness,
+        "has_candidates":len(audit.get("automation_candidates") or [])>=1,
+        "safety_spending_blocked":not bool((audit.get("safety") or {}).get("spending")),
+        "safety_payments_blocked":not bool((audit.get("safety") or {}).get("payments")),
+        "safety_outreach_blocked":not bool((audit.get("safety") or {}).get("commercial_outreach")),
+        "safety_contracts_blocked":not bool((audit.get("safety") or {}).get("contracts")),
+    }
+    passed=all(tests.values())
+    metrics=AUTOPILOT_STATE.get("venture_metrics") or {}
+    manifest={
+        "build_id":"neo-"+datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")+"-"+secrets.token_hex(3),
+        "built_at_utc":datetime.now(timezone.utc).isoformat(),
+        "family":family,
+        "product_name":product_candidate.get("name"),
+        "offer":product_candidate.get("offer"),
+        "status":"MVP_BUILT" if passed else "BUILD_TEST_FAILED",
+        "tests_passed":passed,
+        "tests":tests,
+        "jarvis_decision":jarvis_decision,
+        "jarvis_decision_source":jarvis_source,
+        "endpoint":"/api/venture/audit",
+        "ui":"/venture?family="+quote_plus(family),
+        "audit_count_at_build":int(metrics.get("audits_total") or 0),
+        "external_actions_performed":False,
+        "spending_eur":0,
+        "synthetic_test":audit,
+    }
+    history=list(AUTOPILOT_STATE.get("build_history") or [])
+    history.append(manifest)
+    AUTOPILOT_STATE["build_history"]=history[-20:]
+    AUTOPILOT_STATE["last_build"]=manifest
+    return manifest
+
+
+def _measurement_snapshot(build: dict) -> dict:
+    if not isinstance(build,dict) or not build.get("tests_passed"):
+        return {"ok":False,"status":"NO_BUILD"}
+    metrics=dict(AUTOPILOT_STATE.get("venture_metrics") or {})
+    baseline=int(build.get("audit_count_at_build") or 0)
+    total=int(metrics.get("audits_total") or 0)
+    new_usage=max(0,total-baseline)
+    row={
+        "ok":True,
+        "measured_at_utc":datetime.now(timezone.utc).isoformat(),
+        "build_id":build.get("build_id"),
+        "family":build.get("family"),
+        "status":"MEASURING" if new_usage>0 else "AWAITING_REAL_USAGE",
+        "audits_total":total,
+        "new_audits_since_build":new_usage,
+        "audits_with_baseline":int(metrics.get("audits_with_baseline") or 0),
+        "audits_with_error_baseline":int(metrics.get("audits_with_error_baseline") or 0),
+        "conversion_measurement":"not_available_without_explicit_external_launch",
+        "external_actions_performed":False,
+    }
+    history=list(AUTOPILOT_STATE.get("measurement_history") or [])
+    prev=AUTOPILOT_STATE.get("last_measurement")
+    if not isinstance(prev,dict) or prev.get("new_audits_since_build")!=new_usage or prev.get("build_id")!=row.get("build_id"):
+        history.append(row)
+        AUTOPILOT_STATE["measurement_history"]=history[-30:]
+    AUTOPILOT_STATE["last_measurement"]=row
+    return row
+
+
+def _record_venture_metric(audit: dict) -> None:
+    metrics=dict(AUTOPILOT_STATE.get("venture_metrics") or {})
+    metrics["audits_total"]=int(metrics.get("audits_total") or 0)+1
+    measurement=audit.get("measurement") or {}
+    if float(measurement.get("current_weekly_minutes") or 0)>0:
+        metrics["audits_with_baseline"]=int(metrics.get("audits_with_baseline") or 0)+1
+    if float(measurement.get("current_weekly_errors") or 0)>0:
+        metrics["audits_with_error_baseline"]=int(metrics.get("audits_with_error_baseline") or 0)+1
+    metrics["last_audit_utc"]=datetime.now(timezone.utc).isoformat()
+    AUTOPILOT_STATE["venture_metrics"]=metrics
+    _save_local_state()
+
+
 def _jarvis_snapshot(result: dict) -> dict:
     """Extract Jarvis metadata even if the transport response is nested or the review failed."""
     candidates=[]
@@ -1679,6 +1911,13 @@ def _compact_director_result(result: dict) -> dict:
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "clusters": compact_clusters,
         "product_candidate": result.get("product_candidate") or {},
+        "build": result.get("build") or {},
+        "measurement": result.get("measurement") or {},
+        "agent_trust_top": sorted(
+            (AUTOPILOT_STATE.get("agent_trust") or {}).values(),
+            key=lambda x:(float(x.get("trust") or 0),int(x.get("observations") or 0)),
+            reverse=True
+        )[:10],
         "jarvis": jarvis_snapshot,
     }
 
@@ -1860,6 +2099,34 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         and jarvis_decision == "VALIDATE"
     )
 
+    build_result = {"ok":False,"status":"NOT_READY"}
+    measurement = {"ok":False,"status":"NO_BUILD"}
+    if build_ready:
+        build_result = _autonomous_build(
+            product_candidate,evidence_quality,collective_summary,
+            jarvis_decision,jarvis_decision_source
+        )
+        measurement = _measurement_snapshot(build_result)
+
+    if build_result.get("tests_passed"):
+        final_status = "MEASURE_READY" if measurement.get("status")=="AWAITING_REAL_USAGE" else "MEASURING"
+        lifecycle_current = "MEASURE"
+        next_gate = (
+            "MEASURE: raccogli uso reale e baseline dall'MVP senza outreach automatico; migliora solo su dati osservati."
+        )
+    elif build_ready:
+        final_status = "BUILD_READY"
+        lifecycle_current = "BUILD"
+        next_gate = "BUILD: il candidato ha superato i gate ma il builder deve completare i test interni."
+    elif product_candidate.get("status") == "PILOT_READY":
+        final_status = "COLLECTIVE_REVIEW"
+        lifecycle_current = "REVIEW"
+        next_gate = "REVIEW: il candidato deve superare mente collettiva e Jarvis prima del BUILD."
+    else:
+        final_status = "SELECT"
+        lifecycle_current = "SELECT"
+        next_gate = "SELECT: raccogli evidenza convergente e prepara un candidato testabile."
+
     result = {
         "ok": True,
         "mode": "director",
@@ -1878,7 +2145,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
-        "status": ("BUILD_READY" if build_ready else ("COLLECTIVE_REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),
+        "status": final_status,
         "build_gate": {
             "passed": build_ready,
             "candidate_pilot_ready": product_candidate.get("status") == "PILOT_READY",
@@ -1887,13 +2154,16 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "jarvis_decision": jarvis_decision,
             "jarvis_decision_source": jarvis_decision_source,
         },
+        "build": build_result,
+        "measurement": measurement,
+        "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
         "lifecycle": {
-            "current": ("BUILD" if build_ready else ("REVIEW" if product_candidate.get("status") == "PILOT_READY" else "SELECT")),
-            "stages": ["SELECT","BUILD","LAUNCH","MEASURE","IMPROVE"],
-            "launch_policy": "MVP pubblico sul perimetro NEO autorizzato; promozione organica non-spam; nessuna spesa, contratto o account personale senza approvazione",
+            "current": lifecycle_current,
+            "stages": ["SELECT","REVIEW","BUILD","TEST","MEASURE","IMPROVE"],
+            "launch_policy": "Nessun outreach o publishing automatico. L'MVP resta nel perimetro NEO autorizzato finche un umano non approva azioni esterne.",
         },
         "jarvis": jarvis_review,
-        "next_gate": ("BUILD: genera un MVP reversibile sul perimetro NEO autorizzato, poi misura interesse e conversioni." if build_ready else ("REVIEW: il candidato deve superare mente collettiva e Jarvis prima del BUILD." if product_candidate.get("status") == "PILOT_READY" else "SELECT: raccogli evidenza convergente e prepara un candidato testabile.")),
+        "next_gate": next_gate,
         "warning": "Le stime economiche e le risposte degli agenti restano ipotesi finche non sono verificate con evidenze reali.",
     }
     _record_director_result(result)
@@ -2492,6 +2762,7 @@ async def venture(request: Request):
     body+='<section class="card"><form method="post" action="/venture"><input type="hidden" name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo attuale</label><textarea name="process" placeholder="Esempio: ricevo un CSV via email, copio le righe in Excel, controllo alcune colonne e aggiorno il CRM...">'+html.escape(process)+'</textarea><label>Minuti impiegati ogni volta</label><input name="minutes_each" type="number" min="0" step="1" value="'+str(minutes_each)+'"><label>Quante volte a settimana</label><input name="weekly_runs" type="number" min="0" step="1" value="'+str(weekly_runs)+'"><label>Errori/correzioni medi a settimana</label><input name="weekly_errors" type="number" min="0" step="1" value="'+str(weekly_errors)+'"><button type="submit">Genera audit MVP</button></form></section>'
     if process:
         audit=run_pilot(process,family,minutes_each,weekly_runs,weekly_errors)
+        _record_venture_metric(audit)
         body+='<section class="card"><h2>Report SheetFlow MVP</h2><pre>'+html.escape(json.dumps(audit,ensure_ascii=False,indent=2))+'</pre><p class="muted">Le stime restano preliminari finche non vengono confrontate con misure reali prima/dopo.</p></section>'
     return layout("SheetFlow Audit",body)
 
@@ -2509,7 +2780,38 @@ async def api_venture_audit(request: Request):
         _float_value(payload.get("weekly_runs")),
         _float_value(payload.get("weekly_errors")),
     )
+    _record_venture_metric(audit)
     return JSONResponse({"ok":True,"neo_version":VERSION,"audit":audit})
+
+
+async def api_memory_status(request: Request):
+    trust=AUTOPILOT_STATE.get("agent_trust") or {}
+    top=sorted(trust.values(),key=lambda x:(float(x.get("trust") or 0),int(x.get("observations") or 0)),reverse=True)[:20]
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "restore_source":AUTOPILOT_STATE.get("restore_source"),
+        "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
+        "agent_trust_top":top,
+        "build_history":list(AUTOPILOT_STATE.get("build_history") or [])[-10:],
+        "measurement_history":list(AUTOPILOT_STATE.get("measurement_history") or [])[-10:],
+        "venture_metrics":AUTOPILOT_STATE.get("venture_metrics") or {},
+    })
+
+
+async def api_builder_status(request: Request):
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "policy":{
+            "enabled":bool(_load_policy().get("autonomous_builder_enabled",True)),
+            "allowed_families":_load_policy().get("builder_allowed_families") or [],
+            "min_readiness":_load_policy().get("builder_min_readiness"),
+        },
+        "last_build":AUTOPILOT_STATE.get("last_build"),
+        "last_measurement":AUTOPILOT_STATE.get("last_measurement"),
+        "external_actions_allowed":False,
+    })
 
 
 async def system(request: Request):
@@ -2596,6 +2898,8 @@ app = Starlette(
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
+        Route("/api/memory/status", api_memory_status, methods=["GET"]),
+        Route("/api/builder/status", api_builder_status, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
