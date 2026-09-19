@@ -1079,7 +1079,8 @@ async def lifespan(app: Starlette):
 app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
-        Route("/director", director, methods=["GET"]),\n        Route("/radar", radar, methods=["GET"]),
+        Route("/director", director, methods=["GET"]),
+        Route("/radar", radar, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
         Route("/system", system, methods=["GET"]),
