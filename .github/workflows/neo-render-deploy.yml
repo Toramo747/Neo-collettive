@@ -30,6 +30,15 @@ jobs:
           set -euo pipefail
           python -m py_compile cloud_mcp.py jarvis_service/app.py
           python -m json.tool neo_policy.json >/dev/null
+          python - <<'PY'
+          import ast
+          for path in ("cloud_mcp.py","jarvis_service/app.py"):
+              tree=ast.parse(open(path,encoding="utf-8").read(),filename=path)
+              bad=[n.id for n in ast.walk(tree) if isinstance(n,ast.Name) and n.id in {"true","false","null"}]
+              if bad:
+                  raise SystemExit(f"{path}: JSON literal used as Python name: {sorted(set(bad))}")
+          print("source runtime-literal validation passed")
+          PY
 
       - name: Resolve expected NEO version
         run: |
