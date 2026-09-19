@@ -1046,7 +1046,7 @@ DEFAULT_POLICY = {
     "max_exploitation_slots": 2,
     "smoothing_old_weight": 0.65,
     "minimum_observations_for_exploitation": 2,
-    "autonomous_builder_enabled": true,
+    "autonomous_builder_enabled": True,
     "builder_min_readiness": 45,
     "builder_allowed_families": [
         "spreadsheet_process",
