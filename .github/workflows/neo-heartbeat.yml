@@ -48,27 +48,66 @@ jobs:
 
       - name: Poll NEO runtime
         id: poll
-        continue-on-error: true
         run: |
-          set -uo pipefail
+          set -euo pipefail
           : > /tmp/status-errors.txt
-          for i in $(seq 1 12); do
+          initial_cycles="$(python - <<'PY'
+          import json
+          try:
+              hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8"))
+          except Exception:
+              hb={}
+          print(int(hb.get("cycles_completed") or 0))
+          PY
+          )"
+          require_new_cycle="$(python - <<'PY'
+          import json
+          try:
+              hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8"))
+          except Exception:
+              hb={}
+          print("1" if (hb.get("started") or hb.get("busy")) else "0")
+          PY
+          )"
+
+          completed=0
+          for i in $(seq 1 18); do
             if curl --fail --show-error --silent --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
-              python - <<'PY'
-          import json
+              INITIAL="$initial_cycles" REQUIRE_NEW="$require_new_cycle" python - <<'PY'
+          import json,os,sys
           d=json.load(open("/tmp/status.json",encoding="utf-8"))
           ap=d.get("autopilot") or {}
-          print("poll", {"version":d.get("neo_version"),"enabled":ap.get("enabled"),"running":ap.get("running"),"cycles":ap.get("cycles_completed"),"status":ap.get("last_status"),"error":ap.get("last_error")})
-          PY
-              if python - <<'PY'
-          import json,sys
-          d=json.load(open("/tmp/status.json",encoding="utf-8"))
-          ap=d.get("autopilot") or {}
-          healthy = bool(ap.get("enabled")) and (bool(ap.get("running")) or bool(ap.get("last_finished_utc")))
-          sys.exit(0 if healthy else 1)
+          cycles=int(ap.get("cycles_completed") or 0)
+          initial=int(os.environ["INITIAL"])
+          require_new=os.environ["REQUIRE_NEW"]=="1"
+          latest=ap.get("latest_result")
+          finished=(
+              bool(ap.get("enabled"))
+              and not bool(ap.get("running"))
+              and bool(ap.get("last_finished_utc"))
+              and isinstance(latest,dict)
+              and bool(latest)
+              and not ap.get("last_error")
+              and ((cycles >= initial + 1) if require_new else (cycles >= initial))
+          )
+          print("poll", {
+              "version":d.get("neo_version"),
+              "enabled":ap.get("enabled"),
+              "running":ap.get("running"),
+              "cycles":cycles,
+              "initial_cycles":initial,
+              "require_new_cycle":require_new,
+              "status":ap.get("last_status"),
+              "last_finished_utc":ap.get("last_finished_utc"),
+              "latest_result":bool(latest),
+              "error":ap.get("last_error"),
+              "completed":finished,
+          })
+          sys.exit(0 if finished else 1)
           PY
               then
+                completed=1
                 break
               fi
             else
@@ -76,6 +115,13 @@ jobs:
             fi
             sleep 20
           done
+
+          if [ "$completed" != "1" ]; then
+            echo "NEO cycle did not reach a completed runtime state before timeout" >&2
+            cat /tmp/status-errors.txt >&2 || true
+            cat /tmp/status.json >&2 || true
+            exit 6
+          fi
 
       - name: Build runtime snapshot
         run: |
