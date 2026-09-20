@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.48.0"
+VERSION = "0.48.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2264,13 +2264,18 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
         "\nConstraints: responsive, accessible, business-grade, no deceptive patterns, no external publishing."
     )
     roles=[
-        ("ui visual design saas dashboard","You are a senior UI art director. Propose a professional visual hierarchy, layout, component system, typography and spacing. Avoid superficial decoration. "+context),
-        ("ux accessibility product design","You are a senior UX and accessibility reviewer. Identify usability, information architecture, mobile and accessibility improvements. "+context),
-        ("frontend product interface design","You are a senior frontend product designer. Propose a practical reusable component/layout plan that can be implemented safely with server-rendered HTML/CSS. "+context),
+        ("ui visual design saas dashboard","You are a senior UI art director. Propose a professional visual hierarchy, layout, reusable components, typography and spacing. Keep the answer concise and implementation-oriented. "+context),
+        ("ux accessibility product design","You are a senior UX/accessibility product reviewer. Prioritize usability, information architecture, responsive behavior and accessibility. Keep the answer concise and implementation-oriented. "+context),
     ]
-    specialist_results=await asyncio.gather(*(
-        ask_agents_data(query,prompt,max(2,min(max_agents,MAX_AGENTS))) for query,prompt in roles
-    ))
+    try:
+        specialist_results=await asyncio.wait_for(
+            asyncio.gather(*(
+                ask_agents_data(query,prompt,2) for query,prompt in roles
+            )),
+            timeout=70,
+        )
+    except asyncio.TimeoutError:
+        specialist_results=[]
     specialists=[]
     for (role,_),result in zip(roles,specialist_results):
         valid=[a for a in (result.get("answers") or []) if a.get("ok") and a.get("quality_ok",True)]
@@ -2295,7 +2300,13 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
     )
     collective={"ok":False,"ran":False,"reason":"insufficient specialist responses"}
     if len(specialists)>=2:
-        collective=await collective_two_rounds("ui ux product design",synthesis_problem,min(3,max_agents))
+        try:
+            collective=await asyncio.wait_for(
+                collective_two_rounds("ui ux product design",synthesis_problem,2),
+                timeout=90,
+            )
+        except asyncio.TimeoutError:
+            collective={"ok":False,"ran":True,"reason":"ui_collective_timeout","fallback":False}
 
     summary=_collective_summary(collective) if isinstance(collective,dict) else {"ran":False}
     external_ok=bool(
@@ -2831,7 +2842,23 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             jarvis_decision,jarvis_decision_source
         )
         if build_result.get("tests_passed"):
-            ui_review = await _collaborative_ui_review(product_candidate,build_result,min(3,max_agents))
+            existing_ui=build_result.get("ui_review") or {}
+            if existing_ui.get("status")=="UI_REVIEW_PASSED":
+                ui_review=existing_ui
+            else:
+                try:
+                    ui_review = await asyncio.wait_for(
+                        _collaborative_ui_review(product_candidate,build_result,min(3,max_agents)),
+                        timeout=170,
+                    )
+                except asyncio.TimeoutError:
+                    ui_review={
+                        "ok":False,
+                        "status":"UI_REVIEW_TIMEOUT",
+                        "design_profile":_design_profile_for_family(str(product_candidate.get("family") or "")),
+                        "implementation_mode":"bounded_design_profile",
+                        "note":"UI review timed out; build remains usable and will be reviewed again later.",
+                    }
             build_result["ui_review"] = ui_review
             # Persist the reviewed manifest so Console keeps UI state across restarts.
             history=list(AUTOPILOT_STATE.get("build_history") or [])
@@ -3547,12 +3574,15 @@ async def api_heartbeat(request: Request):
 
     return JSONResponse({
         "ok": True,
+        "neo_version": VERSION,
         "started": started,
         "busy": busy,
         "cooldown": cooldown,
         "cooldown_seconds": HEARTBEAT_MIN_SECONDS,
         "last_started_age_seconds": age,
         "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+        "last_started_utc": AUTOPILOT_STATE.get("last_started_utc"),
+        "last_finished_utc": AUTOPILOT_STATE.get("last_finished_utc"),
         "last_status": AUTOPILOT_STATE.get("last_status"),
         "last_error": AUTOPILOT_STATE.get("last_error"),
     })
