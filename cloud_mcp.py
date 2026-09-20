@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.55.1"
+VERSION = "0.56.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2007,7 +2007,25 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
                     body = r.json()
                 else:
                     body = {"text": r.text[:12000]}
-                result = {
+                jarvis_next_queries=_jarvis_next_queries(jarvis_review)
+    dialogue=list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])
+    dialogue.append({
+        "created_at_utc":datetime.now(timezone.utc).isoformat(),
+        "neo_status":final_status,
+        "lifecycle":lifecycle_current,
+        "family":product_candidate.get("family"),
+        "quality_gate":bool(evidence_quality.get("quality_gate")),
+        "collective_ok":bool(collective_summary.get("ok")),
+        "collective_round2_valid":int(collective_summary.get("round2_valid") or 0),
+        "jarvis_decision":jarvis_decision,
+        "jarvis_decision_source":jarvis_decision_source,
+        "next_search_queries":jarvis_next_queries,
+        "build_tests_passed":bool(build_result.get("tests_passed")),
+        "measurement_status":measurement.get("status"),
+    })
+    AUTOPILOT_STATE["jarvis_dialogue_history"]=dialogue[-12:]
+
+    result = {
                     "configured": True,
                     "endpoint": endpoint,
                     "ok": r.is_success,
@@ -3852,6 +3870,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "Non effettuare acquisti, trasferimenti di denaro, contratti o uso di account/identita personali senza approvazione."
     )
 
+    jarvis_dialogue_history=list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-8:]
+
     # Jarvis is the free internal coordinator: it receives the mission first.
     jarvis_brief = await ask_jarvis(
         "Agisci come coordinatore gratuito di NEO. Scomponi la missione in problemi da verificare e criteri di scarto. "
@@ -3863,6 +3883,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
             "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
             "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
+            "jarvis_dialogue_history": jarvis_dialogue_history,
         },
     )
 
@@ -3940,12 +3961,14 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-40:],
             "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-20:],
             "dialogue_report": dialogue_report,
+        "jarvis_dialogue_history": AUTOPILOT_STATE.get("jarvis_dialogue_history") or [],
             "product_candidate": product_candidate,
             "collective_review": collective_review,
             "collective_summary": _collective_summary(collective_review),
             "evidence_scouts": demand_evidence,
             "valid_external_answers": len(valid),
             "initial_jarvis_brief": jarvis_brief,
+            "jarvis_dialogue_history": jarvis_dialogue_history,
         },
     )
 
