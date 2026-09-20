@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.46.1"
+VERSION = "0.47.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2960,13 +2960,14 @@ def layout(title: str, body: str) -> HTMLResponse:
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050806">
 <title>{html.escape(title)} - NEO</title><style>{BASE_CSS}</style></head><body><main>
 <div class="brand">NEO</div><div class="sub">Collective intelligence radar · v{VERSION}</div>
-<nav><a href="/">Home</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
+<nav><a href="/">Home</a><a href="/console">Console</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
 {body}</main></body></html>"""
     return HTMLResponse(page)
 
 
 async def home(request: Request):
     body = """
+<section class="card"><h2>NEO Console</h2><p>Visualizza tutti i tool e gli MVP creati da NEO, lo stato dei test e le misurazioni reali.</p><a class="btn" href="/console">Apri Console</a></section>
 <section class="card"><h2>NEO Director</h2><p>Coordina agenti e strumenti per cercare opportunita di ricavo, raccogliere prove e proporre esperimenti.</p><a class="btn" href="/director">Apri Director</a></section>\n<section class="card"><h2>Radar agenti</h2>
 <form method="get" action="/radar"><label>Competenza da cercare</label>
 <input name="q" value="cybersecurity"><button type="submit">Cerca agenti</button></form></section>
@@ -2989,6 +2990,133 @@ def extract_items(payload: dict, keys: tuple[str, ...]) -> list:
             if isinstance(value, list):
                 return value
     return []
+
+
+
+def _console_status(build: dict) -> tuple[str, str]:
+    if not isinstance(build, dict):
+        return "UNKNOWN", "tag warn"
+    if build.get("tests_passed"):
+        return "READY", "tag"
+    status=str(build.get("status") or "UNKNOWN")
+    return status, ("tag warn" if status not in {"MVP_BUILT"} else "tag")
+
+
+async def console_page(request: Request):
+    history=list(AUTOPILOT_STATE.get("build_history") or [])
+    latest_rows=_load_recent_results(1)
+    latest=latest_rows[-1] if latest_rows else {}
+    latest_build=(latest or {}).get("build") or {}
+    latest_measurement=(latest or {}).get("measurement") or AUTOPILOT_STATE.get("last_measurement") or {}
+
+    # Deduplicate by build_id while preserving creation order.
+    builds=[]
+    seen=set()
+    for row in history:
+        if not isinstance(row,dict):
+            continue
+        key=str(row.get("build_id") or (str(row.get("family"))+"|"+str(row.get("product_name"))+"|"+str(row.get("built_at_utc"))))
+        if key in seen:
+            continue
+        seen.add(key)
+        builds.append(row)
+    if isinstance(latest_build,dict) and latest_build.get("build_id") and latest_build.get("build_id") not in seen:
+        builds.append(latest_build)
+
+    ready=sum(1 for x in builds if x.get("tests_passed"))
+    families=len({str(x.get("family") or "") for x in builds if x.get("family")})
+    audits=int((AUTOPILOT_STATE.get("venture_metrics") or {}).get("audits_total") or 0)
+    cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+
+    body=(
+        '<section class="card"><span class="tag">CONTROL CENTER</span><h2>NEO Console</h2>'
+        '<p>Catalogo centrale dei prodotti generati autonomamente, con stato tecnico e misurazione reale.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Tool creati</div><h2>'+str(len(builds))+'</h2></article>'
+        '<article><div class="muted">MVP pronti</div><h2>'+str(ready)+'</h2></article>'
+        '<article><div class="muted">Famiglie</div><h2>'+str(families)+'</h2></article>'
+        '<article><div class="muted">Cicli NEO</div><h2>'+str(cycle)+'</h2></article>'
+        '</div></section>'
+    )
+
+    if not builds:
+        body+='<section class="card"><h3>Nessun tool costruito</h3><p class="muted">I nuovi MVP compariranno qui automaticamente dopo il superamento dei gate.</p></section>'
+    else:
+        body+='<section class="card"><h2>Tool & MVP</h2><div class="grid">'
+        for build in reversed(builds):
+            status,status_cls=_console_status(build)
+            family=str(build.get("family") or "unknown")
+            product=str(build.get("product_name") or family.replace("_"," ").title())
+            built=str(build.get("built_at_utc") or "")
+            tests=build.get("tests") or {}
+            passed=sum(1 for v in tests.values() if v is True)
+            total=len(tests)
+            endpoint=str(build.get("endpoint") or "")
+            ui=str(build.get("ui") or "")
+            mode=str(build.get("build_mode") or "legacy_recipe")
+            external=bool(build.get("external_actions_performed"))
+            card=(
+                '<article>'
+                '<div><span class="'+status_cls+'">'+html.escape(status)+'</span> '
+                '<span class="tag">'+html.escape(family)+'</span></div>'
+                '<h3>'+html.escape(product)+'</h3>'
+                '<p>'+html.escape(str(build.get("offer") or ""))+'</p>'
+                '<div class="muted">Build '+html.escape(str(build.get("build_id") or ""))+'</div>'
+                '<div class="muted">Test '+str(passed)+'/'+str(total)+' · '+html.escape(mode)+'</div>'
+                '<div class="muted">Creato '+html.escape(built)+'</div>'
+                '<div class="muted">Azioni esterne: '+("SI" if external else "NO")+'</div>'
+            )
+            if ui.startswith("/"):
+                card+='<a class="btn" href="'+html.escape(ui,quote=True)+'">Apri tool</a> '
+            if endpoint.startswith("/"):
+                card+='<a class="btn" href="'+html.escape(endpoint,quote=True)+'">API</a>'
+            card+='</article>'
+            body+=card
+        body+='</div></section>'
+
+    measurement_status=str(latest_measurement.get("status") or "NO_DATA")
+    body+=(
+        '<section class="card"><h2>Misurazione reale</h2>'
+        '<div class="grid">'
+        '<article><div class="muted">Stato</div><h3>'+html.escape(measurement_status)+'</h3></article>'
+        '<article><div class="muted">Audit reali</div><h3>'+str(audits)+'</h3></article>'
+        '<article><div class="muted">Nuovi utilizzi</div><h3>'+str(int(latest_measurement.get("new_audits_since_build") or 0))+'</h3></article>'
+        '</div>'
+        '<p class="muted">La console distingue build tecniche da utilizzo reale: nessun dato di mercato viene inventato.</p>'
+        '</section>'
+    )
+
+    perf=AUTOPILOT_STATE.get("family_performance") or {}
+    ranked=sorted(
+        [(str(k),v) for k,v in perf.items() if isinstance(v,dict)],
+        key=lambda kv:float(kv[1].get("score") or 0),
+        reverse=True
+    )[:10]
+    body+='<section class="card"><h2>Radar business</h2><div class="grid">'
+    for family,row in ranked:
+        body+=(
+            '<article><span class="tag">'+html.escape(family)+'</span>'
+            '<h3>'+html.escape(str(round(float(row.get("score") or 0),1)))+'</h3>'
+            '<div class="muted">Osservazioni '+str(int(row.get("observations") or 0))+
+            ' · hit qualificati '+str(int(row.get("qualified_hits") or 0))+'</div></article>'
+        )
+    body+='</div></section>'
+    return layout("Console",body)
+
+
+async def api_console(request: Request):
+    history=list(AUTOPILOT_STATE.get("build_history") or [])
+    rows=_load_recent_results(1)
+    latest=rows[-1] if rows else {}
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "cycles_completed":int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+        "builds":history,
+        "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
+        "venture_metrics":AUTOPILOT_STATE.get("venture_metrics") or {},
+        "latest_result":latest,
+    })
 
 
 async def radar(request: Request):
@@ -3581,6 +3709,8 @@ async def lifespan(app: Starlette):
 app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
+        Route("/console", console_page, methods=["GET"]),
+        Route("/api/console", api_console, methods=["GET"]),
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
