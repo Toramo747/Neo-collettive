@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -16,6 +16,26 @@ class AskRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
     source: str = "neo"
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+MAX_CONTEXT_LIST_ITEMS = 24
+MAX_CONTEXT_DICT_ITEMS = 80
+
+
+def _bounded_context(value: Any, depth: int = 0) -> Any:
+    """Bound request size/work so Jarvis stays responsive on small Render instances."""
+    if depth >= 5:
+        if isinstance(value, (dict, list)):
+            return {"truncated": True, "type": type(value).__name__}
+        return value
+    if isinstance(value, list):
+        return [_bounded_context(x, depth + 1) for x in value[-MAX_CONTEXT_LIST_ITEMS:]]
+    if isinstance(value, dict):
+        items = list(value.items())[-MAX_CONTEXT_DICT_ITEMS:]
+        return {str(k): _bounded_context(v, depth + 1) for k, v in items}
+    if isinstance(value, str):
+        return value[:6000]
+    return value
 
 
 def authorize(authorization: str | None) -> None:
@@ -720,5 +740,5 @@ def ask(req: AskRequest, authorization: str | None = Header(default=None)):
         "ok": True,
         "service": "jarvis",
         "version": VERSION,
-        "analysis": _analyze(req.context),
+        "analysis": _analyze(_bounded_context(req.context)),
     }
