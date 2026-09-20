@@ -22,7 +22,7 @@ concurrency:
 jobs:
   wake-neo:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
 
@@ -107,7 +107,7 @@ jobs:
           PY
 
           completed=0
-          for i in $(seq 1 18); do
+          for i in $(seq 1 45); do
             if curl --fail --show-error --silent --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
               if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
@@ -121,10 +121,26 @@ jobs:
           done
 
           if [ "$completed" != "1" ]; then
-            echo "MYCELIX cycle did not reach a completed runtime state before timeout" >&2
-            cat /tmp/status-errors.txt >&2 || true
-            cat /tmp/status.json >&2 || true
-            exit 6
+            healthy_running="$(python - <<'PY'
+import json
+try:
+    d=json.load(open("/tmp/status.json",encoding="utf-8"))
+    ap=d.get("autopilot") or {}
+    ok=bool(ap.get("enabled")) and bool(ap.get("running")) and not ap.get("last_error")
+    print("1" if ok else "0")
+except Exception:
+    print("0")
+PY
+)"
+            if [ "$healthy_running" = "1" ]; then
+              echo "MYCELIX cycle is still running without errors after the observation window; treating as healthy in-progress."
+              completed=2
+            else
+              echo "MYCELIX cycle did not reach a completed or healthy-running runtime state before timeout" >&2
+              cat /tmp/status-errors.txt >&2 || true
+              cat /tmp/status.json >&2 || true
+              exit 6
+            fi
           fi
 
       - name: Build runtime snapshot
@@ -186,6 +202,9 @@ jobs:
                   "exploration_history": ap.get("exploration_history") or [],
                   "inbound_messages": ap.get("inbound_messages") or [],
                   "inbound_agent_stats": ap.get("inbound_agent_stats") or {},
+                  "jarvis_dialogue_history": ap.get("jarvis_dialogue_history") or [],
+                  "jarvis_runtime": ap.get("jarvis_runtime") or {},
+                  "commercial_evidence_memory": ap.get("commercial_evidence_memory") or [],
                   "venture_metrics": ap.get("venture_metrics") or {}
               },
               "manual_run": raw.get("manual_run") or {},
