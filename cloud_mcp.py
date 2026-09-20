@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.52.0"
+VERSION = "0.53.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2031,7 +2031,59 @@ def _response_excerpt(answer: dict, limit: int = 700) -> str:
     return " ".join(text.split())[:limit]
 
 
-def _suggestion_sentences(review: dict) -> list[dict]:
+def _dialogue_candidate_quality(text: str, topic: str = "", problem: str = "") -> tuple[bool,str]:
+    cleaned=" ".join((text or "").split())
+    low=cleaned.lower()
+    if len(cleaned)<55:
+        return False,"too_short"
+    if len(cleaned)>520:
+        return False,"too_long"
+
+    # Never learn protocol/routing/payment boilerplate as domain knowledge.
+    reject_markers=(
+        "payment-required","x402","x-payment","wallet-identified","wallet identified",
+        "recommended oracle","recommended agent","did:wba","tools/list","tool call",
+        "call tools","routing recommendation","route for intent","available interfaces",
+        "available capabilities","endpoint above","post here","http header","api key",
+        "before participating","canonical human-readable experiment specification",
+        "no matching capability","invalid params","intent too long",
+    )
+    if any(x in low for x in reject_markers):
+        return False,"protocol_or_service_boilerplate"
+
+    # Reject echoes of MYCELIX's own review instructions.
+    prompt_echoes=(
+        "unsupported assumptions","false demand signals","single-source dependence",
+        "reasons not to proceed","non assumere che sia valida","falsi segnali di domanda",
+        "motivi per non procedere","candidate:","candidato:",
+    )
+    if sum(1 for x in prompt_echoes if x in low)>=2:
+        return False,"review_prompt_echo"
+
+    family=_commercial_family(cleaned)
+    concrete_terms=(
+        "customer","client","user","buyer","business","company","team","market","product",
+        "service","process","workflow","spreadsheet","excel","crm","invoice","support",
+        "developer","api","website","security","report","data","document","shop",
+        "cliente","utente","azienda","mercato","prodotto","servizio","processo",
+    )
+    action_terms=(
+        "build","test","sell","automate","reduce","replace","integrate","validate","measure",
+        "target","offer","charge","save","improve","create","use","try","compare",
+        "automat","ridurre","integra","valid","misur","offr","creare","provare",
+    )
+    concrete=sum(1 for x in concrete_terms if x in low)
+    actionable=sum(1 for x in action_terms if x in low)
+    topic_tokens={x for x in str(topic or "").lower().replace("-","_").split("_") if len(x)>3}
+    overlap=len(topic_tokens & _tokens(cleaned))
+    if family=="other" and concrete<2:
+        return False,"no_domain_content"
+    if actionable<1 and concrete<3 and overlap<1:
+        return False,"not_actionable"
+    return True,"substantive_domain_suggestion"
+
+
+def _suggestion_sentences(review: dict, topic: str = "", problem: str = "") -> list[dict]:
     markers=(
         "recommend","suggest","consider","opportunity","could","should","instead",
         "alternative","new market","new customer","new product","idea","try",
@@ -2048,13 +2100,16 @@ def _suggestion_sentences(review: dict) -> list[dict]:
             agent_id=str(row.get("agent_id") or "")
             agent=str(row.get("agent") or agent_id or "unknown")
             raw=_response_excerpt(row,2200)
-            normalized=raw.replace("\n",". ")
+            normalized=raw.replace("\\n",". ")
             for part in normalized.split("."):
                 sentence=" ".join(part.strip().split())
                 low=sentence.lower()
                 if len(sentence)<45 or len(sentence)>500:
                     continue
                 if not any(m in low for m in markers):
+                    continue
+                quality_ok,quality_reason=_dialogue_candidate_quality(sentence,topic,problem)
+                if not quality_ok:
                     continue
                 key=sentence.lower()
                 if key in seen:
@@ -2065,9 +2120,9 @@ def _suggestion_sentences(review: dict) -> list[dict]:
                     "agent_id":agent_id,
                     "agent":agent,
                     "text":sentence,
+                    "quality_reason":quality_reason,
                 })
-    return out[:18]
-
+    return out[:12]
 
 def _novelty_score(text: str, existing: list[dict]) -> int:
     target=_tokens(text)
@@ -2119,16 +2174,21 @@ def _update_dialogue_learning(review: dict, topic: str, problem: str, goal: str)
         if int((trust.get(aid) or {}).get("observations") or 0)<=1
     ]
 
-    suggestions=_suggestion_sentences(review)
+    suggestions=_suggestion_sentences(review,topic,problem)
     ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
     queue=list(AUTOPILOT_STATE.get("hypothesis_queue") or [])
     added=[]
     for s in suggestions:
         text=str(s.get("text") or "")
+        quality_ok,quality_reason=_dialogue_candidate_quality(text,topic,problem)
+        if not quality_ok:
+            continue
         scores=_hypothesis_scores(text,goal,ledger+queue)
-        if scores["novelty"]<35:
+        if scores["novelty"]<45 or scores["evidence_potential"]<30:
             continue
         family=_commercial_family(text)
+        if family=="other" and scores["strategic_fit"]<47:
+            continue
         row={
             "id":"hyp-"+secrets.token_hex(5),
             "created_at_utc":datetime.now(timezone.utc).isoformat(),
@@ -2189,7 +2249,41 @@ def _update_dialogue_learning(review: dict, topic: str, problem: str, goal: str)
     return report
 
 
+def _sanitize_learning_state() -> dict:
+    removed_queue=0
+    removed_ledger=0
+    queue=[]
+    for row in (AUTOPILOT_STATE.get("hypothesis_queue") or []):
+        if not isinstance(row,dict):
+            continue
+        text=str(row.get("text") or "")
+        topic=str(row.get("topic") or row.get("family") or "")
+        ok,_=_dialogue_candidate_quality(text,topic,"")
+        if ok:
+            queue.append(row)
+        else:
+            removed_queue+=1
+    ledger=[]
+    for row in (AUTOPILOT_STATE.get("knowledge_ledger") or []):
+        if not isinstance(row,dict):
+            continue
+        claim=str(row.get("claim") or "")
+        if row.get("source")=="inbound_agent":
+            ledger.append(row)
+            continue
+        topic=str(row.get("source_dialogue_topic") or row.get("family") or "")
+        ok,_=_dialogue_candidate_quality(claim,topic,"")
+        if ok:
+            ledger.append(row)
+        else:
+            removed_ledger+=1
+    AUTOPILOT_STATE["hypothesis_queue"]=queue[-40:]
+    AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]
+    return {"removed_hypotheses":removed_queue,"removed_knowledge":removed_ledger}
+
+
 def _hypothesis_search_queries(limit: int = 2) -> list[dict]:
+    _sanitize_learning_state()
     rows=[
         x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or [])
         if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}
@@ -2402,6 +2496,63 @@ def _gap_score(tags: list[str], domains: int, strong_domains: int) -> int:
     return max(0,min(100,score))
 
 
+def _family_relevance_terms(family: str) -> tuple[str,...]:
+    mapping={
+        "spreadsheet_process":("spreadsheet","excel","google sheets","csv","manual process"),
+        "workflow_automation":("workflow automation","manual workflow","repetitive task","back office","automation"),
+        "crm_lead_ops":("crm","lead management","sales ops","lead qualification","follow up"),
+        "website_audit":("website audit","site audit","accessibility audit","website qa","broken link"),
+        "developer_tools":("developer tool","developer workflow","devops","code review","api debugging"),
+        "integration_api":("api integration","webhook","integration platform","system integration"),
+        "ai_tools":("ai assistant","ai tool","llm","generative ai","agentic"),
+        "micro_saas":("micro saas","niche saas","vertical saas"),
+        "ecommerce_tools":("ecommerce","shopify","woocommerce","catalog","order operations"),
+        "marketing_seo":("seo","marketing automation","keyword research","ad campaign"),
+        "analytics_tools":("analytics","business intelligence","reporting dashboard","data analytics"),
+        "compliance_tools":("compliance","audit evidence","gdpr","iso 27001","regulatory reporting"),
+        "finance_ops":("invoice","accounts payable","bookkeeping","expense reporting","finance operations"),
+        "hr_tools":("hr workflow","employee onboarding","recruiting","applicant tracking"),
+        "education_tools":("education software","teacher admin","learning platform","course workflow"),
+        "creator_tools":("creator tool","newsletter","podcast workflow","video creator"),
+        "productivity_tools":("productivity tool","knowledge management","task workflow","note taking"),
+        "local_business_tools":("appointment booking","quote preparation","local business","service business"),
+        "document_processing":("document processing","pdf extraction","document parser","form filling","ocr"),
+        "manual_data_entry":("manual data entry","data entry"),
+        "it_hygiene":("it inventory","patch reporting","asset inventory","security hygiene"),
+        "cybersecurity_tools":("cybersecurity","vulnerability","phishing","security automation","soc"),
+        "customer_support":("customer support","support ticket","support triage","faq workflow"),
+        "data_cleanup":("data cleanup","duplicate data","deduplication","csv cleanup"),
+        "content_tools":("content workflow","content repurposing","localization","catalog description"),
+    }
+    return mapping.get(family,())
+
+
+def _evidence_context(title: str, body: str, family: str) -> tuple[str,int,int]:
+    title_low=(title or "").lower()
+    body_low=(body or "").lower()
+    terms=_family_relevance_terms(family)
+    if not terms:
+        return "",0,0
+    title_hits=sum(1 for term in terms if term in title_low)
+    body_hits=sum(1 for term in terms if term in body_low)
+    windows=[]
+    combined=title_low+" "+body_low
+    for term in terms:
+        start=0
+        while True:
+            idx=combined.find(term,start)
+            if idx<0:
+                break
+            windows.append(combined[max(0,idx-220):min(len(combined),idx+len(term)+220)])
+            start=idx+len(term)
+            if len(windows)>=8:
+                break
+        if len(windows)>=8:
+            break
+    context=" ".join(windows)
+    return context,title_hits,body_hits
+
+
 def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | None = None) -> dict:
     """Require convergent evidence: 3 independent domains on one problem + >=1 strong buying signal."""
     noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
@@ -2424,12 +2575,20 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         family=_commercial_family(text)
         if family=="other":
             return
-        strong=[t for t in strong_terms if t in text]
-        weak=[t for t in weak_terms if t in text]
-        # A generic vendor/reference page is not commercial proof merely because it says customer/automation.
+        context,title_hits,body_hits=_evidence_context(title,body,family)
+        # Topic relevance must be explicit, not an incidental keyword buried in a page.
+        if title_hits<1 and body_hits<2:
+            return
+        if len(context)<40:
+            return
+        strong=[t for t in strong_terms if t in context]
+        weak=[t for t in weak_terms if t in context]
         if not weak and not strong:
             return
-        signal_types=_demand_signal_type(title,body)
+        signal_types=_demand_signal_type(title,context)
+        # Paid-demand/pain markers must occur near the family topic.
+        if not signal_types:
+            return
         row={"domain":host,"source":source,"family":family,"title":title or "","url":url or "",
              "strong_markers":strong[:8],"weak_markers":weak[:8],"signal_types":signal_types}
         useful.append(row)
@@ -2464,7 +2623,7 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         cluster_tags=sorted({tag for s in cl["signals"] for tag in (s.get("signal_types") or [])})
         gap=_gap_score(cluster_tags,len(domains),len(strong_domains))
         commercially_actionable=("PAID_DEMAND" in cluster_tags and ("BUY_INTENT" in cluster_tags or "PAIN" in cluster_tags))
-        ok=len(domains)>=2 and commercially_actionable
+        ok=len(domains)>=3 and len(strong_domains)>=1 and commercially_actionable
         public_clusters[family]={
             "independent_domains":len(domains),
             "strong_commercial_domains":len(strong_domains),
@@ -2484,7 +2643,7 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         "qualified_problem_clusters":qualified,
         "clusters":public_clusters,
         "quality_gate":bool(qualified),
-        "gate_rule":"same problem: >=2 independent domains AND PAID_DEMAND + (BUY_INTENT or PAIN)",
+        "gate_rule":"same problem: >=3 topic-relevant independent domains, >=1 strong commercial domain, AND contextual PAID_DEMAND + (BUY_INTENT or PAIN)",
         "useful_results":useful[:20],
     }
 
