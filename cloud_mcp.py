@@ -3,6 +3,7 @@ import html
 import json
 import os
 import secrets
+import time
 import ipaddress
 from datetime import datetime, timezone
 from urllib.parse import urlparse, quote_plus, parse_qs
@@ -19,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.45.4"
+VERSION = "0.45.5"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
