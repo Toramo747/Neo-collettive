@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.46.0"
+VERSION = "0.46.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1487,7 +1487,26 @@ DEFAULT_POLICY = {
         "workflow_automation",
         "crm_lead_ops",
         "manual_data_entry",
-        "website_audit"
+        "website_audit",
+        "document_processing",
+        "developer_tools",
+        "integration_api",
+        "ai_tools",
+        "micro_saas",
+        "ecommerce_tools",
+        "marketing_seo",
+        "analytics_tools",
+        "compliance_tools",
+        "customer_support",
+        "data_cleanup",
+        "content_tools",
+        "productivity_tools",
+        "local_business_tools",
+        "hr_tools",
+        "education_tools",
+        "creator_tools",
+        "it_hygiene",
+        "cybersecurity_tools"
     ]
 }
 
@@ -2229,6 +2248,82 @@ BUILD_RECIPES = {
         "sample_process":"Esporto dati del sito in CSV, confronto manualmente pagine e problemi in Excel e preparo un report.",
         "minutes_each":30,"weekly_runs":4,"weekly_errors":1,
     },
+    "document_processing": {
+        "sample_process":"Ricevo documenti PDF via email, estraggo manualmente campi, li verifico e li copio in un database o gestionale.",
+        "minutes_each":15,"weekly_runs":18,"weekly_errors":3,
+    },
+    "developer_tools": {
+        "sample_process":"Uno sviluppatore controlla manualmente log e output di build, copia errori tra strumenti e prepara un report tecnico ripetitivo.",
+        "minutes_each":18,"weekly_runs":12,"weekly_errors":2,
+    },
+    "integration_api": {
+        "sample_process":"Copio manualmente dati tra due servizi, verifico CSV e webhook, poi aggiorno un database e preparo un report.",
+        "minutes_each":16,"weekly_runs":15,"weekly_errors":3,
+    },
+    "ai_tools": {
+        "sample_process":"Un operatore raccoglie input via email, prepara manualmente un prompt, controlla l output e copia il risultato nel workflow.",
+        "minutes_each":14,"weekly_runs":18,"weekly_errors":2,
+    },
+    "micro_saas": {
+        "sample_process":"Un piccolo team gestisce manualmente richieste ripetitive, dati via email e report, con controlli e aggiornamenti periodici.",
+        "minutes_each":20,"weekly_runs":10,"weekly_errors":2,
+    },
+    "ecommerce_tools": {
+        "sample_process":"Aggiorno manualmente catalogo e ordini da CSV, controllo dati prodotto e preparo un report delle anomalie.",
+        "minutes_each":22,"weekly_runs":10,"weekly_errors":3,
+    },
+    "marketing_seo": {
+        "sample_process":"Esporto manualmente dati SEO in CSV, confronto pagine e metriche e preparo un report ricorrente.",
+        "minutes_each":25,"weekly_runs":5,"weekly_errors":2,
+    },
+    "analytics_tools": {
+        "sample_process":"Raccolgo dati da CSV e database, li normalizzo manualmente e preparo un report o dashboard ricorrente.",
+        "minutes_each":30,"weekly_runs":5,"weekly_errors":2,
+    },
+    "compliance_tools": {
+        "sample_process":"Raccolgo manualmente evidenze da email, CSV e portali, verifico campi e preparo un report di conformita.",
+        "minutes_each":35,"weekly_runs":4,"weekly_errors":2,
+    },
+    "customer_support": {
+        "sample_process":"Leggo ticket ed email, classifico manualmente le richieste, copio dati nel CRM e preparo risposte o escalation.",
+        "minutes_each":8,"weekly_runs":35,"weekly_errors":4,
+    },
+    "data_cleanup": {
+        "sample_process":"Ricevo CSV, individuo manualmente duplicati e formati incoerenti, correggo i dati e preparo un file pulito.",
+        "minutes_each":28,"weekly_runs":6,"weekly_errors":4,
+    },
+    "content_tools": {
+        "sample_process":"Ricevo contenuti via email, li riformatto manualmente, aggiorno un foglio e preparo versioni per diversi canali.",
+        "minutes_each":20,"weekly_runs":10,"weekly_errors":2,
+    },
+    "productivity_tools": {
+        "sample_process":"Un team copia manualmente note e task tra email, fogli e strumenti, controllando ogni volta stato e priorita.",
+        "minutes_each":12,"weekly_runs":20,"weekly_errors":3,
+    },
+    "local_business_tools": {
+        "sample_process":"Ricevo richieste di appuntamento via email, aggiorno manualmente un foglio e preparo conferme e report.",
+        "minutes_each":10,"weekly_runs":25,"weekly_errors":3,
+    },
+    "hr_tools": {
+        "sample_process":"Ricevo candidature e documenti via email, copio manualmente dati in un foglio e aggiorno lo stato del processo.",
+        "minutes_each":12,"weekly_runs":18,"weekly_errors":3,
+    },
+    "education_tools": {
+        "sample_process":"Raccolgo iscrizioni e materiali via email, aggiorno manualmente un foglio e preparo report e comunicazioni.",
+        "minutes_each":15,"weekly_runs":12,"weekly_errors":2,
+    },
+    "creator_tools": {
+        "sample_process":"Raccolgo contenuti e metriche da diversi strumenti, aggiorno manualmente un foglio e preparo report o versioni derivate.",
+        "minutes_each":18,"weekly_runs":10,"weekly_errors":2,
+    },
+    "it_hygiene": {
+        "sample_process":"Esporto inventario e patch in CSV, confronto manualmente dispositivi e vulnerabilita e preparo un report tecnico.",
+        "minutes_each":30,"weekly_runs":4,"weekly_errors":2,
+    },
+    "cybersecurity_tools": {
+        "sample_process":"Raccolgo alert e inventario da CSV e portali, classifico manualmente eventi e preparo un report di sicurezza senza azioni offensive.",
+        "minutes_each":25,"weekly_runs":6,"weekly_errors":2,
+    },
 }
 
 
@@ -2286,6 +2381,8 @@ def _autonomous_build(product_candidate: dict, evidence_quality: dict, collectiv
         "jarvis_decision_source":jarvis_source,
         "endpoint":"/api/venture/audit",
         "ui":"/venture?family="+quote_plus(family),
+        "build_mode":"bounded_generic_audit_recipe",
+        "recipe_family":family,
         "audit_count_at_build":int(metrics.get("audits_total") or 0),
         "external_actions_performed":False,
         "spending_eur":0,
