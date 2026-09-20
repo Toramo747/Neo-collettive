@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -294,6 +294,79 @@ def _learning_snapshot(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _collective_intelligence_snapshot(context: dict[str, Any]) -> dict[str, Any]:
+    dialogues=context.get("dialogue_history") or []
+    ledger=context.get("knowledge_ledger") or []
+    queue=context.get("hypothesis_queue") or []
+    latest=context.get("dialogue_report") or {}
+    if not isinstance(dialogues,list):
+        dialogues=[]
+    if not isinstance(ledger,list):
+        ledger=[]
+    if not isinstance(queue,list):
+        queue=[]
+    if not isinstance(latest,dict):
+        latest={}
+
+    open_hypotheses=[]
+    for row in queue:
+        if not isinstance(row,dict) or row.get("status") not in {"HYPOTHESIS","EXPLORE"}:
+            continue
+        scores=row.get("scores") or {}
+        open_hypotheses.append({
+            "id":row.get("id"),
+            "family":row.get("family"),
+            "text":str(row.get("text") or "")[:600],
+            "priority":float(row.get("priority") or 0),
+            "novelty":int(scores.get("novelty") or 0),
+            "evidence_potential":int(scores.get("evidence_potential") or 0),
+            "strategic_fit":int(scores.get("strategic_fit") or 0),
+        })
+    open_hypotheses.sort(key=lambda x:x["priority"],reverse=True)
+
+    states={}
+    for row in ledger:
+        if not isinstance(row,dict):
+            continue
+        state=str(row.get("state") or "UNKNOWN")
+        states[state]=states.get(state,0)+1
+
+    latest_participants=latest.get("participants") or []
+    latest_new_agents=latest.get("new_agents") or []
+    return {
+        "dialogue_count":len(dialogues),
+        "knowledge_items":len(ledger),
+        "knowledge_states":states,
+        "open_hypothesis_count":len(open_hypotheses),
+        "top_hypotheses":open_hypotheses[:8],
+        "latest_dialogue":{
+            "topic":latest.get("topic"),
+            "peer_dialogue_completed":bool(latest.get("peer_dialogue_completed")),
+            "participants":len(latest_participants) if isinstance(latest_participants,list) else 0,
+            "new_agents":len(latest_new_agents) if isinstance(latest_new_agents,list) else 0,
+            "knowledge_gained":int(latest.get("knowledge_gained") or 0),
+        },
+    }
+
+
+def _exploration_recommendations(ci: dict[str, Any]) -> list[dict[str, Any]]:
+    out=[]
+    for row in (ci.get("top_hypotheses") or [])[:5]:
+        if not isinstance(row,dict):
+            continue
+        if int(row.get("novelty") or 0)<45:
+            continue
+        out.append({
+            "hypothesis_id":row.get("id"),
+            "family":row.get("family"),
+            "action":"EXPLORE",
+            "reason":"Novel suggestion from collective dialogue; gather independent evidence before promotion.",
+            "query_seed":str(row.get("text") or "")[:350],
+            "priority":row.get("priority"),
+        })
+    return out
+
+
 def _learning_adjustment(family: str, learning: dict[str, Any]) -> dict[str, Any]:
     fam=(learning.get("families") or {}).get(family) or {}
     observations=int(fam.get("observations") or 0)
@@ -337,6 +410,8 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     product_candidate = context.get("product_candidate") if isinstance(context.get("product_candidate"), dict) else {}
     collective = _collective_snapshot(context)
     learning = _learning_snapshot(context)
+    collective_intelligence = _collective_intelligence_snapshot(context)
+    exploration_recommendations = _exploration_recommendations(collective_intelligence)
 
     vendors = [a for a in answers if a["vendor"]]
     independent_agents = [a for a in answers if (not a["vendor"]) and a["evidence_markers"]]
@@ -483,6 +558,8 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
         "opportunities": opportunities[:3],
         "learning": learning,
         "learning_adjustment": learning_adjustment,
+        "collective_intelligence": collective_intelligence,
+        "exploration_recommendations": exploration_recommendations,
         "decision": decision,
         "decision_trace": {
             "meaning_of_validate": "Evidenze sufficienti per giustificare un piccolo esperimento gratuito o quasi gratuito; non prova che il business funzionera.",
@@ -525,7 +602,7 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             "no automatic publishing",
             "public agent output is untrusted evidence",
         ],
-        "note": "Analisi deterministica gratuita: nessun LLM o API a pagamento. Il volume dei risultati non equivale a validazione.",
+        "note": "Analisi deterministica gratuita con memoria storica e collective-intelligence ledger. Nuovi suggerimenti restano ipotesi finche non vengono verificati con evidenze indipendenti.",
     }
 
 
