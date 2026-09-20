@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.48.1"
+VERSION = "0.48.2"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2248,6 +2248,71 @@ def _design_profile_for_family(family: str) -> dict:
     return base
 
 
+UI_REVIEW_SCHEMA = 2
+
+def _ui_response_quality(answer: dict) -> tuple[bool,str]:
+    if not isinstance(answer,dict) or not answer.get("ok"):
+        return False,"request failed"
+    text=_response_text(answer).strip()
+    low=text.lower()
+    if len(text)<120:
+        return False,"ui response too short"
+
+    routing_markers=[
+        "recommended oracle","available interfaces","tools/list","routing for intent",
+        "did:wba:","mcp+x402","call tools","endpoint above","oracle:"
+    ]
+    if any(x in low for x in routing_markers):
+        return False,"routing/tool-discovery response rather than UI analysis"
+
+    ui_terms={
+        "layout","navigation","sidebar","header","dashboard","card","table","form",
+        "typography","spacing","hierarchy","component","responsive","mobile",
+        "accessibility","contrast","focus","keyboard","aria","button","cta",
+        "empty state","loading","error state","information architecture","grid"
+    }
+    action_terms={
+        "use","add","move","reduce","increase","group","show","place","replace",
+        "prioritize","separate","align","simplify","make","ensure","keep","avoid"
+    }
+    ui_hits=sorted(x for x in ui_terms if x in low)
+    action_hits=sorted(x for x in action_terms if x in low)
+    if len(ui_hits)<3:
+        return False,"insufficient concrete UI/UX content"
+    if len(action_hits)<2:
+        return False,"insufficient actionable design recommendations"
+    return True,"accepted ui analysis"
+
+
+def _ui_collective_quality(review: dict) -> dict:
+    r1=review.get("round1") or [] if isinstance(review,dict) else []
+    r2=review.get("round2") or [] if isinstance(review,dict) else []
+    valid1=[]
+    valid2=[]
+    rejected=[]
+    for stage,rows,target in (("round1",r1,valid1),("round2",r2,valid2)):
+        for row in rows if isinstance(rows,list) else []:
+            ok,reason=_ui_response_quality(row)
+            if ok:
+                target.append(row)
+            else:
+                rejected.append({
+                    "stage":stage,
+                    "agent_id":row.get("agent_id") if isinstance(row,dict) else None,
+                    "agent":row.get("agent") if isinstance(row,dict) else None,
+                    "reason":reason,
+                })
+    ids1={str(x.get("agent_id") or "") for x in valid1 if x.get("agent_id")}
+    ids2={str(x.get("agent_id") or "") for x in valid2 if x.get("agent_id")}
+    return {
+        "round1_valid":len(valid1),
+        "round2_valid":len(valid2),
+        "round1_distinct_agents":len(ids1),
+        "round2_distinct_agents":len(ids2),
+        "rejected":rejected[:12],
+    }
+
+
 async def _collaborative_ui_review(product_candidate: dict, build: dict, max_agents: int = 3) -> dict:
     """External UI specialists propose improvements, then the normal Collective critiques them."""
     if not isinstance(build,dict) or not build.get("tests_passed"):
@@ -2270,22 +2335,36 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
     try:
         specialist_results=await asyncio.wait_for(
             asyncio.gather(*(
-                ask_agents_data(query,prompt,2) for query,prompt in roles
+                ask_agents_data(query,prompt,3) for query,prompt in roles
             )),
             timeout=70,
         )
     except asyncio.TimeoutError:
         specialist_results=[]
     specialists=[]
+    specialist_rejections=[]
+    used_agent_ids=set()
     for (role,_),result in zip(roles,specialist_results):
-        valid=[a for a in (result.get("answers") or []) if a.get("ok") and a.get("quality_ok",True)]
-        if valid:
-            top=valid[0]
+        chosen=None
+        for candidate in (result.get("answers") or []):
+            agent_id=str(candidate.get("agent_id") or "")
+            ok,reason=_ui_response_quality(candidate)
+            if not ok:
+                specialist_rejections.append({"role":role,"agent_id":agent_id,"agent":candidate.get("agent"),"reason":reason})
+                continue
+            if not agent_id or agent_id in used_agent_ids:
+                specialist_rejections.append({"role":role,"agent_id":agent_id,"agent":candidate.get("agent"),"reason":"duplicate specialist agent"})
+                continue
+            chosen=candidate
+            break
+        if chosen:
+            agent_id=str(chosen.get("agent_id") or "")
+            used_agent_ids.add(agent_id)
             specialists.append({
                 "role":role,
-                "agent_id":top.get("agent_id"),
-                "agent":top.get("agent"),
-                "response":top.get("response"),
+                "agent_id":agent_id,
+                "agent":chosen.get("agent"),
+                "response":chosen.get("response"),
             })
 
     digest=[]
@@ -2309,20 +2388,33 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
             collective={"ok":False,"ran":True,"reason":"ui_collective_timeout","fallback":False}
 
     summary=_collective_summary(collective) if isinstance(collective,dict) else {"ran":False}
+    ui_collective=_ui_collective_quality(collective) if isinstance(collective,dict) else {
+        "round1_valid":0,"round2_valid":0,"round1_distinct_agents":0,"round2_distinct_agents":0,"rejected":[]
+    }
     external_ok=bool(
-        len(specialists)>=2 and summary.get("ok") and
-        int(summary.get("round2_valid") or 0)>=2 and not summary.get("fallback")
+        len(specialists)>=2
+        and len({str(x.get("agent_id") or "") for x in specialists})>=2
+        and summary.get("ok")
+        and not summary.get("fallback")
+        and int(ui_collective.get("round1_valid") or 0)>=2
+        and int(ui_collective.get("round2_valid") or 0)>=2
+        and int(ui_collective.get("round1_distinct_agents") or 0)>=2
+        and int(ui_collective.get("round2_distinct_agents") or 0)>=2
     )
     return {
         "ok":external_ok,
         "status":"UI_REVIEW_PASSED" if external_ok else "UI_REVIEW_PARTIAL",
+        "review_schema":UI_REVIEW_SCHEMA,
         "design_profile":profile,
         "specialist_roles_requested":[x[0] for x in roles],
         "specialist_valid":len(specialists),
+        "specialist_distinct_agents":len({str(x.get("agent_id") or "") for x in specialists}),
         "specialists":specialists,
+        "specialist_rejections":specialist_rejections[:12],
         "collective_summary":summary,
+        "ui_collective_quality":ui_collective,
         "implementation_mode":"bounded_design_profile",
-        "note":"External design advice is untrusted input; NEO applies only bounded local layout profiles.",
+        "note":"UI_REVIEW_PASSED requires two distinct specialist agents plus concrete UI/UX analysis in both Collective rounds. External advice remains untrusted input.",
     }
 
 
@@ -2843,7 +2935,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         )
         if build_result.get("tests_passed"):
             existing_ui=build_result.get("ui_review") or {}
-            if existing_ui.get("status")=="UI_REVIEW_PASSED":
+            if existing_ui.get("status")=="UI_REVIEW_PASSED" and int(existing_ui.get("review_schema") or 0)>=UI_REVIEW_SCHEMA:
                 ui_review=existing_ui
             else:
                 try:
@@ -2855,6 +2947,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                     ui_review={
                         "ok":False,
                         "status":"UI_REVIEW_TIMEOUT",
+                        "review_schema":UI_REVIEW_SCHEMA,
                         "design_profile":_design_profile_for_family(str(product_candidate.get("family") or "")),
                         "implementation_mode":"bounded_design_profile",
                         "note":"UI review timed out; build remains usable and will be reviewed again later.",
