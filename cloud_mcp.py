@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.49.0"
+VERSION = "0.49.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2914,7 +2914,14 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     jarvis_brief = await ask_jarvis(
         "Agisci come coordinatore gratuito di NEO. Scomponi la missione in problemi da verificare e criteri di scarto. "
         "Non inventare prove e non eseguire azioni esterne.\n\nMISSIONE:\n" + goal,
-        {"plan": plan, "phase": "planning"},
+        {
+            "plan": plan,
+            "phase": "planning",
+            "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
+            "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
+            "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
+            "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
+        },
     )
 
     search_strategy = _entropy_search_strategy(goal, 8)
@@ -2980,6 +2987,9 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "web_source_count": web_source_count,
             "evidence_quality": evidence_quality,
             "family_performance": family_performance,
+            "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
+            "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
+            "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
             "product_candidate": product_candidate,
             "collective_review": collective_review,
             "collective_summary": _collective_summary(collective_review),
