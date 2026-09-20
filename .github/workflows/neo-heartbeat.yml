@@ -55,48 +55,47 @@ jobs:
           initial_cycles="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(int(hb.get("cycles_completed") or 0))')"
           require_new_cycle="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print("1" if (hb.get("started") or hb.get("busy")) else "0")')"
 
+          cat > /tmp/check_neo_complete.py <<'PY'
+          import json
+          import os
+          import sys
+
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          cycles=int(ap.get("cycles_completed") or 0)
+          initial=int(os.environ["INITIAL"])
+          require_new=os.environ["REQUIRE_NEW"]=="1"
+          latest=ap.get("latest_result")
+          finished=(
+              bool(ap.get("enabled"))
+              and not bool(ap.get("running"))
+              and bool(ap.get("last_finished_utc"))
+              and isinstance(latest,dict)
+              and bool(latest)
+              and not ap.get("last_error")
+              and ((cycles >= initial + 1) if require_new else (cycles >= initial))
+          )
+          print("poll", {
+              "version":d.get("neo_version"),
+              "enabled":ap.get("enabled"),
+              "running":ap.get("running"),
+              "cycles":cycles,
+              "initial_cycles":initial,
+              "require_new_cycle":require_new,
+              "status":ap.get("last_status"),
+              "last_finished_utc":ap.get("last_finished_utc"),
+              "latest_result":bool(latest),
+              "error":ap.get("last_error"),
+              "completed":finished,
+          })
+          sys.exit(0 if finished else 1)
+          PY
+
           completed=0
           for i in $(seq 1 18); do
             if curl --fail --show-error --silent --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
-
-              set +e
-              INITIAL="$initial_cycles" REQUIRE_NEW="$require_new_cycle" python -c '
-import json,os,sys
-d=json.load(open("/tmp/status.json",encoding="utf-8"))
-ap=d.get("autopilot") or {}
-cycles=int(ap.get("cycles_completed") or 0)
-initial=int(os.environ["INITIAL"])
-require_new=os.environ["REQUIRE_NEW"]=="1"
-latest=ap.get("latest_result")
-finished=(
-    bool(ap.get("enabled"))
-    and not bool(ap.get("running"))
-    and bool(ap.get("last_finished_utc"))
-    and isinstance(latest,dict)
-    and bool(latest)
-    and not ap.get("last_error")
-    and ((cycles >= initial + 1) if require_new else (cycles >= initial))
-)
-print("poll", {
-    "version":d.get("neo_version"),
-    "enabled":ap.get("enabled"),
-    "running":ap.get("running"),
-    "cycles":cycles,
-    "initial_cycles":initial,
-    "require_new_cycle":require_new,
-    "status":ap.get("last_status"),
-    "last_finished_utc":ap.get("last_finished_utc"),
-    "latest_result":bool(latest),
-    "error":ap.get("last_error"),
-    "completed":finished,
-})
-sys.exit(0 if finished else 1)
-'
-              rc=$?
-              set -e
-
-              if [ "$rc" -eq 0 ]; then
+              if INITIAL="$initial_cycles" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
                 completed=1
                 break
               fi
