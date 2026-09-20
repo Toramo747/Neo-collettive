@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.45.1"
+VERSION = "0.45.2"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1099,6 +1099,29 @@ async def _trusted_recovery_answers(question: str, needed: int = 2, exclude_ids:
     return out
 
 
+async def _fresh_external_recovery(query: str, question: str, needed: int, exclude_ids: set[str] | None = None) -> list[dict]:
+    exclude_ids=exclude_ids or set()
+    if needed <= 0:
+        return []
+    result=await ask_agents_data(
+        "critical review " + (query or ""),
+        question,
+        min(MAX_AGENTS,max(needed*2,3)),
+    )
+    out=[]
+    for answer in result.get("answers") or []:
+        agent_id=str(answer.get("agent_id") or "")
+        if not agent_id or agent_id in exclude_ids:
+            continue
+        if answer.get("ok") and answer.get("quality_ok"):
+            answer["selection_reasons"]=(answer.get("selection_reasons") or [])+["fresh external recovery"]
+            out.append(answer)
+            exclude_ids.add(agent_id)
+        if len(out)>=needed:
+            break
+    return out
+
+
 async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -> dict:
     max_agents = max(2, min(max_agents, MAX_AGENTS))
     first = await ask_agents_data(query, problem, max_agents)
@@ -1117,6 +1140,10 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
     if len(first_answers) < 2:
         fallback = _local_collective_fallback(query, problem)
         fallback["external_round1"] = first
+        fallback["external_round1_valid"] = first_answers
+        fallback["external_round1_valid_count"] = len(first_answers)
+        fallback["external_round2_valid"] = []
+        fallback["external_round2_valid_count"] = 0
         fallback["trusted_recovery_attempted"] = True
         fallback["selection"] = {
             "search_queries": first.get("search_queries", []),
@@ -1167,22 +1194,40 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
     initial_second=await asyncio.gather(*(review(a) for a in ordered_first[:max_agents]))
     second=[a for a in initial_second if a.get("ok") and a.get("quality_ok")]
 
-    # If peer reviewers fail, recruit different trusted agents rather than immediately falling back locally.
+    # If peer reviewers fail, try trusted agents first, then discover fresh external reviewers.
     second_ids=first_ids | {str(a.get("agent_id") or "") for a in initial_second}
+    trusted_recovered=[]
+    fresh_recovered=[]
     if len(second)<2:
-        recovered_second=await _trusted_recovery_answers(
+        trusted_recovered=await _trusted_recovery_answers(
             review_prompt,
             needed=2-len(second),
             exclude_ids=second_ids,
         )
-        second.extend(recovered_second)
+        second.extend(trusted_recovered)
+        second_ids.update(str(a.get("agent_id") or "") for a in trusted_recovered)
+
+    if len(second)<2:
+        fresh_recovered=await _fresh_external_recovery(
+            query,
+            review_prompt,
+            needed=2-len(second),
+            exclude_ids=second_ids,
+        )
+        second.extend(fresh_recovered)
+        second_ids.update(str(a.get("agent_id") or "") for a in fresh_recovered)
 
     if len(second)<2:
         fallback=_local_collective_fallback(query,problem)
         fallback["external_round1"]=first
         fallback["external_round1_valid"]=first_answers
+        fallback["external_round1_valid_count"]=len(first_answers)
         fallback["external_round2_attempts"]=initial_second
+        fallback["external_round2_valid"]=second
+        fallback["external_round2_valid_count"]=len(second)
         fallback["trusted_recovery_attempted"]=True
+        fallback["trusted_recovery_valid_count"]=len(trusted_recovered)
+        fallback["fresh_recovery_valid_count"]=len(fresh_recovered)
         fallback["selection"]={
             "search_queries": first.get("search_queries", []),
             "mcp_candidates": first.get("mcp_candidates", []),
@@ -1199,11 +1244,13 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         "problem": problem,
         "round1": first_answers[:max_agents],
         "round2": second[:max_agents],
+        "external_round1_valid_count": len(first_answers),
+        "external_round2_valid_count": len(second),
+        "trusted_recovery_valid_count": len(trusted_recovered),
+        "fresh_recovery_valid_count": len(fresh_recovered),
         "fallback": False,
-        "trusted_recovery_used": (
-            len(first_answers) > len(first.get("answers") or [])
-            or len(second) > len([a for a in initial_second if a.get("ok") and a.get("quality_ok")])
-        ),
+        "trusted_recovery_used": bool(trusted_recovered),
+        "fresh_recovery_used": bool(fresh_recovered),
         "selection": {
             "search_queries": first.get("search_queries", []),
             "mcp_candidates": first.get("mcp_candidates", []),
@@ -2256,16 +2303,29 @@ def _collective_summary(review: dict) -> dict:
     r1 = review.get("round1") or []
     r2 = review.get("round2") or []
     valid_r2 = [x for x in r2 if isinstance(x, dict) and x.get("ok")]
+    fallback=bool(review.get("fallback"))
+    if fallback:
+        external_r1=int(review.get("external_round1_valid_count") or 0)
+        external_r2=int(review.get("external_round2_valid_count") or 0)
+    else:
+        external_r1=int(review.get("external_round1_valid_count") or (len(r1) if isinstance(r1,list) else 0))
+        external_r2=int(review.get("external_round2_valid_count") or len(valid_r2))
     return {
         "ran": True,
         "ok": bool(review.get("ok")),
         "stage": review.get("stage"),
-        "round1_valid": len(r1) if isinstance(r1, list) else 0,
-        "round2_valid": len(valid_r2),
+        "round1_valid": external_r1,
+        "round2_valid": external_r2,
+        "external_round1_valid": external_r1,
+        "external_round2_valid": external_r2,
+        "local_round1_reviewers": (len(r1) if fallback and isinstance(r1,list) else 0),
+        "local_round2_reviewers": (len(valid_r2) if fallback else 0),
         "query": review.get("query"),
         "warning": review.get("warning"),
-        "fallback": bool(review.get("fallback")),
+        "fallback": fallback,
         "trusted_recovery_used": bool(review.get("trusted_recovery_used")),
+        "trusted_recovery_valid": int(review.get("trusted_recovery_valid_count") or 0),
+        "fresh_recovery_valid": int(review.get("fresh_recovery_valid_count") or 0),
     }
 
 
