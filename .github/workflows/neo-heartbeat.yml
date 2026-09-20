@@ -53,6 +53,8 @@ jobs:
           : > /tmp/status-errors.txt
 
           initial_cycles="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(int(hb.get("cycles_completed") or 0))')"
+          initial_version="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(str(hb.get("neo_version") or ""))')"
+          initial_finished="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(str(hb.get("last_finished_utc") or ""))')"
           require_new_cycle="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print("1" if (hb.get("started") or hb.get("busy")) else "0")')"
 
           cat > /tmp/check_neo_complete.py <<'PY'
@@ -64,16 +66,26 @@ jobs:
           ap=d.get("autopilot") or {}
           cycles=int(ap.get("cycles_completed") or 0)
           initial=int(os.environ["INITIAL"])
+          initial_version=os.environ.get("INITIAL_VERSION","")
+          initial_finished=os.environ.get("INITIAL_FINISHED","")
           require_new=os.environ["REQUIRE_NEW"]=="1"
           latest=ap.get("latest_result")
+          version=str(d.get("neo_version") or "")
+          current_finished=str(ap.get("last_finished_utc") or "")
+          version_changed=bool(initial_version and version and version!=initial_version)
+          completed_after_wake=bool(current_finished and current_finished!=initial_finished)
+          if require_new:
+              progress_ok=(cycles >= initial + 1) or version_changed or completed_after_wake
+          else:
+              progress_ok=(cycles >= initial) or version_changed or completed_after_wake
           finished=(
               bool(ap.get("enabled"))
               and not bool(ap.get("running"))
-              and bool(ap.get("last_finished_utc"))
+              and bool(current_finished)
               and isinstance(latest,dict)
               and bool(latest)
               and not ap.get("last_error")
-              and ((cycles >= initial + 1) if require_new else (cycles >= initial))
+              and progress_ok
           )
           print("poll", {
               "version":d.get("neo_version"),
@@ -81,6 +93,9 @@ jobs:
               "running":ap.get("running"),
               "cycles":cycles,
               "initial_cycles":initial,
+              "initial_version":initial_version,
+              "version_changed":version_changed,
+              "completed_after_wake":completed_after_wake,
               "require_new_cycle":require_new,
               "status":ap.get("last_status"),
               "last_finished_utc":ap.get("last_finished_utc"),
@@ -95,7 +110,7 @@ jobs:
           for i in $(seq 1 18); do
             if curl --fail --show-error --silent --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
-              if INITIAL="$initial_cycles" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
+              if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
                 completed=1
                 break
               fi
