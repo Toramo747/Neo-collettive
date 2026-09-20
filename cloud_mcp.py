@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.45.3"
+VERSION = "0.45.4"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -621,57 +621,141 @@ def _a2a_message_payload(question: str) -> dict:
     }
 
 
+def _a2a_direct_urls(agent: dict) -> list[str]:
+    urls=[]
+    for key in ("url","endpoint","a2a_url","agent_url","card_url"):
+        value=agent.get(key)
+        if isinstance(value,str) and value.strip():
+            urls.append(value.strip())
+    for key in ("endpoints","remotes","interfaces"):
+        rows=agent.get(key) or []
+        if isinstance(rows,list):
+            for row in rows:
+                if isinstance(row,dict):
+                    value=row.get("url") or row.get("endpoint")
+                    if isinstance(value,str) and value.strip():
+                        urls.append(value.strip())
+    out=[]
+    for url in urls:
+        safe,_=_safe_public_https(url)
+        if safe and url not in out:
+            out.append(url)
+    return out[:4]
+
+
+def _a2a_timeout(transport_name: str) -> httpx.Timeout:
+    total=max(8.0,min(TIMEOUT,35.0))
+    connect=min(10.0,total)
+    read=total if transport_name=="registry_chat" else min(30.0,total)
+    return httpx.Timeout(connect=connect,read=read,write=min(15.0,total),pool=min(10.0,total))
+
+
 async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
     name=agent.get("name") or agent_id or "unknown"
     attempts=[]
 
-    # Registry proxy is preferred because it normalizes independently operated agents.
     if agent_id:
-        attempts.append(("registry_chat",f"{A2A_REGISTRY}/api/agents/{agent_id}/chat",{"message":question}))
+        attempts.append((
+            "registry_chat",
+            f"{A2A_REGISTRY}/api/agents/{agent_id}/chat",
+            {"message":question},
+        ))
 
-    # Direct A2A message/send fallback using the normalized card URL.
-    direct_url=str(agent.get("url") or "").strip()
-    if direct_url:
-        safe,why=_safe_public_https(direct_url)
-        if safe:
-            attempts.append(("direct_message_send",direct_url,_a2a_message_payload(question)))
+    for direct_url in _a2a_direct_urls(agent):
+        attempts.append(("direct_message_send",direct_url,_a2a_message_payload(question)))
 
     errors=[]
-    async with httpx.AsyncClient(timeout=TIMEOUT,follow_redirects=True) as client:
-        for transport_name,url,payload in attempts:
+    headers={
+        "Accept":"application/json, text/plain;q=0.9, */*;q=0.5",
+        "Content-Type":"application/json",
+        "User-Agent":"NEO-Collective/"+VERSION,
+    }
+
+    for transport_name,url,payload in attempts:
+        max_tries=3 if transport_name=="registry_chat" else 2
+        for attempt_no in range(1,max_tries+1):
+            started=time.monotonic()
             try:
-                r=await client.post(url,json=payload,headers={"Accept":"application/json"})
-                if "json" in (r.headers.get("content-type") or "").lower():
+                async with httpx.AsyncClient(
+                    timeout=_a2a_timeout(transport_name),
+                    follow_redirects=True,
+                    headers=headers,
+                ) as client:
+                    r=await client.post(url,json=payload)
+
+                elapsed_ms=round((time.monotonic()-started)*1000)
+                ctype=(r.headers.get("content-type") or "").lower()
+                if "json" in ctype:
                     try:
                         body=r.json()
                     except Exception:
                         body={"text":r.text[:12000]}
                 else:
                     body={"text":r.text[:12000]}
+
                 answer={
-                    "agent":name,"agent_id":agent_id,"ok":r.is_success,
-                    "status":r.status_code,"response":body,
+                    "agent":name,
+                    "agent_id":agent_id,
+                    "ok":r.is_success,
+                    "status":r.status_code,
+                    "response":body,
                     "transport":transport_name,
+                    "transport_attempt":attempt_no,
+                    "elapsed_ms":elapsed_ms,
                 }
                 quality_ok,quality_reason=_quality_check(answer,question)
                 answer["quality_ok"]=quality_ok
                 answer["quality_reason"]=quality_reason
                 if r.is_success and quality_ok:
                     return answer
+
+                retryable=r.status_code in {408,409,425,429,500,502,503,504}
                 errors.append({
                     "transport":transport_name,
+                    "attempt":attempt_no,
                     "status":r.status_code,
+                    "content_type":ctype[:120],
+                    "elapsed_ms":elapsed_ms,
                     "quality_reason":quality_reason,
+                    "retryable":retryable,
+                    "response_preview":_response_text(answer)[:220],
+                })
+                if not retryable:
+                    break
+            except (httpx.TimeoutException,httpx.ConnectError,httpx.RemoteProtocolError,httpx.ReadError,httpx.WriteError) as e:
+                elapsed_ms=round((time.monotonic()-started)*1000)
+                errors.append({
+                    "transport":transport_name,
+                    "attempt":attempt_no,
+                    "error_type":type(e).__name__,
+                    "error":str(e)[:300],
+                    "elapsed_ms":elapsed_ms,
+                    "retryable":True,
                 })
             except Exception as e:
-                errors.append({"transport":transport_name,"error":type(e).__name__+": "+str(e)[:300]})
+                elapsed_ms=round((time.monotonic()-started)*1000)
+                errors.append({
+                    "transport":transport_name,
+                    "attempt":attempt_no,
+                    "error_type":type(e).__name__,
+                    "error":str(e)[:300],
+                    "elapsed_ms":elapsed_ms,
+                    "retryable":False,
+                })
+                break
+
+            if attempt_no < max_tries:
+                await asyncio.sleep(0.6*(2**(attempt_no-1)))
 
     return {
-        "agent":name,"agent_id":agent_id,"ok":False,
+        "agent":name,
+        "agent_id":agent_id,
+        "ok":False,
         "quality_ok":False,
         "quality_reason":"all A2A transports failed quality/transport checks",
         "transport_errors":errors,
+        "direct_urls_found":len(_a2a_direct_urls(agent)),
     }
 
 
