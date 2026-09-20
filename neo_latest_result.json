@@ -1,7 +1,7 @@
 {
-  "captured_at_utc": "2026-09-20T05:21:16.940249+00:00",
+  "captured_at_utc": "2026-09-20T05:36:55.504551+00:00",
   "snapshot_schema": 3,
-  "neo_version": "0.45.3",
+  "neo_version": "0.45.5",
   "policy": {
     "policy_version": 2,
     "exploration_base": 4,
@@ -23,79 +23,77 @@
   "heartbeat": {
     "ok": true,
     "started": false,
-    "busy": true,
+    "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 122.384775,
-    "cycles_completed": 8,
+    "last_started_age_seconds": 120.363885,
+    "cycles_completed": 9,
     "last_status": null,
-    "last_error": null
+    "last_error": "NameError: name 'time' is not defined"
   },
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "35491236993",
+    "github_run_id": "35491905679",
     "github_run_attempt": "1"
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 9,
-    "last_started_utc": "2026-09-20T05:17:12.798404+00:00",
-    "last_finished_utc": "2026-09-20T05:21:03.201100+00:00",
-    "last_status": "COLLECTIVE_REVIEW",
+    "cycles_completed": 10,
+    "last_started_utc": "2026-09-20T05:32:48.781395+00:00",
+    "last_finished_utc": "2026-09-20T05:36:43.038285+00:00",
+    "last_status": "MEASURE_READY",
     "last_error": null,
     "stagnation_cycles": 0,
     "recent_sectors": [
-      "ecommerce_ops",
-      "data_cleanup",
-      "website_quality",
-      "content_ops",
-      "it_hygiene",
-      "spreadsheet_ops",
-      "small_business_admin",
       "reporting_compliance",
       "customer_support",
       "it_hygiene",
       "website_quality",
-      "content_ops"
+      "content_ops",
+      "spreadsheet_ops",
+      "lead_ops",
+      "document_ops",
+      "data_cleanup",
+      "website_quality",
+      "reporting_compliance",
+      "customer_support"
     ],
     "family_performance": {
       "workflow_automation": {
-        "score": 61.48,
-        "observations": 10,
+        "score": 41.71,
+        "observations": 11,
         "best_gap_score": 60,
         "qualified_hits": 0,
-        "last_gap_score": 60,
+        "last_gap_score": 0,
         "last_domains": 1,
-        "last_strong_domains": 1,
-        "last_signal_types": [
-          "PAID_DEMAND",
-          "PAIN"
-        ]
+        "last_strong_domains": 0,
+        "last_signal_types": []
       },
       "spreadsheet_process": {
-        "score": 93.85,
-        "observations": 10,
-        "best_gap_score": 70,
-        "qualified_hits": 10,
-        "last_gap_score": 65,
+        "score": 96.0,
+        "observations": 11,
+        "best_gap_score": 95,
+        "qualified_hits": 11,
+        "last_gap_score": 95,
         "last_domains": 3,
         "last_strong_domains": 2,
         "last_signal_types": [
+          "BUY_INTENT",
           "COMPETITION",
           "PAID_DEMAND",
           "PAIN"
         ]
       },
       "manual_data_entry": {
-        "score": 64.86,
-        "observations": 10,
+        "score": 70.16,
+        "observations": 11,
         "best_gap_score": 90,
-        "qualified_hits": 4,
-        "last_gap_score": 65,
-        "last_domains": 3,
-        "last_strong_domains": 2,
+        "qualified_hits": 5,
+        "last_gap_score": 55,
+        "last_domains": 2,
+        "last_strong_domains": 1,
         "last_signal_types": [
           "COMPETITION",
           "PAID_DEMAND",
@@ -103,15 +101,14 @@
         ]
       },
       "crm_lead_ops": {
-        "score": 67.93,
-        "observations": 6,
+        "score": 66.9,
+        "observations": 7,
         "best_gap_score": 80,
         "qualified_hits": 0,
-        "last_gap_score": 50,
+        "last_gap_score": 60,
         "last_domains": 1,
         "last_strong_domains": 1,
         "last_signal_types": [
-          "COMPETITION",
           "PAID_DEMAND",
           "PAIN"
         ]
@@ -121,71 +118,72 @@
       "mode": "adaptive_entropy_explore_exploit",
       "entropy_source": "system_random",
       "queries": [
-        "site:reddit.com \"looking for\" Excel workflow",
-        "\"will pay\" back office repetitive tasks",
-        "\"hiring\" freelancer compliance reporting workflow",
-        "site:upwork.com/freelance-jobs support triage automation",
-        "site:reddit.com \"need help\" patch reporting",
-        "\"hiring\" freelancer broken link audit",
-        "site:upwork.com/freelance-jobs content repurposing workflow",
+        "site:upwork.com/freelance-jobs Google Sheets process",
+        "\"budget\" sales admin automation",
+        "site:reddit.com \"need help\" form processing",
+        "site:reddit.com \"need help\" CSV cleanup",
+        "\"will pay\" broken link audit",
+        "\"will pay\" audit evidence collection",
+        "\"budget\" customer support repetitive questions",
         "\"will pay\" \"manual process\" small business"
       ],
       "sectors": [
         "spreadsheet_ops",
-        "small_business_admin",
-        "reporting_compliance",
-        "customer_support",
-        "it_hygiene",
+        "lead_ops",
+        "document_ops",
+        "data_cleanup",
         "website_quality",
-        "content_ops"
+        "reporting_compliance",
+        "customer_support"
       ],
       "sector_families": {
         "spreadsheet_ops": "spreadsheet_process",
-        "small_business_admin": "workflow_automation",
-        "reporting_compliance": "workflow_automation",
-        "customer_support": "customer_support",
-        "it_hygiene": "it_hygiene",
+        "lead_ops": "crm_lead_ops",
+        "document_ops": "manual_data_entry",
+        "data_cleanup": "data_cleanup",
         "website_quality": "website_audit",
-        "content_ops": "content_ops"
+        "reporting_compliance": "workflow_automation",
+        "customer_support": "customer_support"
       },
       "recent_sector_memory": [
-        "ecommerce_ops",
-        "data_cleanup",
-        "website_quality",
-        "content_ops",
-        "it_hygiene",
-        "spreadsheet_ops",
-        "small_business_admin",
         "reporting_compliance",
         "customer_support",
         "it_hygiene",
         "website_quality",
-        "content_ops"
+        "content_ops",
+        "spreadsheet_ops",
+        "lead_ops",
+        "document_ops",
+        "data_cleanup",
+        "website_quality",
+        "reporting_compliance",
+        "customer_support"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
       "exploitation_slots": 3,
       "family_performance": {
         "workflow_automation": {
-          "score": 59.59,
-          "observations": 9,
+          "score": 61.48,
+          "observations": 10,
           "best_gap_score": 60,
           "qualified_hits": 0,
-          "last_gap_score": 35,
-          "last_domains": 4,
-          "last_strong_domains": 0,
+          "last_gap_score": 60,
+          "last_domains": 1,
+          "last_strong_domains": 1,
           "last_signal_types": [
+            "PAID_DEMAND",
             "PAIN"
           ]
         },
         "spreadsheet_process": {
-          "score": 95.93,
-          "observations": 9,
+          "score": 93.85,
+          "observations": 10,
           "best_gap_score": 70,
-          "qualified_hits": 9,
-          "last_gap_score": 70,
-          "last_domains": 4,
-          "last_strong_domains": 3,
+          "qualified_hits": 10,
+          "last_gap_score": 65,
+          "last_domains": 3,
+          "last_strong_domains": 2,
           "last_signal_types": [
             "COMPETITION",
             "PAID_DEMAND",
@@ -193,14 +191,16 @@
           ]
         },
         "manual_data_entry": {
-          "score": 51.32,
-          "observations": 9,
+          "score": 64.86,
+          "observations": 10,
           "best_gap_score": 90,
-          "qualified_hits": 3,
-          "last_gap_score": 20,
-          "last_domains": 1,
-          "last_strong_domains": 0,
+          "qualified_hits": 4,
+          "last_gap_score": 65,
+          "last_domains": 3,
+          "last_strong_domains": 2,
           "last_signal_types": [
+            "COMPETITION",
+            "PAID_DEMAND",
             "PAIN"
           ]
         },
@@ -290,15 +290,15 @@
       },
       "fb961915-bafe-4393-9674-cabb1ea24ca1": {
         "agent": "LLM Orchestration Agent",
-        "observations": 53,
-        "accepted": 16,
-        "transport_success": 16,
-        "relevance_total": 1217.0,
-        "avg_relevance": 22.96,
-        "trust": 44.15,
+        "observations": 61,
+        "accepted": 20,
+        "transport_success": 20,
+        "relevance_total": 1421.0,
+        "avg_relevance": 23.3,
+        "trust": 46.23,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.625087+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "02a5aec8-8439-4f71-9a3a-892933994f9d": {
         "agent": "LLM Orchestration Agent 5",
@@ -314,15 +314,15 @@
       },
       "6099db20-1728-42b2-933b-9a4b38ebb93e": {
         "agent": "LLM Orchestration Agent (Mcp)",
-        "observations": 59,
-        "accepted": 21,
-        "transport_success": 21,
-        "relevance_total": 1381.0,
-        "avg_relevance": 23.41,
-        "trust": 48.47,
+        "observations": 67,
+        "accepted": 24,
+        "transport_success": 24,
+        "relevance_total": 1601.0,
+        "avg_relevance": 23.9,
+        "trust": 48.66,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.504815+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "6c9b3d56-65ac-4711-8d34-e715173a22cc": {
         "agent": "LLM Orchestration Agent (Openai)",
@@ -338,51 +338,51 @@
       },
       "486bcc7d-c94f-4e17-96f6-914cc12a5aa8": {
         "agent": "LLM Orchestration Agent (Langgraph)",
-        "observations": 49,
-        "accepted": 18,
-        "transport_success": 18,
-        "relevance_total": 1241.0,
-        "avg_relevance": 25.33,
-        "trust": 49.39,
+        "observations": 57,
+        "accepted": 21,
+        "transport_success": 21,
+        "relevance_total": 1461.0,
+        "avg_relevance": 25.63,
+        "trust": 49.47,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.199086+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "13621e8e-d23b-41d8-81b9-fbf3256ea3b2": {
         "agent": "LLM Orchestration Agent (Langsmith)",
-        "observations": 46,
-        "accepted": 14,
-        "transport_success": 14,
-        "relevance_total": 1210.0,
-        "avg_relevance": 26.3,
-        "trust": 44.35,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.213401+00:00"
+        "observations": 55,
+        "accepted": 23,
+        "transport_success": 23,
+        "relevance_total": 1462.0,
+        "avg_relevance": 26.58,
+        "trust": 53.45,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
       },
       "1b907fb7-a6d0-4dd0-8f82-68c9e451df7a": {
         "agent": "LLM Orchestration Agent (Langchain Openai)",
-        "observations": 37,
-        "accepted": 11,
-        "transport_success": 11,
-        "relevance_total": 970.0,
-        "avg_relevance": 26.22,
-        "trust": 43.78,
+        "observations": 45,
+        "accepted": 14,
+        "transport_success": 14,
+        "relevance_total": 1174.0,
+        "avg_relevance": 26.09,
+        "trust": 44.89,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.775718+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "4ca9b306-19e4-4d96-ab31-020c8c112c29": {
         "agent": "LLM Orchestration Observability Agent",
-        "observations": 33,
-        "accepted": 10,
-        "transport_success": 10,
-        "relevance_total": 944.0,
-        "avg_relevance": 28.61,
-        "trust": 44.24,
+        "observations": 41,
+        "accepted": 13,
+        "transport_success": 13,
+        "relevance_total": 1148.0,
+        "avg_relevance": 28.0,
+        "trust": 45.37,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:16.900503+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "4ab3cedb-805e-41d5-87bd-a45aa7196a5a": {
         "agent": "MERCURY Web Fetch",
@@ -434,39 +434,135 @@
       },
       "1afc68dc-5c9c-4ece-9a13-5db7c44c3741": {
         "agent": "LLM Orchestration Agent (Langchain Core)",
-        "observations": 30,
-        "accepted": 10,
-        "transport_success": 10,
-        "relevance_total": 742.0,
-        "avg_relevance": 24.73,
-        "trust": 46.67,
+        "observations": 38,
+        "accepted": 13,
+        "transport_success": 13,
+        "relevance_total": 906.0,
+        "avg_relevance": 23.84,
+        "trust": 47.37,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.735544+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "239ac70b-fb90-40cd-867a-e228449bff3f": {
         "agent": "LLM Orchestration Agent (Langchain Anthropic)",
-        "observations": 28,
-        "accepted": 9,
-        "transport_success": 9,
-        "relevance_total": 691.0,
-        "avg_relevance": 24.68,
-        "trust": 45.71,
+        "observations": 36,
+        "accepted": 12,
+        "transport_success": 12,
+        "relevance_total": 855.0,
+        "avg_relevance": 23.75,
+        "trust": 46.67,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.923027+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       "3e58e9b3-f53d-4636-88ab-df10c1e28620": {
         "agent": "LLM Orchestration Agent (Langchain)",
-        "observations": 30,
-        "accepted": 9,
-        "transport_success": 9,
-        "relevance_total": 737.0,
-        "avg_relevance": 24.57,
-        "trust": 44.0,
+        "observations": 38,
+        "accepted": 12,
+        "transport_success": 12,
+        "relevance_total": 893.0,
+        "avg_relevance": 23.5,
+        "trust": 45.26,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.428445+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
+      },
+      "0136e410-6621-4f8b-bba7-8ea58fc46db7": {
+        "agent": "Coin Railz",
+        "observations": 2,
+        "accepted": 2,
+        "transport_success": 2,
+        "relevance_total": 98.0,
+        "avg_relevance": 49.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:40.057244+00:00"
+      },
+      "180ae942-74ae-42a3-94d8-db3531a420e4": {
+        "agent": "invinoveritas-reasoning-agent",
+        "observations": 1,
+        "accepted": 0,
+        "transport_success": 0,
+        "relevance_total": 86.0,
+        "avg_relevance": 86.0,
+        "trust": 20.0,
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
+      },
+      "68673be8-e667-425f-9dcd-36ef150942e4": {
+        "agent": "MolTrust Trust Registry",
+        "observations": 2,
+        "accepted": 2,
+        "transport_success": 2,
+        "relevance_total": 70.0,
+        "avg_relevance": 35.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:40.719146+00:00"
+      },
+      "2c8ca5e2-5715-470e-b3fb-a2e4ed0cd471": {
+        "agent": "PREA",
+        "observations": 2,
+        "accepted": 2,
+        "transport_success": 2,
+        "relevance_total": 70.0,
+        "avg_relevance": 35.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:40.288139+00:00"
+      },
+      "1fc38fef-9e62-4139-ae9e-8340cb6e7b5c": {
+        "agent": "FeedOracle",
+        "observations": 1,
+        "accepted": 1,
+        "transport_success": 1,
+        "relevance_total": 70.0,
+        "avg_relevance": 70.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
+      },
+      "60731d00-1721-4eb0-b645-ed11261d772d": {
+        "agent": "MUJ428 Trust Reflex",
+        "observations": 1,
+        "accepted": 1,
+        "transport_success": 1,
+        "relevance_total": 58.0,
+        "avg_relevance": 58.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
+      },
+      "9bfce891-edc3-4ba9-ba84-53f8873007c6": {
+        "agent": "Misfit Machine Agent",
+        "observations": 1,
+        "accepted": 1,
+        "transport_success": 1,
+        "relevance_total": 58.0,
+        "avg_relevance": 58.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
+      },
+      "4eb0310e-5c8b-4e07-9fbd-6f7d86db553b": {
+        "agent": "GitDealFlow Signal Agent",
+        "observations": 1,
+        "accepted": 0,
+        "transport_success": 0,
+        "relevance_total": 58.0,
+        "avg_relevance": 58.0,
+        "trust": 20.0,
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
       }
     },
     "build_history": [
@@ -984,7 +1080,7 @@
     ],
     "last_measurement": {
       "ok": true,
-      "measured_at_utc": "2026-09-20T05:04:16.732825+00:00",
+      "measured_at_utc": "2026-09-20T05:36:43.035334+00:00",
       "build_id": "neo-20260920050416-7acec1",
       "family": "spreadsheet_process",
       "status": "AWAITING_REAL_USAGE",
@@ -1005,82 +1101,83 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-20T05:21:03.197453+00:00",
-    "neo_version": "0.45.3",
-    "status": "COLLECTIVE_REVIEW",
-    "next_gate": "REVIEW: il candidato deve superare mente collettiva e Jarvis prima del BUILD.",
-    "valid_external_answers": 7,
+    "timestamp_utc": "2026-09-20T05:36:43.035419+00:00",
+    "neo_version": "0.45.5",
+    "status": "MEASURE_READY",
+    "next_gate": "MEASURE: raccogli uso reale e baseline dall'MVP senza outreach automatico; migliora solo su dati osservati.",
+    "valid_external_answers": 11,
     "web_source_count": 40,
     "evidence_scout_count": 20,
     "search_strategy": {
       "mode": "adaptive_entropy_explore_exploit",
       "entropy_source": "system_random",
       "queries": [
-        "site:reddit.com \"looking for\" Excel workflow",
-        "\"will pay\" back office repetitive tasks",
-        "\"hiring\" freelancer compliance reporting workflow",
-        "site:upwork.com/freelance-jobs support triage automation",
-        "site:reddit.com \"need help\" patch reporting",
-        "\"hiring\" freelancer broken link audit",
-        "site:upwork.com/freelance-jobs content repurposing workflow",
+        "site:upwork.com/freelance-jobs Google Sheets process",
+        "\"budget\" sales admin automation",
+        "site:reddit.com \"need help\" form processing",
+        "site:reddit.com \"need help\" CSV cleanup",
+        "\"will pay\" broken link audit",
+        "\"will pay\" audit evidence collection",
+        "\"budget\" customer support repetitive questions",
         "\"will pay\" \"manual process\" small business"
       ],
       "sectors": [
         "spreadsheet_ops",
-        "small_business_admin",
-        "reporting_compliance",
-        "customer_support",
-        "it_hygiene",
+        "lead_ops",
+        "document_ops",
+        "data_cleanup",
         "website_quality",
-        "content_ops"
+        "reporting_compliance",
+        "customer_support"
       ],
       "sector_families": {
         "spreadsheet_ops": "spreadsheet_process",
-        "small_business_admin": "workflow_automation",
-        "reporting_compliance": "workflow_automation",
-        "customer_support": "customer_support",
-        "it_hygiene": "it_hygiene",
+        "lead_ops": "crm_lead_ops",
+        "document_ops": "manual_data_entry",
+        "data_cleanup": "data_cleanup",
         "website_quality": "website_audit",
-        "content_ops": "content_ops"
+        "reporting_compliance": "workflow_automation",
+        "customer_support": "customer_support"
       },
       "recent_sector_memory": [
-        "ecommerce_ops",
-        "data_cleanup",
-        "website_quality",
-        "content_ops",
-        "it_hygiene",
-        "spreadsheet_ops",
-        "small_business_admin",
         "reporting_compliance",
         "customer_support",
         "it_hygiene",
         "website_quality",
-        "content_ops"
+        "content_ops",
+        "spreadsheet_ops",
+        "lead_ops",
+        "document_ops",
+        "data_cleanup",
+        "website_quality",
+        "reporting_compliance",
+        "customer_support"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
       "exploitation_slots": 3,
       "family_performance": {
         "workflow_automation": {
-          "score": 59.59,
-          "observations": 9,
+          "score": 61.48,
+          "observations": 10,
           "best_gap_score": 60,
           "qualified_hits": 0,
-          "last_gap_score": 35,
-          "last_domains": 4,
-          "last_strong_domains": 0,
+          "last_gap_score": 60,
+          "last_domains": 1,
+          "last_strong_domains": 1,
           "last_signal_types": [
+            "PAID_DEMAND",
             "PAIN"
           ]
         },
         "spreadsheet_process": {
-          "score": 95.93,
-          "observations": 9,
+          "score": 93.85,
+          "observations": 10,
           "best_gap_score": 70,
-          "qualified_hits": 9,
-          "last_gap_score": 70,
-          "last_domains": 4,
-          "last_strong_domains": 3,
+          "qualified_hits": 10,
+          "last_gap_score": 65,
+          "last_domains": 3,
+          "last_strong_domains": 2,
           "last_signal_types": [
             "COMPETITION",
             "PAID_DEMAND",
@@ -1088,14 +1185,16 @@
           ]
         },
         "manual_data_entry": {
-          "score": 51.32,
-          "observations": 9,
+          "score": 64.86,
+          "observations": 10,
           "best_gap_score": 90,
-          "qualified_hits": 3,
-          "last_gap_score": 20,
-          "last_domains": 1,
-          "last_strong_domains": 0,
+          "qualified_hits": 4,
+          "last_gap_score": 65,
+          "last_domains": 3,
+          "last_strong_domains": 2,
           "last_signal_types": [
+            "COMPETITION",
+            "PAID_DEMAND",
             "PAIN"
           ]
         },
@@ -1136,40 +1235,38 @@
     },
     "family_performance": {
       "workflow_automation": {
-        "score": 61.48,
-        "observations": 10,
+        "score": 41.71,
+        "observations": 11,
         "best_gap_score": 60,
         "qualified_hits": 0,
-        "last_gap_score": 60,
+        "last_gap_score": 0,
         "last_domains": 1,
-        "last_strong_domains": 1,
-        "last_signal_types": [
-          "PAID_DEMAND",
-          "PAIN"
-        ]
+        "last_strong_domains": 0,
+        "last_signal_types": []
       },
       "spreadsheet_process": {
-        "score": 93.85,
-        "observations": 10,
-        "best_gap_score": 70,
-        "qualified_hits": 10,
-        "last_gap_score": 65,
+        "score": 96.0,
+        "observations": 11,
+        "best_gap_score": 95,
+        "qualified_hits": 11,
+        "last_gap_score": 95,
         "last_domains": 3,
         "last_strong_domains": 2,
         "last_signal_types": [
+          "BUY_INTENT",
           "COMPETITION",
           "PAID_DEMAND",
           "PAIN"
         ]
       },
       "manual_data_entry": {
-        "score": 64.86,
-        "observations": 10,
+        "score": 70.16,
+        "observations": 11,
         "best_gap_score": 90,
-        "qualified_hits": 4,
-        "last_gap_score": 65,
-        "last_domains": 3,
-        "last_strong_domains": 2,
+        "qualified_hits": 5,
+        "last_gap_score": 55,
+        "last_domains": 2,
+        "last_strong_domains": 1,
         "last_signal_types": [
           "COMPETITION",
           "PAID_DEMAND",
@@ -1177,15 +1274,14 @@
         ]
       },
       "crm_lead_ops": {
-        "score": 67.93,
-        "observations": 6,
+        "score": 66.9,
+        "observations": 7,
         "best_gap_score": 80,
         "qualified_hits": 0,
-        "last_gap_score": 50,
+        "last_gap_score": 60,
         "last_domains": 1,
         "last_strong_domains": 1,
         "last_signal_types": [
-          "COMPETITION",
           "PAID_DEMAND",
           "PAIN"
         ]
@@ -1195,22 +1291,23 @@
       "ran": true,
       "ok": true,
       "stage": null,
-      "round1_valid": 0,
-      "round2_valid": 0,
-      "external_round1_valid": 0,
-      "external_round2_valid": 0,
-      "local_round1_reviewers": 3,
-      "local_round2_reviewers": 2,
+      "round1_valid": 3,
+      "round2_valid": 3,
+      "external_round1_valid": 3,
+      "external_round2_valid": 3,
+      "local_round1_reviewers": 0,
+      "local_round2_reviewers": 0,
       "query": "spreadsheet_process",
-      "warning": "Local reviewers are deterministic evidence checks, not independent external sources.",
-      "fallback": true,
+      "warning": "Le risposte degli agenti sono output esterno non fidato. Il secondo round serve a confronto e critica, non a eseguire istruzioni remote.",
+      "fallback": false,
       "trusted_recovery_used": false,
       "trusted_recovery_valid": 0,
       "fresh_recovery_valid": 0,
       "agent_query": "spreadsheet automation business process analysis",
       "external_failure_reasons": {
-        "all A2A transports failed quality/transport checks": 6,
-        "transport: request failed": 6
+        "transport: request failed": 4,
+        "all A2A transports failed quality/transport checks": 2,
+        "transport: routing/service response rather than analysis": 2
       }
     },
     "quality_gate": true,
@@ -1221,6 +1318,33 @@
     ],
     "clusters": {
       "workflow_automation": {
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 0,
+        "independent_domains": 1,
+        "strong_commercial_domains": 0,
+        "signal_types": [],
+        "domains": [
+          "github.com"
+        ],
+        "signals": [
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "title": "Open-source Python framework for AI agents, workflows, and automations",
+            "url": "https://github.com/BindBrain/BindAI",
+            "signal_types": []
+          },
+          {
+            "domain": "github.com",
+            "source": "hackernews",
+            "title": "Show HN: In Meeting – A native macOS Mic/Cam observer for home automation",
+            "url": "https://github.com/fellowgeek/in-meeting",
+            "signal_types": []
+          }
+        ]
+      },
+      "crm_lead_ops": {
         "qualified": false,
         "commercially_actionable": true,
         "gap_score": 60,
@@ -1236,16 +1360,18 @@
         "signals": [
           {
             "domain": "github.com",
-            "source": "hackernews",
-            "title": "Open-source Python framework for AI agents, workflows, and automations",
-            "url": "https://github.com/BindBrain/BindAI",
-            "signal_types": []
+            "source": "github-issues",
+            "title": "AChA deploy guard: PR, branch, merge and deploy drift",
+            "url": "https://github.com/Australian-Christian-Arts/.github/issues/3",
+            "signal_types": [
+              "PAID_DEMAND"
+            ]
           },
           {
             "domain": "github.com",
             "source": "github-issues",
-            "title": "project-guard cannot tell a missing declaration from a formatted one",
-            "url": "https://github.com/chamaya00/agent-factory/issues/61",
+            "title": "[P2][Audit A23] Define and restore the workspace Rust verification baseline",
+            "url": "https://github.com/OpenAgentsInc/openagents/issues/9429",
             "signal_types": [
               "PAIN",
               "PAID_DEMAND"
@@ -1254,36 +1380,22 @@
           {
             "domain": "github.com",
             "source": "github-issues",
-            "title": "[Verify]: deepseek-offpeak",
-            "url": "https://github.com/omacom/omarchy-plugin-marketplace/issues/7740",
-            "signal_types": []
-          },
-          {
-            "domain": "github.com",
-            "source": "github-issues",
-            "title": "Dependency Dashboard",
-            "url": "https://github.com/agentydragon/ducktape/issues/976",
+            "title": "cli: read package docs from each package directory under an ADR-0130 layout — the widening half of #18170, blocked on two contract questions",
+            "url": "https://github.com/objectstack-ai/objectstack/issues/18431",
             "signal_types": [
-              "PAIN",
               "PAID_DEMAND"
             ]
-          },
-          {
-            "domain": "github.com",
-            "source": "hackernews",
-            "title": "Show HN: In Meeting – A native macOS Mic/Cam observer for home automation",
-            "url": "https://github.com/fellowgeek/in-meeting",
-            "signal_types": []
           }
         ]
       },
       "spreadsheet_process": {
         "qualified": true,
         "commercially_actionable": true,
-        "gap_score": 65,
+        "gap_score": 95,
         "independent_domains": 3,
         "strong_commercial_domains": 2,
         "signal_types": [
+          "BUY_INTENT",
           "COMPETITION",
           "PAID_DEMAND",
           "PAIN"
@@ -1326,10 +1438,20 @@
           {
             "domain": "github.com",
             "source": "github-issues",
-            "title": "Plan Manual Concierge Delivery Workflow for 7-Day SaaS Onboarding Email Sprint",
-            "url": "https://github.com/tmsteph/3dvr-portal/issues/2635",
+            "title": "Skills Issue: Developer: Michael Hughes",
+            "url": "https://github.com/hackforla/website/issues/8720",
             "signal_types": [
               "PAIN",
+              "BUY_INTENT",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "github.com",
+            "source": "github-issues",
+            "title": "[C02] Audit Quantity/Export publication snapshot consistency after generation fence",
+            "url": "https://github.com/trinhtanphat/QS3D-BricsCAD/issues/6017",
+            "signal_types": [
               "PAID_DEMAND"
             ]
           }
@@ -1338,9 +1460,9 @@
       "manual_data_entry": {
         "qualified": true,
         "commercially_actionable": true,
-        "gap_score": 65,
-        "independent_domains": 3,
-        "strong_commercial_domains": 2,
+        "gap_score": 55,
+        "independent_domains": 2,
+        "strong_commercial_domains": 1,
         "signal_types": [
           "COMPETITION",
           "PAID_DEMAND",
@@ -1348,8 +1470,7 @@
         ],
         "domains": [
           "coasty.ai",
-          "docmind.neomindintelligence.com",
-          "github.com"
+          "docmind.neomindintelligence.com"
         ],
         "signals": [
           {
@@ -1359,16 +1480,6 @@
             "url": "https://docmind.neomindintelligence.com/",
             "signal_types": [
               "PAIN"
-            ]
-          },
-          {
-            "domain": "github.com",
-            "source": "github-issues",
-            "title": "P0 approved roadmap: daily Brief, Human response retention and bounded research continuation",
-            "url": "https://github.com/auguspp/decision-kernel/issues/297",
-            "signal_types": [
-              "PAID_DEMAND",
-              "COMPETITION"
             ]
           },
           {
@@ -1398,11 +1509,12 @@
         "strong_commercial_domains": 2,
         "qualified": true,
         "signal_types": [
+          "BUY_INTENT",
           "COMPETITION",
           "PAID_DEMAND",
           "PAIN"
         ],
-        "gap_score": 65,
+        "gap_score": 95,
         "commercially_actionable": true,
         "domains": [
           "github.com",
@@ -1472,19 +1584,35 @@
             "domain": "github.com",
             "source": "github-issues",
             "family": "spreadsheet_process",
-            "title": "Plan Manual Concierge Delivery Workflow for 7-Day SaaS Onboarding Email Sprint",
-            "url": "https://github.com/tmsteph/3dvr-portal/issues/2635",
-            "strong_markers": [],
+            "title": "Skills Issue: Developer: Michael Hughes",
+            "url": "https://github.com/hackforla/website/issues/8720",
+            "strong_markers": [
+              "paying"
+            ],
             "weak_markers": [
-              "client",
-              "manual",
               "workflow",
-              "crm",
               "spreadsheet",
-              "automation"
+              "automation",
+              "problem"
             ],
             "signal_types": [
               "PAIN",
+              "BUY_INTENT",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "github.com",
+            "source": "github-issues",
+            "family": "spreadsheet_process",
+            "title": "[C02] Audit Quantity/Export publication snapshot consistency after generation fence",
+            "url": "https://github.com/trinhtanphat/QS3D-BricsCAD/issues/6017",
+            "strong_markers": [
+              "cost",
+              "contract"
+            ],
+            "weak_markers": [],
+            "signal_types": [
               "PAID_DEMAND"
             ]
           }
@@ -1492,133 +1620,257 @@
       }
     },
     "build": {
-      "ok": false,
-      "status": "NOT_READY"
+      "build_id": "neo-20260920050416-7acec1",
+      "built_at_utc": "2026-09-20T05:04:16.732803+00:00",
+      "family": "spreadsheet_process",
+      "product_name": "SheetFlow Audit",
+      "offer": "Analisi automatica dei processi Excel/Google Sheets per individuare lavoro manuale automatizzabile.",
+      "status": "MVP_BUILT",
+      "tests_passed": true,
+      "tests": {
+        "audit_status": true,
+        "readiness": true,
+        "has_candidates": true,
+        "safety_spending_blocked": true,
+        "safety_payments_blocked": true,
+        "safety_outreach_blocked": true,
+        "safety_contracts_blocked": true
+      },
+      "jarvis_decision": "VALIDATE",
+      "jarvis_decision_source": "local_policy_fallback",
+      "endpoint": "/api/venture/audit",
+      "ui": "/venture?family=spreadsheet_process",
+      "audit_count_at_build": 0,
+      "external_actions_performed": false,
+      "spending_eur": 0,
+      "synthetic_test": {
+        "mvp": "SheetFlow Audit",
+        "mvp_version": "1.0",
+        "family": "spreadsheet_process",
+        "status": "AUDIT_READY",
+        "automation_readiness": 100,
+        "complexity": "media",
+        "manual_signals": [
+          "crm",
+          "csv",
+          "email",
+          "excel",
+          "manual",
+          "manualmente"
+        ],
+        "integration_signals": [
+          "crm",
+          "csv",
+          "email",
+          "excel"
+        ],
+        "risk_signals": [],
+        "automation_candidates": [
+          {
+            "name": "Normalizzazione input foglio",
+            "reason": "Ridurre formati incoerenti, colonne manuali e controlli ripetitivi.",
+            "impact": 5,
+            "effort": 2,
+            "risk": "low",
+            "priority_score": 58
+          },
+          {
+            "name": "Eliminazione copia/incolla",
+            "reason": "Sostituire trasferimenti manuali con importazione o regole controllate.",
+            "impact": 5,
+            "effort": 2,
+            "risk": "low",
+            "priority_score": 58
+          },
+          {
+            "name": "Acquisizione dati da email",
+            "reason": "Estrarre allegati o campi e prepararli per il flusso successivo.",
+            "impact": 4,
+            "effort": 3,
+            "risk": "low",
+            "priority_score": 40
+          },
+          {
+            "name": "Sincronizzazione gestionale/CRM",
+            "reason": "Ridurre doppio inserimento con API, CSV o passaggio controllato.",
+            "impact": 5,
+            "effort": 4,
+            "risk": "medium",
+            "priority_score": 36
+          }
+        ],
+        "measurement": {
+          "current_weekly_minutes": 250,
+          "estimated_weekly_minutes_saved_range": [
+            87.5,
+            150.0
+          ],
+          "estimated_annual_hours_saved_range": [
+            75.8,
+            130.0
+          ],
+          "current_weekly_errors": 3,
+          "estimated_weekly_errors_avoided_range": [
+            0.8,
+            1.7
+          ],
+          "confidence": "preliminary",
+          "rule": "Confrontare dati reali prima/dopo sullo stesso processo."
+        },
+        "build_plan": [
+          "documentare input, output e regole",
+          "acquisire una misura baseline di tempo ed errori",
+          "automatizzare il candidato con priorita piu alta",
+          "mantenere controllo umano e log",
+          "eseguire il pilot su dati non sensibili o minimizzati",
+          "confrontare baseline e risultato prima di estendere l'automazione"
+        ],
+        "blockers": [],
+        "safety": {
+          "spending": false,
+          "payments": false,
+          "commercial_outreach": false,
+          "external_publishing": false,
+          "contracts": false,
+          "personal_accounts": false
+        },
+        "note": "MVP di audit tecnico. Non inserire password, credenziali, dati sanitari o altri dati sensibili."
+      },
+      "reused": true
     },
     "measurement": {
-      "ok": false,
-      "status": "NO_BUILD"
+      "ok": true,
+      "measured_at_utc": "2026-09-20T05:36:43.035334+00:00",
+      "build_id": "neo-20260920050416-7acec1",
+      "family": "spreadsheet_process",
+      "status": "AWAITING_REAL_USAGE",
+      "audits_total": 0,
+      "new_audits_since_build": 0,
+      "audits_with_baseline": 0,
+      "audits_with_error_baseline": 0,
+      "conversion_measurement": "not_available_without_explicit_external_launch",
+      "external_actions_performed": false
     },
     "agent_trust_top": [
       {
-        "agent": "LLM Orchestration Agent (Langgraph)",
-        "observations": 49,
-        "accepted": 18,
-        "transport_success": 18,
-        "relevance_total": 1241.0,
-        "avg_relevance": 25.33,
-        "trust": 49.39,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.199086+00:00"
+        "agent": "Coin Railz",
+        "observations": 2,
+        "accepted": 2,
+        "transport_success": 2,
+        "relevance_total": 98.0,
+        "avg_relevance": 49.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:40.057244+00:00"
       },
       {
-        "agent": "LLM Orchestration Agent (Mcp)",
-        "observations": 59,
-        "accepted": 21,
-        "transport_success": 21,
-        "relevance_total": 1381.0,
-        "avg_relevance": 23.41,
-        "trust": 48.47,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.504815+00:00"
+        "agent": "MolTrust Trust Registry",
+        "observations": 2,
+        "accepted": 2,
+        "transport_success": 2,
+        "relevance_total": 70.0,
+        "avg_relevance": 35.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:40.719146+00:00"
       },
       {
-        "agent": "LLM Orchestration Agent (Langchain Core)",
-        "observations": 30,
-        "accepted": 10,
-        "transport_success": 10,
-        "relevance_total": 742.0,
-        "avg_relevance": 24.73,
-        "trust": 46.67,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.735544+00:00"
+        "agent": "PREA",
+        "observations": 2,
+        "accepted": 2,
+        "transport_success": 2,
+        "relevance_total": 70.0,
+        "avg_relevance": 35.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:40.288139+00:00"
       },
       {
-        "agent": "LLM Orchestration Agent (Langchain Anthropic)",
-        "observations": 28,
-        "accepted": 9,
-        "transport_success": 9,
-        "relevance_total": 691.0,
-        "avg_relevance": 24.68,
-        "trust": 45.71,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:59.923027+00:00"
+        "agent": "FeedOracle",
+        "observations": 1,
+        "accepted": 1,
+        "transport_success": 1,
+        "relevance_total": 70.0,
+        "avg_relevance": 70.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
+      },
+      {
+        "agent": "MUJ428 Trust Reflex",
+        "observations": 1,
+        "accepted": 1,
+        "transport_success": 1,
+        "relevance_total": 58.0,
+        "avg_relevance": 58.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
+      },
+      {
+        "agent": "Misfit Machine Agent",
+        "observations": 1,
+        "accepted": 1,
+        "transport_success": 1,
+        "relevance_total": 58.0,
+        "avg_relevance": 58.0,
+        "trust": 100.0,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
       },
       {
         "agent": "LLM Orchestration Agent (Langsmith)",
-        "observations": 46,
-        "accepted": 14,
-        "transport_success": 14,
-        "relevance_total": 1210.0,
-        "avg_relevance": 26.3,
-        "trust": 44.35,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.213401+00:00"
+        "observations": 55,
+        "accepted": 23,
+        "transport_success": 23,
+        "relevance_total": 1462.0,
+        "avg_relevance": 26.58,
+        "trust": 53.45,
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T05:36:37.453581+00:00"
       },
       {
-        "agent": "LLM Orchestration Observability Agent",
-        "observations": 33,
-        "accepted": 10,
-        "transport_success": 10,
-        "relevance_total": 944.0,
-        "avg_relevance": 28.61,
-        "trust": 44.24,
+        "agent": "LLM Orchestration Agent (Langgraph)",
+        "observations": 57,
+        "accepted": 21,
+        "transport_success": 21,
+        "relevance_total": 1461.0,
+        "avg_relevance": 25.63,
+        "trust": 49.47,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:20:16.900503+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       {
-        "agent": "LLM Orchestration Agent",
-        "observations": 53,
-        "accepted": 16,
-        "transport_success": 16,
-        "relevance_total": 1217.0,
-        "avg_relevance": 22.96,
-        "trust": 44.15,
+        "agent": "LLM Orchestration Agent (Mcp)",
+        "observations": 67,
+        "accepted": 24,
+        "transport_success": 24,
+        "relevance_total": 1601.0,
+        "avg_relevance": 23.9,
+        "trust": 48.66,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.625087+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       },
       {
-        "agent": "LLM Orchestration Agent (Langchain)",
-        "observations": 30,
-        "accepted": 9,
-        "transport_success": 9,
-        "relevance_total": 737.0,
-        "avg_relevance": 24.57,
-        "trust": 44.0,
+        "agent": "LLM Orchestration Agent (Langchain Core)",
+        "observations": 38,
+        "accepted": 13,
+        "transport_success": 13,
+        "relevance_total": 906.0,
+        "avg_relevance": 23.84,
+        "trust": 47.37,
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.428445+00:00"
-      },
-      {
-        "agent": "LLM Orchestration Agent (Langchain Openai)",
-        "observations": 37,
-        "accepted": 11,
-        "transport_success": 11,
-        "relevance_total": 970.0,
-        "avg_relevance": 26.22,
-        "trust": 43.78,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:21:00.775718+00:00"
-      },
-      {
-        "agent": "LLM Orchestration Agent (Opentelemetry Api)",
-        "observations": 35,
-        "accepted": 10,
-        "transport_success": 10,
-        "relevance_total": 778.0,
-        "avg_relevance": 22.23,
-        "trust": 42.86,
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T05:03:10.109735+00:00"
+        "last_seen_utc": "2026-09-20T05:36:16.389149+00:00"
       }
     ],
     "jarvis": {
