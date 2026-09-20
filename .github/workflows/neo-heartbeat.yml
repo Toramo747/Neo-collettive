@@ -1,8 +1,8 @@
-name: NEO Heartbeat
+name: MYCELIX Heartbeat
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: neo-heartbeat
+  group: mycelix-heartbeat
   cancel-in-progress: false
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Wake NEO
+      - name: Wake MYCELIX
         id: wake
         continue-on-error: true
         env:
@@ -46,7 +46,7 @@ jobs:
           fi
           cat /tmp/heartbeat.json || true
 
-      - name: Poll NEO runtime
+      - name: Poll MYCELIX runtime
         id: poll
         run: |
           set -euo pipefail
@@ -121,7 +121,7 @@ jobs:
           done
 
           if [ "$completed" != "1" ]; then
-            echo "NEO cycle did not reach a completed runtime state before timeout" >&2
+            echo "MYCELIX cycle did not reach a completed runtime state before timeout" >&2
             cat /tmp/status-errors.txt >&2 || true
             cat /tmp/status.json >&2 || true
             exit 6
@@ -151,7 +151,9 @@ jobs:
 
           snapshot={
               "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-              "snapshot_schema": 3,
+              "snapshot_schema": 4,
+              "brand": raw.get("brand") or "MYCELIX",
+              "brand_tagline": raw.get("brand_tagline") or "Collective Intelligence Network",
               "neo_version": raw.get("neo_version"),
               "policy": raw.get("policy") or {},
               "heartbeat": hb,
@@ -178,6 +180,12 @@ jobs:
                   "last_build": ap.get("last_build"),
                   "measurement_history": ap.get("measurement_history") or [],
                   "last_measurement": ap.get("last_measurement"),
+                  "dialogue_history": ap.get("dialogue_history") or [],
+                  "knowledge_ledger": ap.get("knowledge_ledger") or [],
+                  "hypothesis_queue": ap.get("hypothesis_queue") or [],
+                  "exploration_history": ap.get("exploration_history") or [],
+                  "inbound_messages": ap.get("inbound_messages") or [],
+                  "inbound_agent_stats": ap.get("inbound_agent_stats") or {},
                   "venture_metrics": ap.get("venture_metrics") or {}
               },
               "manual_run": raw.get("manual_run") or {},
@@ -197,7 +205,7 @@ jobs:
           cp /tmp/neo_latest_result.json neo_latest_result.json
           git add neo_latest_result.json
           git diff --cached --quiet && exit 0
-          git config user.name "NEO Runtime Snapshot"
+          git config user.name "MYCELIX Runtime Snapshot"
           git config user.email "actions@users.noreply.github.com"
-          git commit -m "NEO runtime snapshot"
+          git commit -m "MYCELIX runtime snapshot"
           git push origin HEAD:main
