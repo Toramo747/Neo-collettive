@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -216,6 +216,119 @@ def _collective_snapshot(context: dict[str, Any]) -> dict[str, Any]:
 
 
 
+
+def _learning_snapshot(context: dict[str, Any]) -> dict[str, Any]:
+    """Derive bounded learning signals from NEO's persistent historical state."""
+    perf=context.get("family_performance") or {}
+    trust=context.get("agent_trust") or {}
+    builds=context.get("build_history") or []
+    measurements=context.get("measurement_history") or []
+    if not isinstance(perf,dict):
+        perf={}
+    if not isinstance(trust,dict):
+        trust={}
+    if not isinstance(builds,list):
+        builds=[]
+    if not isinstance(measurements,list):
+        measurements=[]
+
+    family_memory={}
+    for family,row in perf.items():
+        if not isinstance(row,dict):
+            continue
+        family_memory[str(family)]={
+            "score":float(row.get("score") or 0.0),
+            "observations":int(row.get("observations") or 0),
+            "qualified":int(row.get("qualified") or 0),
+        }
+
+    agent_rows=[]
+    for agent_id,row in trust.items():
+        if not isinstance(row,dict):
+            continue
+        obs=int(row.get("observations") or 0)
+        accepted=int(row.get("accepted") or 0)
+        if obs<1:
+            continue
+        agent_rows.append({
+            "agent_id":str(agent_id),
+            "agent":row.get("agent"),
+            "trust":float(row.get("trust") or 0.0),
+            "observations":obs,
+            "accepted":accepted,
+            "acceptance_rate":round(accepted/max(1,obs),3),
+        })
+    agent_rows.sort(key=lambda x:(x["acceptance_rate"],x["trust"],x["accepted"]),reverse=True)
+
+    built_by_family={}
+    ui_failures={}
+    for b in builds[-20:]:
+        if not isinstance(b,dict):
+            continue
+        family=str(b.get("family") or "")
+        if not family:
+            continue
+        built_by_family[family]=built_by_family.get(family,0)+1
+        ui=(b.get("ui_review") or {}) if isinstance(b.get("ui_review"),dict) else {}
+        if ui.get("status") in {"UI_REVIEW_PARTIAL","UI_REVIEW_TIMEOUT"}:
+            ui_failures[family]=ui_failures.get(family,0)+1
+
+    real_usage_by_family={}
+    for m in measurements[-30:]:
+        if not isinstance(m,dict):
+            continue
+        family=str(m.get("family") or "")
+        if not family:
+            continue
+        audits=int(m.get("new_audits_since_build") or m.get("audits_total") or 0)
+        real_usage_by_family[family]=max(real_usage_by_family.get(family,0),audits)
+
+    return {
+        "families":family_memory,
+        "top_agents":agent_rows[:8],
+        "builds_by_family":built_by_family,
+        "ui_failures_by_family":ui_failures,
+        "real_usage_by_family":real_usage_by_family,
+        "build_history_count":len(builds),
+        "measurement_history_count":len(measurements),
+    }
+
+
+def _learning_adjustment(family: str, learning: dict[str, Any]) -> dict[str, Any]:
+    fam=(learning.get("families") or {}).get(family) or {}
+    observations=int(fam.get("observations") or 0)
+    historical_score=float(fam.get("score") or 0.0)
+    builds=int((learning.get("builds_by_family") or {}).get(family) or 0)
+    usage=int((learning.get("real_usage_by_family") or {}).get(family) or 0)
+    ui_failures=int((learning.get("ui_failures_by_family") or {}).get(family) or 0)
+
+    adjustment=0
+    reasons=[]
+    if observations>=3 and historical_score>=65:
+        adjustment+=1
+        reasons.append("historical family evidence has been repeatedly strong")
+    if builds>=2 and usage==0:
+        adjustment-=1
+        reasons.append("multiple builds exist without observed real usage")
+    if ui_failures>=2:
+        adjustment-=1
+        reasons.append("repeated UI review failures indicate unresolved delivery quality")
+    if usage>0:
+        adjustment+=2
+        reasons.append("real usage has been observed")
+
+    return {
+        "family":family,
+        "adjustment":max(-2,min(2,adjustment)),
+        "reasons":reasons,
+        "observations":observations,
+        "historical_score":historical_score,
+        "builds":builds,
+        "real_usage":usage,
+        "ui_failures":ui_failures,
+    }
+
+
 def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     answers = _flatten_answers(context)
     scout_evidence = _flatten_evidence_scouts(context)
@@ -223,6 +336,7 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     quality = _quality_snapshot(context)
     product_candidate = context.get("product_candidate") if isinstance(context.get("product_candidate"), dict) else {}
     collective = _collective_snapshot(context)
+    learning = _learning_snapshot(context)
 
     vendors = [a for a in answers if a["vendor"]]
     independent_agents = [a for a in answers if (not a["vendor"]) and a["evidence_markers"]]
@@ -293,11 +407,27 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     collective_required = bool(product_candidate and product_candidate.get("status") == "PILOT_READY")
     collective_pass = (not collective_required) or collective.get("collective_gate", False)
     final_gate_pass = bool(gate_pass and collective_pass)
-    decision = "VALIDATE" if final_gate_pass else ("COLLECTIVE_REVIEW" if gate_pass and collective_required else "SEARCH_MORE")
+    selected_family=str(selected_cluster or product_candidate.get("family") or "")
+    learning_adjustment=_learning_adjustment(selected_family,learning) if selected_family else {
+        "family":"","adjustment":0,"reasons":[],"observations":0,"historical_score":0.0,
+        "builds":0,"real_usage":0,"ui_failures":0,
+    }
 
-    if final_gate_pass:
+    # Learning is deliberately bounded: history may make Jarvis more conservative,
+    # but can never bypass current evidence + Collective gates.
+    learned_hold=bool(final_gate_pass and int(learning_adjustment.get("adjustment") or 0)<0)
+    decision = (
+        "HOLD" if learned_hold
+        else "VALIDATE" if final_gate_pass
+        else ("COLLECTIVE_REVIEW" if gate_pass and collective_required else "SEARCH_MORE")
+    )
+
+    if final_gate_pass and not learned_hold:
         evidence_state = "QUALIFIED_FOR_EXPERIMENT"
         next_experiment = opportunities[0]["next_free_test"]
+    elif learned_hold:
+        evidence_state = "HISTORICAL_CAUTION"
+        next_experiment = "Le evidenze correnti superano i gate, ma la memoria storica segnala criticita. Correggere il problema indicato dalla learning adjustment prima di una nuova build."
     elif gate_pass and collective_required:
         evidence_state = "AWAITING_COLLECTIVE_CONFIRMATION"
         next_experiment = "Non costruire ancora: completare una revisione collettiva con almeno 2 agenti validi nel secondo round."
@@ -351,6 +481,8 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             for x in web_evidence[:20]
         ],
         "opportunities": opportunities[:3],
+        "learning": learning,
+        "learning_adjustment": learning_adjustment,
         "decision": decision,
         "decision_trace": {
             "meaning_of_validate": "Evidenze sufficienti per giustificare un piccolo esperimento gratuito o quasi gratuito; non prova che il business funzionera.",
@@ -404,7 +536,8 @@ def health():
         "status": "ok",
         "service": "jarvis",
         "version": VERSION,
-        "engine": "rule-based",
+        "engine": "rule-based-learning",
+        "learning_mode": "bounded_history_feedback",
         "paid_api_required": False,
         "auth_enabled": bool(JARVIS_SHARED_SECRET),
     }
@@ -417,7 +550,8 @@ def ask_status():
         "service": "jarvis",
         "version": VERSION,
         "post": "/ask",
-        "engine": "rule-based",
+        "engine": "rule-based-learning",
+        "learning_mode": "bounded_history_feedback",
         "paid_api_required": False,
         "auth_enabled": bool(JARVIS_SHARED_SECRET),
     }
