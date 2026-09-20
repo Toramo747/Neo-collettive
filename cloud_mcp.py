@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.45.5"
+VERSION = "0.46.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1574,15 +1574,27 @@ ENTROPY_SECTORS = [
     {"id":"spreadsheet_ops","terms":["spreadsheet automation","Excel workflow","Google Sheets process"]},
     {"id":"document_ops","terms":["document processing","PDF data extraction","form processing"]},
     {"id":"small_business_admin","terms":["small business admin automation","back office repetitive tasks","manual office process"]},
-    {"id":"ecommerce_ops","terms":["ecommerce operations automation","catalog data cleanup","order operations"]},
-    {"id":"reporting_compliance","terms":["recurring reporting automation","compliance reporting workflow","audit evidence collection"]},
+    {"id":"ecommerce_ops","terms":["ecommerce operations software","catalog automation","order operations tool"]},
+    {"id":"reporting_compliance","terms":["recurring reporting software","compliance reporting tool","audit evidence automation"]},
     {"id":"it_hygiene","terms":["IT inventory audit","patch reporting","security hygiene audit"]},
-    {"id":"customer_support","terms":["customer support repetitive questions","support triage automation","FAQ workflow"]},
+    {"id":"cybersecurity_ops","terms":["cybersecurity automation SMB","security assessment SaaS","vulnerability workflow tool"]},
+    {"id":"customer_support","terms":["customer support automation","support triage SaaS","AI support workflow"]},
     {"id":"data_cleanup","terms":["data cleanup service","CSV cleanup","duplicate data cleanup"]},
+    {"id":"data_analytics","terms":["analytics SaaS small business","automated reporting dashboard","business intelligence pain"]},
     {"id":"website_quality","terms":["website accessibility audit","website QA audit","broken link audit"]},
-    {"id":"local_business_ops","terms":["appointment admin workflow","quote preparation small business","manual booking admin"]},
-    {"id":"content_ops","terms":["content repurposing workflow","catalog description workflow","localization workflow"]},
+    {"id":"seo_marketing","terms":["SEO automation tool","marketing workflow SaaS","content optimization software"]},
+    {"id":"local_business_ops","terms":["appointment admin software","quote preparation small business","booking automation"]},
+    {"id":"content_ops","terms":["content repurposing tool","catalog description automation","localization workflow"]},
     {"id":"lead_ops","terms":["CRM follow up workflow","lead qualification automation","sales admin automation"]},
+    {"id":"micro_saas","terms":["micro SaaS pain point","small SaaS tool needed","niche B2B SaaS"]},
+    {"id":"ai_tools","terms":["AI tool workflow business","AI assistant SaaS","LLM automation business"]},
+    {"id":"developer_tools","terms":["developer productivity tool","API debugging SaaS","software developer workflow pain"]},
+    {"id":"integration_api","terms":["API integration service","SaaS integration pain","webhook automation tool"]},
+    {"id":"productivity","terms":["productivity SaaS workflow","team productivity tool","knowledge workflow software"]},
+    {"id":"finance_ops","terms":["invoice workflow automation","expense reporting tool","small business finance operations"]},
+    {"id":"hr_ops","terms":["HR workflow automation","employee onboarding software","recruiting operations tool"]},
+    {"id":"education_tools","terms":["education workflow SaaS","teacher admin automation","training platform pain"]},
+    {"id":"creator_tools","terms":["creator workflow software","newsletter automation tool","digital creator SaaS"]},
 ]
 
 ENTROPY_PATTERNS = [
@@ -1606,17 +1618,29 @@ def _performance_score(family: str) -> float:
 def _sector_family(sector_id: str) -> str:
     mapping = {
         "spreadsheet_ops": "spreadsheet_process",
-        "document_ops": "manual_data_entry",
+        "document_ops": "document_processing",
         "small_business_admin": "workflow_automation",
-        "ecommerce_ops": "workflow_automation",
-        "reporting_compliance": "workflow_automation",
+        "ecommerce_ops": "ecommerce_tools",
+        "reporting_compliance": "compliance_tools",
         "it_hygiene": "it_hygiene",
+        "cybersecurity_ops": "cybersecurity_tools",
         "customer_support": "customer_support",
         "data_cleanup": "data_cleanup",
+        "data_analytics": "analytics_tools",
         "website_quality": "website_audit",
-        "local_business_ops": "workflow_automation",
-        "content_ops": "content_ops",
+        "seo_marketing": "marketing_seo",
+        "local_business_ops": "local_business_tools",
+        "content_ops": "content_tools",
         "lead_ops": "crm_lead_ops",
+        "micro_saas": "micro_saas",
+        "ai_tools": "ai_tools",
+        "developer_tools": "developer_tools",
+        "integration_api": "integration_api",
+        "productivity": "productivity_tools",
+        "finance_ops": "finance_ops",
+        "hr_ops": "hr_tools",
+        "education_tools": "education_tools",
+        "creator_tools": "creator_tools",
     }
     return mapping.get(sector_id, "other")
 
@@ -1756,15 +1780,31 @@ def _director_searches(goal: str) -> list[str]:
 def _commercial_family(text: str) -> str:
     low=(text or "").lower()
     families=[
-        ("manual_data_entry", ("manual data entry","data entry","document parser","extracting it from pdf","pdf","form filling","document processing")),
+        ("cybersecurity_tools", ("cybersecurity","security assessment","vulnerability management","phishing analysis","soc automation","security automation")),
+        ("developer_tools", ("developer tool","developer productivity","api debugging","code review tool","devops tool","software developer workflow")),
+        ("integration_api", ("api integration","webhook","integration platform","connect saas","system integration")),
+        ("ai_tools", ("ai assistant","ai tool","llm","generative ai","ai automation","agentic")),
+        ("micro_saas", ("micro saas","niche saas","small saas","vertical saas")),
+        ("ecommerce_tools", ("ecommerce","shopify","woocommerce","catalog automation","order operations")),
+        ("marketing_seo", ("seo","marketing automation","content optimization","keyword research","ad campaign")),
+        ("analytics_tools", ("analytics dashboard","business intelligence","data analytics","automated reporting","reporting dashboard")),
+        ("compliance_tools", ("compliance reporting","audit evidence","gdpr workflow","iso 27001","regulatory reporting")),
+        ("finance_ops", ("invoice workflow","expense reporting","accounts payable","bookkeeping automation","finance operations")),
+        ("hr_tools", ("hr workflow","employee onboarding","recruiting operations","applicant tracking","leave management")),
+        ("education_tools", ("education software","teacher admin","learning platform","training platform","course workflow")),
+        ("creator_tools", ("creator tool","newsletter automation","podcast workflow","video creator","digital creator")),
+        ("productivity_tools", ("productivity tool","knowledge management","team productivity","note taking","task workflow")),
+        ("local_business_tools", ("appointment booking","quote preparation","local business software","booking admin","service business")),
+        ("document_processing", ("document parser","extracting it from pdf","pdf extraction","form filling","document processing","ocr workflow")),
+        ("manual_data_entry", ("manual data entry","data entry")),
         ("spreadsheet_process", ("spreadsheet","excel","google sheets","manual process","csv cleanup")),
         ("crm_lead_ops", ("crm","lead management","sales ops","lead qualification","follow up","follow-up")),
-        ("website_audit", ("website audit","site audit","seo audit","technical audit","accessibility audit","broken link audit","website qa")),
+        ("website_audit", ("website audit","site audit","technical audit","accessibility audit","broken link audit","website qa")),
         ("it_hygiene", ("it inventory","patch reporting","security hygiene","asset inventory")),
         ("customer_support", ("customer support","support triage","faq workflow","support ticket")),
         ("data_cleanup", ("data cleanup","duplicate data","csv cleanup","deduplication")),
-        ("content_ops", ("content repurposing","catalog description","localization workflow")),
-        ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow","back office","ecommerce operations","reporting automation","appointment admin","quote preparation","booking admin")),
+        ("content_tools", ("content repurposing","catalog description","localization workflow","content workflow")),
+        ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow","back office","reporting automation")),
     ]
     for family, needles in families:
         if any(n in low for n in needles):
@@ -1952,11 +1992,14 @@ async def _free_web_research(queries: list[str], per_query: int = 5) -> list[dic
 
 async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
     """Collect demand/problem signals from public Hacker News and GitHub APIs."""
-    terms = ["workflow automation", "manual data entry", "spreadsheet automation", "CRM automation", "AI automation"]
-    low = (goal or "").lower()
-    if "online" in low:
-        terms += ["small business software", "freelance automation"]
-    terms = terms[:5]
+    broad_terms=[
+        "workflow automation","spreadsheet automation","AI SaaS","micro SaaS","developer tools",
+        "cybersecurity software","ecommerce software","SEO software","analytics SaaS","API integration",
+        "customer support software","document processing","compliance software","productivity SaaS",
+        "small business software","creator tools"
+    ]
+    rng=secrets.SystemRandom()
+    terms=rng.sample(broad_terms,k=min(7,len(broad_terms)))
 
     async def hn(term: str):
         try:
@@ -2026,8 +2069,31 @@ def build_candidate(evidence_quality: dict) -> dict:
         "crm_lead_ops":("LeadFlow Audit","Analisi del percorso dei lead per individuare perdite e passaggi automatizzabili."),
         "manual_data_entry":("DataEntry Fix Audit","Analisi dei passaggi di inserimento dati e proposta di automazione con controlli QA."),
         "website_audit":("Website Process Audit","Analisi strutturata di un processo web e delle opportunita di automazione."),
+        "document_processing":("DocumentOps Pilot","Pilot per estrazione, classificazione e gestione automatizzata di documenti."),
+        "cybersecurity_tools":("SecurityOps Pilot","Pilot digitale per un problema operativo di cybersecurity con metriche verificabili."),
+        "developer_tools":("DevTool Pilot","Pilot di uno strumento digitale per ridurre attrito in un workflow di sviluppo."),
+        "integration_api":("Integration Pilot","Pilot per collegare sistemi o SaaS attraverso API e workflow controllati."),
+        "ai_tools":("AI Utility Pilot","Pilot di una utility AI focalizzata su un problema operativo specifico."),
+        "micro_saas":("MicroSaaS Pilot","Pilot minimale di un servizio SaaS verticale basato su domanda verificata."),
+        "ecommerce_tools":("CommerceOps Pilot","Pilot di uno strumento per un problema operativo e-commerce."),
+        "marketing_seo":("GrowthOps Pilot","Pilot di uno strumento misurabile per SEO o marketing operativo."),
+        "analytics_tools":("InsightOps Pilot","Pilot per reporting, analytics o decision support automatizzato."),
+        "compliance_tools":("ComplianceOps Pilot","Pilot per raccolta evidenze, reporting o workflow di compliance."),
+        "customer_support":("SupportOps Pilot","Pilot per triage, knowledge o automazione del supporto."),
+        "data_cleanup":("DataQuality Pilot","Pilot per pulizia, deduplicazione o normalizzazione dati."),
+        "content_tools":("ContentOps Pilot","Pilot per un workflow digitale di produzione o trasformazione contenuti."),
+        "productivity_tools":("Productivity Pilot","Pilot per ridurre lavoro ripetitivo o attrito nella produttivita digitale."),
+        "local_business_tools":("LocalOps Pilot","Pilot software per un problema operativo di piccole attivita."),
+        "finance_ops":("FinanceOps Pilot","Pilot per workflow amministrativi o finanziari non transazionali."),
+        "hr_tools":("PeopleOps Pilot","Pilot per workflow HR o recruiting."),
+        "education_tools":("EduOps Pilot","Pilot per workflow di formazione o amministrazione educativa."),
+        "creator_tools":("CreatorOps Pilot","Pilot per un workflow digitale di creator o publisher."),
+        "it_hygiene":("ITHygiene Pilot","Pilot per inventario, patch reporting o igiene IT."),
     }
-    name,offer=products.get(family,products["workflow_automation"])
+    name,offer=products.get(
+        family,
+        ("Digital Opportunity Pilot","Pilot digitale minimale per validare il problema, la domanda e una soluzione misurabile.")
+    )
     return {"status":"PILOT_READY","family":family,"name":name,"offer":offer,"price":"pilot gratuito","delivery":"report automatico","payment":"disabled until validated","evidence":clusters.get(family,{})}
 
 def run_pilot(
