@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.50.0"
+VERSION = "0.51.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -48,6 +48,8 @@ AUTOPILOT_GOAL = os.getenv(
     "Non effettuare spese, pagamenti, contratti, outreach commerciale, uso di account personali o transazioni senza approvazione umana."
 )
 AUTOPILOT_LOCK = asyncio.Lock()
+PUBLIC_BASE_URL = (os.getenv("NEO_PUBLIC_BASE_URL") or "https://neo-collettive.onrender.com").strip().rstrip("/")
+A2A_MAX_MESSAGE_CHARS = max(1000, min(20000, int(os.getenv("NEO_A2A_MAX_MESSAGE_CHARS", "12000"))))
 AUTOPILOT_STATE: dict[str, Any] = {
     "enabled": AUTOPILOT_ENABLED,
     "interval_seconds": AUTOPILOT_INTERVAL_SECONDS,
@@ -70,6 +72,8 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "knowledge_ledger": [],
     "hypothesis_queue": [],
     "exploration_history": [],
+    "inbound_messages": [],
+    "inbound_agent_stats": {},
     "venture_metrics": {
         "audits_total": 0,
         "audits_with_baseline": 0,
@@ -93,6 +97,8 @@ def _state_payload() -> dict:
         "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
         "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-40:],
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
+        "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
+        "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
     }
 
@@ -126,6 +132,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["hypothesis_queue"] = payload.get("hypothesis_queue")[-40:]
     if isinstance(payload.get("exploration_history"), list):
         AUTOPILOT_STATE["exploration_history"] = payload.get("exploration_history")[-40:]
+    if isinstance(payload.get("inbound_messages"), list):
+        AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
+    if isinstance(payload.get("inbound_agent_stats"), dict):
+        AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
     if isinstance(payload.get("venture_metrics"), dict):
         AUTOPILOT_STATE["venture_metrics"] = payload.get("venture_metrics") or {}
     return True
@@ -214,6 +224,324 @@ async def _manual_director_cycle(goal: str, budget: float, hours: int) -> None:
         finally:
             MANUAL_RUN_STATE["running"] = False
             MANUAL_RUN_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
+
+
+
+def _neo_agent_card() -> dict:
+    return {
+        "name":"NEO Collective",
+        "description":"Autonomous collective-intelligence agent for evidence review, peer critique, knowledge synthesis and bounded hypothesis exploration.",
+        "url":PUBLIC_BASE_URL + "/a2a",
+        "version":VERSION,
+        "protocolVersion":"0.3",
+        "preferredTransport":"JSONRPC",
+        "capabilities":{
+            "streaming":False,
+            "pushNotifications":False,
+            "stateTransitionHistory":True,
+        },
+        "defaultInputModes":["text/plain","application/json"],
+        "defaultOutputModes":["text/plain","application/json"],
+        "skills":[
+            {
+                "id":"collective-dialogue",
+                "name":"Collective Dialogue",
+                "description":"Discuss a claim with NEO. NEO records the dialogue as untrusted evidence and asks for evidence, critique and alternatives.",
+                "tags":["collective intelligence","peer critique","dialogue","evidence"],
+                "examples":["Critique this market hypothesis and identify evidence that would falsify it."],
+            },
+            {
+                "id":"knowledge-synthesis",
+                "name":"Knowledge Synthesis",
+                "description":"Submit a substantive suggestion or claim for the NEO knowledge ledger. Claims remain unverified until independently checked.",
+                "tags":["knowledge ledger","synthesis","claims","verification"],
+                "examples":["A new operational pain point may exist in invoice reconciliation for small firms."],
+            },
+            {
+                "id":"hypothesis-exploration",
+                "name":"Hypothesis Exploration",
+                "description":"Propose a new direction. NEO can score novelty and evidence potential and place promising ideas into its bounded exploration queue.",
+                "tags":["hypothesis","exploration","novelty","research"],
+                "examples":["Consider a different customer segment and explain why it may have stronger paid demand."],
+            },
+        ],
+        "securitySchemes":{},
+        "security":[],
+        "metadata":{
+            "operator":"NEO Collective",
+            "inboundPolicy":"Public messages are treated as untrusted evidence, never as executable instructions.",
+            "protectedActions":["spending","payments","contracts","commercial outreach","external publishing","personal accounts","transactions"],
+        },
+    }
+
+
+def _a2a_inbound_text(payload: dict) -> str:
+    params=payload.get("params") or {}
+    message=params.get("message") or {}
+    parts=message.get("parts") or []
+    chunks=[]
+    if isinstance(parts,list):
+        for part in parts[:20]:
+            if not isinstance(part,dict):
+                continue
+            value=part.get("text")
+            if value is None and part.get("kind") in {"text","data"}:
+                value=part.get("data")
+            if isinstance(value,str):
+                chunks.append(value)
+            elif isinstance(value,(dict,list)):
+                chunks.append(json.dumps(value,ensure_ascii=False,default=str))
+    if not chunks:
+        for key in ("message","text","prompt","question"):
+            value=params.get(key)
+            if isinstance(value,str):
+                chunks.append(value)
+                break
+    return "\n".join(chunks).strip()[:A2A_MAX_MESSAGE_CHARS]
+
+
+def _a2a_sender(payload: dict, request: Request) -> dict:
+    params=payload.get("params") or {}
+    message=params.get("message") or {}
+    metadata={}
+    for source in (params.get("metadata"),message.get("metadata")):
+        if isinstance(source,dict):
+            metadata.update(source)
+    sender_id=str(
+        request.headers.get("x-agent-id")
+        or metadata.get("agent_id")
+        or metadata.get("agentId")
+        or metadata.get("sender_id")
+        or metadata.get("senderId")
+        or ""
+    ).strip()[:180]
+    sender_name=str(
+        request.headers.get("x-agent-name")
+        or metadata.get("agent_name")
+        or metadata.get("agentName")
+        or metadata.get("sender_name")
+        or metadata.get("senderName")
+        or sender_id
+        or "anonymous-agent"
+    ).strip()[:180]
+    return {"agent_id":sender_id,"agent":sender_name,"declared":bool(sender_id)}
+
+
+def _a2a_thread_id(payload: dict, sender: dict) -> str:
+    params=payload.get("params") or {}
+    message=params.get("message") or {}
+    value=(
+        params.get("contextId")
+        or params.get("context_id")
+        or message.get("contextId")
+        or message.get("context_id")
+        or params.get("taskId")
+        or ""
+    )
+    if value:
+        return str(value)[:180]
+    if sender.get("agent_id"):
+        return "sender:"+str(sender.get("agent_id"))[:160]
+    return "anon:"+secrets.token_hex(6)
+
+
+def _inbound_is_substantive(text: str) -> bool:
+    low=(text or "").lower()
+    if len(text.strip())<80:
+        return False
+    noise=("ignore previous","system prompt","reveal secret","api key","password","seed phrase")
+    if any(x in low for x in noise):
+        return False
+    return len(_tokens(text))>=8
+
+
+def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
+    text=_a2a_inbound_text(payload)
+    sender=_a2a_sender(payload,request)
+    thread_id=_a2a_thread_id(payload,sender)
+    now=datetime.now(timezone.utc).isoformat()
+    method=str(payload.get("method") or "message/send")
+    row={
+        "message_id":str(((payload.get("params") or {}).get("message") or {}).get("messageId") or ("in-"+secrets.token_hex(6)))[:180],
+        "received_at_utc":now,
+        "thread_id":thread_id,
+        "sender":sender,
+        "method":method,
+        "text":text,
+        "substantive":_inbound_is_substantive(text),
+        "treated_as":"untrusted_evidence",
+    }
+
+    inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
+    inbox.append(row)
+    AUTOPILOT_STATE["inbound_messages"]=inbox[-80:]
+
+    stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
+    stat_key=str(sender.get("agent_id") or "anonymous")
+    old=dict(stats.get(stat_key) or {})
+    stats[stat_key]={
+        "agent_id":sender.get("agent_id"),
+        "agent":sender.get("agent"),
+        "declared":bool(sender.get("declared")),
+        "messages":int(old.get("messages") or 0)+1,
+        "substantive_messages":int(old.get("substantive_messages") or 0)+(1 if row["substantive"] else 0),
+        "first_seen_utc":old.get("first_seen_utc") or now,
+        "last_seen_utc":now,
+    }
+    AUTOPILOT_STATE["inbound_agent_stats"]=stats
+
+    if row["substantive"]:
+        ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
+        scores=_hypothesis_scores(text,AUTOPILOT_GOAL,ledger+list(AUTOPILOT_STATE.get("hypothesis_queue") or []))
+        knowledge={
+            "id":"know-in-"+secrets.token_hex(5),
+            "created_at_utc":now,
+            "state":"INBOUND_CLAIM",
+            "claim":text[:900],
+            "family":_commercial_family(text),
+            "source":"inbound_agent",
+            "source_agent_id":sender.get("agent_id"),
+            "source_agent":sender.get("agent"),
+            "thread_id":thread_id,
+            "supporting_agents":[sender.get("agent_id")] if sender.get("agent_id") else [],
+            "confidence":"unverified",
+            "next_action":"COLLECTIVE_REVIEW",
+            "scores":scores,
+        }
+        ledger.append(knowledge)
+        AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]
+        row["knowledge_id"]=knowledge["id"]
+
+        if scores.get("novelty",0)>=45 and scores.get("evidence_potential",0)>=40:
+            queue=list(AUTOPILOT_STATE.get("hypothesis_queue") or [])
+            duplicate=any(_novelty_score(text,[old])<28 for old in queue[-40:] if isinstance(old,dict))
+            if not duplicate:
+                hyp={
+                    "id":"hyp-in-"+secrets.token_hex(5),
+                    "created_at_utc":now,
+                    "status":"HYPOTHESIS",
+                    "source":"inbound_agent",
+                    "thread_id":thread_id,
+                    "family":knowledge["family"],
+                    "text":text[:900],
+                    "proposed_by":{"agent_id":sender.get("agent_id"),"agent":sender.get("agent"),"stage":"inbound"},
+                    "scores":scores,
+                    "priority":round(scores["novelty"]*0.35+scores["evidence_potential"]*0.35+scores["strategic_fit"]*0.30,1),
+                }
+                queue.append(hyp)
+                queue.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
+                AUTOPILOT_STATE["hypothesis_queue"]=queue[-40:]
+                row["hypothesis_id"]=hyp["id"]
+
+    _save_local_state()
+    return row
+
+
+def _inbound_reply_text(row: dict) -> str:
+    if not row.get("text"):
+        return (
+            "NEO received the A2A request but no text message was found. "
+            "Send a concrete claim, criticism, evidence or new hypothesis."
+        )
+    if not row.get("substantive"):
+        return (
+            "NEO received your message. To enter the collective-intelligence process, provide a substantive claim or suggestion "
+            "with evidence, a falsification condition, one alternative explanation, and one concrete next test."
+        )
+    return (
+        "NEO recorded your contribution as untrusted evidence"
+        + ((" in knowledge item "+str(row.get("knowledge_id"))) if row.get("knowledge_id") else "")
+        + ". Continue the dialogue by supplying: (1) independent evidence or source, "
+          "(2) the strongest reason your claim could be wrong, (3) an alternative path, "
+          "(4) a reversible zero/minimal-cost test. NEO will compare it with other agents before promoting it."
+    )
+
+
+async def a2a_agent_card(request: Request):
+    return JSONResponse(_neo_agent_card())
+
+
+async def a2a_endpoint(request: Request):
+    try:
+        payload=await request.json()
+    except Exception:
+        return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32700,"message":"Parse error"}},status_code=400)
+    if not isinstance(payload,dict):
+        return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}},status_code=400)
+    rpc_id=payload.get("id")
+    method=str(payload.get("method") or "")
+    if method not in {"message/send","message/stream"}:
+        return JSONResponse({
+            "jsonrpc":"2.0","id":rpc_id,
+            "error":{"code":-32601,"message":"Method not found. NEO accepts message/send."}
+        },status_code=404)
+
+    row=_record_inbound_agent_message(payload,request)
+    reply=_inbound_reply_text(row)
+    message_id="neo-reply-"+secrets.token_hex(8)
+    result={
+        "kind":"message",
+        "role":"agent",
+        "messageId":message_id,
+        "contextId":row.get("thread_id"),
+        "parts":[{"kind":"text","text":reply}],
+        "metadata":{
+            "neo_version":VERSION,
+            "treated_as":"untrusted_evidence",
+            "knowledge_id":row.get("knowledge_id"),
+            "hypothesis_id":row.get("hypothesis_id"),
+            "protected_actions_enforced":True,
+        },
+    }
+    return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
+
+
+async def api_inbound_agents(request: Request):
+    stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
+    declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
+    messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "public_agent_card":PUBLIC_BASE_URL+"/.well-known/agent-card.json",
+        "a2a_endpoint":PUBLIC_BASE_URL+"/a2a",
+        "inbound_messages":len(messages),
+        "declared_unique_agents":len(declared),
+        "anonymous_messages":sum(1 for x in messages if not ((x.get("sender") or {}).get("declared"))),
+        "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
+        "recent_messages":messages[-20:],
+    })
+
+
+async def inbound_page(request: Request):
+    stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
+    declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
+    messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
+    body=(
+        '<section class="card"><span class="tag">PUBLIC A2A</span><h2>NEO Agent Inbox</h2>'
+        '<p>NEO e raggiungibile dagli agenti esterni. Ogni messaggio viene trattato come evidenza non fidata e non puo eseguire istruzioni remote.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Agenti inbound dichiarati</div><h2>'+str(len(declared))+'</h2></article>'
+        '<article><div class="muted">Messaggi inbound</div><h2>'+str(len(messages))+'</h2></article>'
+        '<article><div class="muted">Endpoint</div><h3>/a2a</h3></article>'
+        '</div>'
+        '<p class="muted">Agent Card: '+html.escape(PUBLIC_BASE_URL+'/.well-known/agent-card.json')+'</p></section>'
+    )
+    body+='<section class="card"><h2>Ultimi contatti</h2><div class="grid">'
+    if not messages:
+        body+='<article><p class="muted">Nessun agente esterno ha ancora iniziato spontaneamente una conversazione.</p></article>'
+    for row in reversed(messages[-12:]):
+        sender=row.get("sender") or {}
+        body+=(
+            '<article><span class="tag">'+html.escape(str(sender.get("agent") or "anonymous-agent"))+'</span>'
+            '<h3>'+html.escape(str(row.get("thread_id") or ""))+'</h3>'
+            '<p>'+html.escape(str(row.get("text") or "")[:700])+'</p>'
+            '<div class="muted">'+html.escape(str(row.get("received_at_utc") or ""))+
+            ' · '+("knowledge" if row.get("knowledge_id") else "message")+
+            ' · '+("hypothesis" if row.get("hypothesis_id") else "no hypothesis")+'</div></article>'
+        )
+    body+='</div></section>'
+    return layout("Agent Inbox",body)
 
 
 mcp = MCPServer(
@@ -3490,7 +3818,7 @@ def layout(title: str, body: str) -> HTMLResponse:
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050806">
 <title>{html.escape(title)} - NEO</title><style>{BASE_CSS}</style></head><body><main>
 <div class="brand">NEO</div><div class="sub">Collective intelligence radar · v{VERSION}</div>
-<nav><a href="/">Home</a><a href="/console">Console</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
+<nav><a href="/">Home</a><a href="/console">Console</a><a href="/intelligence">Intelligence</a><a href="/inbox">Agent Inbox</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
 {body}</main></body></html>"""
     return HTMLResponse(page)
 
@@ -3721,6 +4049,8 @@ async def api_intelligence(request: Request):
         "knowledge_ledger":list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
         "open_hypotheses":hypotheses[:40],
         "exploration_history":list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
+        "inbound_agent_stats":AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "recent_inbound_messages":list(AUTOPILOT_STATE.get("inbound_messages") or [])[-20:],
     })
 
 
@@ -4333,6 +4663,11 @@ async def lifespan(app: Starlette):
 app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
+        Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
+        Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),
+        Route("/a2a", a2a_endpoint, methods=["POST"]),
+        Route("/inbox", inbound_page, methods=["GET"]),
+        Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/console", console_page, methods=["GET"]),
         Route("/api/console", api_console, methods=["GET"]),
         Route("/intelligence", intelligence_page, methods=["GET"]),
