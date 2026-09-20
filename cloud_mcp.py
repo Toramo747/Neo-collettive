@@ -88,6 +88,19 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
+    "jarvis_dialogue_history": [],
+    "jarvis_runtime": {
+        "last_request_utc": None,
+        "last_response_utc": None,
+        "last_ok": None,
+        "last_status": None,
+        "last_attempt": None,
+        "last_phase": None,
+        "last_reason": None,
+        "requests_total": 0,
+        "success_total": 0,
+        "failure_total": 0,
+    },
     "venture_metrics": {
         "audits_total": 0,
         "audits_with_baseline": 0,
@@ -113,6 +126,8 @@ def _state_payload() -> dict:
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
+        "jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
     }
 
@@ -150,6 +165,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
+    if isinstance(payload.get("jarvis_dialogue_history"), list):
+        AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
+    if isinstance(payload.get("jarvis_runtime"), dict):
+        AUTOPILOT_STATE["jarvis_runtime"] = payload.get("jarvis_runtime") or {}
     if isinstance(payload.get("venture_metrics"), dict):
         AUTOPILOT_STATE["venture_metrics"] = payload.get("venture_metrics") or {}
     return True
@@ -1989,13 +2008,38 @@ async def jarvis_status() -> dict:
         return {"configured": True, "endpoint": endpoint, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:300]}
 
 
+def _record_jarvis_runtime(result: dict, context: dict | None = None) -> None:
+    runtime = dict(AUTOPILOT_STATE.get("jarvis_runtime") or {})
+    now = datetime.now(timezone.utc).isoformat()
+    runtime["last_response_utc"] = now
+    runtime["last_ok"] = bool(result.get("ok"))
+    runtime["last_status"] = result.get("status")
+    runtime["last_attempt"] = result.get("attempt")
+    runtime["last_phase"] = (context or {}).get("phase") if isinstance(context, dict) else None
+    runtime["last_reason"] = result.get("reason")
+    runtime["requests_total"] = int(runtime.get("requests_total") or 0) + 1
+    if result.get("ok"):
+        runtime["success_total"] = int(runtime.get("success_total") or 0) + 1
+    else:
+        runtime["failure_total"] = int(runtime.get("failure_total") or 0) + 1
+    AUTOPILOT_STATE["jarvis_runtime"] = runtime
+
+
 async def ask_jarvis(message: str, context: dict | None = None) -> dict:
     endpoint = _jarvis_endpoint()
+    runtime = dict(AUTOPILOT_STATE.get("jarvis_runtime") or {})
+    runtime["last_request_utc"] = datetime.now(timezone.utc).isoformat()
+    runtime["last_phase"] = (context or {}).get("phase") if isinstance(context, dict) else None
+    AUTOPILOT_STATE["jarvis_runtime"] = runtime
     if not endpoint:
-        return {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
+        result = {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
+        _record_jarvis_runtime(result, context)
+        return result
     safe, why = _safe_public_https(endpoint)
     if not safe:
-        return {"configured": True, "ok": False, "reason": why}
+        result = {"configured": True, "ok": False, "reason": why}
+        _record_jarvis_runtime(result, context)
+        return result
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     if JARVIS_API_KEY:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
@@ -2018,6 +2062,7 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
                     "response": body,
                 }
                 if r.is_success or r.status_code not in (502,503,504):
+                    _record_jarvis_runtime(result, context)
                     return result
                 last = result
                 await asyncio.sleep(1.0)
@@ -2025,7 +2070,9 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
             last = {"configured": True, "endpoint": endpoint, "ok": False, "attempt": attempt + 1, "reason": type(e).__name__ + ": " + str(e)[:500]}
             if attempt == 0:
                 await asyncio.sleep(1.0)
-    return last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
+    result = last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
+    _record_jarvis_runtime(result, context)
+    return result
 
 
 def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
@@ -4837,7 +4884,7 @@ async def api_render_errors(request: Request):
 
 
 async def api_render_diagnostics(request: Request):
-    """Return sanitized operational diagnostics for NEO or Jarvis from Render."""
+    """Return sanitized operational diagnostics and a compact runtime assessment."""
     target = (request.query_params.get("target") or "jarvis").strip().lower()
     resource_id = RENDER_SERVICE_ID if target == "neo" else (JARVIS_RENDER_SERVICE_ID or RENDER_SERVICE_ID)
     if not RENDER_API_KEY or not resource_id:
@@ -4850,61 +4897,101 @@ async def api_render_diagnostics(request: Request):
             "jarvis_render_service_id_configured": bool(JARVIS_RENDER_SERVICE_ID),
         }, status_code=503)
 
+    def parse_dt(value: Any):
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc)
+        except Exception:
+            return None
+
+    def row_timestamp(row: Any):
+        if not isinstance(row, dict):
+            return None
+        for key in ("timestamp", "timestamp_utc", "time", "createdAt"):
+            dt = parse_dt(row.get(key))
+            if dt:
+                return dt
+        return None
+
     try:
         service = await render_request(f"/services/{resource_id}")
         owner_id = service.get("ownerId") or service.get("owner_id")
         if not owner_id:
-            return JSONResponse({
-                "ok": False,
-                "error": "owner_id_missing",
-                "target": target,
-                "resource": resource_id,
-            }, status_code=502)
+            return JSONResponse({"ok": False, "error": "owner_id_missing", "target": target, "resource": resource_id}, status_code=502)
 
         logs_data, deploys_data = await asyncio.gather(
-            render_request(
-                "/logs",
-                {
-                    "ownerId": owner_id,
-                    "resource": resource_id,
-                    "direction": "backward",
-                    "limit": 120,
-                },
-            ),
-            render_request(f"/services/{resource_id}/deploys", {"limit": 5}),
+            render_request("/logs", {
+                "ownerId": owner_id,
+                "resource": resource_id,
+                "direction": "backward",
+                "limit": 160,
+            }),
+            render_request(f"/services/{resource_id}/deploys", {"limit": 10}),
         )
 
         raw_logs = logs_data.get("logs") if isinstance(logs_data, dict) else logs_data
         rows = raw_logs if isinstance(raw_logs, list) else []
+        deploys = deploys_data if isinstance(deploys_data, list) else (
+            deploys_data.get("deploys", []) if isinstance(deploys_data, dict) else []
+        )
+
         secrets_to_redact = [x for x in (RENDER_API_KEY, JARVIS_API_KEY) if x]
-
-        categories = {
-            "errors_5xx": 0,
-            "timeouts": 0,
-            "restarts_shutdowns": 0,
-            "startup": 0,
-            "ask_requests": 0,
-            "health_requests": 0,
-        }
-        important = []
-        recent = []
-
         def sanitize(value: Any) -> str:
             text = json.dumps(value, ensure_ascii=False, default=str)
             for secret in secrets_to_redact:
                 text = text.replace(secret, "[REDACTED]")
             return text[:3500]
 
+        deploy_windows = []
+        compact_deploys = []
+        for item in deploys[:10]:
+            if not isinstance(item, dict):
+                continue
+            deploy = item.get("deploy") if isinstance(item.get("deploy"), dict) else item
+            created = parse_dt(deploy.get("createdAt"))
+            finished = parse_dt(deploy.get("finishedAt") or deploy.get("updatedAt"))
+            if created or finished:
+                deploy_windows.append((created, finished))
+            compact_deploys.append({
+                "id": deploy.get("id"),
+                "status": deploy.get("status"),
+                "createdAt": deploy.get("createdAt"),
+                "updatedAt": deploy.get("updatedAt"),
+                "finishedAt": deploy.get("finishedAt"),
+                "commit": deploy.get("commit"),
+            })
+
+        categories = {
+            "errors_5xx": 0,
+            "timeouts": 0,
+            "restarts_shutdowns": 0,
+            "startup": 0,
+            "deploy_startups": 0,
+            "possible_cold_starts": 0,
+            "ask_requests": 0,
+            "ask_2xx": 0,
+            "ask_failures": 0,
+            "health_requests": 0,
+        }
+        important = []
+        startup_events = []
+        latest_ask = None
+        latest_log_utc = None
+
         for row in rows:
             text = sanitize(row)
             low = text.lower()
-            recent.append(text)
+            ts = row_timestamp(row)
+            if ts and (latest_log_utc is None or ts > latest_log_utc):
+                latest_log_utc = ts
 
             matched = []
-            if any(k in low for k in (
-                "traceback", "exception", "internal server error", "status 500",
-                "status 502", "status 503", "status 504", " 500 ", " 502 ", " 503 ", " 504 "
-            )):
+            is_error = any(k in low for k in (
+                "traceback", "exception", "internal server error",
+                " 500 ", " 502 ", " 503 ", " 504 ", "status 500", "status 502", "status 503", "status 504"
+            ))
+            if is_error:
                 categories["errors_5xx"] += 1
                 matched.append("error_5xx")
             if any(k in low for k in ("timeout", "timed out", "readtimeout", "connecttimeout")):
@@ -4916,38 +5003,66 @@ async def api_render_diagnostics(request: Request):
             )):
                 categories["restarts_shutdowns"] += 1
                 matched.append("restart_shutdown")
-            if any(k in low for k in (
+
+            is_startup = any(k in low for k in (
                 "application startup complete", "started server process", "uvicorn running",
                 "deploy live", "starting service"
-            )):
+            ))
+            if is_startup:
                 categories["startup"] += 1
-                matched.append("startup")
+                classification = "startup_unclassified"
+                if ts:
+                    for created, finished in deploy_windows:
+                        candidates = [x for x in (created, finished) if x]
+                        if any(abs((ts - x).total_seconds()) <= 300 for x in candidates):
+                            classification = "deploy_start"
+                            break
+                    if classification == "startup_unclassified":
+                        classification = "possible_cold_start"
+                if classification == "deploy_start":
+                    categories["deploy_startups"] += 1
+                elif classification == "possible_cold_start":
+                    categories["possible_cold_starts"] += 1
+                startup_events.append({
+                    "timestamp_utc": ts.isoformat() if ts else None,
+                    "classification": classification,
+                })
+                matched.append(classification)
+
             if "/ask" in low:
                 categories["ask_requests"] += 1
+                status = None
+                for code in (200,201,202,204,400,401,403,404,408,429,500,502,503,504):
+                    if f" {code} " in low or f"status {code}" in low:
+                        status = code
+                        break
+                if status is not None and 200 <= status < 300:
+                    categories["ask_2xx"] += 1
+                elif status is not None and status >= 400:
+                    categories["ask_failures"] += 1
+                if latest_ask is None or (ts and parse_dt(latest_ask.get("timestamp_utc")) and ts > parse_dt(latest_ask.get("timestamp_utc"))):
+                    latest_ask = {
+                        "timestamp_utc": ts.isoformat() if ts else None,
+                        "status": status,
+                    }
                 matched.append("ask")
             if "/health" in low:
                 categories["health_requests"] += 1
                 matched.append("health")
 
-            if matched and len(important) < 40:
-                important.append({"categories": matched, "log": text})
+            if matched and len(important) < 30:
+                important.append({"timestamp_utc": ts.isoformat() if ts else None, "categories": matched, "log": text})
 
-        deploys = deploys_data if isinstance(deploys_data, list) else (
-            deploys_data.get("deploys", []) if isinstance(deploys_data, dict) else []
-        )
-        compact_deploys = []
-        for item in deploys[:5]:
-            if not isinstance(item, dict):
-                continue
-            deploy = item.get("deploy") if isinstance(item.get("deploy"), dict) else item
-            compact_deploys.append({
-                "id": deploy.get("id"),
-                "status": deploy.get("status"),
-                "createdAt": deploy.get("createdAt"),
-                "updatedAt": deploy.get("updatedAt"),
-                "finishedAt": deploy.get("finishedAt"),
-                "commit": deploy.get("commit"),
-            })
+        if categories["errors_5xx"] or categories["timeouts"]:
+            assessment = "runtime_errors_detected"
+        elif categories["restarts_shutdowns"]:
+            assessment = "runtime_restart_or_shutdown_detected"
+        elif categories["possible_cold_starts"] and not categories["deploy_startups"]:
+            assessment = "possible_free_instance_wake"
+        elif categories["ask_requests"] and categories["ask_failures"] == 0:
+            assessment = "healthy_jarvis_traffic"
+        else:
+            assessment = "no_clear_failure_detected"
 
         return JSONResponse({
             "ok": True,
@@ -4960,12 +5075,17 @@ async def api_render_diagnostics(request: Request):
                 "suspended": service.get("suspended"),
                 "updatedAt": service.get("updatedAt"),
             },
+            "assessment": assessment,
+            "latest_log_utc": latest_log_utc.isoformat() if latest_log_utc else None,
+            "latest_ask": latest_ask,
+            "neo_jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") if target == "jarvis" else None,
+            "last_dialogue": (list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-1] if target == "jarvis" and AUTOPILOT_STATE.get("jarvis_dialogue_history") else None),
             "log_rows_scanned": len(rows),
             "categories": categories,
-            "important": important,
-            "recent_logs": recent[:40],
+            "startup_events": startup_events[:20],
             "recent_deploys": compact_deploys,
-            "note": "Secrets are redacted. Counts are heuristic keyword matches over recent Render logs.",
+            "important": important,
+            "note": "Cold-start classification is heuristic: a startup not near a recorded deploy is marked possible_cold_start, not proven.",
         })
     except Exception as e:
         return JSONResponse({
