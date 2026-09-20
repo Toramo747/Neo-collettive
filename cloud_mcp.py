@@ -29,6 +29,7 @@ TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID")
+JARVIS_RENDER_SERVICE_ID = (os.getenv("JARVIS_RENDER_SERVICE_ID") or "").strip()
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
@@ -4225,6 +4226,67 @@ async def neo_render_logs(limit: int = 50) -> dict:
             {
                 "ownerId": owner_id,
                 "resource": RENDER_SERVICE_ID,
+                "direction": "backward",
+                "limit": max(1, min(limit, 100)),
+            },
+        )
+        return {"ok": True, "logs": data}
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__, "detail": str(e)[:500]}
+
+
+@mcp.tool()
+async def jarvis_render_status() -> dict:
+    """Read Jarvis Render service status using the shared Render API credentials."""
+    if not JARVIS_RENDER_SERVICE_ID:
+        return {"ok": False, "error": "jarvis_render_service_id_missing"}
+    try:
+        service = await render_request(f"/services/{JARVIS_RENDER_SERVICE_ID}")
+        return {
+            "ok": True,
+            "service": {
+                "id": service.get("id"),
+                "name": service.get("name"),
+                "type": service.get("type"),
+                "region": service.get("region"),
+                "suspended": service.get("suspended"),
+                "updatedAt": service.get("updatedAt"),
+            },
+        }
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__, "detail": str(e)[:500]}
+
+
+@mcp.tool()
+async def jarvis_render_deploys(limit: int = 5) -> dict:
+    """List recent Render deploys for Jarvis."""
+    if not JARVIS_RENDER_SERVICE_ID:
+        return {"ok": False, "error": "jarvis_render_service_id_missing"}
+    try:
+        data = await render_request(
+            f"/services/{JARVIS_RENDER_SERVICE_ID}/deploys",
+            {"limit": max(1, min(limit, 20))},
+        )
+        return {"ok": True, "deploys": data}
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__, "detail": str(e)[:500]}
+
+
+@mcp.tool()
+async def jarvis_render_logs(limit: int = 50) -> dict:
+    """Read recent Render logs for Jarvis."""
+    if not JARVIS_RENDER_SERVICE_ID:
+        return {"ok": False, "error": "jarvis_render_service_id_missing"}
+    try:
+        service = await render_request(f"/services/{JARVIS_RENDER_SERVICE_ID}")
+        owner_id = service.get("ownerId") or service.get("owner_id")
+        if not owner_id:
+            return {"ok": False, "error": "owner_id_missing"}
+        data = await render_request(
+            "/logs",
+            {
+                "ownerId": owner_id,
+                "resource": JARVIS_RENDER_SERVICE_ID,
                 "direction": "backward",
                 "limit": max(1, min(limit, 100)),
             },
