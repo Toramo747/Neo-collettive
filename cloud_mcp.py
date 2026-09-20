@@ -4789,7 +4789,14 @@ async def api_render_errors(request: Request):
     target = (request.query_params.get("target") or "jarvis").strip().lower()
     resource_id = RENDER_SERVICE_ID if target == "neo" else (JARVIS_RENDER_SERVICE_ID or RENDER_SERVICE_ID)
     if not RENDER_API_KEY or not resource_id:
-        return JSONResponse({"ok": False, "error": "render_api_not_configured", "target": target}, status_code=503)
+        return JSONResponse({
+            "ok": False,
+            "error": "render_api_not_configured",
+            "target": target,
+            "render_api_key_configured": bool(RENDER_API_KEY),
+            "render_service_id_configured": bool(RENDER_SERVICE_ID),
+            "jarvis_render_service_id_configured": bool(JARVIS_RENDER_SERVICE_ID),
+        }, status_code=503)
     try:
         service = await render_request(f"/services/{resource_id}")
         owner_id = service.get("ownerId") or service.get("owner_id")
