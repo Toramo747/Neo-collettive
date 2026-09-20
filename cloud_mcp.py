@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.56.0"
+VERSION = "0.57.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2568,6 +2568,68 @@ def _hypothesis_search_queries(limit: int = 2) -> list[dict]:
     return out
 
 
+def _convergence_search_queries(limit: int = 3) -> list[dict]:
+    """Exploit promising families by seeking independent demand evidence instead of more generic volume."""
+    perf = AUTOPILOT_STATE.get("family_performance") or {}
+    ranked = []
+    for family, row in perf.items():
+        if not isinstance(row, dict):
+            continue
+        score = float(row.get("score") or 0.0)
+        observations = int(row.get("observations") or 0)
+        domains = int(row.get("last_domains") or 0)
+        strong = int(row.get("last_strong_domains") or 0)
+        signals = set(row.get("last_signal_types") or [])
+        if observations < 2 or score < 55:
+            continue
+        if domains >= 3 and strong >= 1 and "PAID_DEMAND" in signals and ("BUY_INTENT" in signals or "PAIN" in signals):
+            continue
+        ranked.append((score, observations, family, domains, strong, signals))
+    ranked.sort(reverse=True)
+
+    patterns = [
+        '"{term}" "need help" OR "looking for" OR "manual"',
+        '"{term}" hiring OR budget OR freelance OR consultant',
+        '"{term}" pricing OR "will pay" OR "paid" customer problem',
+        'site:reddit.com "{term}" "need" OR "problem" OR "manual"',
+        'site:news.ycombinator.com "{term}" problem OR workflow OR customer',
+    ]
+
+    out = []
+    seen = set()
+    for score, observations, family, domains, strong, signals in ranked[:3]:
+        terms = list(_family_relevance_terms(family))
+        if not terms:
+            continue
+        # Stable, deterministic term choice prevents entropy from abandoning a promising family.
+        term = sorted(terms, key=lambda x: (-len(x), x))[0]
+        missing = []
+        if domains < 3:
+            missing.append("independent_domains")
+        if strong < 1:
+            missing.append("commercial_source")
+        if "PAID_DEMAND" not in signals:
+            missing.append("paid_demand")
+        if "BUY_INTENT" not in signals and "PAIN" not in signals:
+            missing.append("buy_intent_or_pain")
+        for pattern in patterns:
+            q = pattern.format(term=term)
+            key = q.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "family": family,
+                "query": q,
+                "score": score,
+                "observations": observations,
+                "missing": missing,
+            })
+            if len(out) >= max(0, limit):
+                return out
+    return out
+
+
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
     count = max(4, min(count, 10))
@@ -2613,20 +2675,26 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         pattern = rng.choice(ENTROPY_PATTERNS)
         queries.append(pattern.format(term=term))
 
-    hypothesis_probes=_hypothesis_search_queries(2)
-    for probe in hypothesis_probes:
-        queries.append(str(probe.get("query") or ""))
+    # When evidence is repeatedly promising but fragmented, reserve search capacity
+    # for convergence on the same commercial family instead of adding more random sectors.
+    convergence_limit = 3 if stagnation >= int(policy["stagnation_threshold"]) else 2
+    convergence_probes = _convergence_search_queries(convergence_limit)
+    convergence_queries = [str(x.get("query") or "") for x in convergence_probes if str(x.get("query") or "").strip()]
 
-    # Always retain explicit buying-intent probes.
-    queries.extend([
+    hypothesis_probes = _hypothesis_search_queries(1)
+    hypothesis_queries = [str(x.get("query") or "") for x in hypothesis_probes if str(x.get("query") or "").strip()]
+
+    # Priority order is deliberate: convergence first, then fresh exploration, then one
+    # learned hypothesis and explicit buying-intent fallbacks.
+    queries = convergence_queries + queries + hypothesis_queries + [
         '"will pay" "manual process" small business',
         '"hiring" freelancer "repetitive task" automation',
-    ])
+    ]
 
     out = []
     for q in queries:
         q = " ".join(q.split())
-        if q.lower() not in {x.lower() for x in out}:
+        if q and q.lower() not in {x.lower() for x in out}:
             out.append(q)
 
     AUTOPILOT_STATE["recent_sectors"] = (recent + sectors)[-12:]
@@ -2642,7 +2710,9 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "exploitation_slots": exploitation_slots,
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
         "hypothesis_probes": hypothesis_probes,
-        "policy": "exploit evidence-producing families while preserving majority exploration; reserve bounded search capacity for hypotheses learned from agent dialogue",
+        "convergence_probes": convergence_probes,
+        "convergence_slots": len(convergence_queries),
+        "policy": "prioritize convergence on promising commercial families while preserving exploration; never relax the evidence gate",
         "adaptive_policy": policy,
     }
     AUTOPILOT_STATE["last_search_strategy"] = strategy
