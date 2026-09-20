@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -402,6 +402,85 @@ def _learning_adjustment(family: str, learning: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _reciprocal_memory(context: dict[str, Any]) -> dict[str, Any]:
+    """Read a bounded history of NEO<->Jarvis exchanges without allowing history to override current evidence."""
+    rows=context.get("jarvis_dialogue_history") or []
+    if not isinstance(rows,list):
+        rows=[]
+    recent=[x for x in rows[-8:] if isinstance(x,dict)]
+    statuses={}
+    decisions={}
+    families={}
+    for row in recent:
+        status=str(row.get("neo_status") or "UNKNOWN")
+        decision=str(row.get("jarvis_decision") or "UNKNOWN")
+        family=str(row.get("family") or "")
+        statuses[status]=statuses.get(status,0)+1
+        decisions[decision]=decisions.get(decision,0)+1
+        if family:
+            families[family]=families.get(family,0)+1
+    last=recent[-1] if recent else {}
+    return {
+        "exchange_count":len(recent),
+        "status_counts":statuses,
+        "decision_counts":decisions,
+        "family_counts":families,
+        "last_exchange":{
+            "neo_status":last.get("neo_status"),
+            "family":last.get("family"),
+            "quality_gate":last.get("quality_gate"),
+            "collective_ok":last.get("collective_ok"),
+            "jarvis_decision":last.get("jarvis_decision"),
+            "next_search_queries":last.get("next_search_queries") or [],
+        } if last else {},
+        "rule":"Historical dialogue may redirect exploration or increase caution, but can never bypass current evidence and Collective gates.",
+    }
+
+
+def _adaptive_search_queries(
+    rejected_clusters: list[dict[str, Any]],
+    exploration_recommendations: list[dict[str, Any]],
+    reciprocal: dict[str, Any],
+) -> list[str]:
+    out=[]
+    for row in exploration_recommendations[:3]:
+        seed=" ".join(str(row.get("query_seed") or "").split())
+        if seed:
+            out.append(seed[:220])
+    for row in rejected_clusters[:5]:
+        family=str(row.get("family") or "").replace("_"," ")
+        reasons=" ".join(str(x) for x in (row.get("reasons") or []))
+        if "PAID_DEMAND" in reasons:
+            out.append(f'"will pay" OR budget OR hiring "{family}"')
+        elif "BUY_INTENT" in reasons or "PAIN" in reasons:
+            out.append(f'"need help" OR "looking for" "{family}"')
+        elif "fonti indipendenti" in reasons:
+            out.append(f'"{family}" customer problem discussion')
+        if len(out)>=5:
+            break
+    last=(reciprocal.get("last_exchange") or {}) if isinstance(reciprocal,dict) else {}
+    for q in last.get("next_search_queries") or []:
+        q=" ".join(str(q).split())
+        if q:
+            out.append(q[:220])
+    defaults=[
+        "customer pain evidence",
+        "explicit buying intent",
+        "paid demand budget hiring",
+        "competitor pricing",
+        "independent user discussion",
+    ]
+    for q in defaults:
+        if len(out)>=5:
+            break
+        out.append(q)
+    dedup=[]
+    for q in out:
+        if q and q.lower() not in {x.lower() for x in dedup}:
+            dedup.append(q)
+    return dedup[:5]
+
+
 def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     answers = _flatten_answers(context)
     scout_evidence = _flatten_evidence_scouts(context)
@@ -412,6 +491,7 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
     learning = _learning_snapshot(context)
     collective_intelligence = _collective_intelligence_snapshot(context)
     exploration_recommendations = _exploration_recommendations(collective_intelligence)
+    reciprocal_memory = _reciprocal_memory(context)
 
     vendors = [a for a in answers if a["vendor"]]
     independent_agents = [a for a in answers if (not a["vendor"]) and a["evidence_markers"]]
@@ -586,13 +666,12 @@ def _analyze(context: dict[str, Any]) -> dict[str, Any]:
             "accepted_for_experiment": bool(final_gate_pass and product_candidate.get("family") == selected_cluster),
         },
         "collective_review": collective,
-        "next_search_queries": [
-            "customer pain evidence",
-            "explicit buying intent",
-            "paid demand budget hiring",
-            "competitor pricing",
-            "independent user discussion",
-        ],
+        "reciprocal_memory": reciprocal_memory,
+        "next_search_queries": _adaptive_search_queries(
+            rejected_clusters,
+            exploration_recommendations,
+            reciprocal_memory,
+        ),
         "next_experiment": next_experiment,
         "guardrails": [
             "no automatic spending",
