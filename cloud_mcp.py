@@ -4836,6 +4836,147 @@ async def api_render_errors(request: Request):
         return JSONResponse({"ok": False, "target": target, "resource": resource_id, "error": type(e).__name__, "detail": str(e)[:300]}, status_code=502)
 
 
+async def api_render_diagnostics(request: Request):
+    """Return sanitized operational diagnostics for NEO or Jarvis from Render."""
+    target = (request.query_params.get("target") or "jarvis").strip().lower()
+    resource_id = RENDER_SERVICE_ID if target == "neo" else (JARVIS_RENDER_SERVICE_ID or RENDER_SERVICE_ID)
+    if not RENDER_API_KEY or not resource_id:
+        return JSONResponse({
+            "ok": False,
+            "error": "render_api_not_configured",
+            "target": target,
+            "render_api_key_configured": bool(RENDER_API_KEY),
+            "render_service_id_configured": bool(RENDER_SERVICE_ID),
+            "jarvis_render_service_id_configured": bool(JARVIS_RENDER_SERVICE_ID),
+        }, status_code=503)
+
+    try:
+        service = await render_request(f"/services/{resource_id}")
+        owner_id = service.get("ownerId") or service.get("owner_id")
+        if not owner_id:
+            return JSONResponse({
+                "ok": False,
+                "error": "owner_id_missing",
+                "target": target,
+                "resource": resource_id,
+            }, status_code=502)
+
+        logs_data, deploys_data = await asyncio.gather(
+            render_request(
+                "/logs",
+                {
+                    "ownerId": owner_id,
+                    "resource": resource_id,
+                    "direction": "backward",
+                    "limit": 120,
+                },
+            ),
+            render_request(f"/services/{resource_id}/deploys", {"limit": 5}),
+        )
+
+        raw_logs = logs_data.get("logs") if isinstance(logs_data, dict) else logs_data
+        rows = raw_logs if isinstance(raw_logs, list) else []
+        secrets_to_redact = [x for x in (RENDER_API_KEY, JARVIS_API_KEY) if x]
+
+        categories = {
+            "errors_5xx": 0,
+            "timeouts": 0,
+            "restarts_shutdowns": 0,
+            "startup": 0,
+            "ask_requests": 0,
+            "health_requests": 0,
+        }
+        important = []
+        recent = []
+
+        def sanitize(value: Any) -> str:
+            text = json.dumps(value, ensure_ascii=False, default=str)
+            for secret in secrets_to_redact:
+                text = text.replace(secret, "[REDACTED]")
+            return text[:3500]
+
+        for row in rows:
+            text = sanitize(row)
+            low = text.lower()
+            recent.append(text)
+
+            matched = []
+            if any(k in low for k in (
+                "traceback", "exception", "internal server error", "status 500",
+                "status 502", "status 503", "status 504", " 500 ", " 502 ", " 503 ", " 504 "
+            )):
+                categories["errors_5xx"] += 1
+                matched.append("error_5xx")
+            if any(k in low for k in ("timeout", "timed out", "readtimeout", "connecttimeout")):
+                categories["timeouts"] += 1
+                matched.append("timeout")
+            if any(k in low for k in (
+                "shutdown", "shutting down", "restart", "restarting", "killed",
+                "sigterm", "signal 15", "out of memory", "oom"
+            )):
+                categories["restarts_shutdowns"] += 1
+                matched.append("restart_shutdown")
+            if any(k in low for k in (
+                "application startup complete", "started server process", "uvicorn running",
+                "deploy live", "starting service"
+            )):
+                categories["startup"] += 1
+                matched.append("startup")
+            if "/ask" in low:
+                categories["ask_requests"] += 1
+                matched.append("ask")
+            if "/health" in low:
+                categories["health_requests"] += 1
+                matched.append("health")
+
+            if matched and len(important) < 40:
+                important.append({"categories": matched, "log": text})
+
+        deploys = deploys_data if isinstance(deploys_data, list) else (
+            deploys_data.get("deploys", []) if isinstance(deploys_data, dict) else []
+        )
+        compact_deploys = []
+        for item in deploys[:5]:
+            if not isinstance(item, dict):
+                continue
+            deploy = item.get("deploy") if isinstance(item.get("deploy"), dict) else item
+            compact_deploys.append({
+                "id": deploy.get("id"),
+                "status": deploy.get("status"),
+                "createdAt": deploy.get("createdAt"),
+                "updatedAt": deploy.get("updatedAt"),
+                "finishedAt": deploy.get("finishedAt"),
+                "commit": deploy.get("commit"),
+            })
+
+        return JSONResponse({
+            "ok": True,
+            "target": target,
+            "resource": resource_id,
+            "service": {
+                "name": service.get("name"),
+                "type": service.get("type"),
+                "region": service.get("region"),
+                "suspended": service.get("suspended"),
+                "updatedAt": service.get("updatedAt"),
+            },
+            "log_rows_scanned": len(rows),
+            "categories": categories,
+            "important": important,
+            "recent_logs": recent[:40],
+            "recent_deploys": compact_deploys,
+            "note": "Secrets are redacted. Counts are heuristic keyword matches over recent Render logs.",
+        })
+    except Exception as e:
+        return JSONResponse({
+            "ok": False,
+            "target": target,
+            "resource": resource_id,
+            "error": type(e).__name__,
+            "detail": str(e)[:500],
+        }, status_code=502)
+
+
 async def api_director_run(request: Request):
     """Run one autonomous, zero-budget Director cycle and return the compact result."""
     goal=(request.query_params.get("goal") or (
@@ -5193,6 +5334,7 @@ app = Starlette(
         Route("/api/director/results", api_director_results, methods=["GET"]),
         Route("/api/director/run", api_director_run, methods=["GET"]),
         Route("/api/render/errors", api_render_errors, methods=["GET"]),
+        Route("/api/render/diagnostics", api_render_diagnostics, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
