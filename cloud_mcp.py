@@ -4781,19 +4781,25 @@ async def api_director_results(request: Request):
 
 
 async def api_render_errors(request: Request):
-    """Return a small sanitized slice of recent Render error logs for self-diagnostics."""
-    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
-        return JSONResponse({"ok": False, "error": "render_api_not_configured"}, status_code=503)
+    """Return a small sanitized slice of recent Render error logs for self-diagnostics.
+
+    By default prefer Jarvis' Render service when JARVIS_RENDER_SERVICE_ID is configured,
+    falling back to NEO's own RENDER_SERVICE_ID. Use ?target=neo to force NEO logs.
+    """
+    target = (request.query_params.get("target") or "jarvis").strip().lower()
+    resource_id = RENDER_SERVICE_ID if target == "neo" else (JARVIS_RENDER_SERVICE_ID or RENDER_SERVICE_ID)
+    if not RENDER_API_KEY or not resource_id:
+        return JSONResponse({"ok": False, "error": "render_api_not_configured", "target": target}, status_code=503)
     try:
-        service = await render_request(f"/services/{RENDER_SERVICE_ID}")
+        service = await render_request(f"/services/{resource_id}")
         owner_id = service.get("ownerId") or service.get("owner_id")
         if not owner_id:
-            return JSONResponse({"ok": False, "error": "owner_id_missing"}, status_code=502)
+            return JSONResponse({"ok": False, "error": "owner_id_missing", "target": target, "resource": resource_id}, status_code=502)
         data = await render_request(
             "/logs",
             {
                 "ownerId": owner_id,
-                "resource": RENDER_SERVICE_ID,
+                "resource": resource_id,
                 "direction": "backward",
                 "limit": 80,
             },
@@ -4811,9 +4817,16 @@ async def api_render_errors(request: Request):
                 keep.append(text[:3000])
             if len(keep) >= 20:
                 break
-        return JSONResponse({"ok": True, "count": len(keep), "errors": keep})
+        return JSONResponse({
+            "ok": True,
+            "target": target,
+            "resource": resource_id,
+            "service_name": service.get("name"),
+            "count": len(keep),
+            "errors": keep,
+        })
     except Exception as e:
-        return JSONResponse({"ok": False, "error": type(e).__name__, "detail": str(e)[:300]}, status_code=502)
+        return JSONResponse({"ok": False, "target": target, "resource": resource_id, "error": type(e).__name__, "detail": str(e)[:300]}, status_code=502)
 
 
 async def api_director_run(request: Request):
