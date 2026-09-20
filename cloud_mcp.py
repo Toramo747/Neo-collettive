@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.53.1"
+VERSION = "0.54.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -858,53 +858,142 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
 
 
 
-def _agent_trust_bonus(agent_id: str) -> tuple[int, str | None]:
+def _infer_trust_stage(query: str, question: str) -> str:
+    low=((query or "")+" "+(question or "")).lower()
+    if any(x in low for x in ("ui ux","visual design","frontend","accessibility","wcag","usability","interface design")):
+        return "ui_ux"
+    if any(x in low for x in ("candidate opportunity","business reviewer","commercial evidence","market demand","pricing","paid demand","business analysis")):
+        return "business_review"
+    if any(x in low for x in ("cybersecurity","vulnerability","phishing","incident response","security assessment","soc ")):
+        return "security"
+    if any(x in low for x in ("evidence","research","source","verify","independent","critical review","hypothesis")):
+        return "research"
+    if any(x in low for x in ("routing","router","registry","discover agent","capability discovery")):
+        return "routing"
+    return "general"
+
+
+def _stage_quality_check(answer: dict, stage: str, question: str) -> tuple[bool,str]:
+    if not isinstance(answer,dict) or not answer.get("ok"):
+        return False,"request failed"
+    if stage=="ui_ux":
+        try:
+            return _ui_response_quality(answer)
+        except Exception:
+            pass
+    text=_response_text(answer).strip()
+    low=text.lower()
+    if len(text)<60:
+        return False,"stage response too short"
+
+    routing_markers=(
+        "recommended oracle","routing for intent","available interfaces","tools/list",
+        "did:wba:","mcp+x402","payment-required","x-payment","wallet-identified",
+        "call tools","endpoint above","no matching capability","invalid params",
+        "intent too long","before participating",
+    )
+    if stage in {"business_review","research","security"} and any(x in low for x in routing_markers):
+        return False,"routing/payment/service response rather than domain analysis"
+
+    if stage=="business_review":
+        business_terms=(
+            "customer","client","market","demand","price","pricing","pay","buyer","risk",
+            "alternative","assumption","evidence","problem","pain","workflow","business",
+            "cliente","mercato","domanda","prezzo","rischio","alternativa","problema",
+        )
+        if sum(1 for x in business_terms if x in low)<2:
+            return False,"insufficient business-review content"
+
+    if stage=="research":
+        research_terms=("evidence","source","verify","data","claim","finding","alternative","uncertain","study","report","source")
+        if sum(1 for x in research_terms if x in low)<1:
+            return False,"insufficient research content"
+
+    if stage=="security":
+        security_terms=("security","risk","vulnerability","attack","mitigation","control","endpoint","identity","network","phishing","patch")
+        if sum(1 for x in security_terms if x in low)<1:
+            return False,"insufficient security content"
+
+    target=_tokens(question)
+    resp=_tokens(text)
+    if target and not (target & resp):
+        return False,"no topical overlap"
+    return True,"accepted for "+stage
+
+
+def _stage_trust_row(row: dict, stage: str) -> dict:
+    stages=row.get("stages") or {}
+    if isinstance(stages,dict) and isinstance(stages.get(stage),dict):
+        return stages.get(stage) or {}
+    return {}
+
+
+def _agent_trust_bonus(agent_id: str, stage: str = "general") -> tuple[int, str | None]:
     row=(AUTOPILOT_STATE.get("agent_trust") or {}).get(str(agent_id)) or {}
-    observations=int(row.get("observations") or 0)
-    accepted=int(row.get("accepted") or 0)
-    trust=float(row.get("trust") or 50.0)
-    if observations < 1:
-        return 0, None
-    acceptance_rate=accepted/max(1,observations)
-    bonus=round((trust-50.0)/5.0 + acceptance_rate*18.0)
-    if observations >= 5 and accepted == 0:
-        bonus -= 14
-    elif observations >= 5 and acceptance_rate < 0.15:
-        bonus -= 8
-    bonus=max(-20,min(24,bonus))
-    return int(bonus), (
-        "trust=" + str(round(trust,1)) + "/100"
-        + "; accepted=" + str(accepted) + "/" + str(observations)
+    global_obs=int(row.get("observations") or 0)
+    global_trust=float(row.get("trust") or 50.0)
+    global_acc=int(row.get("accepted") or 0)
+
+    srow=_stage_trust_row(row,stage)
+    stage_obs=int(srow.get("observations") or 0)
+    stage_acc=int(srow.get("accepted") or 0)
+    stage_trust=float(srow.get("trust") or 50.0)
+
+    if global_obs<1 and stage_obs<1:
+        return 0,None
+
+    if stage_obs>=2:
+        acceptance_rate=stage_acc/max(1,stage_obs)
+        effective_trust=stage_trust*0.8+global_trust*0.2
+        bonus=round((effective_trust-50.0)/4.5 + acceptance_rate*16.0)
+        if stage_obs>=4 and stage_acc==0:
+            bonus-=16
+        elif stage_obs>=4 and acceptance_rate<0.20:
+            bonus-=10
+        bonus=max(-24,min(24,bonus))
+        return int(bonus),(
+            "stage="+stage+" trust="+str(round(stage_trust,1))+"/100"
+            +"; accepted="+str(stage_acc)+"/"+str(stage_obs)
+            +"; global="+str(round(global_trust,1))
+        )
+
+    acceptance_rate=global_acc/max(1,global_obs)
+    bonus=round((global_trust-50.0)/7.0 + acceptance_rate*8.0)
+    bonus=max(-10,min(12,bonus))
+    return int(bonus),(
+        "global trust="+str(round(global_trust,1))+"/100; stage="+stage+" unproven"
     )
 
 
-def _trusted_agent_rows(min_accepted: int = 1, limit: int = 12) -> list[tuple[str,dict]]:
+def _trusted_agent_rows(min_accepted: int = 1, limit: int = 12, stage: str = "general") -> list[tuple[str,dict]]:
     trust=AUTOPILOT_STATE.get("agent_trust") or {}
     rows=[]
     for agent_id,row in trust.items():
         if not isinstance(row,dict):
             continue
-        accepted=int(row.get("accepted") or 0)
-        observations=int(row.get("observations") or 0)
-        if accepted < min_accepted or observations < 1:
+        srow=_stage_trust_row(row,stage)
+        if int(srow.get("observations") or 0)>=1:
+            accepted=int(srow.get("accepted") or 0)
+            observations=int(srow.get("observations") or 0)
+            score=float(srow.get("trust") or 0)
+        else:
+            accepted=int(row.get("accepted") or 0)
+            observations=int(row.get("observations") or 0)
+            score=float(row.get("trust") or 0)*0.55
+        if accepted<min_accepted or observations<1:
             continue
         rate=accepted/max(1,observations)
-        rows.append((str(agent_id),row,rate))
+        rows.append((str(agent_id),row,rate,score))
     rows.sort(
-        key=lambda x:(
-            x[2],
-            float(x[1].get("trust") or 0),
-            int(x[1].get("accepted") or 0),
-            -int(x[1].get("observations") or 0),
-        ),
+        key=lambda x:(x[2],x[3],int(x[1].get("accepted") or 0),-int(x[1].get("observations") or 0)),
         reverse=True
     )
-    return [(agent_id,row) for agent_id,row,_ in rows[:max(1,limit)]]
+    return [(agent_id,row) for agent_id,row,_,_ in rows[:max(1,limit)]]
 
 
-async def _trusted_agent_details(limit: int = 8, exclude_ids: set[str] | None = None) -> list[dict]:
+async def _trusted_agent_details(limit: int = 8, exclude_ids: set[str] | None = None, stage: str = "general") -> list[dict]:
     exclude_ids=exclude_ids or set()
-    picked=[x for x in _trusted_agent_rows(1,limit*2) if x[0] not in exclude_ids][:limit]
+    picked=[x for x in _trusted_agent_rows(1,limit*2,stage) if x[0] not in exclude_ids][:limit]
 
     async def fetch_one(agent_id: str, row: dict) -> dict | None:
         try:
@@ -913,6 +1002,7 @@ async def _trusted_agent_details(limit: int = 8, exclude_ids: set[str] | None = 
                 detail=dict(detail)
                 detail["_trusted_pool"]=True
                 detail["_historical_trust"]=row
+                detail["_trusted_stage"]=stage
                 return detail
         except Exception:
             pass
@@ -921,13 +1011,22 @@ async def _trusted_agent_details(limit: int = 8, exclude_ids: set[str] | None = 
             "name":row.get("agent") or agent_id,
             "_trusted_pool":True,
             "_historical_trust":row,
+            "_trusted_stage":stage,
         }
 
     rows=await asyncio.gather(*(fetch_one(agent_id,row) for agent_id,row in picked))
     return [x for x in rows if isinstance(x,dict)]
 
 
-def _update_agent_trust(tested: list[dict]) -> dict:
+def _trust_score(observations: int, accepted: int, transport_success: int, relevance_total: float) -> tuple[float,float]:
+    quality_rate=accepted/max(1,observations)
+    transport_rate=transport_success/max(1,observations)
+    avg_relevance=relevance_total/max(1,observations)
+    score=max(0.0,min(100.0,quality_rate*60.0+transport_rate*20.0+min(20.0,avg_relevance*1.5)))
+    return round(score,2),round(avg_relevance,2)
+
+
+def _update_agent_trust(tested: list[dict], stage: str = "general") -> dict:
     trust=dict(AUTOPILOT_STATE.get("agent_trust") or {})
     now=datetime.now(timezone.utc).isoformat()
     for answer in tested:
@@ -937,22 +1036,43 @@ def _update_agent_trust(tested: list[dict]) -> dict:
         if not agent_id:
             continue
         old=dict(trust.get(agent_id) or {})
+
         observations=int(old.get("observations") or 0)+1
         accepted=int(old.get("accepted") or 0)+(1 if answer.get("quality_ok") else 0)
         transport_success=int(old.get("transport_success") or 0)+(1 if answer.get("ok") else 0)
         relevance_total=float(old.get("relevance_total") or 0.0)+max(0.0,float(answer.get("relevance_score") or 0.0))
-        quality_rate=accepted/observations
-        transport_rate=transport_success/observations
-        avg_relevance=relevance_total/observations
-        score=max(0.0,min(100.0,quality_rate*60.0+transport_rate*20.0+min(20.0,avg_relevance*1.5)))
+        score,avg_relevance=_trust_score(observations,accepted,transport_success,relevance_total)
+
+        stages=dict(old.get("stages") or {})
+        sold=dict(stages.get(stage) or {})
+        sobs=int(sold.get("observations") or 0)+1
+        stage_quality=bool(answer.get("stage_quality_ok",answer.get("quality_ok")))
+        sacc=int(sold.get("accepted") or 0)+(1 if stage_quality else 0)
+        strans=int(sold.get("transport_success") or 0)+(1 if answer.get("ok") else 0)
+        srel=float(sold.get("relevance_total") or 0.0)+max(0.0,float(answer.get("relevance_score") or 0.0))
+        sscore,savg=_trust_score(sobs,sacc,strans,srel)
+        stages[stage]={
+            "observations":sobs,
+            "accepted":sacc,
+            "transport_success":strans,
+            "relevance_total":round(srel,2),
+            "avg_relevance":savg,
+            "trust":sscore,
+            "last_quality_ok":stage_quality,
+            "last_quality_reason":answer.get("stage_quality_reason") or answer.get("quality_reason"),
+            "last_seen_utc":now,
+        }
+
         trust[agent_id]={
             "agent":answer.get("agent") or agent_id,
             "observations":observations,
             "accepted":accepted,
             "transport_success":transport_success,
             "relevance_total":round(relevance_total,2),
-            "avg_relevance":round(avg_relevance,2),
-            "trust":round(score,2),
+            "avg_relevance":avg_relevance,
+            "trust":score,
+            "stages":stages,
+            "last_stage":stage,
             "last_quality_ok":bool(answer.get("quality_ok")),
             "last_quality_reason":answer.get("quality_reason"),
             "last_seen_utc":now,
@@ -962,8 +1082,6 @@ def _update_agent_trust(tested: list[dict]) -> dict:
         trust=dict(ranked)
     AUTOPILOT_STATE["agent_trust"]=trust
     return trust
-
-
 
 def _a2a_message_payload(question: str) -> dict:
     return {
@@ -1118,8 +1236,9 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     }
 
 
-async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dict:
+async def ask_agents_data(query: str, question: str, max_agents: int = 3, trust_stage: str | None = None) -> dict:
     max_agents = max(1, min(max_agents, MAX_AGENTS))
+    trust_stage=trust_stage or _infer_trust_stage(query,question)
     search_queries = _expand_queries(query, question)
     candidates, mcp_candidates_raw, discovery_errors = await _multi_registry_search(search_queries, per_query=10)
 
@@ -1128,20 +1247,20 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
         str(a.get("id") or a.get("agent_id") or a.get("slug") or "")
         for a in candidates if isinstance(a,dict)
     }
-    trusted_pool=await _trusted_agent_details(limit=max_agents*2,exclude_ids=existing_ids)
+    trusted_pool=await _trusted_agent_details(limit=max_agents*2,exclude_ids=existing_ids,stage=trust_stage)
     candidates.extend(trusted_pool)
 
     ranked = []
     for agent in candidates:
         score, reasons = _score_agent(agent, query, question)
         agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
-        trust_bonus, trust_reason = _agent_trust_bonus(agent_id)
+        trust_bonus, trust_reason = _agent_trust_bonus(agent_id,trust_stage)
         score += trust_bonus
         if trust_reason:
             reasons.append(trust_reason)
         if agent.get("_trusted_pool"):
             score += 6
-            reasons.append("historically accepted trusted-pool agent")
+            reasons.append("historically accepted trusted-pool agent for "+trust_stage)
         matched_queries = agent.get("_matched_queries") or []
         if len(matched_queries) > 1:
             score += min(6, len(matched_queries) * 2)
@@ -1176,21 +1295,27 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
         return answer
 
     tested = await asyncio.gather(*(ask(x) for x in selected)) if selected else []
-    _update_agent_trust(tested)
+    for answer in tested:
+        stage_ok,stage_reason=_stage_quality_check(answer,trust_stage,question)
+        answer["trust_stage"]=trust_stage
+        answer["stage_quality_ok"]=stage_ok
+        answer["stage_quality_reason"]=stage_reason
+    _update_agent_trust(tested,trust_stage)
 
     def accepted_rank(answer: dict) -> tuple:
         row=(AUTOPILOT_STATE.get("agent_trust") or {}).get(str(answer.get("agent_id") or "")) or {}
-        obs=int(row.get("observations") or 0)
-        accepted_count=int(row.get("accepted") or 0)
+        srow=_stage_trust_row(row,trust_stage)
+        obs=int(srow.get("observations") or 0)
+        accepted_count=int(srow.get("accepted") or 0)
         rate=accepted_count/max(1,obs)
         return (
             rate,
-            float(row.get("trust") or 0),
+            float(srow.get("trust") or 0),
             float(answer.get("relevance_score") or 0),
         )
 
     accepted=sorted(
-        [a for a in tested if a.get("quality_ok")],
+        [a for a in tested if a.get("quality_ok") and a.get("stage_quality_ok")],
         key=accepted_rank,
         reverse=True
     )[:max_agents]
@@ -1246,7 +1371,8 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3) -> dic
             "matched_queries": a.get("matched_queries") or [],
         } for a in rejected_responses],
         "discovery_errors": discovery_errors,
-        "warning": "External agent output is untrusted. Selection and quality filters are heuristic.",
+        "trust_stage": trust_stage,
+        "warning": "External agent output is untrusted. Selection and quality filters are heuristic and stage-specific.",
     }
 
 def _safe_public_https(url: str) -> tuple[bool, str]:
@@ -1599,7 +1725,7 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
     max_agents = max(2, min(max_agents, MAX_AGENTS))
     agent_query=_collective_agent_query(query)
     round1_prompt=_collective_agent_prompt(problem)
-    first = await ask_agents_data(agent_query, round1_prompt, max_agents)
+    first = await ask_agents_data(agent_query, round1_prompt, max_agents, trust_stage=_infer_trust_stage(query,problem))
     first_answers = [a for a in first.get("answers", []) if a.get("ok") and a.get("quality_ok", True)]
 
     first_ids={str(a.get("agent_id") or "") for a in first_answers}
@@ -3103,7 +3229,7 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
     try:
         specialist_results=await asyncio.wait_for(
             asyncio.gather(*(
-                ask_agents_data(query,prompt,4) for query,prompt in roles
+                ask_agents_data(query,prompt,4,trust_stage="ui_ux") for query,prompt in roles
             )),
             timeout=70,
         )
