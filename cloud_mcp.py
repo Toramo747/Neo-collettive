@@ -2007,25 +2007,7 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
                     body = r.json()
                 else:
                     body = {"text": r.text[:12000]}
-                jarvis_next_queries=_jarvis_next_queries(jarvis_review)
-    dialogue=list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])
-    dialogue.append({
-        "created_at_utc":datetime.now(timezone.utc).isoformat(),
-        "neo_status":final_status,
-        "lifecycle":lifecycle_current,
-        "family":product_candidate.get("family"),
-        "quality_gate":bool(evidence_quality.get("quality_gate")),
-        "collective_ok":bool(collective_summary.get("ok")),
-        "collective_round2_valid":int(collective_summary.get("round2_valid") or 0),
-        "jarvis_decision":jarvis_decision,
-        "jarvis_decision_source":jarvis_decision_source,
-        "next_search_queries":jarvis_next_queries,
-        "build_tests_passed":bool(build_result.get("tests_passed")),
-        "measurement_status":measurement.get("status"),
-    })
-    AUTOPILOT_STATE["jarvis_dialogue_history"]=dialogue[-12:]
-
-    result = {
+                result = {
                     "configured": True,
                     "endpoint": endpoint,
                     "ok": r.is_success,
@@ -4042,6 +4024,24 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         final_status = "SELECT"
         lifecycle_current = "SELECT"
         next_gate = "SELECT: raccogli evidenza convergente e prepara un candidato testabile."
+
+    jarvis_next_queries=_jarvis_next_queries(jarvis_review)
+    dialogue=list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])
+    dialogue.append({
+        "created_at_utc":datetime.now(timezone.utc).isoformat(),
+        "neo_status":final_status,
+        "lifecycle":lifecycle_current,
+        "family":product_candidate.get("family"),
+        "quality_gate":bool(evidence_quality.get("quality_gate")),
+        "collective_ok":bool(collective_summary.get("ok")),
+        "collective_round2_valid":int(collective_summary.get("round2_valid") or 0),
+        "jarvis_decision":jarvis_decision,
+        "jarvis_decision_source":jarvis_decision_source,
+        "next_search_queries":jarvis_next_queries,
+        "build_tests_passed":bool(build_result.get("tests_passed")),
+        "measurement_status":measurement.get("status"),
+    })
+    AUTOPILOT_STATE["jarvis_dialogue_history"]=dialogue[-12:]
 
     result = {
         "ok": True,
