@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.48.2"
+VERSION = "0.48.3"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2260,10 +2260,13 @@ def _ui_response_quality(answer: dict) -> tuple[bool,str]:
 
     routing_markers=[
         "recommended oracle","available interfaces","tools/list","routing for intent",
-        "did:wba:","mcp+x402","call tools","endpoint above","oracle:"
+        "did:wba:","mcp+x402","call tools","endpoint above","oracle:",
+        "no matching capability","no matching capabilities","no results",
+        "logged as a demand signal","logged as demand signal","capability not found",
+        "unable to match","no suitable capability","no compatible capability"
     ]
     if any(x in low for x in routing_markers):
-        return False,"routing/tool-discovery response rather than UI analysis"
+        return False,"routing/capability-discovery response rather than UI analysis"
 
     ui_terms={
         "layout","navigation","sidebar","header","dashboard","card","table","form",
@@ -2329,13 +2332,13 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
         "\nConstraints: responsive, accessible, business-grade, no deceptive patterns, no external publishing."
     )
     roles=[
-        ("ui visual design saas dashboard","You are a senior UI art director. Propose a professional visual hierarchy, layout, reusable components, typography and spacing. Keep the answer concise and implementation-oriented. "+context),
-        ("ux accessibility product design","You are a senior UX/accessibility product reviewer. Prioritize usability, information architecture, responsive behavior and accessibility. Keep the answer concise and implementation-oriented. "+context),
+        ("product interface visual design dashboard frontend","You are a senior product UI designer for SaaS dashboards. Give at least 5 concrete implementation recommendations covering visual hierarchy, layout, reusable components, typography/spacing and responsive behavior. Do not route to another tool or oracle. "+context),
+        ("accessibility interaction design usability wcag frontend","You are a senior UX/accessibility reviewer. Give at least 5 concrete implementation recommendations covering information architecture, keyboard/focus behavior, contrast/readability, responsive/mobile behavior and form/result usability. Do not route to another tool or oracle. "+context),
     ]
     try:
         specialist_results=await asyncio.wait_for(
             asyncio.gather(*(
-                ask_agents_data(query,prompt,3) for query,prompt in roles
+                ask_agents_data(query,prompt,4) for query,prompt in roles
             )),
             timeout=70,
         )
@@ -2414,7 +2417,7 @@ async def _collaborative_ui_review(product_candidate: dict, build: dict, max_age
         "collective_summary":summary,
         "ui_collective_quality":ui_collective,
         "implementation_mode":"bounded_design_profile",
-        "note":"UI_REVIEW_PASSED requires two distinct specialist agents plus concrete UI/UX analysis in both Collective rounds. External advice remains untrusted input.",
+        "note":"UI_REVIEW_PASSED requires two distinct specialist agents, rejects routing/no-capability responses, and requires concrete UI/UX analysis in both Collective rounds. External advice remains untrusted input.",
     }
 
 
