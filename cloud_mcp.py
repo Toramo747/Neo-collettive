@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.54.0"
+VERSION = "0.55.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1605,10 +1605,15 @@ def _local_collective_fallback(query: str, problem: str) -> dict:
             },
         },
     ]
+    trust_stage=_infer_trust_stage(query,problem)
+    math_summary=_collective_math_summary(first_answers[:max_agents]+second[:max_agents],trust_stage)
+
     return {
         "ok": True,
         "query": query,
         "problem": problem,
+        "protocol":COLLECTIVE_PROTOCOL_VERSION,
+        "math_summary":math_summary,
         "round1": round1,
         "round2": round2,
         "fallback": True,
@@ -1680,6 +1685,8 @@ def _collective_agent_query(query: str) -> str:
     return aliases.get(key,("business analysis critical review " + key).strip())
 
 
+COLLECTIVE_PROTOCOL_VERSION = "MCX-1"
+
 def _collective_agent_prompt(problem: str, peer_digest: str | None = None) -> str:
     base=(
         "Act as an independent critical business and technical reviewer. "
@@ -1687,7 +1694,13 @@ def _collective_agent_prompt(problem: str, peer_digest: str | None = None) -> st
         "single-source dependence, operational risks, alternatives, and reasons not to proceed. "
         "Give a substantive conclusion based only on the supplied evidence. "
         "Do not describe routing, agent infrastructure, or how to connect to a service. "
-        "You may answer in English or Italian.\n\nCANDIDATE:\n" + (problem or "")
+        "Use English as the shared inter-agent language. "
+        "Finish with one machine-readable line exactly in this form: "
+        "MYCELIX_VECTOR support=<0..1>; contradiction=<0..1>; evidence_strength=<0..100>; "
+        "source_diversity=<0..100>; novelty=<0..100>; risk=<0..100>; actionability=<0..100>; "
+        "decision=<PROCEED|TEST|REJECT|UNCERTAIN>. "
+        "These scores are self-assessments only and must reflect the supplied evidence; do not invent sources or certainty. "
+        "\n\nCANDIDATE:\n" + (problem or "")
     )
     if peer_digest:
         base+=(
@@ -1696,6 +1709,85 @@ def _collective_agent_prompt(problem: str, peer_digest: str | None = None) -> st
             + "\n\nCompare the peer answers, identify agreement/disagreement and unsupported claims, then give your own conclusion."
         )
     return base
+
+
+def _collective_vector(answer: dict) -> dict | None:
+    text=_response_text(answer)
+    if "MYCELIX_VECTOR" not in text:
+        return None
+    fields={}
+    limits={
+        "support":(0.0,1.0),
+        "contradiction":(0.0,1.0),
+        "evidence_strength":(0.0,100.0),
+        "source_diversity":(0.0,100.0),
+        "novelty":(0.0,100.0),
+        "risk":(0.0,100.0),
+        "actionability":(0.0,100.0),
+    }
+    for key,(lo,hi) in limits.items():
+        m=re.search(r"\\b"+re.escape(key)+r"\\s*=\\s*(-?\\d+(?:\\.\\d+)?)",text,re.I)
+        if not m:
+            return None
+        value=float(m.group(1))
+        if value<lo or value>hi:
+            return None
+        fields[key]=round(value,3)
+    m=re.search(r"\\bdecision\\s*=\\s*(PROCEED|TEST|REJECT|UNCERTAIN)",text,re.I)
+    if not m:
+        return None
+    fields["decision"]=m.group(1).upper()
+    fields["agent_id"]=answer.get("agent_id")
+    fields["agent"]=answer.get("agent")
+    return fields
+
+
+def _collective_math_summary(rows: list[dict], trust_stage: str) -> dict:
+    vectors=[]
+    trust=AUTOPILOT_STATE.get("agent_trust") or {}
+    for row in rows:
+        vector=_collective_vector(row)
+        if not vector:
+            continue
+        agent_id=str(row.get("agent_id") or "")
+        trow=(trust.get(agent_id) or {})
+        srow=_stage_trust_row(trow,trust_stage)
+        trust_score=float(srow.get("trust") or trow.get("trust") or 50.0)
+        weight=max(0.2,min(1.0,trust_score/100.0))
+        vector["trust_score"]=round(trust_score,2)
+        vector["weight"]=round(weight,3)
+        vectors.append(vector)
+
+    if not vectors:
+        return {"protocol":COLLECTIVE_PROTOCOL_VERSION,"valid_vectors":0,"consensus_available":False}
+
+    keys=("support","contradiction","evidence_strength","source_diversity","novelty","risk","actionability")
+    denom=sum(v["weight"] for v in vectors) or 1.0
+    consensus={}
+    dispersion={}
+    for key in keys:
+        mean=sum(v[key]*v["weight"] for v in vectors)/denom
+        variance=sum(v["weight"]*((v[key]-mean)**2) for v in vectors)/denom
+        consensus[key]=round(mean,2)
+        dispersion[key]=round(variance**0.5,2)
+
+    decision_weights={}
+    for v in vectors:
+        decision_weights[v["decision"]]=round(decision_weights.get(v["decision"],0.0)+v["weight"],3)
+    decision=max(decision_weights.items(),key=lambda kv:kv[1])[0]
+    total=sum(decision_weights.values()) or 1.0
+    return {
+        "protocol":COLLECTIVE_PROTOCOL_VERSION,
+        "valid_vectors":len(vectors),
+        "consensus_available":len(vectors)>=2,
+        "consensus":consensus,
+        "dispersion":dispersion,
+        "weighted_decision":decision,
+        "decision_support":round(decision_weights[decision]/total,3),
+        "decision_weights":decision_weights,
+        "vectors":vectors[:8],
+        "note":"Agent self-assessments weighted by stage-specific trust; evidence gates remain authoritative.",
+    }
 
 
 async def _fresh_external_recovery(query: str, question: str, needed: int, exclude_ids: set[str] | None = None) -> list[dict]:
@@ -2359,6 +2451,8 @@ def _update_dialogue_learning(review: dict, topic: str, problem: str, goal: str)
         "round1_count":len(r1),
         "round2_count":len(r2),
         "peer_dialogue_completed":bool(len(r1)>=2 and len(r2)>=2),
+        "protocol":(review or {}).get("protocol") or COLLECTIVE_PROTOCOL_VERSION,
+        "math_summary":(review or {}).get("math_summary") or _collective_math_summary(r1+r2,_infer_trust_stage(topic,problem)),
         "round1_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"text":_response_excerpt(x)} for x in r1[:4]],
         "round2_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"text":_response_excerpt(x)} for x in r2[:4]],
         "suggestions_extracted":len(suggestions),
