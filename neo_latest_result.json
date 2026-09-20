@@ -1,16 +1,16 @@
 {
-  "captured_at_utc": "2026-09-20T13:41:10.537634+00:00",
+  "captured_at_utc": "2026-09-20T16:32:40.572866+00:00",
   "snapshot_schema": 4,
   "brand": "MYCELIX",
   "brand_tagline": "Collective Intelligence Network",
-  "neo_version": "0.55.0",
+  "neo_version": "0.55.1",
   "policy": {
-    "policy_version": 3,
+    "policy_version": 4,
     "exploration_base": 4,
     "exploration_stagnant": 5,
     "stagnation_threshold": 3,
     "max_exploitation_slots": 3,
-    "smoothing_old_weight": 0.7,
+    "smoothing_old_weight": 0.75,
     "minimum_observations_for_exploitation": 2,
     "autonomous_builder_enabled": true,
     "builder_min_readiness": 45,
@@ -43,14 +43,14 @@
   },
   "heartbeat": {
     "ok": true,
-    "neo_version": "0.55.0",
+    "neo_version": "0.55.1",
     "started": false,
     "busy": true,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 9.39645,
-    "cycles_completed": 33,
-    "last_started_utc": "2026-09-20T13:37:56.433868+00:00",
+    "last_started_age_seconds": 19.191245,
+    "cycles_completed": 34,
+    "last_started_utc": "2026-09-20T16:28:55.472402+00:00",
     "last_finished_utc": null,
     "last_status": null,
     "last_error": null
@@ -58,31 +58,31 @@
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "35514056539",
+    "github_run_id": "35522853683",
     "github_run_attempt": "1"
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 34,
-    "last_started_utc": "2026-09-20T13:37:56.433868+00:00",
-    "last_finished_utc": "2026-09-20T13:41:03.537051+00:00",
+    "cycles_completed": 35,
+    "last_started_utc": "2026-09-20T16:28:55.472402+00:00",
+    "last_finished_utc": "2026-09-20T16:32:25.327865+00:00",
     "last_status": "SELECT",
     "last_error": null,
     "stagnation_cycles": 0,
     "recent_sectors": [
-      "hr_ops",
-      "creator_tools",
-      "local_business_ops",
-      "document_ops",
-      "productivity",
-      "integration_api",
-      "seo_marketing",
       "data_cleanup",
       "data_analytics",
       "micro_saas",
       "ai_tools",
-      "small_business_admin"
+      "small_business_admin",
+      "integration_api",
+      "ecommerce_ops",
+      "reporting_compliance",
+      "content_ops",
+      "finance_ops",
+      "lead_ops",
+      "customer_support"
     ],
     "family_performance": {
       "workflow_automation": {
@@ -145,15 +145,17 @@
         "last_signal_types": []
       },
       "ai_tools": {
-        "score": 44.51,
-        "observations": 19,
+        "score": 52.13,
+        "observations": 20,
         "best_gap_score": 100,
         "qualified_hits": 4,
-        "last_gap_score": 35,
-        "last_domains": 1,
-        "last_strong_domains": 0,
+        "last_gap_score": 60,
+        "last_domains": 2,
+        "last_strong_domains": 2,
         "last_signal_types": [
-          "PAID_DEMAND"
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
         ]
       },
       "developer_tools": {
@@ -275,50 +277,50 @@
       "mode": "adaptive_entropy_explore_exploit",
       "entropy_source": "system_random",
       "queries": [
-        "\"hiring\" freelancer API integration service",
-        "\"will pay\" content optimization software",
-        "\"hiring\" freelancer data cleanup service",
-        "\"will pay\" business intelligence pain",
-        "site:freelancer.com/projects small SaaS tool needed",
-        "\"will pay\" AI tool workflow business",
-        "\"manual\" \"time consuming\" manual office process",
+        "site:upwork.com/freelance-jobs SaaS integration pain",
+        "site:upwork.com/freelance-jobs order operations tool",
+        "site:upwork.com/freelance-jobs compliance reporting tool",
+        "\"hiring\" freelancer localization workflow",
+        "\"budget\" expense reporting tool",
+        "site:reddit.com \"need help\" CRM follow up workflow",
+        "site:reddit.com \"looking for\" customer support automation",
         "\"will pay\" \"manual process\" small business"
       ],
       "sectors": [
         "integration_api",
-        "seo_marketing",
-        "data_cleanup",
-        "data_analytics",
-        "micro_saas",
-        "ai_tools",
-        "small_business_admin"
+        "ecommerce_ops",
+        "reporting_compliance",
+        "content_ops",
+        "finance_ops",
+        "lead_ops",
+        "customer_support"
       ],
       "sector_families": {
         "integration_api": "integration_api",
-        "seo_marketing": "marketing_seo",
-        "data_cleanup": "data_cleanup",
-        "data_analytics": "analytics_tools",
-        "micro_saas": "micro_saas",
-        "ai_tools": "ai_tools",
-        "small_business_admin": "workflow_automation"
+        "ecommerce_ops": "ecommerce_tools",
+        "reporting_compliance": "compliance_tools",
+        "content_ops": "content_tools",
+        "finance_ops": "finance_ops",
+        "lead_ops": "crm_lead_ops",
+        "customer_support": "customer_support"
       },
       "recent_sector_memory": [
-        "hr_ops",
-        "creator_tools",
-        "local_business_ops",
-        "document_ops",
-        "productivity",
-        "integration_api",
-        "seo_marketing",
         "data_cleanup",
         "data_analytics",
         "micro_saas",
         "ai_tools",
-        "small_business_admin"
+        "small_business_admin",
+        "integration_api",
+        "ecommerce_ops",
+        "reporting_compliance",
+        "content_ops",
+        "finance_ops",
+        "lead_ops",
+        "customer_support"
       ],
-      "stagnation_cycles": 4,
-      "exploration_slots": 5,
-      "exploitation_slots": 2,
+      "stagnation_cycles": 0,
+      "exploration_slots": 4,
+      "exploitation_slots": 3,
       "family_performance": {
         "workflow_automation": {
           "score": 50.34,
@@ -380,15 +382,15 @@
           "last_signal_types": []
         },
         "ai_tools": {
-          "score": 37.87,
-          "observations": 18,
+          "score": 44.51,
+          "observations": 19,
           "best_gap_score": 100,
           "qualified_hits": 4,
-          "last_gap_score": 20,
+          "last_gap_score": 35,
           "last_domains": 1,
           "last_strong_domains": 0,
           "last_signal_types": [
-            "PAIN"
+            "PAID_DEMAND"
           ]
         },
         "developer_tools": {
@@ -418,15 +420,14 @@
           ]
         },
         "customer_support": {
-          "score": 51.57,
-          "observations": 11,
+          "score": 39.1,
+          "observations": 12,
           "best_gap_score": 65,
           "qualified_hits": 0,
-          "last_gap_score": 25,
+          "last_gap_score": 0,
           "last_domains": 1,
           "last_strong_domains": 1,
           "last_signal_types": [
-            "BUY_INTENT",
             "COMPETITION"
           ]
         },
@@ -510,12 +511,12 @@
       "hypothesis_probes": [],
       "policy": "exploit evidence-producing families while preserving majority exploration; reserve bounded search capacity for hypotheses learned from agent dialogue",
       "adaptive_policy": {
-        "policy_version": 3,
+        "policy_version": 4,
         "exploration_base": 4,
         "exploration_stagnant": 5,
         "stagnation_threshold": 3,
         "max_exploitation_slots": 3,
-        "smoothing_old_weight": 0.7,
+        "smoothing_old_weight": 0.75,
         "minimum_observations_for_exploitation": 2,
         "autonomous_builder_enabled": true,
         "builder_min_readiness": 45,
@@ -576,107 +577,107 @@
       },
       "422e8beb-0953-431f-bb48-9a423f1e5b1e": {
         "agent": "LLM Orchestration Agent 2",
-        "observations": 23,
-        "accepted": 10,
-        "transport_success": 10,
-        "relevance_total": 296.0,
-        "avg_relevance": 12.87,
-        "trust": 54.09,
+        "observations": 31,
+        "accepted": 14,
+        "transport_success": 14,
+        "relevance_total": 344.0,
+        "avg_relevance": 11.1,
+        "trust": 52.77,
         "stages": {
           "research": {
-            "observations": 15,
+            "observations": 23,
             "accepted": 1,
-            "transport_success": 9,
-            "relevance_total": 152.0,
-            "avg_relevance": 10.13,
-            "trust": 31.2,
+            "transport_success": 13,
+            "relevance_total": 200.0,
+            "avg_relevance": 8.7,
+            "trust": 26.96,
             "last_quality_ok": false,
             "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "c99dbe3b-8e7b-4226-8204-ffd46f6bc34e": {
         "agent": "LLM Orchestration Agent (Opentelemetry Api)",
-        "observations": 162,
-        "accepted": 86,
-        "transport_success": 86,
-        "relevance_total": 4549.0,
-        "avg_relevance": 28.08,
-        "trust": 62.47,
+        "observations": 170,
+        "accepted": 90,
+        "transport_success": 90,
+        "relevance_total": 4613.0,
+        "avg_relevance": 27.14,
+        "trust": 62.35,
         "stages": {
           "research": {
-            "observations": 11,
+            "observations": 19,
             "accepted": 1,
-            "transport_success": 6,
-            "relevance_total": 184.0,
-            "avg_relevance": 16.73,
-            "trust": 36.36,
+            "transport_success": 10,
+            "relevance_total": 248.0,
+            "avg_relevance": 13.05,
+            "trust": 33.26,
             "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "1b2fc615-c365-4ddc-b879-a4a5548502d4": {
         "agent": "LLM Orchestration JWT Agent",
-        "observations": 24,
-        "accepted": 17,
-        "transport_success": 17,
-        "relevance_total": 320.0,
-        "avg_relevance": 13.33,
-        "trust": 76.67,
+        "observations": 32,
+        "accepted": 21,
+        "transport_success": 21,
+        "relevance_total": 400.0,
+        "avg_relevance": 12.5,
+        "trust": 71.25,
         "stages": {
           "research": {
-            "observations": 16,
+            "observations": 24,
             "accepted": 2,
-            "transport_success": 16,
-            "relevance_total": 176.0,
-            "avg_relevance": 11.0,
-            "trust": 44.0,
+            "transport_success": 20,
+            "relevance_total": 256.0,
+            "avg_relevance": 10.67,
+            "trust": 37.67,
             "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "fb961915-bafe-4393-9674-cabb1ea24ca1": {
         "agent": "LLM Orchestration Agent",
-        "observations": 100,
-        "accepted": 49,
-        "transport_success": 49,
-        "relevance_total": 2071.0,
-        "avg_relevance": 20.71,
-        "trust": 59.2,
+        "observations": 108,
+        "accepted": 52,
+        "transport_success": 52,
+        "relevance_total": 2159.0,
+        "avg_relevance": 19.99,
+        "trust": 58.52,
         "stages": {
           "research": {
-            "observations": 23,
-            "accepted": 4,
-            "transport_success": 23,
-            "relevance_total": 279.0,
-            "avg_relevance": 12.13,
-            "trust": 48.63,
+            "observations": 31,
+            "accepted": 5,
+            "transport_success": 26,
+            "relevance_total": 367.0,
+            "avg_relevance": 11.84,
+            "trust": 44.21,
             "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "02a5aec8-8439-4f71-9a3a-892933994f9d": {
         "agent": "LLM Orchestration Agent 5",
@@ -706,29 +707,29 @@
       },
       "6099db20-1728-42b2-933b-9a4b38ebb93e": {
         "agent": "LLM Orchestration Agent (Mcp)",
-        "observations": 78,
-        "accepted": 31,
-        "transport_success": 31,
-        "relevance_total": 1891.0,
-        "avg_relevance": 24.24,
-        "trust": 51.79,
+        "observations": 86,
+        "accepted": 34,
+        "transport_success": 34,
+        "relevance_total": 2123.0,
+        "avg_relevance": 24.69,
+        "trust": 51.63,
         "stages": {
           "research": {
-            "observations": 4,
+            "observations": 12,
             "accepted": 1,
-            "transport_success": 4,
-            "relevance_total": 108.0,
-            "avg_relevance": 27.0,
-            "trust": 55.0,
+            "transport_success": 7,
+            "relevance_total": 340.0,
+            "avg_relevance": 28.33,
+            "trust": 36.67,
             "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:40:02.075275+00:00"
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:40:02.075275+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "6c9b3d56-65ac-4711-8d34-e715173a22cc": {
         "agent": "LLM Orchestration Agent (Openai)",
@@ -836,29 +837,29 @@
       },
       "4ca9b306-19e4-4d96-ab31-020c8c112c29": {
         "agent": "LLM Orchestration Observability Agent",
-        "observations": 78,
-        "accepted": 38,
-        "transport_success": 38,
-        "relevance_total": 1969.0,
-        "avg_relevance": 25.24,
-        "trust": 58.97,
+        "observations": 86,
+        "accepted": 40,
+        "transport_success": 40,
+        "relevance_total": 2081.0,
+        "avg_relevance": 24.2,
+        "trust": 57.21,
         "stages": {
           "research": {
-            "observations": 12,
+            "observations": 20,
             "accepted": 1,
-            "transport_success": 10,
-            "relevance_total": 234.0,
-            "avg_relevance": 19.5,
-            "trust": 41.67,
+            "transport_success": 12,
+            "relevance_total": 346.0,
+            "avg_relevance": 17.3,
+            "trust": 35.0,
             "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "4ab3cedb-805e-41d5-87bd-a45aa7196a5a": {
         "agent": "MERCURY Web Fetch",
@@ -1236,29 +1237,29 @@
       },
       "96c8bb05-4e53-4b17-bb80-1b8bc7fb76b5": {
         "agent": "GOSCE Portfolio Router",
-        "observations": 191,
-        "accepted": 191,
-        "transport_success": 191,
-        "relevance_total": 8150.0,
-        "avg_relevance": 42.67,
+        "observations": 199,
+        "accepted": 199,
+        "transport_success": 199,
+        "relevance_total": 8178.0,
+        "avg_relevance": 41.1,
         "trust": 100.0,
         "stages": {
           "research": {
-            "observations": 12,
+            "observations": 20,
             "accepted": 0,
-            "transport_success": 12,
-            "relevance_total": 320.0,
-            "avg_relevance": 26.67,
+            "transport_success": 20,
+            "relevance_total": 348.0,
+            "avg_relevance": 17.4,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "routing/payment/service response rather than domain analysis",
-            "last_seen_utc": "2026-09-20T13:40:22.005928+00:00"
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:40:22.005928+00:00"
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "717cc386-c0ed-4749-a276-b6a629f66749": {
         "agent": "Agent Zero",
@@ -1326,55 +1327,55 @@
       },
       "41166d96-a79d-43ef-bd5a-77dd92ca01c9": {
         "agent": "LLM Orchestration Agent (Cryptography)",
-        "observations": 72,
-        "accepted": 41,
-        "transport_success": 41,
-        "relevance_total": 2703.0,
-        "avg_relevance": 37.54,
-        "trust": 65.56,
+        "observations": 80,
+        "accepted": 49,
+        "transport_success": 49,
+        "relevance_total": 2807.0,
+        "avg_relevance": 35.09,
+        "trust": 69.0,
         "stages": {
           "research": {
-            "observations": 12,
-            "accepted": 1,
-            "transport_success": 5,
-            "relevance_total": 300.0,
-            "avg_relevance": 25.0,
-            "trust": 33.33,
-            "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "observations": 20,
+            "accepted": 2,
+            "transport_success": 13,
+            "relevance_total": 404.0,
+            "avg_relevance": 20.2,
+            "trust": 39.0,
+            "last_quality_ok": true,
+            "last_quality_reason": "accepted for research",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "a8592942-a978-4449-ab29-051c49d2bd9f": {
         "agent": "TESSA Marketing & Technology",
-        "observations": 136,
-        "accepted": 128,
-        "transport_success": 128,
-        "relevance_total": 8236.0,
-        "avg_relevance": 60.56,
-        "trust": 95.29,
+        "observations": 144,
+        "accepted": 136,
+        "transport_success": 136,
+        "relevance_total": 8732.0,
+        "avg_relevance": 60.64,
+        "trust": 95.56,
         "stages": {
           "research": {
-            "observations": 32,
-            "accepted": 32,
-            "transport_success": 32,
-            "relevance_total": 1912.0,
-            "avg_relevance": 59.75,
+            "observations": 40,
+            "accepted": 40,
+            "transport_success": 40,
+            "relevance_total": 2408.0,
+            "avg_relevance": 60.2,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       "8989b794-4c09-4960-9d13-af23a2394cb7": {
         "agent": "Graph Advocate",
@@ -3909,61 +3910,61 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-20T13:41:03.529001+00:00",
-    "neo_version": "0.55.0",
+    "timestamp_utc": "2026-09-20T16:32:25.317485+00:00",
+    "neo_version": "0.55.1",
     "status": "SELECT",
     "next_gate": "SELECT: raccogli evidenza convergente e prepara un candidato testabile.",
-    "valid_external_answers": 12,
+    "valid_external_answers": 10,
     "web_source_count": 40,
     "evidence_scout_count": 20,
     "search_strategy": {
       "mode": "adaptive_entropy_explore_exploit",
       "entropy_source": "system_random",
       "queries": [
-        "\"hiring\" freelancer API integration service",
-        "\"will pay\" content optimization software",
-        "\"hiring\" freelancer data cleanup service",
-        "\"will pay\" business intelligence pain",
-        "site:freelancer.com/projects small SaaS tool needed",
-        "\"will pay\" AI tool workflow business",
-        "\"manual\" \"time consuming\" manual office process",
+        "site:upwork.com/freelance-jobs SaaS integration pain",
+        "site:upwork.com/freelance-jobs order operations tool",
+        "site:upwork.com/freelance-jobs compliance reporting tool",
+        "\"hiring\" freelancer localization workflow",
+        "\"budget\" expense reporting tool",
+        "site:reddit.com \"need help\" CRM follow up workflow",
+        "site:reddit.com \"looking for\" customer support automation",
         "\"will pay\" \"manual process\" small business"
       ],
       "sectors": [
         "integration_api",
-        "seo_marketing",
-        "data_cleanup",
-        "data_analytics",
-        "micro_saas",
-        "ai_tools",
-        "small_business_admin"
+        "ecommerce_ops",
+        "reporting_compliance",
+        "content_ops",
+        "finance_ops",
+        "lead_ops",
+        "customer_support"
       ],
       "sector_families": {
         "integration_api": "integration_api",
-        "seo_marketing": "marketing_seo",
-        "data_cleanup": "data_cleanup",
-        "data_analytics": "analytics_tools",
-        "micro_saas": "micro_saas",
-        "ai_tools": "ai_tools",
-        "small_business_admin": "workflow_automation"
+        "ecommerce_ops": "ecommerce_tools",
+        "reporting_compliance": "compliance_tools",
+        "content_ops": "content_tools",
+        "finance_ops": "finance_ops",
+        "lead_ops": "crm_lead_ops",
+        "customer_support": "customer_support"
       },
       "recent_sector_memory": [
-        "hr_ops",
-        "creator_tools",
-        "local_business_ops",
-        "document_ops",
-        "productivity",
-        "integration_api",
-        "seo_marketing",
         "data_cleanup",
         "data_analytics",
         "micro_saas",
         "ai_tools",
-        "small_business_admin"
+        "small_business_admin",
+        "integration_api",
+        "ecommerce_ops",
+        "reporting_compliance",
+        "content_ops",
+        "finance_ops",
+        "lead_ops",
+        "customer_support"
       ],
-      "stagnation_cycles": 4,
-      "exploration_slots": 5,
-      "exploitation_slots": 2,
+      "stagnation_cycles": 0,
+      "exploration_slots": 4,
+      "exploitation_slots": 3,
       "family_performance": {
         "workflow_automation": {
           "score": 50.34,
@@ -4025,15 +4026,15 @@
           "last_signal_types": []
         },
         "ai_tools": {
-          "score": 37.87,
-          "observations": 18,
+          "score": 44.51,
+          "observations": 19,
           "best_gap_score": 100,
           "qualified_hits": 4,
-          "last_gap_score": 20,
+          "last_gap_score": 35,
           "last_domains": 1,
           "last_strong_domains": 0,
           "last_signal_types": [
-            "PAIN"
+            "PAID_DEMAND"
           ]
         },
         "developer_tools": {
@@ -4063,15 +4064,14 @@
           ]
         },
         "customer_support": {
-          "score": 51.57,
-          "observations": 11,
+          "score": 39.1,
+          "observations": 12,
           "best_gap_score": 65,
           "qualified_hits": 0,
-          "last_gap_score": 25,
+          "last_gap_score": 0,
           "last_domains": 1,
           "last_strong_domains": 1,
           "last_signal_types": [
-            "BUY_INTENT",
             "COMPETITION"
           ]
         },
@@ -4155,12 +4155,12 @@
       "hypothesis_probes": [],
       "policy": "exploit evidence-producing families while preserving majority exploration; reserve bounded search capacity for hypotheses learned from agent dialogue",
       "adaptive_policy": {
-        "policy_version": 3,
+        "policy_version": 4,
         "exploration_base": 4,
         "exploration_stagnant": 5,
         "stagnation_threshold": 3,
         "max_exploitation_slots": 3,
-        "smoothing_old_weight": 0.7,
+        "smoothing_old_weight": 0.75,
         "minimum_observations_for_exploitation": 2,
         "autonomous_builder_enabled": true,
         "builder_min_readiness": 45,
@@ -4253,15 +4253,17 @@
         "last_signal_types": []
       },
       "ai_tools": {
-        "score": 44.51,
-        "observations": 19,
+        "score": 52.13,
+        "observations": 20,
         "best_gap_score": 100,
         "qualified_hits": 4,
-        "last_gap_score": 35,
-        "last_domains": 1,
-        "last_strong_domains": 0,
+        "last_gap_score": 60,
+        "last_domains": 2,
+        "last_strong_domains": 2,
         "last_signal_types": [
-          "PAID_DEMAND"
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
         ]
       },
       "developer_tools": {
@@ -4402,50 +4404,40 @@
     "gate_rule": "same problem: >=3 topic-relevant independent domains, >=1 strong commercial domain, AND contextual PAID_DEMAND + (BUY_INTENT or PAIN)",
     "qualified_problem_clusters": [],
     "clusters": {
-      "customer_support": {
-        "qualified": false,
-        "commercially_actionable": false,
-        "gap_score": 0,
-        "independent_domains": 1,
-        "strong_commercial_domains": 1,
-        "signal_types": [
-          "COMPETITION"
-        ],
-        "domains": [
-          "asking.com.br"
-        ],
-        "signals": [
-          {
-            "domain": "asking.com.br",
-            "source": "hackernews",
-            "title": "Show HN: Asking – A simpler customer support inbox for small teams",
-            "url": "https://asking.com.br/",
-            "signal_types": [
-              "COMPETITION"
-            ]
-          }
-        ]
-      },
       "ai_tools": {
         "qualified": false,
-        "commercially_actionable": false,
-        "gap_score": 35,
-        "independent_domains": 1,
-        "strong_commercial_domains": 0,
+        "commercially_actionable": true,
+        "gap_score": 60,
+        "independent_domains": 2,
+        "strong_commercial_domains": 2,
         "signal_types": [
-          "PAID_DEMAND"
+          "COMPETITION",
+          "PAID_DEMAND",
+          "PAIN"
         ],
         "domains": [
-          "github.com"
+          "github.com",
+          "news.ycombinator.com"
         ],
         "signals": [
           {
             "domain": "github.com",
             "source": "github-issues",
-            "title": "Pull Request Dashboard",
-            "url": "https://github.com/open-telemetry/opentelemetry-java-instrumentation/issues/18435",
+            "title": "bench: Decision Bench lane — same workflow, swap only the intelligence seat (#457 owns the universe)",
+            "url": "https://github.com/supernovae-st/nika/issues/1656",
             "signal_types": [
               "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "news.ycombinator.com",
+            "source": "hackernews",
+            "title": "Karen Nikoghosyan Is Building AI Operating Layers for Multichannel Commerce",
+            "url": "https://news.ycombinator.com/item?id=49776683",
+            "signal_types": [
+              "PAIN",
+              "PAID_DEMAND",
+              "COMPETITION"
             ]
           }
         ]
@@ -4496,29 +4488,29 @@
       },
       {
         "agent": "GOSCE Portfolio Router",
-        "observations": 191,
-        "accepted": 191,
-        "transport_success": 191,
-        "relevance_total": 8150.0,
-        "avg_relevance": 42.67,
+        "observations": 199,
+        "accepted": 199,
+        "transport_success": 199,
+        "relevance_total": 8178.0,
+        "avg_relevance": 41.1,
         "trust": 100.0,
         "stages": {
           "research": {
-            "observations": 12,
+            "observations": 20,
             "accepted": 0,
-            "transport_success": 12,
-            "relevance_total": 320.0,
-            "avg_relevance": 26.67,
+            "transport_success": 20,
+            "relevance_total": 348.0,
+            "avg_relevance": 17.4,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "routing/payment/service response rather than domain analysis",
-            "last_seen_utc": "2026-09-20T13:40:22.005928+00:00"
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:40:22.005928+00:00"
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       {
         "agent": "Graph Advocate",
@@ -4600,55 +4592,29 @@
       },
       {
         "agent": "TESSA Marketing & Technology",
-        "observations": 136,
-        "accepted": 128,
-        "transport_success": 128,
-        "relevance_total": 8236.0,
-        "avg_relevance": 60.56,
-        "trust": 95.29,
+        "observations": 144,
+        "accepted": 136,
+        "transport_success": 136,
+        "relevance_total": 8732.0,
+        "avg_relevance": 60.64,
+        "trust": 95.56,
         "stages": {
           "research": {
-            "observations": 32,
-            "accepted": 32,
-            "transport_success": 32,
-            "relevance_total": 1912.0,
-            "avg_relevance": 59.75,
+            "observations": 40,
+            "accepted": 40,
+            "transport_success": 40,
+            "relevance_total": 2408.0,
+            "avg_relevance": 60.2,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
-      },
-      {
-        "agent": "LLM Orchestration JWT Agent",
-        "observations": 24,
-        "accepted": 17,
-        "transport_success": 17,
-        "relevance_total": 320.0,
-        "avg_relevance": 13.33,
-        "trust": 76.67,
-        "stages": {
-          "research": {
-            "observations": 16,
-            "accepted": 2,
-            "transport_success": 16,
-            "relevance_total": 176.0,
-            "avg_relevance": 11.0,
-            "trust": 44.0,
-            "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
-          }
-        },
-        "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-20T13:41:01.032819+00:00"
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
       },
       {
         "agent": "Encrypted LangChain Token Agent",
@@ -4677,6 +4643,58 @@
         "last_seen_utc": "2026-09-20T12:22:39.154969+00:00"
       },
       {
+        "agent": "LLM Orchestration JWT Agent",
+        "observations": 32,
+        "accepted": 21,
+        "transport_success": 21,
+        "relevance_total": 400.0,
+        "avg_relevance": 12.5,
+        "trust": 71.25,
+        "stages": {
+          "research": {
+            "observations": 24,
+            "accepted": 2,
+            "transport_success": 20,
+            "relevance_total": 256.0,
+            "avg_relevance": 10.67,
+            "trust": 37.67,
+            "last_quality_ok": false,
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
+          }
+        },
+        "last_stage": "research",
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
+      },
+      {
+        "agent": "LLM Orchestration Agent (Cryptography)",
+        "observations": 80,
+        "accepted": 49,
+        "transport_success": 49,
+        "relevance_total": 2807.0,
+        "avg_relevance": 35.09,
+        "trust": 69.0,
+        "stages": {
+          "research": {
+            "observations": 20,
+            "accepted": 2,
+            "transport_success": 13,
+            "relevance_total": 404.0,
+            "avg_relevance": 20.2,
+            "trust": 39.0,
+            "last_quality_ok": true,
+            "last_quality_reason": "accepted for research",
+            "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
+          }
+        },
+        "last_stage": "research",
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-20T16:32:22.868199+00:00"
+      },
+      {
         "agent": "LLM Orchestration Agent (Langsmith)",
         "observations": 169,
         "accepted": 102,
@@ -4701,32 +4719,6 @@
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
         "last_seen_utc": "2026-09-20T12:22:39.154969+00:00"
-      },
-      {
-        "agent": "LLM Orchestration Agent (Langchain Core)",
-        "observations": 176,
-        "accepted": 101,
-        "transport_success": 101,
-        "relevance_total": 5772.0,
-        "avg_relevance": 32.8,
-        "trust": 65.91,
-        "stages": {
-          "research": {
-            "observations": 8,
-            "accepted": 0,
-            "transport_success": 1,
-            "relevance_total": 248.0,
-            "avg_relevance": 31.0,
-            "trust": 22.5,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-20T11:34:30.044137+00:00"
-          }
-        },
-        "last_stage": "research",
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-20T11:34:30.044137+00:00"
       }
     ],
     "jarvis": {
