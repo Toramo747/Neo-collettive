@@ -3658,7 +3658,24 @@ def _jarvis_snapshot(result: dict) -> dict:
                 "next_experiment":analysis.get("next_experiment"),
                 "transport_ok": bool(root.get("ok")) if isinstance(root, dict) else None,
             }
-    return {"version":None,"evidence_state":None,"decision":None,"summary":{},"opportunities":[],"next_experiment":None}
+    transports=[]
+    for name in ("jarvis","jarvis_brief"):
+        root=result.get(name)
+        if isinstance(root,dict):
+            transports.append({
+                "stage":name,
+                "configured":root.get("configured"),
+                "ok":root.get("ok"),
+                "status":root.get("status"),
+                "attempt":root.get("attempt"),
+                "reason":root.get("reason"),
+                "endpoint":root.get("endpoint"),
+            })
+    return {
+        "version":None,"evidence_state":None,"decision":None,"summary":{},
+        "opportunities":[],"next_experiment":None,
+        "transport_diagnostics":transports,
+    }
 
 
 def _compact_director_result(result: dict) -> dict:
