@@ -20,7 +20,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.49.1"
+VERSION = "0.50.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -66,6 +66,10 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "last_build": None,
     "measurement_history": [],
     "last_measurement": None,
+    "dialogue_history": [],
+    "knowledge_ledger": [],
+    "hypothesis_queue": [],
+    "exploration_history": [],
     "venture_metrics": {
         "audits_total": 0,
         "audits_with_baseline": 0,
@@ -85,6 +89,10 @@ def _state_payload() -> dict:
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
         "last_measurement": AUTOPILOT_STATE.get("last_measurement"),
+        "dialogue_history": list(AUTOPILOT_STATE.get("dialogue_history") or [])[-30:],
+        "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
+        "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-40:],
+        "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
     }
 
@@ -110,6 +118,14 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["measurement_history"] = payload.get("measurement_history")[-30:]
     if isinstance(payload.get("last_measurement"), dict):
         AUTOPILOT_STATE["last_measurement"] = payload.get("last_measurement")
+    if isinstance(payload.get("dialogue_history"), list):
+        AUTOPILOT_STATE["dialogue_history"] = payload.get("dialogue_history")[-30:]
+    if isinstance(payload.get("knowledge_ledger"), list):
+        AUTOPILOT_STATE["knowledge_ledger"] = payload.get("knowledge_ledger")[-80:]
+    if isinstance(payload.get("hypothesis_queue"), list):
+        AUTOPILOT_STATE["hypothesis_queue"] = payload.get("hypothesis_queue")[-40:]
+    if isinstance(payload.get("exploration_history"), list):
+        AUTOPILOT_STATE["exploration_history"] = payload.get("exploration_history")[-40:]
     if isinstance(payload.get("venture_metrics"), dict):
         AUTOPILOT_STATE["venture_metrics"] = payload.get("venture_metrics") or {}
     return True
@@ -1664,6 +1680,189 @@ def _sector_family(sector_id: str) -> str:
     return mapping.get(sector_id, "other")
 
 
+
+def _response_excerpt(answer: dict, limit: int = 700) -> str:
+    try:
+        text=_response_text(answer).strip()
+    except Exception:
+        text=""
+    return " ".join(text.split())[:limit]
+
+
+def _suggestion_sentences(review: dict) -> list[dict]:
+    markers=(
+        "recommend","suggest","consider","opportunity","could","should","instead",
+        "alternative","new market","new customer","new product","idea","try",
+        "consiglio","sugger","potrebbe","dovrebbe","alternativa","opportunita",
+        "opportunità","invece","nuovo mercato","nuovo prodotto","provare"
+    )
+    out=[]
+    seen=set()
+    for stage in ("round1","round2"):
+        rows=(review or {}).get(stage) or []
+        for row in rows if isinstance(rows,list) else []:
+            if not isinstance(row,dict) or not row.get("ok"):
+                continue
+            agent_id=str(row.get("agent_id") or "")
+            agent=str(row.get("agent") or agent_id or "unknown")
+            raw=_response_excerpt(row,2200)
+            normalized=raw.replace("\n",". ")
+            for part in normalized.split("."):
+                sentence=" ".join(part.strip().split())
+                low=sentence.lower()
+                if len(sentence)<45 or len(sentence)>500:
+                    continue
+                if not any(m in low for m in markers):
+                    continue
+                key=sentence.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append({
+                    "stage":stage,
+                    "agent_id":agent_id,
+                    "agent":agent,
+                    "text":sentence,
+                })
+    return out[:18]
+
+
+def _novelty_score(text: str, existing: list[dict]) -> int:
+    target=_tokens(text)
+    if not target:
+        return 0
+    best=0.0
+    for row in existing[-60:]:
+        if not isinstance(row,dict):
+            continue
+        other=_tokens(str(row.get("text") or row.get("claim") or row.get("hypothesis") or ""))
+        if not other:
+            continue
+        overlap=len(target & other)/max(1,len(target | other))
+        best=max(best,overlap)
+    return max(0,min(100,round((1.0-best)*100)))
+
+
+def _hypothesis_scores(text: str, goal: str, existing: list[dict]) -> dict:
+    low=(text or "").lower()
+    novelty=_novelty_score(text,existing)
+    evidence_markers=("customer","client","problem","pain","manual","workflow","price","pay","budget","hiring","market","cliente","problema","prezzo","pag","mercato")
+    evidence=min(100,30+sum(10 for x in evidence_markers if x in low))
+    fit_tokens=_tokens(goal)
+    text_tokens=_tokens(text)
+    overlap=len(fit_tokens & text_tokens)
+    strategic=min(100,35+overlap*12+(15 if _commercial_family(text)!="other" else 0))
+    return {"novelty":novelty,"evidence_potential":evidence,"strategic_fit":strategic}
+
+
+def _update_dialogue_learning(review: dict, topic: str, problem: str, goal: str) -> dict:
+    if not isinstance(review,dict) or not review.get("ran",True):
+        return {"ran":False}
+
+    r1=[x for x in (review.get("round1") or []) if isinstance(x,dict) and x.get("ok")]
+    r2=[x for x in (review.get("round2") or []) if isinstance(x,dict) and x.get("ok")]
+    participants={}
+    for stage,rows in (("round1",r1),("round2",r2)):
+        for row in rows:
+            aid=str(row.get("agent_id") or "")
+            if not aid:
+                continue
+            p=participants.setdefault(aid,{"agent_id":aid,"agent":row.get("agent") or aid,"stages":[]})
+            if stage not in p["stages"]:
+                p["stages"].append(stage)
+
+    trust=AUTOPILOT_STATE.get("agent_trust") or {}
+    new_agents=[
+        p for aid,p in participants.items()
+        if int((trust.get(aid) or {}).get("observations") or 0)<=1
+    ]
+
+    suggestions=_suggestion_sentences(review)
+    ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
+    queue=list(AUTOPILOT_STATE.get("hypothesis_queue") or [])
+    added=[]
+    for s in suggestions:
+        text=str(s.get("text") or "")
+        scores=_hypothesis_scores(text,goal,ledger+queue)
+        if scores["novelty"]<35:
+            continue
+        family=_commercial_family(text)
+        row={
+            "id":"hyp-"+secrets.token_hex(5),
+            "created_at_utc":datetime.now(timezone.utc).isoformat(),
+            "status":"HYPOTHESIS",
+            "source":"agent_dialogue",
+            "topic":topic,
+            "family":family,
+            "text":text,
+            "proposed_by":{"agent_id":s.get("agent_id"),"agent":s.get("agent"),"stage":s.get("stage")},
+            "scores":scores,
+            "priority":round(scores["novelty"]*0.35+scores["evidence_potential"]*0.35+scores["strategic_fit"]*0.30,1),
+        }
+        duplicate=False
+        for old in queue[-40:]:
+            if _novelty_score(text,[old])<28:
+                duplicate=True
+                break
+        if duplicate:
+            continue
+        queue.append(row)
+        ledger.append({
+            "id":"know-"+secrets.token_hex(5),
+            "created_at_utc":row["created_at_utc"],
+            "state":"HYPOTHESIS",
+            "claim":text,
+            "family":family,
+            "source_dialogue_topic":topic,
+            "supporting_agents":[s.get("agent_id")],
+            "confidence":"unverified",
+            "next_action":"EXPLORE",
+            "scores":scores,
+        })
+        added.append(row)
+
+    report={
+        "dialogue_id":"dlg-"+secrets.token_hex(5),
+        "created_at_utc":datetime.now(timezone.utc).isoformat(),
+        "topic":topic,
+        "problem_excerpt":" ".join((problem or "").split())[:700],
+        "participants":list(participants.values()),
+        "new_agents":new_agents,
+        "round1_count":len(r1),
+        "round2_count":len(r2),
+        "peer_dialogue_completed":bool(len(r1)>=2 and len(r2)>=2),
+        "round1_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"text":_response_excerpt(x)} for x in r1[:4]],
+        "round2_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"text":_response_excerpt(x)} for x in r2[:4]],
+        "suggestions_extracted":len(suggestions),
+        "new_hypotheses":added,
+        "knowledge_gained":len(added),
+        "fallback":bool(review.get("fallback")),
+    }
+    history=list(AUTOPILOT_STATE.get("dialogue_history") or [])
+    history.append(report)
+    AUTOPILOT_STATE["dialogue_history"]=history[-30:]
+    AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]
+    queue.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
+    AUTOPILOT_STATE["hypothesis_queue"]=queue[-40:]
+    return report
+
+
+def _hypothesis_search_queries(limit: int = 2) -> list[dict]:
+    rows=[
+        x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or [])
+        if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}
+    ]
+    rows.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
+    out=[]
+    for row in rows[:max(0,limit)]:
+        tokens=sorted(_tokens(str(row.get("text") or "")),key=lambda x:(-len(x),x))[:7]
+        if not tokens:
+            continue
+        query='"'+" ".join(tokens[:4])+'" market problem pricing'
+        out.append({"hypothesis_id":row.get("id"),"family":row.get("family"),"query":query,"priority":row.get("priority")})
+    return out
+
+
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
     count = max(4, min(count, 10))
@@ -1709,6 +1908,10 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         pattern = rng.choice(ENTROPY_PATTERNS)
         queries.append(pattern.format(term=term))
 
+    hypothesis_probes=_hypothesis_search_queries(2)
+    for probe in hypothesis_probes:
+        queries.append(str(probe.get("query") or ""))
+
     # Always retain explicit buying-intent probes.
     queries.extend([
         '"will pay" "manual process" small business',
@@ -1733,7 +1936,8 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "exploration_slots": exploration_slots,
         "exploitation_slots": exploitation_slots,
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
-        "policy": "exploit evidence-producing families while preserving majority exploration; increase exploration after stagnation",
+        "hypothesis_probes": hypothesis_probes,
+        "policy": "exploit evidence-producing families while preserving majority exploration; reserve bounded search capacity for hypotheses learned from agent dialogue",
         "adaptive_policy": policy,
     }
     AUTOPILOT_STATE["last_search_strategy"] = strategy
@@ -2973,9 +3177,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     product_candidate = build_candidate(evidence_quality)
 
     collective_review = {"ok": False, "ran": False, "reason": "no qualified candidate"}
+    dialogue_report = {"ran":False,"reason":"no qualified candidate"}
     if product_candidate.get("status") == "PILOT_READY":
         collective_query, collective_problem = _collective_problem(product_candidate, evidence_quality)
         collective_review = await collective_two_rounds(collective_query, collective_problem, min(3, max_agents))
+        dialogue_report = _update_dialogue_learning(
+            collective_review, collective_query, collective_problem, goal
+        )
 
     jarvis_review = await ask_jarvis(
         jarvis_message,
@@ -2990,6 +3198,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
             "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
             "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
+            "dialogue_history": list(AUTOPILOT_STATE.get("dialogue_history") or [])[-12:],
+            "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-40:],
+            "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-20:],
+            "dialogue_report": dialogue_report,
             "product_candidate": product_candidate,
             "collective_review": collective_review,
             "collective_summary": _collective_summary(collective_review),
@@ -3085,6 +3297,12 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "product_candidate": product_candidate,
         "collective_review": collective_review,
         "collective_summary": _collective_summary(collective_review),
+        "dialogue_report": dialogue_report,
+        "knowledge_ledger_summary": {
+            "items": len(AUTOPILOT_STATE.get("knowledge_ledger") or []),
+            "open_hypotheses": len([x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or []) if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}]),
+            "top_hypotheses": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[:5],
+        },
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
         "valid_external_answers": len(valid),
@@ -3431,7 +3649,78 @@ async def api_console(request: Request):
         "builds":history,
         "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
         "venture_metrics":AUTOPILOT_STATE.get("venture_metrics") or {},
+        "dialogue_count":len(AUTOPILOT_STATE.get("dialogue_history") or []),
+        "knowledge_count":len(AUTOPILOT_STATE.get("knowledge_ledger") or []),
+        "open_hypotheses":list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[:10],
         "latest_result":latest,
+    })
+
+
+
+async def intelligence_page(request: Request):
+    dialogues=list(AUTOPILOT_STATE.get("dialogue_history") or [])
+    ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
+    hypotheses=[
+        x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or [])
+        if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}
+    ]
+    hypotheses.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
+
+    body=(
+        '<section class="card"><span class="tag">COLLECTIVE INTELLIGENCE</span>'
+        '<h2>Dialoghi, conoscenza e nuove strade</h2>'
+        '<div class="grid">'
+        '<article><div class="muted">Dialoghi registrati</div><h2>'+str(len(dialogues))+'</h2></article>'
+        '<article><div class="muted">Knowledge ledger</div><h2>'+str(len(ledger))+'</h2></article>'
+        '<article><div class="muted">Ipotesi aperte</div><h2>'+str(len(hypotheses))+'</h2></article>'
+        '</div></section>'
+    )
+    body+='<section class="card"><h2>Nuove strade da esplorare</h2><div class="grid">'
+    if not hypotheses:
+        body+='<article><p class="muted">Nessuna ipotesi aperta.</p></article>'
+    for row in hypotheses[:12]:
+        scores=row.get("scores") or {}
+        body+=(
+            '<article><span class="tag">'+html.escape(str(row.get("family") or "other"))+'</span>'
+            '<h3>'+html.escape(str(row.get("status") or "HYPOTHESIS"))+'</h3>'
+            '<p>'+html.escape(str(row.get("text") or ""))+'</p>'
+            '<div class="muted">Priorita '+html.escape(str(row.get("priority") or 0))+
+            ' · novelty '+html.escape(str(scores.get("novelty") or 0))+
+            ' · evidence '+html.escape(str(scores.get("evidence_potential") or 0))+
+            ' · fit '+html.escape(str(scores.get("strategic_fit") or 0))+'</div></article>'
+        )
+    body+='</div></section>'
+
+    body+='<section class="card"><h2>Ultimi dialoghi</h2><div class="grid">'
+    if not dialogues:
+        body+='<article><p class="muted">Nessun dialogo registrato.</p></article>'
+    for dlg in reversed(dialogues[-8:]):
+        names=", ".join(str(x.get("agent") or x.get("agent_id") or "") for x in (dlg.get("participants") or []))
+        body+=(
+            '<article><span class="tag">'+html.escape(str(dlg.get("topic") or "dialogue"))+'</span>'
+            '<h3>'+html.escape(str(dlg.get("dialogue_id") or ""))+'</h3>'
+            '<p>'+html.escape(str(dlg.get("problem_excerpt") or ""))+'</p>'
+            '<div class="muted">Agenti: '+html.escape(names)+
+            ' · round '+str(int(dlg.get("round1_count") or 0))+'+'+str(int(dlg.get("round2_count") or 0))+
+            ' · nuove ipotesi '+str(len(dlg.get("new_hypotheses") or []))+'</div></article>'
+        )
+    body+='</div></section>'
+    return layout("Collective Intelligence",body)
+
+
+async def api_intelligence(request: Request):
+    hypotheses=[
+        x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or [])
+        if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}
+    ]
+    hypotheses.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "dialogues":list(AUTOPILOT_STATE.get("dialogue_history") or [])[-30:],
+        "knowledge_ledger":list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
+        "open_hypotheses":hypotheses[:40],
+        "exploration_history":list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
     })
 
 
@@ -4046,6 +4335,8 @@ app = Starlette(
         Route("/", home, methods=["GET"]),
         Route("/console", console_page, methods=["GET"]),
         Route("/api/console", api_console, methods=["GET"]),
+        Route("/intelligence", intelligence_page, methods=["GET"]),
+        Route("/api/intelligence", api_intelligence, methods=["GET"]),
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
