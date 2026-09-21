@@ -1,8 +1,6 @@
 name: NEO Self Evolution
 
 on:
-  schedule:
-    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -49,21 +47,6 @@ jobs:
           open("/tmp/ready","w").write("1")
           PY
 
-      - name: Increment patch version
-        run: |
-          set -euo pipefail
-          [ "$(cat /tmp/ready)" = "1" ] || exit 0
-          python - <<'PY'
-          import re
-          p="cloud_mcp.py"
-          s=open(p,encoding="utf-8").read()
-          m=re.search(r'^VERSION = "(\d+)\.(\d+)\.(\d+)"',s,re.M)
-          if not m: raise SystemExit("VERSION not found")
-          a,b,c=map(int,m.groups())
-          s=s[:m.start()]+f'VERSION = "{a}.{b}.{c+1}"'+s[m.end():]
-          open(p,"w",encoding="utf-8").write(s)
-          PY
-
       - name: Validate source and policy
         run: |
           set -euo pipefail
@@ -81,7 +64,7 @@ jobs:
           [ "$(cat /tmp/ready)" = "1" ] || exit 0
           git config user.name "NEO Self Evolution"
           git config user.email "actions@users.noreply.github.com"
-          git add cloud_mcp.py neo_policy.json
+          git add neo_policy.json
           git diff --cached --quiet && exit 0
           git commit -m "NEO autonomous bounded policy evolution"
           git push
