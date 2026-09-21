@@ -3537,31 +3537,38 @@ def _human_problem_hypotheses(family: str, problem_key: str) -> list[dict]:
 
 
 
-def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | None = None) -> dict:
-    """Accumulate recent independent evidence across cycles, clustered by concrete problem."""
+def _commercial_evidence_quality(
+    web_research: list[dict],
+    scouts: list[dict] | None = None,
+    query_meta: dict[str, dict] | None = None,
+) -> dict:
+    """Evidence Integrity v2: accumulate only attributable, gate-eligible commercial evidence."""
     noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
-    strong_terms=(
-        "pricing","price","priced","cost","costs","charge","charged","paid","paying","subscription",
-        "per month","per year","one time purchase","one-time purchase","contract","budget","hire","hiring",
-        "freelance","customer pays","customers pay","book a call","enterprise deployments"
+    buyer_strong_terms=(
+        "budget","will pay","paid job","fixed-price","fixed price","hourly","per hour",
+        "hiring","hire someone","hire a","freelance","freelancer","contractor",
+        "seeking contractor","quote requested","request a quote",
     )
-    weak_terms=("customer","client","manual","workflow","crm","spreadsheet","automation","problem","pain")
+    weak_terms=("customer","client","manual","workflow","crm","spreadsheet","automation","problem","pain","workaround")
+    query_meta=query_meta or {}
     current_rows=[]
+    rejected=[]
     now_epoch=time.time()
     retention_seconds=21*24*3600
     fresh_seconds=7*24*3600
 
-    def ingest(url: str, title: str, body: str, source: str):
-        host=(urlparse(url or "").hostname or "").lower()
-        if host.startswith("www."):
-            host=host[4:]
+    def reject(reason: str, url: str, title: str, role: str = ""):
+        if len(rejected)<40:
+            rejected.append({"reason":reason,"url":(url or "")[:500],"title":(title or "")[:180],"query_role":role})
+
+    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = ""):
+        raw_host=(urlparse(url or "").hostname or "").lower()
+        host=canonical_domain(raw_host)
         if not host or any(host==n or host.endswith("."+n) for n in noise):
+            reject("noise_domain",url,title,query_role)
             return
         title_low=(title or "").lower()
         body_low=(body or "").lower()
-        # GitHub issues are useful discovery sources but are also a major source of
-        # self-promotional/spam evidence. Require explicit buyer/problem language and
-        # reject obvious trust/ownership/patent/crypto noise before it enters memory.
         if host == "github.com":
             github_noise=(
                 "family trust","trust vault","trademark","patent-pending","patent pending",
@@ -3569,96 +3576,152 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
                 "master roadmap","roadmap maître","roadmap master",
             )
             if any(x in title_low or x in body_low for x in github_noise):
+                reject("github_noise",url,title,query_role)
                 return
             github_demand=(
-                "need help","looking for","seeking","hiring","budget","paid","paying",
-                "manual","repetitive","problem","pain","customer","client","freelance","contract",
+                "need help","looking for","seeking","hiring","budget","paid","manual",
+                "repetitive","problem","pain","customer","client","freelance","contractor",
             )
-            if not any(x in title_low or x in body_low for x in github_demand):
+            if not any(contains_term(title_low+" "+body_low,x) for x in github_demand):
+                reject("github_no_buyer_problem_context",url,title,query_role)
                 return
+
         text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
+            reject("no_family",url,title,query_role)
             return
         context,title_hits,body_hits=_evidence_context(title,body,family)
         if title_hits<1 and body_hits<2:
+            reject("weak_family_relevance",url,title,query_role)
             return
         if len(context)<40:
+            reject("context_too_short",url,title,query_role)
             return
-        strong=[t for t in strong_terms if t in context]
-        weak=[t for t in weak_terms if t in context]
-        if not weak and not strong:
-            return
-        signal_types=_demand_signal_type(title,context)
+
+        weak=[t for t in weak_terms if contains_term(context,t)]
+        signal_types=_demand_signal_type(title,context,query_role)
         if not signal_types:
+            reject("no_demand_signal",url,title,query_role)
             return
-        current_rows.append({
+
+        problem_key=canonical_problem_key(family,_problem_signature(family,title,context))
+        positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(signal_types))
+        strong=[t for t in buyer_strong_terms if contains_term(context,t)] if "PAID_DEMAND" in signal_types else []
+        gate_eligible=bool(
+            query_role!="disconfirm"
+            and "DISCONFIRM" not in signal_types
+            and gate_eligible_problem_key(problem_key)
+            and positive
+        )
+        meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
+        row={
+            "schema_v":EVIDENCE_SCHEMA_VERSION,
+            "tagger_v":TAGGER_VERSION,
+            "migration_v":EVIDENCE_SCHEMA_VERSION,
+            "gate_eligible":gate_eligible,
+            "quarantine_reason":None if gate_eligible else (
+                "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
+                else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
+                else "nonpositive_signal"
+            ),
             "domain":host,
             "source":source,
             "family":family,
-            "problem_key":_problem_signature(family,title,context),
+            "problem_key_raw":problem_key,
+            "problem_key":problem_key,
+            "problem_id":str(meta.get("problem_id") or ""),
+            "thesis_id":str(meta.get("thesis_id") or ""),
+            "query":(query or "")[:700],
+            "query_role":query_role or str(meta.get("role") or ""),
             "title":(title or "")[:300],
-            "url":(url or "")[:1200],
+            "snippet":(body or "")[:300],
+            "url":canonical_url(url)[:1200],
             "strong_markers":strong[:8],
             "weak_markers":weak[:8],
             "signal_types":signal_types,
             "last_seen_epoch":now_epoch,
             "first_seen_epoch":now_epoch,
             "seen_count":1,
-        })
+        }
+        current_rows.append(row)
 
     for group in web_research:
         if not isinstance(group,dict):
             continue
+        q=" ".join(str(group.get("query") or "").split())
+        meta=query_meta.get(q.lower()) or {}
+        role=str(meta.get("role") or meta.get("class") or "web")
         for item in group.get("results") or []:
             if isinstance(item,dict):
-                ingest(item.get("url") or "",item.get("title") or "",item.get("snippet") or "","web")
+                ingest(item.get("url") or "",item.get("title") or "",item.get("snippet") or "","web",q,role)
 
     for item in scouts or []:
         if isinstance(item,dict):
-            ingest(item.get("url") or "",item.get("title") or "",item.get("text") or "",item.get("source") or "scout")
+            ingest(
+                item.get("url") or "",item.get("title") or "",item.get("text") or "",
+                item.get("source") or "scout",str(item.get("query") or ""),"scout"
+            )
 
-    # Merge with durable memory. URLs are the strongest dedup key; fallback keeps distinct
-    # sources on the same domain from inflating independent-domain counts.
-    memory=[]
-    for row in AUTOPILOT_STATE.get("commercial_evidence_memory") or []:
-        if not isinstance(row,dict):
-            continue
-        old_domain=str(row.get("domain") or "").lower()
-        old_text=(str(row.get("title") or "")+" "+str(row.get("url") or "")).lower()
-        legacy_noise=(
-            "family trust","trust vault","trademark","patent-pending","patent pending",
-            "revenue command dashboard","roadmap maître","roadmap master",
-        )
-        if old_domain == "github.com" and any(x in old_text for x in legacy_noise):
-            continue
-        last=float(row.get("last_seen_epoch") or 0)
-        if last and now_epoch-last <= retention_seconds:
-            memory.append(dict(row))
+    # Migrate legacy rows idempotently. v1 rows remain discovery-visible but are
+    # quarantined from the gate until re-observed and re-tagged by v2.
+    memory,migration=migrate_evidence_memory([
+        dict(x) for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or [])
+        if isinstance(x,dict) and float(x.get("last_seen_epoch") or 0)
+        and now_epoch-float(x.get("last_seen_epoch") or 0)<=retention_seconds
+    ])
 
     index={}
     for i,row in enumerate(memory):
-        key=(str(row.get("url") or "").strip().lower()
-             or (str(row.get("domain") or "")+"|"+str(row.get("problem_key") or "")+"|"+str(row.get("title") or "")[:120].lower()))
+        key=canonical_url(str(row.get("url") or ""))
+        if not key:
+            key=str(row.get("domain") or "")+"|"+str(row.get("title") or "")[:160].lower()
         index[key]=i
 
     for row in current_rows:
-        key=(str(row.get("url") or "").strip().lower()
-             or (str(row.get("domain") or "")+"|"+str(row.get("problem_key") or "")+"|"+str(row.get("title") or "")[:120].lower()))
+        key=canonical_url(str(row.get("url") or ""))
+        if not key:
+            key=str(row.get("domain") or "")+"|"+str(row.get("title") or "")[:160].lower()
         if key in index:
             old=memory[index[key]]
-            old["last_seen_epoch"]=now_epoch
-            old["seen_count"]=int(old.get("seen_count") or 1)+1
-            old["signal_types"]=sorted(set(old.get("signal_types") or []) | set(row.get("signal_types") or []))
-            old["strong_markers"]=sorted(set(old.get("strong_markers") or []) | set(row.get("strong_markers") or []))[:8]
-            old["weak_markers"]=sorted(set(old.get("weak_markers") or []) | set(row.get("weak_markers") or []))[:8]
+            first=min(float(old.get("first_seen_epoch") or now_epoch),float(row.get("first_seen_epoch") or now_epoch))
+            # A current v2 observation supersedes an old generic/quarantined classification;
+            # a generic observation never demotes an existing concrete v2 classification.
+            preserve_concrete=bool(old.get("gate_eligible")) and not bool(row.get("gate_eligible"))
+            merged=dict(old if preserve_concrete else row)
+            merged["first_seen_epoch"]=first
+            merged["last_seen_epoch"]=now_epoch
+            merged["seen_count"]=int(old.get("seen_count") or 1)+1
+            merged["signal_types"]=sorted(set(old.get("signal_types") or []) | set(row.get("signal_types") or []))
+            if row.get("query_role")=="disconfirm":
+                merged["gate_eligible"]=False
+                merged["quarantine_reason"]="disconfirm"
+            memory[index[key]]=merged
         else:
             index[key]=len(memory)
             memory.append(row)
 
-    memory.sort(key=lambda x:float(x.get("last_seen_epoch") or 0), reverse=True)
-    memory=memory[:180]
+    # Per-problem retention: keep recent rows while preventing one noisy problem from
+    # evicting the entire memory. 240 is still bounded for Render env persistence.
+    memory.sort(key=lambda x:float(x.get("last_seen_epoch") or 0),reverse=True)
+    per_problem={}
+    bounded=[]
+    for row in memory:
+        bucket=str(row.get("problem_key") or "unknown")
+        if per_problem.get(bucket,0)>=30:
+            continue
+        per_problem[bucket]=per_problem.get(bucket,0)+1
+        bounded.append(row)
+        if len(bounded)>=240:
+            break
+    memory=bounded
     AUTOPILOT_STATE["commercial_evidence_memory"]=memory
+    migration.update({
+        "rows":len(memory),
+        "quarantined":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
+        "rejected_current":len(rejected),
+    })
+    AUTOPILOT_STATE["evidence_integrity"]=migration
 
     problem_clusters={}
     family_clusters={}
@@ -3667,38 +3730,44 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
 
     for row in memory:
         family=str(row.get("family") or "")
-        problem_key=str(row.get("problem_key") or (family+":general"))
+        problem_key=canonical_problem_key(family,str(row.get("problem_key") or (family+":general")))
         domain=str(row.get("domain") or "")
         if not family or not domain:
             continue
         age=max(0.0,now_epoch-float(row.get("last_seen_epoch") or now_epoch))
-        fresh=age <= fresh_seconds
-        strong=bool(row.get("strong_markers"))
+        fresh=age<=fresh_seconds
+        gate_row=bool(row.get("gate_eligible")) and gate_eligible_problem_key(problem_key)
         tags=set(row.get("signal_types") or [])
+        strong=gate_row and bool(row.get("strong_markers"))
 
         pcl=problem_clusters.setdefault(problem_key,{
-            "family":family,"domains":set(),"fresh_domains":set(),"strong_domains":set(),"signals":[],"tags":set()
+            "family":family,"domains":set(),"fresh_domains":set(),"strong_domains":set(),
+            "signals":[],"tags":set(),"disconfirm_domains":set(),"quarantined":0,
         })
-        pcl["domains"].add(domain)
-        if fresh:
-            pcl["fresh_domains"].add(domain)
-        if strong:
-            pcl["strong_domains"].add(domain)
-        pcl["tags"].update(tags)
+        if gate_row:
+            pcl["domains"].add(domain)
+            if fresh: pcl["fresh_domains"].add(domain)
+            if strong: pcl["strong_domains"].add(domain)
+            pcl["tags"].update(tags - {"DISCONFIRM","COMPETITION"})
+        else:
+            pcl["quarantined"]+=1
+        if "DISCONFIRM" in tags:
+            pcl["disconfirm_domains"].add(domain)
         if len(pcl["signals"])<12:
             safe_row={k:v for k,v in row.items() if k not in {"first_seen_epoch","last_seen_epoch"}}
             safe_row["age_days"]=round(age/86400,2)
             pcl["signals"].append(safe_row)
 
-        fcl=family_clusters.setdefault(family,{"domains":set(),"strong_domains":set(),"tags":set(),"problem_keys":set()})
-        fcl["domains"].add(domain)
-        if strong:
-            fcl["strong_domains"].add(domain)
-        fcl["tags"].update(tags)
+        fcl=family_clusters.setdefault(family,{
+            "domains":set(),"strong_domains":set(),"tags":set(),"problem_keys":set(),
+        })
+        if gate_row:
+            fcl["domains"].add(domain)
+            if strong: fcl["strong_domains"].add(domain)
+            fcl["tags"].update(tags - {"DISCONFIRM","COMPETITION"})
+            all_domains.add(domain)
+            if strong: all_strong.add(domain)
         fcl["problem_keys"].add(problem_key)
-        all_domains.add(domain)
-        if strong:
-            all_strong.add(domain)
 
     public_problems={}
     qualified_problem_keys=[]
@@ -3707,16 +3776,21 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         fresh_domains=sorted(cl["fresh_domains"])
         strong_domains=sorted(cl["strong_domains"])
         tags=sorted(cl["tags"])
+        eligible=gate_eligible_problem_key(problem_key)
         commercially_actionable=("PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags))
-        # Cumulative evidence is allowed, but at least two independent domains must
-        # have been seen within the last 7 days so stale history cannot unlock a build.
-        qualified=(len(domains)>=3 and len(fresh_domains)>=2 and len(strong_domains)>=1 and commercially_actionable)
+        qualified=bool(
+            eligible and len(domains)>=3 and len(fresh_domains)>=2 and len(strong_domains)>=1
+            and commercially_actionable
+        )
         gap=_gap_score(tags,len(domains),len(strong_domains))
         public_problems[problem_key]={
             "family":cl["family"],
+            "gate_eligible":eligible,
             "independent_domains":len(domains),
             "fresh_independent_domains":len(fresh_domains),
             "strong_commercial_domains":len(strong_domains),
+            "disconfirm_domains":len(cl["disconfirm_domains"]),
+            "quarantined_rows":cl["quarantined"],
             "qualified":qualified,
             "signal_types":tags,
             "gap_score":gap,
@@ -3725,13 +3799,12 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
             "fresh_domains":fresh_domains[:10],
             "signals":cl["signals"][:8],
         }
-        if qualified:
-            qualified_problem_keys.append(problem_key)
+        if qualified: qualified_problem_keys.append(problem_key)
 
     public_families={}
     qualified_families=[]
     for family,fcl in family_clusters.items():
-        related=[v for k,v in public_problems.items() if v.get("family")==family]
+        related=[v for v in public_problems.values() if v.get("family")==family]
         qualified_related=[v for v in related if v.get("qualified")]
         best=max(related,key=lambda x:int(x.get("gap_score") or 0),default={})
         public_families[family]={
@@ -3746,10 +3819,11 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
             "qualified_problem_keys":[k for k,v in public_problems.items() if v.get("family")==family and v.get("qualified")][:6],
             "signals":(best.get("signals") or [])[:6],
         }
-        if qualified_related:
-            qualified_families.append(family)
+        if qualified_related: qualified_families.append(family)
 
     return {
+        "evidence_schema_v":EVIDENCE_SCHEMA_VERSION,
+        "tagger_v":TAGGER_VERSION,
         "independent_domains":len(all_domains),
         "strong_commercial_domains":len(all_strong),
         "qualified_problem_clusters":qualified_families,
@@ -3757,14 +3831,15 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
         "clusters":public_families,
         "problem_clusters":public_problems,
         "quality_gate":bool(qualified_problem_keys),
-        "gate_rule":"same concrete problem: >=3 independent domains accumulated within 21d, >=2 seen within 7d, >=1 strong commercial domain, AND PAID_DEMAND + (BUY_INTENT or PAIN)",
+        "gate_rule":"same concrete problem: >=3 independent domains accumulated within 21d, >=2 seen within 7d, >=1 strong BUYER commercial domain, AND PAID_DEMAND + (BUY_INTENT or PAIN); generic/legacy/disconfirm evidence is non-qualifying",
         "current_cycle_useful_results":len(current_rows),
         "persistent_evidence_items":len(memory),
+        "quarantined_evidence_items":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
+        "rejected_current_results":rejected,
         "memory_retention_days":21,
         "freshness_window_days":7,
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
     }
-
 
 async def free_web_search(query: str, limit: int = 6) -> dict:
     """Free public web discovery via Bing RSS. No API key and no paid provider."""
