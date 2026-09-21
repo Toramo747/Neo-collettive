@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.59.1"
+VERSION = "0.60.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2854,6 +2854,51 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
     return out
 
 
+def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
+    """Change source class and buyer language after prolonged stagnation without relaxing gates."""
+    stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
+    if stagnation < 8:
+        return []
+    memory = [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x, dict)]
+    by_problem: dict[str, dict] = {}
+    for row in memory:
+        key = str(row.get("problem_key") or "")
+        family = str(row.get("family") or "")
+        if not key or not family:
+            continue
+        cl = by_problem.setdefault(key, {"family": family, "domains": set(), "tags": set()})
+        if row.get("domain"):
+            cl["domains"].add(str(row.get("domain")))
+        cl["tags"].update(row.get("signal_types") or [])
+    ranked = sorted(
+        by_problem.items(),
+        key=lambda kv: (-(len(kv[1]["domains"]) * 20 + (20 if "PAID_DEMAND" in kv[1]["tags"] else 0) + (15 if "PAIN" in kv[1]["tags"] else 0)), kv[0])
+    )
+    source_patterns = [
+        'site:upwork.com "{term}" automation OR integration OR consultant',
+        'site:freelancer.com "{term}" automation OR integration',
+        'site:stackoverflow.com "{term}" "manual" OR "workaround" OR "pain"',
+        'site:community.zapier.com "{term}" "help" OR "how do i" OR workaround',
+        'site:community.make.com "{term}" "help" OR manual OR workaround',
+        'site:reddit.com "{term}" "pay for" OR "recommend a tool" OR "need a tool"',
+    ]
+    out, seen = [], set()
+    for problem_key, cl in ranked[:3]:
+        marker = problem_key.split(":", 1)[-1].replace("_", " ")
+        if marker == "general" or len(marker) < 4:
+            terms = sorted(_family_relevance_terms(cl["family"]), key=lambda x: (-len(x), x))
+            marker = terms[0] if terms else cl["family"].replace("_", " ")
+        for pattern in source_patterns:
+            q = pattern.format(term=marker)
+            if q.lower() in seen:
+                continue
+            seen.add(q.lower())
+            out.append({"family": cl["family"], "problem_key": problem_key, "query": q, "mode": "source_breakout"})
+            if len(out) >= max(0, limit):
+                return out
+    return out
+
+
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
     count = max(4, min(count, 10))
@@ -2905,12 +2950,16 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     convergence_probes = _convergence_search_queries(convergence_limit)
     convergence_queries = [str(x.get("query") or "") for x in convergence_probes if str(x.get("query") or "").strip()]
 
+    breakout_limit = 4 if stagnation >= 12 else (2 if stagnation >= 8 else 0)
+    breakout_probes = _stagnation_breakout_queries(breakout_limit)
+    breakout_queries = [str(x.get("query") or "") for x in breakout_probes if str(x.get("query") or "").strip()]
+
     hypothesis_probes = _hypothesis_search_queries(1)
     hypothesis_queries = [str(x.get("query") or "") for x in hypothesis_probes if str(x.get("query") or "").strip()]
 
-    # Priority order is deliberate: convergence first, then fresh exploration, then one
-    # learned hypothesis and explicit buying-intent fallbacks.
-    queries = convergence_queries + queries + hypothesis_queries + [
+    # During prolonged stagnation, change source class before repeating broad exploration.
+    # Evidence thresholds remain identical; only discovery strategy changes.
+    queries = breakout_queries + convergence_queries + queries + hypothesis_queries + [
         '"will pay" "manual process" small business',
         '"hiring" freelancer "repetitive task" automation',
     ]
@@ -2936,7 +2985,10 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "hypothesis_probes": hypothesis_probes,
         "convergence_probes": convergence_probes,
         "convergence_slots": len(convergence_queries),
-        "policy": "prioritize convergence on promising commercial families while preserving exploration; never relax the evidence gate",
+        "breakout_probes": breakout_probes,
+        "breakout_slots": len(breakout_queries),
+        "stagnation_breakout": bool(breakout_queries),
+        "policy": "after prolonged stagnation change source classes and buyer-language queries; preserve convergence and exploration; never relax the evidence gate",
         "adaptive_policy": policy,
     }
     AUTOPILOT_STATE["last_search_strategy"] = strategy
