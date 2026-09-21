@@ -32,41 +32,85 @@ jobs:
           d=json.load(open("/tmp/status.json",encoding="utf-8"))
           ap=d.get("autopilot") or {}
           last=ap.get("last_finished_utc")
-          stale=True
-          age_minutes=None
+          runtime_stale=True
+          runtime_age_minutes=None
 
           if last:
               try:
                   dt=datetime.fromisoformat(str(last).replace("Z","+00:00"))
-                  age_minutes=(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds()/60
-                  stale=age_minutes>20
+                  runtime_age_minutes=(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds()/60
+                  runtime_stale=runtime_age_minutes>20
               except Exception:
-                  stale=True
+                  runtime_stale=True
 
-          with open("/tmp/stale","w",encoding="utf-8") as f:
-              f.write("1" if stale else "0")
+          with open("/tmp/runtime_stale","w",encoding="utf-8") as f:
+              f.write("1" if runtime_stale else "0")
 
           print({
               "neo_version": d.get("neo_version"),
               "last_finished_utc": last,
-              "age_minutes": None if age_minutes is None else round(age_minutes,1),
+              "runtime_age_minutes": None if runtime_age_minutes is None else round(runtime_age_minutes,1),
               "running": ap.get("running"),
               "last_error": ap.get("last_error"),
-              "stale": stale,
+              "runtime_stale": runtime_stale,
+              "cycles_completed": ap.get("cycles_completed"),
           })
           PY
 
-      - name: Dispatch primary heartbeat if stale
+      - name: Check published snapshot freshness
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [ "$(cat /tmp/stale)" != "1" ]; then
-            echo "Primary heartbeat is fresh; no dispatch needed."
+          snapshot_stale=1
+          if curl --fail --show-error --silent --max-time 30 \
+            -H "Accept: application/vnd.github.raw+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/contents/neo_latest_result.json?ref=main" > /tmp/snapshot.json; then
+            SNAPSHOT=/tmp/snapshot.json python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          try:
+              d=json.load(open(os.environ["SNAPSHOT"],encoding="utf-8"))
+              captured=d.get("captured_at_utc")
+              age=None
+              stale=True
+              if captured:
+                  dt=datetime.fromisoformat(str(captured).replace("Z","+00:00"))
+                  age=(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds()/60
+                  stale=age>20
+              open("/tmp/snapshot_stale","w").write("1" if stale else "0")
+              print({"snapshot_captured_at_utc":captured,"snapshot_age_minutes":None if age is None else round(age,1),"snapshot_stale":stale})
+          except Exception as exc:
+              open("/tmp/snapshot_stale","w").write("1")
+              print({"snapshot_stale":True,"snapshot_error":type(exc).__name__+": "+str(exc)[:200]})
+          PY
+          else
+            echo "1" > /tmp/snapshot_stale
+            echo "Could not read published snapshot; forcing heartbeat dispatch."
+          fi
+
+      - name: Dispatch primary heartbeat if runtime or snapshot is stale
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          runtime_stale="$(cat /tmp/runtime_stale)"
+          snapshot_stale="$(cat /tmp/snapshot_stale)"
+          if [ "$runtime_stale" != "1" ] && [ "$snapshot_stale" != "1" ]; then
+            echo "Runtime and published snapshot are fresh; no dispatch needed."
             exit 0
           fi
 
-          curl --fail --show-error --silent             -X POST             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer $GH_TOKEN"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/$REPO/actions/workflows/neo-heartbeat.yml/dispatches"             -d '{"ref":"main"}'
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$REPO/actions/workflows/neo-heartbeat.yml/dispatches" \
+            -d '{"ref":"main"}'
 
-          echo "Primary MYCELIX heartbeat dispatched because runtime was stale."
+          echo "Primary MYCELIX heartbeat dispatched. runtime_stale=$runtime_stale snapshot_stale=$snapshot_stale"
