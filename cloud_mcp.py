@@ -37,7 +37,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.68.0"  # retrieval hardening
+VERSION = "0.69.0"  # retrieval hardening
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2964,6 +2964,8 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         key=canonical_problem_key(family,str(row.get("problem_key") or ""))
         if not family or not key or not gate_eligible_problem_key(key):
             continue
+        if not bool(row.get("gate_eligible")):
+            continue
         candidates[key]=family
 
     ranked=[]
@@ -3139,6 +3141,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             "job_to_be_done":h["job"],
             "pain":h["pain"],
             "term":h["term"],
+            "search_aliases":list(h.get("search_aliases") or [h["term"]]),
             "thesis":f'{h["customer"]} pay to solve "{h["job"]}" because {h["pain"]}.',
             "status":"ACTIVE",
             "budget_cycles":4,
@@ -3154,19 +3157,28 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     active["cycles_used"]=int(active.get("cycles_used") or 0)+1
     AUTOPILOT_STATE["active_thesis"]=active
 
-    term=str(active.get("term") or "")
     customer=str(active.get("customer") or "")
     job=str(active.get("job_to_be_done") or "")
-    pain=str(active.get("pain") or "")
-    # Prefer source-qualified queries anchored on the human job, not generic English
-    # phrases such as "will pay" or "looking for" in isolation.
+    aliases=_thesis_search_aliases(active)
+    if aliases and not active.get("search_aliases"):
+        active["search_aliases"]=aliases
+        AUTOPILOT_STATE["active_thesis"]=active
+    cycle_index=max(0,int(active.get("cycles_used") or 1)-1)
+
+    def alias(offset: int = 0) -> str:
+        if not aliases:
+            return str(active.get("term") or job)
+        return aliases[(cycle_index+offset) % len(aliases)]
+
+    # The thesis remains human-readable and stable. Search vocabulary is deliberately
+    # shorter and rotates across synonyms so Bing does not overfit one literal sentence.
     probes=[
-        ("buyer",f'site:reddit.com "{job}" "{customer}" (manual OR repetitive OR workaround OR frustrating)'),
-        ("paid_market",f'site:upwork.com/freelance-jobs "{job}" "{customer}" (fixed-price OR hourly OR freelancer OR contractor)'),
-        ("paid_market",f'site:freelancer.com/jobs "{job}" "{customer}" (budget OR fixed OR hourly OR freelancer)'),
-        ("practitioner",f'"{job}" "{pain}" (manual OR repetitive OR workaround) -site:wikipedia.org -site:github.com'),
-        ("alternative",f'"{job}" "{customer}" (pricing OR subscription OR "book a demo" OR software)'),
-        ("disconfirm",f'"{job}" "{customer}" ("not needed" OR "already automated" OR "easy to automate" OR solved)'),
+        ("buyer",f'site:reddit.com "{alias(0)}" ("small business" OR agency OR operations) (manual OR repetitive OR workaround)'),
+        ("paid_market",f'site:upwork.com/freelance-jobs "{alias(1)}" (freelancer OR contractor OR hourly OR fixed-price)'),
+        ("paid_market",f'site:freelancer.com/jobs "{alias(2)}" (budget OR freelancer OR hourly OR fixed)'),
+        ("practitioner",f'"{alias(3)}" (manual OR repetitive OR workflow OR workaround) -site:wikipedia.org -site:github.com'),
+        ("alternative",f'"{alias(4)}" (software OR pricing OR subscription OR "book a demo")'),
+        ("disconfirm",f'"{alias(5)}" ("already automated" OR solved OR "not worth" OR "no need")'),
     ]
     out=[]
     for role,q in probes[:max(0,limit)]:
@@ -3184,6 +3196,8 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             "job_to_be_done":active.get("job_to_be_done"),
             "pain":active.get("pain"),
             "thesis":active.get("thesis"),
+            "search_aliases":aliases,
+            "search_alias_used":q.split('"')[1] if '"' in q else "",
             "cycles_used":active.get("cycles_used"),
             "budget_cycles":active.get("budget_cycles"),
             "broad_cluster_refinement":active.get("broad_cluster_refinement"),
@@ -3771,29 +3785,152 @@ def _problem_signature(family: str, title: str, body: str) -> str:
 
 
 def _human_problem_hypotheses(family: str, problem_key: str) -> list[dict]:
-    """Translate a broad technology cluster into customer + job + pain hypotheses."""
+    """Translate a broad technology cluster into a human thesis plus compact web-search aliases."""
     catalog = {
         "ai_tools": [
-            {"customer":"small service businesses","job":"triage inbound customer emails and draft replies","pain":"staff repeatedly copy context between inboxes and business systems","term":"AI email triage customer support"},
-            {"customer":"sales teams","job":"qualify inbound leads and prepare CRM follow-ups","pain":"reps manually read enquiries, update CRM fields and write repetitive follow-ups","term":"AI lead qualification CRM follow up"},
-            {"customer":"operations teams","job":"extract structured data from PDFs and emails into spreadsheets or systems","pain":"staff manually copy data from documents into Excel or back-office tools","term":"AI document data extraction manual entry"},
-            {"customer":"small businesses","job":"produce recurring client and management reports","pain":"employees manually combine spreadsheets and rewrite the same report every week","term":"AI automated reporting spreadsheets"},
-            {"customer":"SaaS operations teams","job":"connect AI workflows to existing APIs and business tools","pain":"teams struggle to move data reliably between AI tools and existing systems","term":"AI workflow API integration"},
+            {
+                "customer":"small service businesses",
+                "job":"triage inbound customer emails and draft replies",
+                "pain":"staff repeatedly copy context between inboxes and business systems",
+                "term":"AI email triage customer support",
+                "search_aliases":[
+                    "customer support email",
+                    "shared inbox customer service",
+                    "email support workflow",
+                    "customer email management",
+                    "email CRM workflow",
+                    "email triage automation",
+                ],
+            },
+            {
+                "customer":"sales teams",
+                "job":"qualify inbound leads and prepare CRM follow-ups",
+                "pain":"reps manually read enquiries, update CRM fields and write repetitive follow-ups",
+                "term":"AI lead qualification CRM follow up",
+                "search_aliases":[
+                    "lead qualification CRM",
+                    "inbound lead follow up",
+                    "sales lead triage",
+                    "CRM follow up workflow",
+                    "lead routing automation",
+                ],
+            },
+            {
+                "customer":"operations teams",
+                "job":"extract structured data from PDFs and emails into spreadsheets or systems",
+                "pain":"staff manually copy data from documents into Excel or back-office tools",
+                "term":"AI document data extraction manual entry",
+                "search_aliases":[
+                    "PDF data extraction",
+                    "email data extraction",
+                    "document to spreadsheet",
+                    "invoice data entry automation",
+                    "document processing workflow",
+                ],
+            },
+            {
+                "customer":"small businesses",
+                "job":"produce recurring client and management reports",
+                "pain":"employees manually combine spreadsheets and rewrite the same report every week",
+                "term":"AI automated reporting spreadsheets",
+                "search_aliases":[
+                    "recurring report automation",
+                    "spreadsheet reporting workflow",
+                    "weekly client reporting",
+                    "management report automation",
+                    "Excel report automation",
+                ],
+            },
+            {
+                "customer":"SaaS operations teams",
+                "job":"connect AI workflows to existing APIs and business tools",
+                "pain":"teams struggle to move data reliably between AI tools and existing systems",
+                "term":"AI workflow API integration",
+                "search_aliases":[
+                    "AI API integration",
+                    "AI workflow integration",
+                    "SaaS AI integration",
+                    "automation API workflow",
+                    "AI business tool integration",
+                ],
+            },
         ],
         "integration_api": [
-            {"customer":"SaaS operations teams","job":"keep customer data synchronized across business apps","pain":"staff repair failed syncs and manually transfer records between systems","term":"SaaS data sync manual transfer"},
-            {"customer":"automation consultants","job":"connect client tools through APIs and webhooks","pain":"fragile integrations require repeated manual troubleshooting","term":"API webhook integration troubleshooting"},
+            {
+                "customer":"SaaS operations teams",
+                "job":"keep customer data synchronized across business apps",
+                "pain":"staff repair failed syncs and manually transfer records between systems",
+                "term":"SaaS data sync manual transfer",
+                "search_aliases":[
+                    "SaaS data sync",
+                    "CRM data synchronization",
+                    "manual data transfer SaaS",
+                    "app integration sync",
+                    "customer data integration",
+                ],
+            },
+            {
+                "customer":"automation consultants",
+                "job":"connect client tools through APIs and webhooks",
+                "pain":"fragile integrations require repeated manual troubleshooting",
+                "term":"API webhook integration troubleshooting",
+                "search_aliases":[
+                    "webhook integration troubleshooting",
+                    "API integration failure",
+                    "client API integration",
+                    "webhook automation",
+                    "SaaS API connector",
+                ],
+            },
         ],
         "spreadsheet_process": [
-            {"customer":"small operations teams","job":"turn recurring spreadsheet work into reliable reports","pain":"staff repeatedly clean CSVs, copy formulas and assemble reports","term":"Excel recurring report automation"},
+            {
+                "customer":"small operations teams",
+                "job":"turn recurring spreadsheet work into reliable reports",
+                "pain":"staff repeatedly clean CSVs, copy formulas and assemble reports",
+                "term":"Excel recurring report automation",
+                "search_aliases":[
+                    "Excel report automation",
+                    "CSV cleanup workflow",
+                    "recurring spreadsheet report",
+                    "spreadsheet manual process",
+                    "Google Sheets reporting automation",
+                ],
+            },
         ],
         "workflow_automation": [
-            {"customer":"small service businesses","job":"automate repetitive back-office handoffs","pain":"staff copy information between email, spreadsheets and SaaS tools","term":"back office manual workflow automation"},
+            {
+                "customer":"small service businesses",
+                "job":"automate repetitive back-office handoffs",
+                "pain":"staff copy information between email, spreadsheets and SaaS tools",
+                "term":"back office manual workflow automation",
+                "search_aliases":[
+                    "back office workflow",
+                    "manual business process",
+                    "email spreadsheet workflow",
+                    "repetitive admin workflow",
+                    "service business automation",
+                ],
+            },
         ],
     }
     return catalog.get(family, [])[:]
 
 
+def _thesis_search_aliases(active: dict) -> list[str]:
+    """Resolve short search vocabulary for a persisted thesis, including pre-v0.69 theses."""
+    aliases=[str(x).strip() for x in (active.get("search_aliases") or []) if str(x).strip()]
+    if aliases:
+        return aliases
+    family=str(active.get("family") or "")
+    job=str(active.get("job_to_be_done") or "")
+    for h in _human_problem_hypotheses(family,str(active.get("seed_problem_key") or "")):
+        if str(h.get("job") or "")==job:
+            aliases=[str(x).strip() for x in (h.get("search_aliases") or []) if str(x).strip()]
+            if aliases:
+                return aliases
+    fallback=str(active.get("term") or job or family.replace("_"," ")).strip()
+    return [fallback] if fallback else []
 
 def _commercial_evidence_quality(
     web_research: list[dict],
