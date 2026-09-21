@@ -3034,7 +3034,14 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
 def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     """Hold one falsifiable human thesis across cycles instead of rotating technology labels."""
     stagnation=int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
-    if stagnation<5:
+    integrity=AUTOPILOT_STATE.get("evidence_integrity") or {}
+    legacy_only=bool(
+        int(integrity.get("rows") or 0)>0
+        and int(integrity.get("quarantined") or 0)>=int(integrity.get("rows") or 0)
+    )
+    # After an evidence-integrity migration, start a human thesis immediately instead
+    # of waiting five empty cycles. This changes search allocation, never the gate.
+    if stagnation<5 and not legacy_only and not isinstance(AUTOPILOT_STATE.get("active_thesis"),dict):
         return []
 
     memory=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
@@ -3148,13 +3155,18 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     AUTOPILOT_STATE["active_thesis"]=active
 
     term=str(active.get("term") or "")
+    customer=str(active.get("customer") or "")
+    job=str(active.get("job_to_be_done") or "")
+    pain=str(active.get("pain") or "")
+    # Prefer source-qualified queries anchored on the human job, not generic English
+    # phrases such as "will pay" or "looking for" in isolation.
     probes=[
-        ("buyer",f'site:reddit.com "{term}" ("need help" OR "looking for" OR "recommend")'),
-        ("paid_market",f'site:upwork.com/freelance-jobs "{term}" (budget OR "fixed-price" OR hourly)'),
-        ("paid_market",f'site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly)'),
-        ("practitioner",f'"{term}" ("manual" OR "time consuming" OR "workaround") -site:github.com'),
-        ("alternative",f'"{term}" (pricing OR subscription OR "book a demo")'),
-        ("disconfirm",f'"{term}" ("not needed" OR "easy to automate" OR "solved")'),
+        ("buyer",f'site:reddit.com "{job}" "{customer}" (manual OR repetitive OR workaround OR frustrating)'),
+        ("paid_market",f'site:upwork.com/freelance-jobs "{job}" "{customer}" (fixed-price OR hourly OR freelancer OR contractor)'),
+        ("paid_market",f'site:freelancer.com/jobs "{job}" "{customer}" (budget OR fixed OR hourly OR freelancer)'),
+        ("practitioner",f'"{job}" "{pain}" (manual OR repetitive OR workaround) -site:wikipedia.org -site:github.com'),
+        ("alternative",f'"{job}" "{customer}" (pricing OR subscription OR "book a demo" OR software)'),
+        ("disconfirm",f'"{job}" "{customer}" ("not needed" OR "already automated" OR "easy to automate" OR solved)'),
     ]
     out=[]
     for role,q in probes[:max(0,limit)]:
@@ -3339,13 +3351,23 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
 
     def sector_entry(sector: dict, cls: str) -> dict:
         term=rng.choice(sector["terms"])
-        pattern=rng.choice(ENTROPY_PATTERNS)
+        family=_sector_family(sector["id"])
+        # Discovery v2: anchor queries to explicit work/pain contexts and useful
+        # source classes. Avoid generic trigger phrases that Bing often interprets
+        # as names, dictionaries or unrelated media.
+        templates=[
+            f'site:reddit.com "{term}" (manual OR repetitive OR workflow OR workaround)',
+            f'site:upwork.com/freelance-jobs "{term}" (contractor OR freelancer OR hourly OR fixed-price)',
+            f'"{term}" ("small business" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org',
+            f'site:news.ycombinator.com "{term}" (customer OR workflow OR manual OR problem)',
+        ]
+        query=rng.choice(templates)
         return {
-            "query":" ".join(pattern.format(term=term).split()),
+            "query":" ".join(query.split()),
             "class":cls,
             "role":"discovery",
             "sector":sector["id"],
-            "family":_sector_family(sector["id"]),
+            "family":family,
         }
 
     exploit_entries=[sector_entry(x,"exploit") for x in exploit_pool[:3]]
@@ -3360,7 +3382,12 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         row.setdefault("role","buyer")
         convergence_entries.append(row)
 
-    anthropic_probes=_anthropic_convergence_queries(6) if stagnation>=5 else []
+    integrity=AUTOPILOT_STATE.get("evidence_integrity") or {}
+    legacy_only=bool(
+        int(integrity.get("rows") or 0)>0
+        and int(integrity.get("quarantined") or 0)>=int(integrity.get("rows") or 0)
+    )
+    anthropic_probes=_anthropic_convergence_queries(6) if (stagnation>=5 or legacy_only or isinstance(AUTOPILOT_STATE.get("active_thesis"),dict)) else []
     thesis_entries=[]
     # Preserve a falsification probe every cycle. Never let list order silently drop it.
     preferred_roles=("buyer","paid_market","practitioner","disconfirm")
@@ -3427,8 +3454,17 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
                 break
 
     # Backfill unused capacity with real exploration entries, never phantom telemetry.
+    backfill_entries=explore_entries+exploit_entries+hypothesis_entries
+    # Guarantee enough concrete discovery candidates to fill the declared budget.
+    if len(backfill_entries)<count:
+        extra_pool=[
+            x for x in ENTROPY_SECTORS
+            if not _family_on_cooldown(_sector_family(x["id"]))
+        ]
+        rng.shuffle(extra_pool)
+        backfill_entries += [sector_entry(x,"explore") for x in extra_pool]
     if len(planned)<count:
-        for entry in explore_entries+exploit_entries+hypothesis_entries:
+        for entry in backfill_entries:
             q=" ".join(str(entry.get("query") or "").split())
             if not q or q.lower() in seen:
                 continue
