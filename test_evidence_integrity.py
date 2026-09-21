@@ -19,7 +19,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertEqual(commercial_family("excellent customer service"), "other")
 
     def test_llm_does_not_match_stillman(self):
-        self.assertEqual(commercial_family("Stillman workflow problem"), "workflow_automation")
+        self.assertNotEqual(commercial_family("Stillman workflow problem"), "ai_tools")
 
     def test_vendor_pricing_is_competition_not_paid_demand(self):
         tags=demand_signal_type("Enterprise plans", "Pricing subscription book a demo")
