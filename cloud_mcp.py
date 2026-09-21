@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.60.0"
+VERSION = "0.61.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2185,19 +2185,110 @@ def _record_jarvis_runtime(result: dict, context: dict | None = None) -> None:
     AUTOPILOT_STATE["jarvis_runtime"] = runtime
 
 
+def _local_jarvis_core(message: str, context: dict | None = None) -> dict:
+    """Always-available Jarvis core inside NEO. Remote Jarvis is advisory only."""
+    src = context if isinstance(context, dict) else {}
+    phase = str(src.get("phase") or "review")
+    quality = src.get("evidence_quality") if isinstance(src.get("evidence_quality"), dict) else {}
+    product = src.get("product_candidate") if isinstance(src.get("product_candidate"), dict) else {}
+    collective = src.get("collective_summary") if isinstance(src.get("collective_summary"), dict) else {}
+    clusters = quality.get("problem_clusters") or quality.get("clusters") or {}
+    gate = bool(quality.get("quality_gate"))
+    qualified = list(quality.get("qualified_problem_keys") or quality.get("qualified_problem_clusters") or [])
+
+    next_queries = []
+    strategy = AUTOPILOT_STATE.get("last_search_strategy") or {}
+    for row in (strategy.get("breakout_probes") or []) + (strategy.get("convergence_probes") or []):
+        if isinstance(row, dict) and row.get("query"):
+            q = " ".join(str(row.get("query")).split())
+            if q and q.lower() not in {x.lower() for x in next_queries}:
+                next_queries.append(q)
+        if len(next_queries) >= 5:
+            break
+
+    if phase == "planning":
+        decision = "SEARCH_MORE"
+        state = "PLANNING"
+        next_experiment = "Search for independent buyer/problem evidence; keep gates unchanged."
+    else:
+        collective_ok = bool(collective.get("ok")) and int(collective.get("round2_valid") or 0) >= 2
+        pilot_ready = product.get("status") == "PILOT_READY"
+        if gate and qualified and pilot_ready and collective_ok:
+            decision = "VALIDATE"
+            state = "QUALIFIED_FOR_EXPERIMENT"
+            next_experiment = "Proceed with the bounded reversible experiment allowed by NEO policy."
+        elif gate and qualified:
+            decision = "HOLD"
+            state = "QUALIFIED_PENDING_COLLECTIVE"
+            next_experiment = "Complete collective review before any build."
+        elif clusters:
+            decision = "SEARCH_MORE"
+            state = "PARTIAL_EVIDENCE"
+            next_experiment = "Gather another independent source on the same concrete problem; do not build yet."
+        else:
+            decision = "SEARCH_MORE"
+            state = "NO_EVIDENCE"
+            next_experiment = "Gather independent demand evidence before building."
+
+    return {
+        "ok": True,
+        "service": "jarvis-core",
+        "version": "neo-embedded-1",
+        "analysis": {
+            "engine": "neo-embedded-jarvis-core",
+            "phase": phase,
+            "evidence_state": state,
+            "decision": decision,
+            "summary": {
+                "neo_quality_gate": gate,
+                "qualified_problem_clusters": len(qualified),
+                "commercial_memory_items": len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
+                "remote_required": False,
+            },
+            "opportunities": [],
+            "next_search_queries": next_queries,
+            "next_experiment": next_experiment,
+            "guardrails": [
+                "embedded Jarvis cannot bypass NEO evidence gates",
+                "no automatic spending",
+                "no automatic outreach",
+                "remote Jarvis advice is non-authoritative",
+            ],
+            "note": "Embedded Jarvis core is authoritative for availability; remote Jarvis is optional advisory.",
+        },
+    }
+
+
 async def ask_jarvis(message: str, context: dict | None = None) -> dict:
+    """Return embedded Jarvis immediately; consult remote Jarvis only as a short best-effort advisor."""
+    local = _local_jarvis_core(message, context)
     endpoint = _jarvis_endpoint()
-    runtime = dict(AUTOPILOT_STATE.get("jarvis_runtime") or {})
-    runtime["last_request_utc"] = datetime.now(timezone.utc).isoformat()
-    runtime["last_phase"] = (context or {}).get("phase") if isinstance(context, dict) else None
-    AUTOPILOT_STATE["jarvis_runtime"] = runtime
     if not endpoint:
-        result = {"configured": False, "ok": False, "reason": "JARVIS_URL not configured"}
+        result = {
+            "configured": False,
+            "endpoint": None,
+            "ok": True,
+            "status": 200,
+            "attempt": 0,
+            "payload_mode": "embedded_core",
+            "response": local,
+            "remote_advisory": {"ok": False, "reason": "JARVIS_URL not configured"},
+        }
         _record_jarvis_runtime(result, context)
         return result
+
     safe, why = _safe_public_https(endpoint)
     if not safe:
-        result = {"configured": True, "ok": False, "reason": why}
+        result = {
+            "configured": True,
+            "endpoint": endpoint,
+            "ok": True,
+            "status": 200,
+            "attempt": 0,
+            "payload_mode": "embedded_core",
+            "response": local,
+            "remote_advisory": {"ok": False, "reason": why},
+        }
         _record_jarvis_runtime(result, context)
         return result
 
@@ -2205,66 +2296,44 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
     if JARVIS_API_KEY:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
 
-    readiness = await _ensure_jarvis_ready(headers, max_wait_seconds=45.0)
-    last = None
-    for attempt in range(4):
-        minimal = attempt >= 1
-        payload, payload_bytes = _jarvis_payload(message, context, minimal=minimal)
-        encoded = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-        try:
-            async with httpx.AsyncClient(timeout=max(TIMEOUT, 30), follow_redirects=False) as client:
-                r = await client.post(endpoint, headers=headers, content=encoded)
-                if "json" in (r.headers.get("content-type") or ""):
-                    body = r.json()
-                else:
-                    body = {"text": r.text[:6000]}
-                result = {
-                    "configured": True,
-                    "endpoint": endpoint,
-                    "ok": r.is_success,
-                    "status": r.status_code,
-                    "attempt": attempt + 1,
-                    "payload_bytes": payload_bytes,
-                    "payload_mode": "bounded_rich" if attempt == 0 else "minimal_retry",
-                    "readiness": readiness,
-                    "response": body,
-                }
-                if r.is_success or r.status_code not in (502, 503, 504):
-                    _record_jarvis_runtime(result, context)
-                    return result
-                last = result
-                readiness = await _ensure_jarvis_ready(headers, max_wait_seconds=45.0)
-                await asyncio.sleep(min(8.0, 2.0 * (attempt + 1)))
-        except Exception as exc:
-            last = {
-                "configured": True,
-                "endpoint": endpoint,
-                "ok": False,
-                "attempt": attempt + 1,
-                "payload_bytes": payload_bytes,
-                "payload_mode": "bounded_rich" if attempt == 0 else "minimal_retry",
-                "readiness": readiness,
-                "reason": type(exc).__name__ + ": " + str(exc)[:500],
-            }
-            if attempt < 3:
-                readiness = await _ensure_jarvis_ready(headers, max_wait_seconds=45.0)
-                await asyncio.sleep(min(8.0, 2.0 * (attempt + 1)))
+    payload, payload_bytes = _jarvis_payload(message, context, minimal=True)
+    encoded = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    remote = {"ok": False, "reason": "not_attempted"}
+    try:
+        # The remote advisor gets a strict latency budget. It must never hold up NEO.
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
+            r = await client.post(endpoint, headers=headers, content=encoded)
+        body = r.json() if "json" in (r.headers.get("content-type") or "") else {"text": r.text[:3000]}
+        remote = {
+            "ok": r.is_success,
+            "status": r.status_code,
+            "attempt": 1,
+            "payload_bytes": payload_bytes,
+            "response": body,
+        }
+    except Exception as exc:
+        remote = {
+            "ok": False,
+            "attempt": 1,
+            "payload_bytes": payload_bytes,
+            "reason": type(exc).__name__ + ": " + str(exc)[:300],
+        }
 
-    remote = last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
-    fallback = _local_jarvis_fallback(context, remote)
-    fallback_result = {
+    # Remote output is retained for comparison/learning, but the embedded core remains
+    # the availability and gating authority.
+    result = {
         "configured": True,
         "endpoint": endpoint,
         "ok": True,
         "status": 200,
-        "attempt": remote.get("attempt"),
-        "payload_bytes": remote.get("payload_bytes"),
-        "payload_mode": "local_fallback",
-        "reason": "remote_jarvis_unavailable_local_fallback_used",
-        "response": fallback,
+        "attempt": 1,
+        "payload_bytes": payload_bytes,
+        "payload_mode": "embedded_core_remote_advisory",
+        "response": local,
+        "remote_advisory": remote,
     }
-    _record_jarvis_runtime(fallback_result, context)
-    return fallback_result
+    _record_jarvis_runtime(result, context)
+    return result
 
 
 def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
@@ -3471,8 +3540,7 @@ async def free_web_search(query: str, limit: int = 6) -> dict:
 
 def _jarvis_next_queries(jarvis_result: dict) -> list[str]:
     try:
-        response = jarvis_result.get("response") or {}
-        analysis = response.get("analysis") or {}
+        analysis = _extract_jarvis_analysis(jarvis_result)
         values = analysis.get("next_search_queries") or []
         if isinstance(values, list):
             return [" ".join(str(x).split()) for x in values if str(x).strip()][:5]
@@ -4623,7 +4691,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     result = {
         "ok": True,
         "mode": "director",
-        "coordinator": "jarvis-free",
+        "coordinator": "jarvis-embedded-core",
         "plan": plan,
         "jarvis_brief": jarvis_brief,
         "research": evidence,
