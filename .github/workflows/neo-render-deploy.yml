@@ -41,6 +41,11 @@ jobs:
           print("source runtime-literal validation passed")
           PY
 
+      - name: Run evidence integrity regression tests
+        run: |
+          set -euo pipefail
+          python -m unittest -v test_evidence_integrity.py
+
       - name: Resolve expected NEO version
         run: |
           set -euo pipefail
