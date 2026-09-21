@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.58.1"
+VERSION = "0.59.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2665,64 +2665,96 @@ def _hypothesis_search_queries(limit: int = 2) -> list[dict]:
 
 
 def _convergence_search_queries(limit: int = 3) -> list[dict]:
-    """Exploit promising families by seeking independent demand evidence instead of more generic volume."""
-    perf = AUTOPILOT_STATE.get("family_performance") or {}
+    """Target the concrete persistent problem clusters closest to the commercial gate."""
+    memory = [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x, dict)]
+    now = time.time()
+    fresh_cutoff = 7 * 24 * 3600
+    clusters: dict[str, dict] = {}
+
+    for row in memory:
+        family = str(row.get("family") or "")
+        problem_key = str(row.get("problem_key") or "")
+        domain = str(row.get("domain") or "")
+        if not family or not problem_key or not domain:
+            continue
+        cl = clusters.setdefault(problem_key, {
+            "family": family, "domains": set(), "fresh_domains": set(),
+            "strong_domains": set(), "tags": set(), "markers": set(), "titles": [],
+        })
+        cl["domains"].add(domain)
+        if now - float(row.get("last_seen_epoch") or 0) <= fresh_cutoff:
+            cl["fresh_domains"].add(domain)
+        if row.get("strong_markers"):
+            cl["strong_domains"].add(domain)
+        cl["tags"].update(row.get("signal_types") or [])
+        cl["markers"].update(row.get("weak_markers") or [])
+        cl["markers"].update(row.get("strong_markers") or [])
+        if row.get("title"):
+            cl["titles"].append(str(row.get("title")))
+
     ranked = []
-    for family, row in perf.items():
-        if not isinstance(row, dict):
+    for problem_key, cl in clusters.items():
+        domains = len(cl["domains"])
+        fresh = len(cl["fresh_domains"])
+        strong = len(cl["strong_domains"])
+        tags = set(cl["tags"])
+        qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
+        if qualified:
             continue
-        score = float(row.get("score") or 0.0)
-        observations = int(row.get("observations") or 0)
-        domains = int(row.get("last_domains") or 0)
-        strong = int(row.get("last_strong_domains") or 0)
-        signals = set(row.get("last_signal_types") or [])
-        if observations < 2 or score < 55:
-            continue
-        if domains >= 3 and strong >= 1 and "PAID_DEMAND" in signals and ("BUY_INTENT" in signals or "PAIN" in signals):
-            continue
-        ranked.append((score, observations, family, domains, strong, signals))
-    ranked.sort(reverse=True)
+        # Lower missing count and more existing independent evidence rank first.
+        missing = []
+        if domains < 3: missing.append("independent_domains")
+        if fresh < 2: missing.append("fresh_independent_domains")
+        if strong < 1: missing.append("commercial_source")
+        if "PAID_DEMAND" not in tags: missing.append("paid_demand")
+        if "BUY_INTENT" not in tags and "PAIN" not in tags: missing.append("buy_intent_or_pain")
+        rank = (domains * 30 + fresh * 15 + strong * 15 + (20 if "PAID_DEMAND" in tags else 0)
+                + (15 if ("BUY_INTENT" in tags or "PAIN" in tags) else 0) - len(missing) * 5)
+        ranked.append((rank, problem_key, cl, missing))
 
-    patterns = [
-        '"{term}" "need help" OR "looking for" OR "manual"',
-        '"{term}" hiring OR budget OR freelance OR consultant',
-        '"{term}" pricing OR "will pay" OR "paid" customer problem',
-        'site:reddit.com "{term}" "need" OR "problem" OR "manual"',
-        'site:news.ycombinator.com "{term}" problem OR workflow OR customer',
-    ]
-
+    ranked.sort(key=lambda x: (-x[0], x[1]))
     out = []
     seen = set()
-    for score, observations, family, domains, strong, signals in ranked[:3]:
-        terms = list(_family_relevance_terms(family))
-        if not terms:
-            continue
-        # Stable, deterministic term choice prevents entropy from abandoning a promising family.
-        term = sorted(terms, key=lambda x: (-len(x), x))[0]
-        missing = []
-        if domains < 3:
-            missing.append("independent_domains")
-        if strong < 1:
-            missing.append("commercial_source")
-        if "PAID_DEMAND" not in signals:
-            missing.append("paid_demand")
-        if "BUY_INTENT" not in signals and "PAIN" not in signals:
-            missing.append("buy_intent_or_pain")
+    # Give two convergence probes to the closest cluster, then diversify.
+    for pos, (rank, problem_key, cl, missing) in enumerate(ranked[:3]):
+        family = cl["family"]
+        marker = problem_key.split(":", 1)[-1].replace("_", " ")
+        if marker == "general" or len(marker) < 4:
+            terms = sorted(_family_relevance_terms(family), key=lambda x: (-len(x), x))
+            marker = terms[0] if terms else family.replace("_", " ")
+        patterns = []
+        if "independent_domains" in missing or "fresh_independent_domains" in missing:
+            patterns += [
+                '"{term}" "need help" OR "looking for" OR "pain point"',
+                '"{term}" customer problem OR manual OR repetitive -site:github.com',
+            ]
+        if "commercial_source" in missing or "paid_demand" in missing:
+            patterns += [
+                '"{term}" pricing OR budget OR hiring OR consultant -site:github.com',
+                '"{term}" "will pay" OR paid OR subscription OR contract -site:github.com',
+            ]
+        if "buy_intent_or_pain" in missing:
+            patterns += ['"{term}" "looking for" OR "need help" OR frustrating -site:github.com']
+        patterns += [
+            'site:reddit.com "{term}" "need help" OR "looking for" OR manual',
+            'site:news.ycombinator.com "{term}" customer OR problem OR workflow',
+        ]
+        quota = 2 if pos == 0 else 1
+        added = 0
         for pattern in patterns:
-            q = pattern.format(term=term)
-            key = q.lower()
-            if key in seen:
+            q = pattern.format(term=marker)
+            if q.lower() in seen:
                 continue
-            seen.add(key)
+            seen.add(q.lower())
             out.append({
-                "family": family,
-                "query": q,
-                "score": score,
-                "observations": observations,
-                "missing": missing,
+                "family": family, "problem_key": problem_key, "query": q,
+                "rank": rank, "missing": missing, "existing_domains": sorted(cl["domains"]),
             })
+            added += 1
             if len(out) >= max(0, limit):
                 return out
+            if added >= quota:
+                break
     return out
 
 
@@ -3037,7 +3069,26 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
             host=host[4:]
         if not host or any(host==n or host.endswith("."+n) for n in noise):
             return
-        text=((title or "")+" "+(body or "")).lower()
+        title_low=(title or "").lower()
+        body_low=(body or "").lower()
+        # GitHub issues are useful discovery sources but are also a major source of
+        # self-promotional/spam evidence. Require explicit buyer/problem language and
+        # reject obvious trust/ownership/patent/crypto noise before it enters memory.
+        if host == "github.com":
+            github_noise=(
+                "family trust","trust vault","trademark","patent-pending","patent pending",
+                "ownership","token sale","airdrop","wallet address","revenue command dashboard",
+                "master roadmap","roadmap maître","roadmap master",
+            )
+            if any(x in title_low or x in body_low for x in github_noise):
+                return
+            github_demand=(
+                "need help","looking for","seeking","hiring","budget","paid","paying",
+                "manual","repetitive","problem","pain","customer","client","freelance","contract",
+            )
+            if not any(x in title_low or x in body_low for x in github_demand):
+                return
+        text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
             return
@@ -3084,6 +3135,14 @@ def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | 
     memory=[]
     for row in AUTOPILOT_STATE.get("commercial_evidence_memory") or []:
         if not isinstance(row,dict):
+            continue
+        old_domain=str(row.get("domain") or "").lower()
+        old_text=(str(row.get("title") or "")+" "+str(row.get("url") or "")).lower()
+        legacy_noise=(
+            "family trust","trust vault","trademark","patent-pending","patent pending",
+            "revenue command dashboard","roadmap maître","roadmap master",
+        )
+        if old_domain == "github.com" and any(x in old_text for x in legacy_noise):
             continue
         last=float(row.get("last_seen_epoch") or 0)
         if last and now_epoch-last <= retention_seconds:
