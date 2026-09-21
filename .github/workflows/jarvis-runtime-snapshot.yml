@@ -52,8 +52,9 @@ jobs:
               "categories": src.get("categories"),
               "startup_events": (src.get("startup_events") or [])[:20],
               "recent_deploys": (src.get("recent_deploys") or [])[:10],
-              "important": (src.get("important") or [])[:30],
+              "important": [],
               "note": src.get("note"),
+              "privacy_note": "Raw Render log rows are intentionally omitted; counters and sanitized telemetry are retained.",
           }
 
           with open("/tmp/jarvis-runtime-snapshot.json", "w", encoding="utf-8") as fh:
