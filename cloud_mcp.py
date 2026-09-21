@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.62.0"
+VERSION = "0.63.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2927,8 +2927,91 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
     return out
 
 
+def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
+    """Act like a human researcher: pick one near-gate problem, form a falsifiable thesis,
+    and triangulate buyer, practitioner and market evidence without relaxing the gate."""
+    stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
+    if stagnation < 5:
+        return []
+    memory = [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x, dict)]
+    now = time.time()
+    by_problem: dict[str, dict] = {}
+    for row in memory:
+        key = str(row.get("problem_key") or "")
+        family = str(row.get("family") or "")
+        domain = str(row.get("domain") or "")
+        if not key or not family or not domain:
+            continue
+        cl = by_problem.setdefault(key, {
+            "family": family, "domains": set(), "fresh": set(), "strong": set(),
+            "tags": set(), "titles": [],
+        })
+        cl["domains"].add(domain)
+        if now - float(row.get("last_seen_epoch") or 0) <= 7 * 24 * 3600:
+            cl["fresh"].add(domain)
+        if row.get("strong_markers"):
+            cl["strong"].add(domain)
+        cl["tags"].update(row.get("signal_types") or [])
+        if row.get("title"):
+            cl["titles"].append(str(row.get("title"))[:180])
+
+    ranked = []
+    for key, cl in by_problem.items():
+        if _family_on_cooldown(cl["family"]):
+            continue
+        domains, fresh, strong = len(cl["domains"]), len(cl["fresh"]), len(cl["strong"])
+        tags = cl["tags"]
+        qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
+        if qualified:
+            continue
+        missing = []
+        if domains < 3: missing.append("independent_domains")
+        if fresh < 2: missing.append("fresh_independent_domains")
+        if strong < 1: missing.append("commercial_source")
+        if "PAID_DEMAND" not in tags: missing.append("paid_demand")
+        if not ({"BUY_INTENT","PAIN"} & tags): missing.append("buyer_pain")
+        # Human-style priority: closeness to proof, not historical family popularity.
+        score = domains * 35 + fresh * 20 + strong * 15 + (20 if "PAID_DEMAND" in tags else 0) + (15 if ({"BUY_INTENT","PAIN"} & tags) else 0) - len(missing) * 8
+        ranked.append((score, key, cl, missing))
+    ranked.sort(key=lambda x: (-x[0], x[1]))
+    if not ranked:
+        return []
+
+    score, key, cl, missing = ranked[0]
+    term = key.split(":",1)[-1].replace("_"," ")
+    if term == "general" or len(term) < 4:
+        terms = sorted(_family_relevance_terms(cl["family"]), key=lambda x:(-len(x),x))
+        term = terms[0] if terms else cl["family"].replace("_"," ")
+
+    # Triangulation deliberately spans different human evidence roles.
+    probes = [
+        ("buyer", f'site:reddit.com "{term}" ("need help" OR "looking for" OR "recommend")'),
+        ("buyer", f'"{term}" ("need help" OR "looking for a tool" OR "pain point") -site:github.com'),
+        ("paid_market", f'site:upwork.com/freelance-jobs "{term}" (budget OR "fixed-price" OR hourly)'),
+        ("paid_market", f'site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly)'),
+        ("practitioner", f'site:stackoverflow.com "{term}" (manual OR workaround OR repetitive)'),
+        ("practitioner", f'site:community.zapier.com "{term}" (help OR workaround OR manual)'),
+        ("alternative", f'"{term}" (pricing OR subscription OR "book a demo")'),
+        ("disconfirm", f'"{term}" ("not a problem" OR "easy to automate" OR "no need")'),
+    ]
+    out=[]
+    existing=set(cl["domains"])
+    for role,q in probes:
+        out.append({
+            "family":cl["family"], "problem_key":key, "query":q, "mode":"anthropic_triangulation",
+            "role":role, "rank":score, "missing":missing, "existing_domains":sorted(existing),
+            "thesis":f"Independent buyers repeatedly experience and pay to solve {term}.",
+        })
+        if len(out) >= max(0,limit):
+            break
+    return out
+
+
 def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
-    """Change source class and buyer language after prolonged stagnation without relaxing gates."""
+    """Legacy broad breakout, retained as fallback when anthropic triangulation has no target."""
+    anthropic = _anthropic_convergence_queries(limit)
+    if anthropic:
+        return anthropic
     stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
     if stagnation < 8:
         return []
@@ -2944,38 +3027,18 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
             cl["domains"].add(str(row.get("domain")))
         cl["tags"].update(row.get("signal_types") or [])
     by_problem={k:v for k,v in by_problem.items() if not _family_on_cooldown(v["family"])}
-    ranked = sorted(
-        by_problem.items(),
-        key=lambda kv: (-(len(kv[1]["domains"]) * 20 + (20 if "PAID_DEMAND" in kv[1]["tags"] else 0) + (15 if "PAIN" in kv[1]["tags"] else 0)), kv[0])
-    )
-    source_patterns = [
-        'site:upwork.com/freelance-jobs "{term}" "posted" automation OR integration',
-        'site:freelancer.com/jobs "{term}" budget OR fixed OR hourly',
-        'site:peopleperhour.com "{term}" project OR proposal',
-        'site:guru.com/jobs "{term}" automation OR integration',
-        'site:upwork.com "{term}" automation OR integration OR consultant',
-        'site:freelancer.com "{term}" automation OR integration',
-        'site:stackoverflow.com "{term}" "manual" OR "workaround" OR "pain"',
-        'site:community.zapier.com "{term}" "help" OR "how do i" OR workaround',
-        'site:community.make.com "{term}" "help" OR manual OR workaround',
-        'site:reddit.com "{term}" "pay for" OR "recommend a tool" OR "need a tool"',
-    ]
-    out, seen = [], set()
-    for problem_key, cl in ranked[:3]:
-        marker = problem_key.split(":", 1)[-1].replace("_", " ")
-        if marker == "general" or len(marker) < 4:
-            terms = sorted(_family_relevance_terms(cl["family"]), key=lambda x: (-len(x), x))
-            marker = terms[0] if terms else cl["family"].replace("_", " ")
-        for pattern in source_patterns:
-            q = pattern.format(term=marker)
-            if q.lower() in seen:
-                continue
-            seen.add(q.lower())
-            out.append({"family": cl["family"], "problem_key": problem_key, "query": q, "mode": "source_breakout"})
-            if len(out) >= max(0, limit):
+    ranked = sorted(by_problem.items(), key=lambda kv: (-(len(kv[1]["domains"])*20),kv[0]))
+    out=[]
+    for problem_key,cl in ranked[:2]:
+        marker=problem_key.split(":",1)[-1].replace("_"," ")
+        for q in [
+            f'site:reddit.com "{marker}" "need help"',
+            f'site:upwork.com "{marker}" automation OR consultant',
+        ]:
+            out.append({"family":cl["family"],"problem_key":problem_key,"query":q,"mode":"source_breakout"})
+            if len(out)>=max(0,limit):
                 return out
     return out
-
 
 def _family_on_cooldown(family: str) -> bool:
     row=(AUTOPILOT_STATE.get("family_cooldowns") or {}).get(family) or {}
@@ -3048,7 +3111,7 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     convergence_probes = _convergence_search_queries(convergence_limit)
     convergence_queries = [str(x.get("query") or "") for x in convergence_probes if str(x.get("query") or "").strip()]
 
-    breakout_limit = 4 if stagnation >= 12 else (2 if stagnation >= 8 else 0)
+    breakout_limit = 6 if stagnation >= 12 else (4 if stagnation >= 5 else 0)
     breakout_probes = _stagnation_breakout_queries(breakout_limit)
     breakout_queries = [str(x.get("query") or "") for x in breakout_probes if str(x.get("query") or "").strip()]
 
@@ -3087,7 +3150,9 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "breakout_probes": breakout_probes,
         "breakout_slots": len(breakout_queries),
         "stagnation_breakout": bool(breakout_queries),
-        "policy": "after prolonged stagnation change source classes and buyer-language queries; preserve convergence and exploration; never relax the evidence gate",
+        "anthropic_convergence": any(x.get("mode") == "anthropic_triangulation" for x in breakout_probes),
+        "anthropic_thesis": next((x.get("thesis") for x in breakout_probes if x.get("mode") == "anthropic_triangulation"), None),
+        "policy": "when a concrete problem is near the gate, converge anthropically: hold one falsifiable thesis and triangulate buyer, paid-market, practitioner and disconfirming evidence; never relax the evidence gate",
         "adaptive_policy": policy,
     }
     AUTOPILOT_STATE["last_search_strategy"] = strategy
