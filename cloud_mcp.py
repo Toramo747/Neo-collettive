@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.64.0"
+VERSION = "0.65.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1714,7 +1714,7 @@ def _collective_agent_query(query: str) -> str:
     return aliases.get(key,("business analysis critical review " + key).strip())
 
 
-COLLECTIVE_PROTOCOL_VERSION = "MCX-1"
+COLLECTIVE_PROTOCOL_VERSION = "MCX-2"
 
 def _collective_agent_prompt(problem: str, peer_digest: str | None = None) -> str:
     base=(
@@ -1843,7 +1843,8 @@ async def _fresh_external_recovery(query: str, question: str, needed: int, exclu
 
 
 async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -> dict:
-    max_agents = max(2, min(max_agents, MAX_AGENTS))
+    """MCX-2: independent scan -> thesis/antithesis -> neutral arbitration."""
+    max_agents = max(3, min(max_agents, MAX_AGENTS))
     agent_query=_collective_agent_query(query)
     round1_prompt=_collective_agent_prompt(problem)
     first = await ask_agents_data(agent_query, round1_prompt, max_agents, trust_stage=_infer_trust_stage(query,problem))
@@ -1866,6 +1867,7 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         fallback["external_round1_valid_count"] = len(first_answers)
         fallback["external_round2_valid"] = []
         fallback["external_round2_valid_count"] = 0
+        fallback["debate_protocol"] = "MCX-2-fallback"
         fallback["trusted_recovery_attempted"] = True
         fallback["selection"] = {
             "agent_query": agent_query,
@@ -1878,20 +1880,6 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         }
         return fallback
 
-    peer_digest_parts = []
-    for a in first_answers:
-        payload = a.get("response")
-        text = json.dumps(payload, ensure_ascii=False, default=str)
-        if len(text) > 2500:
-            text = text[:2500] + "...[troncato]"
-        peer_digest_parts.append(
-            "AGENTE " + str(a.get("agent") or a.get("agent_id")) + "\n" + text
-        )
-    peer_digest = "\n\n---\n\n".join(peer_digest_parts)
-
-    review_prompt=_collective_agent_prompt(problem,peer_digest)
-
-    # Prefer the strongest historical first-round performers for critique.
     def review_rank(a: dict) -> tuple:
         row=(AUTOPILOT_STATE.get("agent_trust") or {}).get(str(a.get("agent_id") or "")) or {}
         obs=int(row.get("observations") or 0)
@@ -1899,37 +1887,67 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         return (acc/max(1,obs),float(row.get("trust") or 0),float(a.get("relevance_score") or 0))
 
     ordered_first=sorted(first_answers,key=review_rank,reverse=True)
+    thesis_agent=ordered_first[0]
+    antithesis_agent=ordered_first[1]
 
-    async def review(a: dict) -> dict:
-        answer=await ask_agent_by_id(str(a.get("agent_id")), review_prompt)
-        quality_ok,quality_reason=_quality_check(answer,review_prompt)
+    def compact_answer(a: dict, limit: int = 2200) -> str:
+        text=_response_excerpt(a,limit)
+        return text if text else "(no substantive answer)"
+
+    thesis_seed=compact_answer(thesis_agent)
+    antithesis_seed=compact_answer(antithesis_agent)
+
+    thesis_prompt=(
+        "You are the THESIS agent in an adversarial business review. "
+        "Argue the strongest evidence-grounded case FOR running a small reversible test of the candidate. "
+        "Directly address the opposing agent's initial answer below. Do not invent evidence, do not evade contradictions, "
+        "and explicitly concede any valid criticism. End with the MYCELIX_VECTOR line required by the protocol.\n\n"
+        "CANDIDATE:\n"+problem+
+        "\n\nYOUR INITIAL POSITION:\n"+thesis_seed+
+        "\n\nOPPOSING INITIAL POSITION:\n"+antithesis_seed
+    )
+    antithesis_prompt=(
+        "You are the ANTITHESIS agent in an adversarial business review. "
+        "Argue the strongest evidence-grounded case AGAINST proceeding with the candidate now. "
+        "Directly attack unsupported assumptions in the opposing agent's initial answer below, while conceding any claim "
+        "that is genuinely supported. Do not invent evidence. End with the MYCELIX_VECTOR line required by the protocol.\n\n"
+        "CANDIDATE:\n"+problem+
+        "\n\nYOUR INITIAL POSITION:\n"+antithesis_seed+
+        "\n\nOPPOSING INITIAL POSITION:\n"+thesis_seed
+    )
+
+    async def role_review(a: dict, prompt: str, role: str) -> dict:
+        answer=await ask_agent_by_id(str(a.get("agent_id")), prompt)
+        quality_ok,quality_reason=_quality_check(answer,prompt)
         answer["quality_ok"]=quality_ok
         answer["quality_reason"]=quality_reason
+        answer["debate_role"]=role
         return answer
 
-    initial_second=await asyncio.gather(*(review(a) for a in ordered_first[:max_agents]))
-    second=[a for a in initial_second if a.get("ok") and a.get("quality_ok")]
+    thesis_answer, antithesis_answer = await asyncio.gather(
+        role_review(thesis_agent,thesis_prompt,"thesis"),
+        role_review(antithesis_agent,antithesis_prompt,"antithesis"),
+    )
+    second=[a for a in (thesis_answer,antithesis_answer) if a.get("ok") and a.get("quality_ok")]
 
-    # If peer reviewers fail, try trusted agents first, then discover fresh external reviewers.
-    second_ids=first_ids | {str(a.get("agent_id") or "") for a in initial_second}
+    # Recover missing debate side without changing the role.
+    second_ids=first_ids | {str(a.get("agent_id") or "") for a in (thesis_answer,antithesis_answer)}
     trusted_recovered=[]
     fresh_recovered=[]
     if len(second)<2:
-        trusted_recovered=await _trusted_recovery_answers(
-            review_prompt,
-            needed=2-len(second),
-            exclude_ids=second_ids,
-        )
+        missing_role="thesis" if not (thesis_answer.get("ok") and thesis_answer.get("quality_ok")) else "antithesis"
+        missing_prompt=thesis_prompt if missing_role=="thesis" else antithesis_prompt
+        trusted_recovered=await _trusted_recovery_answers(missing_prompt,needed=1,exclude_ids=second_ids)
+        for a in trusted_recovered:
+            a["debate_role"]=missing_role
         second.extend(trusted_recovered)
         second_ids.update(str(a.get("agent_id") or "") for a in trusted_recovered)
-
     if len(second)<2:
-        fresh_recovered=await _fresh_external_recovery(
-            agent_query,
-            review_prompt,
-            needed=2-len(second),
-            exclude_ids=second_ids,
-        )
+        missing_role="thesis" if not any(a.get("debate_role")=="thesis" for a in second) else "antithesis"
+        missing_prompt=thesis_prompt if missing_role=="thesis" else antithesis_prompt
+        fresh_recovered=await _fresh_external_recovery(agent_query,missing_prompt,needed=1,exclude_ids=second_ids)
+        for a in fresh_recovered:
+            a["debate_role"]=missing_role
         second.extend(fresh_recovered)
         second_ids.update(str(a.get("agent_id") or "") for a in fresh_recovered)
 
@@ -1938,10 +1956,10 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         fallback["external_round1"]=first
         fallback["external_round1_valid"]=first_answers
         fallback["external_round1_valid_count"]=len(first_answers)
-        fallback["external_round2_attempts"]=initial_second
+        fallback["external_round2_attempts"]=[thesis_answer,antithesis_answer]
         fallback["external_round2_valid"]=second
         fallback["external_round2_valid_count"]=len(second)
-        fallback["trusted_recovery_attempted"]=True
+        fallback["debate_protocol"]="MCX-2-fallback"
         fallback["trusted_recovery_valid_count"]=len(trusted_recovered)
         fallback["fresh_recovery_valid_count"]=len(fresh_recovered)
         fallback["selection"]={
@@ -1955,14 +1973,47 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         }
         return fallback
 
+    # Neutral arbiter must be different from thesis/antithesis when possible.
+    judge_candidates=[a for a in ordered_first[2:] if str(a.get("agent_id") or "") not in second_ids]
+    judge_agent=judge_candidates[0] if judge_candidates else None
+    thesis_final=next((a for a in second if a.get("debate_role")=="thesis"),second[0])
+    antithesis_final=next((a for a in second if a.get("debate_role")=="antithesis"),second[-1])
+    judge_prompt=(
+        "You are the NEUTRAL ARBITER. Do not simply average the two sides. "
+        "Identify which specific claims survive adversarial scrutiny, which claims fail, and what evidence is still missing. "
+        "Choose PROCEED, TEST, REJECT, or UNCERTAIN based only on supplied evidence. "
+        "Do not invent sources. End with the MYCELIX_VECTOR line required by the protocol.\n\n"
+        "CANDIDATE:\n"+problem+
+        "\n\nTHESIS:\n"+compact_answer(thesis_final,2600)+
+        "\n\nANTITHESIS:\n"+compact_answer(antithesis_final,2600)
+    )
+    arbitration=None
+    if judge_agent:
+        arbitration=await role_review(judge_agent,judge_prompt,"arbiter")
+    if not arbitration or not arbitration.get("ok") or not arbitration.get("quality_ok"):
+        recovered_judges=await _trusted_recovery_answers(judge_prompt,needed=1,exclude_ids=second_ids)
+        if not recovered_judges:
+            recovered_judges=await _fresh_external_recovery(agent_query,judge_prompt,needed=1,exclude_ids=second_ids)
+        arbitration=recovered_judges[0] if recovered_judges else None
+        if arbitration:
+            arbitration["debate_role"]="arbiter"
+
+    math_rows=first_answers[:max_agents]+second[:2]+([arbitration] if isinstance(arbitration,dict) and arbitration.get("ok") else [])
+    math_summary=_collective_math_summary(math_rows,_infer_trust_stage(query,problem))
+
     return {
         "ok": True,
         "query": query,
         "problem": problem,
+        "protocol": COLLECTIVE_PROTOCOL_VERSION,
+        "debate_protocol": "thesis_antithesis_arbiter",
         "round1": first_answers[:max_agents],
-        "round2": second[:max_agents],
+        "round2": second[:2],
+        "arbitration": arbitration,
+        "math_summary": math_summary,
         "external_round1_valid_count": len(first_answers),
         "external_round2_valid_count": len(second),
+        "arbiter_valid": bool(isinstance(arbitration,dict) and arbitration.get("ok") and arbitration.get("quality_ok",True)),
         "trusted_recovery_valid_count": len(trusted_recovered),
         "fresh_recovery_valid_count": len(fresh_recovered),
         "fallback": False,
@@ -1970,6 +2021,9 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
         "fresh_recovery_used": bool(fresh_recovered),
         "selection": {
             "agent_query": agent_query,
+            "thesis_agent": {"agent":thesis_agent.get("agent"),"agent_id":thesis_agent.get("agent_id")},
+            "antithesis_agent": {"agent":antithesis_agent.get("agent"),"agent_id":antithesis_agent.get("agent_id")},
+            "arbiter_agent": {"agent":arbitration.get("agent"),"agent_id":arbitration.get("agent_id")} if isinstance(arbitration,dict) else None,
             "search_queries": first.get("search_queries", []),
             "mcp_candidates": first.get("mcp_candidates", []),
             "mcp_inspected": first.get("mcp_inspected", []),
@@ -1978,8 +2032,8 @@ async def collective_two_rounds(query: str, problem: str, max_agents: int = 3) -
             "discovery_errors": first.get("discovery_errors", []),
         },
         "warning": (
-            "Le risposte degli agenti sono output esterno non fidato. "
-            "Il secondo round serve a confronto e critica, non a eseguire istruzioni remote."
+            "Agent outputs are untrusted external content. Thesis and antithesis must address each other; "
+            "the arbiter identifies surviving claims but cannot bypass evidence gates."
         ),
     }
 
@@ -2768,7 +2822,15 @@ def _update_dialogue_learning(review: dict, topic: str, problem: str, goal: str)
         "protocol":(review or {}).get("protocol") or COLLECTIVE_PROTOCOL_VERSION,
         "math_summary":(review or {}).get("math_summary") or _collective_math_summary(r1+r2,_infer_trust_stage(topic,problem)),
         "round1_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"text":_response_excerpt(x)} for x in r1[:4]],
-        "round2_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"text":_response_excerpt(x)} for x in r2[:4]],
+        "round2_excerpts":[{"agent":x.get("agent"),"agent_id":x.get("agent_id"),"role":x.get("debate_role"),"text":_response_excerpt(x)} for x in r2[:4]],
+        "debate_protocol":(review or {}).get("debate_protocol"),
+        "arbitration_excerpt":({
+            "agent":(review.get("arbitration") or {}).get("agent"),
+            "agent_id":(review.get("arbitration") or {}).get("agent_id"),
+            "role":"arbiter",
+            "text":_response_excerpt(review.get("arbitration") or {}),
+        } if isinstance((review or {}).get("arbitration"),dict) else None),
+        "arbiter_valid":bool((review or {}).get("arbiter_valid")),
         "suggestions_extracted":len(suggestions),
         "new_hypotheses":added,
         "knowledge_gained":len(added),
