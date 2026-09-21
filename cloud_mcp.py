@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.59.0"
+VERSION = "0.59.1"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2075,12 +2075,95 @@ def _jarvis_payload(message: str, context: dict | None, minimal: bool = False) -
     return payload, size
 
 
-async def _wake_jarvis(endpoint: str, headers: dict) -> None:
-    try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
-            await client.get(endpoint, headers={"Accept": "application/json", **({"Authorization": headers["Authorization"]} if headers.get("Authorization") else {})})
-    except Exception:
-        pass
+def _jarvis_health_endpoint() -> str:
+    raw = (JARVIS_URL or "").strip().rstrip("/")
+    if not raw:
+        return ""
+    if raw.endswith("/ask"):
+        raw = raw[:-4].rstrip("/")
+    return raw + "/health"
+
+
+async def _ensure_jarvis_ready(headers: dict, max_wait_seconds: float = 45.0) -> dict:
+    """Wake/poll Jarvis until Render has a healthy instance before sending a POST."""
+    health = _jarvis_health_endpoint()
+    if not health:
+        return {"ok": False, "reason": "health endpoint unavailable", "checks": []}
+    checks = []
+    started = time.monotonic()
+    delays = (0.0, 1.5, 2.5, 4.0, 6.0, 8.0, 10.0)
+    for delay in delays:
+        if delay:
+            await asyncio.sleep(delay)
+        if time.monotonic() - started > max_wait_seconds:
+            break
+        try:
+            h = {"Accept": "application/json"}
+            if headers.get("Authorization"):
+                h["Authorization"] = headers["Authorization"]
+            async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
+                r = await client.get(health, headers=h)
+            checks.append({"status": r.status_code})
+            if r.is_success:
+                return {
+                    "ok": True,
+                    "status": r.status_code,
+                    "checks": checks,
+                    "wait_seconds": round(time.monotonic() - started, 2),
+                }
+        except Exception as exc:
+            checks.append({"error": type(exc).__name__})
+    return {
+        "ok": False,
+        "checks": checks,
+        "wait_seconds": round(time.monotonic() - started, 2),
+    }
+
+
+def _local_jarvis_fallback(context: dict | None, remote: dict) -> dict:
+    """Deterministic fallback so a Render gateway failure never blocks NEO's cycle."""
+    src = context if isinstance(context, dict) else {}
+    quality = src.get("evidence_quality") if isinstance(src.get("evidence_quality"), dict) else {}
+    qualified = list(quality.get("qualified_problem_keys") or quality.get("qualified_problem_clusters") or [])
+    gate = bool(quality.get("quality_gate"))
+    clusters = quality.get("problem_clusters") or quality.get("clusters") or {}
+    if gate and qualified:
+        decision = "VALIDATE"
+        state = "QUALIFIED_FOR_EXPERIMENT"
+        next_experiment = "Proceed only with the bounded zero/minimal-cost experiment already allowed by NEO policy."
+    elif clusters:
+        decision = "SEARCH_MORE"
+        state = "PARTIAL_EVIDENCE"
+        next_experiment = "Gather another independent source on the same concrete problem; do not build yet."
+    else:
+        decision = "SEARCH_MORE"
+        state = "NO_EVIDENCE"
+        next_experiment = "Gather independent demand evidence before building."
+    return {
+        "ok": True,
+        "service": "jarvis-local-fallback",
+        "version": "local-rule-fallback-1",
+        "analysis": {
+            "engine": "neo-local-jarvis-fallback",
+            "evidence_state": state,
+            "decision": decision,
+            "summary": {
+                "neo_quality_gate": gate,
+                "qualified_problem_clusters": len(qualified),
+                "remote_transport_failed": True,
+            },
+            "opportunities": [],
+            "next_experiment": next_experiment,
+            "guardrails": [
+                "fallback cannot bypass NEO evidence gates",
+                "no automatic spending",
+                "no automatic outreach",
+            ],
+            "note": "Remote Jarvis was unavailable; deterministic local fallback preserved cycle continuity.",
+        },
+        "fallback": True,
+        "remote_failure": remote,
+    }
 
 
 def _record_jarvis_runtime(result: dict, context: dict | None = None) -> None:
@@ -2122,13 +2205,14 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
     if JARVIS_API_KEY:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
 
+    readiness = await _ensure_jarvis_ready(headers, max_wait_seconds=45.0)
     last = None
-    for attempt in range(3):
+    for attempt in range(4):
         minimal = attempt >= 1
         payload, payload_bytes = _jarvis_payload(message, context, minimal=minimal)
         encoded = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
+            async with httpx.AsyncClient(timeout=max(TIMEOUT, 30), follow_redirects=False) as client:
                 r = await client.post(endpoint, headers=headers, content=encoded)
                 if "json" in (r.headers.get("content-type") or ""):
                     body = r.json()
@@ -2142,16 +2226,15 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
                     "attempt": attempt + 1,
                     "payload_bytes": payload_bytes,
                     "payload_mode": "bounded_rich" if attempt == 0 else "minimal_retry",
+                    "readiness": readiness,
                     "response": body,
                 }
                 if r.is_success or r.status_code not in (502, 503, 504):
                     _record_jarvis_runtime(result, context)
                     return result
                 last = result
-                # Gateway errors can be Render cold/proxy failures. Wake with a tiny GET,
-                # then retry using minimal context instead of resending the large payload.
-                await _wake_jarvis(endpoint, headers)
-                await asyncio.sleep(1.5 * (attempt + 1))
+                readiness = await _ensure_jarvis_ready(headers, max_wait_seconds=45.0)
+                await asyncio.sleep(min(8.0, 2.0 * (attempt + 1)))
         except Exception as exc:
             last = {
                 "configured": True,
@@ -2160,15 +2243,28 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
                 "attempt": attempt + 1,
                 "payload_bytes": payload_bytes,
                 "payload_mode": "bounded_rich" if attempt == 0 else "minimal_retry",
+                "readiness": readiness,
                 "reason": type(exc).__name__ + ": " + str(exc)[:500],
             }
-            if attempt < 2:
-                await _wake_jarvis(endpoint, headers)
-                await asyncio.sleep(1.5 * (attempt + 1))
+            if attempt < 3:
+                readiness = await _ensure_jarvis_ready(headers, max_wait_seconds=45.0)
+                await asyncio.sleep(min(8.0, 2.0 * (attempt + 1)))
 
-    result = last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
-    _record_jarvis_runtime(result, context)
-    return result
+    remote = last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
+    fallback = _local_jarvis_fallback(context, remote)
+    fallback_result = {
+        "configured": True,
+        "endpoint": endpoint,
+        "ok": True,
+        "status": 200,
+        "attempt": remote.get("attempt"),
+        "payload_bytes": remote.get("payload_bytes"),
+        "payload_mode": "local_fallback",
+        "reason": "remote_jarvis_unavailable_local_fallback_used",
+        "response": fallback,
+    }
+    _record_jarvis_runtime(fallback_result, context)
+    return fallback_result
 
 
 def director_plan(goal: str, budget: float = 0.0, hours_per_week: int = 5) -> dict:
