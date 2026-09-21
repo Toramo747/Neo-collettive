@@ -37,7 +37,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.67.0"
+VERSION = "0.68.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -210,24 +210,28 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
     if isinstance(payload.get("jarvis_dialogue_history"), list):
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
+    migration_changed = False
     if isinstance(payload.get("commercial_evidence_memory"), list):
         migrated, migration = migrate_evidence_memory(payload.get("commercial_evidence_memory")[-240:])
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
-        if migration.get("changed") or migration.get("quarantined"):
-            # Derived commercial scores from tagger v1 are not safe guidance for v2.
+        migration_changed = bool(int(migration.get("changed") or 0) > 0)
+        if migration_changed:
+            # Reset v1-derived guidance exactly once, when rows are actually migrated.
+            # Merely retaining quarantined rows across Render restarts must not reset learning.
             AUTOPILOT_STATE["family_performance"] = {}
             AUTOPILOT_STATE["family_cooldowns"] = {}
             AUTOPILOT_STATE["problem_performance"] = {}
             AUTOPILOT_STATE["problem_cooldowns"] = {}
             AUTOPILOT_STATE["stagnation_cycles"] = 0
-    if isinstance(payload.get("active_thesis"), dict):
+            AUTOPILOT_STATE["active_thesis"] = None
+    if not migration_changed and isinstance(payload.get("active_thesis"), dict):
         AUTOPILOT_STATE["active_thesis"] = payload.get("active_thesis")
     if isinstance(payload.get("thesis_history"), list):
         AUTOPILOT_STATE["thesis_history"] = payload.get("thesis_history")[-30:]
-    if isinstance(payload.get("problem_performance"), dict):
+    if not migration_changed and isinstance(payload.get("problem_performance"), dict):
         AUTOPILOT_STATE["problem_performance"] = payload.get("problem_performance") or {}
-    if isinstance(payload.get("problem_cooldowns"), dict):
+    if not migration_changed and isinstance(payload.get("problem_cooldowns"), dict):
         AUTOPILOT_STATE["problem_cooldowns"] = payload.get("problem_cooldowns") or {}
     if isinstance(payload.get("query_execution"), dict):
         AUTOPILOT_STATE["query_execution"] = payload.get("query_execution") or {}
