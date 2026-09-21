@@ -2012,6 +2012,77 @@ async def jarvis_status() -> dict:
         return {"configured": True, "endpoint": endpoint, "ok": False, "reason": type(e).__name__ + ": " + str(e)[:300]}
 
 
+def _compact_jarvis_value(value: Any, depth: int = 0, key: str = "") -> Any:
+    """Bound outbound context so Render never receives a huge Jarvis request."""
+    if depth >= 5:
+        if isinstance(value, dict):
+            return {"truncated": True, "type": "dict"}
+        if isinstance(value, list):
+            return [{"truncated": True, "type": "list", "count": len(value)}]
+        if isinstance(value, str):
+            return value[:600]
+        return value
+    if isinstance(value, str):
+        limits = {"text": 1500, "snippet": 900, "response": 1500, "claim": 900, "message": 5000}
+        return value[:limits.get(key, 1200)]
+    if isinstance(value, list):
+        limits = {
+            "external_research": 6, "web_research": 6, "evidence_scouts": 12,
+            "dialogue_history": 6, "knowledge_ledger": 10, "hypothesis_queue": 8,
+            "jarvis_dialogue_history": 6, "commercial_evidence_memory": 16,
+            "build_history": 8, "measurement_history": 8, "answers": 3,
+            "results": 3, "signals": 5,
+        }
+        limit = limits.get(key, 10)
+        tail_keys = {
+            "dialogue_history","knowledge_ledger","jarvis_dialogue_history",
+            "commercial_evidence_memory","build_history","measurement_history"
+        }
+        items = value[-limit:] if key in tail_keys else value[:limit]
+        return [_compact_jarvis_value(x, depth + 1) for x in items]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in list(value.items())[:60]:
+            out[str(k)] = _compact_jarvis_value(v, depth + 1, str(k))
+        return out
+    return value
+
+
+def _minimal_jarvis_context(context: dict | None) -> dict:
+    src = context if isinstance(context, dict) else {}
+    keep = (
+        "phase","evidence_quality","family_performance","product_candidate",
+        "collective_summary","dialogue_report","valid_external_answers",
+        "web_source_count","initial_jarvis_brief",
+    )
+    out = {k: src.get(k) for k in keep if k in src}
+    scouts = src.get("evidence_scouts")
+    if isinstance(scouts, list):
+        out["evidence_scouts"] = scouts[:8]
+    hist = src.get("jarvis_dialogue_history")
+    if isinstance(hist, list):
+        out["jarvis_dialogue_history"] = hist[-4:]
+    return _compact_jarvis_value(out)
+
+
+def _jarvis_payload(message: str, context: dict | None, minimal: bool = False) -> tuple[dict, int]:
+    bounded = _minimal_jarvis_context(context) if minimal else _compact_jarvis_value(context or {})
+    payload = {"message": str(message or "")[:10000], "source": "neo", "context": bounded}
+    size = len(json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8"))
+    if size > 160000 and not minimal:
+        payload["context"] = _minimal_jarvis_context(context)
+        size = len(json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8"))
+    return payload, size
+
+
+async def _wake_jarvis(endpoint: str, headers: dict) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
+            await client.get(endpoint, headers={"Accept": "application/json", **({"Authorization": headers["Authorization"]} if headers.get("Authorization") else {})})
+    except Exception:
+        pass
+
+
 def _record_jarvis_runtime(result: dict, context: dict | None = None) -> None:
     runtime = dict(AUTOPILOT_STATE.get("jarvis_runtime") or {})
     now = datetime.now(timezone.utc).isoformat()
@@ -2021,6 +2092,8 @@ def _record_jarvis_runtime(result: dict, context: dict | None = None) -> None:
     runtime["last_attempt"] = result.get("attempt")
     runtime["last_phase"] = (context or {}).get("phase") if isinstance(context, dict) else None
     runtime["last_reason"] = result.get("reason")
+    runtime["last_payload_bytes"] = result.get("payload_bytes")
+    runtime["last_payload_mode"] = result.get("payload_mode")
     runtime["requests_total"] = int(runtime.get("requests_total") or 0) + 1
     if result.get("ok"):
         runtime["success_total"] = int(runtime.get("success_total") or 0) + 1
@@ -2044,36 +2117,55 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
         result = {"configured": True, "ok": False, "reason": why}
         _record_jarvis_runtime(result, context)
         return result
+
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
     if JARVIS_API_KEY:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
-    payload = {"message": message, "source": "neo", "context": context or {}}
+
     last = None
-    for attempt in range(2):
+    for attempt in range(3):
+        minimal = attempt >= 1
+        payload, payload_bytes = _jarvis_payload(message, context, minimal=minimal)
+        encoded = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
-                r = await client.post(endpoint, headers=headers, json=payload)
+                r = await client.post(endpoint, headers=headers, content=encoded)
                 if "json" in (r.headers.get("content-type") or ""):
                     body = r.json()
                 else:
-                    body = {"text": r.text[:12000]}
+                    body = {"text": r.text[:6000]}
                 result = {
                     "configured": True,
                     "endpoint": endpoint,
                     "ok": r.is_success,
                     "status": r.status_code,
                     "attempt": attempt + 1,
+                    "payload_bytes": payload_bytes,
+                    "payload_mode": "bounded_rich" if attempt == 0 else "minimal_retry",
                     "response": body,
                 }
-                if r.is_success or r.status_code not in (502,503,504):
+                if r.is_success or r.status_code not in (502, 503, 504):
                     _record_jarvis_runtime(result, context)
                     return result
                 last = result
-                await asyncio.sleep(1.0)
-        except Exception as e:
-            last = {"configured": True, "endpoint": endpoint, "ok": False, "attempt": attempt + 1, "reason": type(e).__name__ + ": " + str(e)[:500]}
-            if attempt == 0:
-                await asyncio.sleep(1.0)
+                # Gateway errors can be Render cold/proxy failures. Wake with a tiny GET,
+                # then retry using minimal context instead of resending the large payload.
+                await _wake_jarvis(endpoint, headers)
+                await asyncio.sleep(1.5 * (attempt + 1))
+        except Exception as exc:
+            last = {
+                "configured": True,
+                "endpoint": endpoint,
+                "ok": False,
+                "attempt": attempt + 1,
+                "payload_bytes": payload_bytes,
+                "payload_mode": "bounded_rich" if attempt == 0 else "minimal_retry",
+                "reason": type(exc).__name__ + ": " + str(exc)[:500],
+            }
+            if attempt < 2:
+                await _wake_jarvis(endpoint, headers)
+                await asyncio.sleep(1.5 * (attempt + 1))
+
     result = last or {"configured": True, "endpoint": endpoint, "ok": False, "reason": "unknown Jarvis failure"}
     _record_jarvis_runtime(result, context)
     return result
