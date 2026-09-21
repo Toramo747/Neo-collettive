@@ -75,6 +75,10 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertEqual(once[0]["problem_key"],"ai_tools:generic_technology")
         self.assertEqual(meta2["changed"],0)
 
+    def test_generic_hypothesis_terms_remain_nonqualifying(self):
+        self.assertFalse(gate_eligible_problem_key("ai_tools:generic_technology"))
+        self.assertEqual(canonical_problem_key("ai_tools","ai_tools:llm"),"ai_tools:generic_technology")
+
 
 if __name__=="__main__":
     unittest.main()
