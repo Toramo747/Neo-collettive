@@ -3050,55 +3050,122 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
 
 
 def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
-    """Converge from technology -> customer -> job-to-be-done -> pain -> willingness to pay."""
-    stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
-    if stagnation < 5:
+    """Hold one falsifiable human thesis across cycles instead of rotating technology labels."""
+    stagnation=int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
+    if stagnation<5:
         return []
-    memory = [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x, dict)]
-    now = time.time()
-    by_problem: dict[str, dict] = {}
+
+    memory=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
+    now=time.time()
+    by_problem={}
     for row in memory:
-        key, family, domain = str(row.get("problem_key") or ""), str(row.get("family") or ""), str(row.get("domain") or "")
+        family=str(row.get("family") or "")
+        key=canonical_problem_key(family,str(row.get("problem_key") or ""))
+        domain=str(row.get("domain") or "")
         if not key or not family or not domain:
             continue
-        cl=by_problem.setdefault(key,{"family":family,"domains":set(),"fresh":set(),"strong":set(),"tags":set(),"titles":[]})
+        cl=by_problem.setdefault(key,{
+            "family":family,"domains":set(),"fresh":set(),"strong":set(),"tags":set(),"titles":[],
+            "gate_rows":0,"disconfirm":0,
+        })
         cl["domains"].add(domain)
-        if now-float(row.get("last_seen_epoch") or 0)<=7*24*3600: cl["fresh"].add(domain)
-        if row.get("strong_markers"): cl["strong"].add(domain)
-        cl["tags"].update(row.get("signal_types") or [])
-        if row.get("title"): cl["titles"].append(str(row.get("title"))[:180])
+        if now-float(row.get("last_seen_epoch") or 0)<=7*24*3600:
+            cl["fresh"].add(domain)
+        if row.get("strong_markers") and row.get("gate_eligible"):
+            cl["strong"].add(domain)
+        if row.get("gate_eligible"):
+            cl["gate_rows"]+=1
+            cl["tags"].update(set(row.get("signal_types") or [])-{"COMPETITION","DISCONFIRM"})
+        if "DISCONFIRM" in set(row.get("signal_types") or []):
+            cl["disconfirm"]+=1
+        if row.get("title"):
+            cl["titles"].append(str(row.get("title"))[:180])
 
     ranked=[]
     for key,cl in by_problem.items():
-        if _family_on_cooldown(cl["family"], purpose=("hypothesis" if not gate_eligible_problem_key(key) else "convergence"), problem_key=key): continue
-        d,f,s=len(cl["domains"]),len(cl["fresh"]),len(cl["strong"]); tags=cl["tags"]
-        if d>=3 and f>=2 and s>=1 and "PAID_DEMAND" in tags and ({"BUY_INTENT","PAIN"} & tags): continue
+        purpose="convergence" if gate_eligible_problem_key(key) else "hypothesis"
+        if _family_on_cooldown(cl["family"],purpose=purpose,problem_key=key):
+            continue
+        d,fresh,strong=len(cl["domains"]),len(cl["fresh"]),len(cl["strong"])
+        tags=cl["tags"]
+        if gate_eligible_problem_key(key) and d>=3 and fresh>=2 and strong>=1 and "PAID_DEMAND" in tags and ({"BUY_INTENT","PAIN"} & tags):
+            continue
         missing=[]
-        if d<3: missing.append("independent_domains")
-        if f<2: missing.append("fresh_independent_domains")
-        if s<1: missing.append("commercial_source")
-        if "PAID_DEMAND" not in tags: missing.append("paid_demand")
-        if not ({"BUY_INTENT","PAIN"} & tags): missing.append("buyer_pain")
-        score=d*35+f*20+s*15+(20 if "PAID_DEMAND" in tags else 0)+(15 if ({"BUY_INTENT","PAIN"} & tags) else 0)-len(missing)*8
+        if gate_eligible_problem_key(key):
+            snap=_problem_snapshot(key)
+            if len(snap["domains"])<3: missing.append("independent_domains")
+            if len(snap["fresh_domains"])<2: missing.append("fresh_independent_domains")
+            if len(snap["strong_domains"])<1: missing.append("commercial_source")
+            if "PAID_DEMAND" not in snap["tags"]: missing.append("paid_demand")
+            if not ({"BUY_INTENT","PAIN"} & snap["tags"]): missing.append("buyer_pain")
+            score=len(snap["domains"])*35+len(snap["fresh_domains"])*20+len(snap["strong_domains"])*15
+            score+=(20 if "PAID_DEMAND" in snap["tags"] else 0)+(15 if ({"BUY_INTENT","PAIN"} & snap["tags"]) else 0)
+        else:
+            # Generic technology is discovery-only. Rank it by recurrence, never as gate progress.
+            missing=["human_problem_hypothesis"]
+            score=min(60,d*12+len(cl["titles"])*3)
         ranked.append((score,key,cl,missing))
     ranked.sort(key=lambda x:(-x[0],x[1]))
-    if not ranked: return []
+    if not ranked:
+        return []
 
-    score,key,cl,missing=ranked[0]
-    family=cl["family"]
-    broad = key.endswith(":generic_technology") or key.endswith(":general")
-    hypotheses=_human_problem_hypotheses(family,key) if broad else []
-    if not hypotheses:
-        term=key.split(":",1)[-1].replace("_"," ")
-        hypotheses=[{"customer":"buyers","job":term,"pain":f"manual or costly work around {term}","term":term}]
+    active=AUTOPILOT_STATE.get("active_thesis")
+    if isinstance(active,dict) and active.get("status")=="ACTIVE":
+        used=int(active.get("cycles_used") or 0)
+        budget=max(1,int(active.get("budget_cycles") or 4))
+        if used>=budget:
+            finished=dict(active)
+            finished["status"]="EXHAUSTED"
+            finished["closed_at_cycle"]=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+            hist=list(AUTOPILOT_STATE.get("thesis_history") or [])
+            hist.append(finished)
+            AUTOPILOT_STATE["thesis_history"]=hist[-30:]
+            AUTOPILOT_STATE["active_thesis"]=None
+            active=None
 
-    # During stagnation rotate among concrete human hypotheses rather than hammering
-    # one generic technology phrase forever.
-    cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
-    h=hypotheses[cycle % len(hypotheses)]
-    term=h["term"]; customer=h["customer"]; job=h["job"]; pain=h["pain"]
-    thesis=f'{customer} pay to solve "{job}" because {pain}.'
+    if not isinstance(active,dict):
+        score,key,cl,missing=ranked[0]
+        family=cl["family"]
+        broad=not gate_eligible_problem_key(key)
+        hypotheses=_human_problem_hypotheses(family,key) if broad else []
+        if not hypotheses:
+            term=key.split(":",1)[-1].replace("_"," ")
+            hypotheses=[{
+                "customer":"buyers",
+                "job":term,
+                "pain":f"manual or costly work around {term}",
+                "term":term,
+            }]
+        history=list(AUTOPILOT_STATE.get("thesis_history") or [])
+        prior_for_seed=sum(1 for x in history if isinstance(x,dict) and x.get("seed_problem_key")==key)
+        h=hypotheses[prior_for_seed % len(hypotheses)]
+        problem_id=make_problem_id(family,h["customer"],h["job"])
+        thesis_id=make_thesis_id(family,h["customer"],h["job"],h["pain"])
+        active={
+            "thesis_id":thesis_id,
+            "problem_id":problem_id,
+            "seed_problem_key":key,
+            "family":family,
+            "customer":h["customer"],
+            "job_to_be_done":h["job"],
+            "pain":h["pain"],
+            "term":h["term"],
+            "thesis":f'{h["customer"]} pay to solve "{h["job"]}" because {h["pain"]}.',
+            "status":"ACTIVE",
+            "budget_cycles":4,
+            "cycles_used":0,
+            "created_at_cycle":int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+            "broad_cluster_refinement":broad,
+            "missing":missing,
+            "rank":score,
+        }
+        AUTOPILOT_STATE["active_thesis"]=active
 
+    active=dict(AUTOPILOT_STATE.get("active_thesis") or {})
+    active["cycles_used"]=int(active.get("cycles_used") or 0)+1
+    AUTOPILOT_STATE["active_thesis"]=active
+
+    term=str(active.get("term") or "")
     probes=[
         ("buyer",f'site:reddit.com "{term}" ("need help" OR "looking for" OR "recommend")'),
         ("paid_market",f'site:upwork.com/freelance-jobs "{term}" (budget OR "fixed-price" OR hourly)'),
@@ -3110,14 +3177,24 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     out=[]
     for role,q in probes[:max(0,limit)]:
         out.append({
-            "family":family,"problem_key":key,"query":q,"mode":"anthropic_job_to_be_done",
-            "role":role,"rank":score,"missing":missing,"existing_domains":sorted(cl["domains"]),
-            "customer":customer,"job_to_be_done":job,"pain":pain,"thesis":thesis,
-            "broad_cluster_refinement":broad,
+            "family":active.get("family"),
+            "problem_key":active.get("seed_problem_key"),
+            "problem_id":active.get("problem_id"),
+            "thesis_id":active.get("thesis_id"),
+            "query":q,
+            "mode":"anthropic_persistent_thesis",
+            "role":role,
+            "rank":active.get("rank"),
+            "missing":active.get("missing") or [],
+            "customer":active.get("customer"),
+            "job_to_be_done":active.get("job_to_be_done"),
+            "pain":active.get("pain"),
+            "thesis":active.get("thesis"),
+            "cycles_used":active.get("cycles_used"),
+            "budget_cycles":active.get("budget_cycles"),
+            "broad_cluster_refinement":active.get("broad_cluster_refinement"),
         })
     return out
-
-
 
 def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
     """Legacy broad breakout, retained as fallback when anthropic triangulation has no target."""
