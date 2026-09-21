@@ -235,13 +235,16 @@ def migrate_evidence_row(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
     schema_v = int(out.get("schema_v") or 1)
     tagger_v = int(out.get("tagger_v") or 1)
+    migration_v = int(out.get("migration_v") or 0)
     if schema_v < EVIDENCE_SCHEMA_VERSION or tagger_v < TAGGER_VERSION:
-        out["schema_v"] = EVIDENCE_SCHEMA_VERSION
-        out["tagger_v"] = tagger_v
-        out["gate_eligible"] = False
-        out["quarantine_reason"] = "legacy_unverified_tagger_v1"
-        out["migration_v"] = EVIDENCE_SCHEMA_VERSION
-        changed = True
+        # Preserve the original tagger version: quarantine means "not revalidated".
+        if migration_v < EVIDENCE_SCHEMA_VERSION or out.get("quarantine_reason") != "legacy_unverified_tagger_v1":
+            out["schema_v"] = EVIDENCE_SCHEMA_VERSION
+            out["tagger_v"] = tagger_v
+            out["gate_eligible"] = False
+            out["quarantine_reason"] = "legacy_unverified_tagger_v1"
+            out["migration_v"] = EVIDENCE_SCHEMA_VERSION
+            changed = True
     else:
         if "gate_eligible" not in out:
             out["gate_eligible"] = gate_eligible_problem_key(canonical)
