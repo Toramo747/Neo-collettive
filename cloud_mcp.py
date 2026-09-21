@@ -3347,7 +3347,6 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     exploit_entries=[sector_entry(x,"exploit") for x in exploit_pool[:3]]
     explore_entries=[sector_entry(x,"explore") for x in exploration_pool[:4]]
     convergence_probes=_convergence_search_queries(3 if stagnation>=int(policy["stagnation_threshold"]) else 2)
-    convergence_entries=[dict(x,class_="convergence") for x in []]  # schema marker; entries normalized below
     convergence_entries=[]
     for x in convergence_probes:
         if not str(x.get("query") or "").strip():
