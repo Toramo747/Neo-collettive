@@ -79,6 +79,11 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertFalse(gate_eligible_problem_key("ai_tools:generic_technology"))
         self.assertEqual(canonical_problem_key("ai_tools","ai_tools:llm"),"ai_tools:generic_technology")
 
+    def test_search_vocabulary_is_not_human_thesis_identity(self):
+        # Search aliases are retrieval helpers only; generic technology still cannot qualify.
+        self.assertEqual(canonical_problem_key("ai_tools","ai_tools:llm"),"ai_tools:generic_technology")
+        self.assertFalse(gate_eligible_problem_key("ai_tools:generic_technology"))
+
 
 if __name__=="__main__":
     unittest.main()
