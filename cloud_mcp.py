@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.63.0"
+VERSION = "0.64.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2928,8 +2928,7 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
 
 
 def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
-    """Act like a human researcher: pick one near-gate problem, form a falsifiable thesis,
-    and triangulate buyer, practitioner and market evidence without relaxing the gate."""
+    """Converge from technology -> customer -> job-to-be-done -> pain -> willingness to pay."""
     stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
     if stagnation < 5:
         return []
@@ -2937,74 +2936,65 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     now = time.time()
     by_problem: dict[str, dict] = {}
     for row in memory:
-        key = str(row.get("problem_key") or "")
-        family = str(row.get("family") or "")
-        domain = str(row.get("domain") or "")
+        key, family, domain = str(row.get("problem_key") or ""), str(row.get("family") or ""), str(row.get("domain") or "")
         if not key or not family or not domain:
             continue
-        cl = by_problem.setdefault(key, {
-            "family": family, "domains": set(), "fresh": set(), "strong": set(),
-            "tags": set(), "titles": [],
-        })
+        cl=by_problem.setdefault(key,{"family":family,"domains":set(),"fresh":set(),"strong":set(),"tags":set(),"titles":[]})
         cl["domains"].add(domain)
-        if now - float(row.get("last_seen_epoch") or 0) <= 7 * 24 * 3600:
-            cl["fresh"].add(domain)
-        if row.get("strong_markers"):
-            cl["strong"].add(domain)
+        if now-float(row.get("last_seen_epoch") or 0)<=7*24*3600: cl["fresh"].add(domain)
+        if row.get("strong_markers"): cl["strong"].add(domain)
         cl["tags"].update(row.get("signal_types") or [])
-        if row.get("title"):
-            cl["titles"].append(str(row.get("title"))[:180])
+        if row.get("title"): cl["titles"].append(str(row.get("title"))[:180])
 
-    ranked = []
-    for key, cl in by_problem.items():
-        if _family_on_cooldown(cl["family"]):
-            continue
-        domains, fresh, strong = len(cl["domains"]), len(cl["fresh"]), len(cl["strong"])
-        tags = cl["tags"]
-        qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
-        if qualified:
-            continue
-        missing = []
-        if domains < 3: missing.append("independent_domains")
-        if fresh < 2: missing.append("fresh_independent_domains")
-        if strong < 1: missing.append("commercial_source")
+    ranked=[]
+    for key,cl in by_problem.items():
+        if _family_on_cooldown(cl["family"]): continue
+        d,f,s=len(cl["domains"]),len(cl["fresh"]),len(cl["strong"]); tags=cl["tags"]
+        if d>=3 and f>=2 and s>=1 and "PAID_DEMAND" in tags and ({"BUY_INTENT","PAIN"} & tags): continue
+        missing=[]
+        if d<3: missing.append("independent_domains")
+        if f<2: missing.append("fresh_independent_domains")
+        if s<1: missing.append("commercial_source")
         if "PAID_DEMAND" not in tags: missing.append("paid_demand")
         if not ({"BUY_INTENT","PAIN"} & tags): missing.append("buyer_pain")
-        # Human-style priority: closeness to proof, not historical family popularity.
-        score = domains * 35 + fresh * 20 + strong * 15 + (20 if "PAID_DEMAND" in tags else 0) + (15 if ({"BUY_INTENT","PAIN"} & tags) else 0) - len(missing) * 8
-        ranked.append((score, key, cl, missing))
-    ranked.sort(key=lambda x: (-x[0], x[1]))
-    if not ranked:
-        return []
+        score=d*35+f*20+s*15+(20 if "PAID_DEMAND" in tags else 0)+(15 if ({"BUY_INTENT","PAIN"} & tags) else 0)-len(missing)*8
+        ranked.append((score,key,cl,missing))
+    ranked.sort(key=lambda x:(-x[0],x[1]))
+    if not ranked: return []
 
-    score, key, cl, missing = ranked[0]
-    term = key.split(":",1)[-1].replace("_"," ")
-    if term == "general" or len(term) < 4:
-        terms = sorted(_family_relevance_terms(cl["family"]), key=lambda x:(-len(x),x))
-        term = terms[0] if terms else cl["family"].replace("_"," ")
+    score,key,cl,missing=ranked[0]
+    family=cl["family"]
+    broad = key.endswith(":generic_technology") or key.endswith(":general")
+    hypotheses=_human_problem_hypotheses(family,key) if broad else []
+    if not hypotheses:
+        term=key.split(":",1)[-1].replace("_"," ")
+        hypotheses=[{"customer":"buyers","job":term,"pain":f"manual or costly work around {term}","term":term}]
 
-    # Triangulation deliberately spans different human evidence roles.
-    probes = [
-        ("buyer", f'site:reddit.com "{term}" ("need help" OR "looking for" OR "recommend")'),
-        ("buyer", f'"{term}" ("need help" OR "looking for a tool" OR "pain point") -site:github.com'),
-        ("paid_market", f'site:upwork.com/freelance-jobs "{term}" (budget OR "fixed-price" OR hourly)'),
-        ("paid_market", f'site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly)'),
-        ("practitioner", f'site:stackoverflow.com "{term}" (manual OR workaround OR repetitive)'),
-        ("practitioner", f'site:community.zapier.com "{term}" (help OR workaround OR manual)'),
-        ("alternative", f'"{term}" (pricing OR subscription OR "book a demo")'),
-        ("disconfirm", f'"{term}" ("not a problem" OR "easy to automate" OR "no need")'),
+    # During stagnation rotate among concrete human hypotheses rather than hammering
+    # one generic technology phrase forever.
+    cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    h=hypotheses[cycle % len(hypotheses)]
+    term=h["term"]; customer=h["customer"]; job=h["job"]; pain=h["pain"]
+    thesis=f'{customer} pay to solve "{job}" because {pain}.'
+
+    probes=[
+        ("buyer",f'site:reddit.com "{term}" ("need help" OR "looking for" OR "recommend")'),
+        ("paid_market",f'site:upwork.com/freelance-jobs "{term}" (budget OR "fixed-price" OR hourly)'),
+        ("paid_market",f'site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly)'),
+        ("practitioner",f'"{term}" ("manual" OR "time consuming" OR "workaround") -site:github.com'),
+        ("alternative",f'"{term}" (pricing OR subscription OR "book a demo")'),
+        ("disconfirm",f'"{term}" ("not needed" OR "easy to automate" OR "solved")'),
     ]
     out=[]
-    existing=set(cl["domains"])
-    for role,q in probes:
+    for role,q in probes[:max(0,limit)]:
         out.append({
-            "family":cl["family"], "problem_key":key, "query":q, "mode":"anthropic_triangulation",
-            "role":role, "rank":score, "missing":missing, "existing_domains":sorted(existing),
-            "thesis":f"Independent buyers repeatedly experience and pay to solve {term}.",
+            "family":family,"problem_key":key,"query":q,"mode":"anthropic_job_to_be_done",
+            "role":role,"rank":score,"missing":missing,"existing_domains":sorted(cl["domains"]),
+            "customer":customer,"job_to_be_done":job,"pain":pain,"thesis":thesis,
+            "broad_cluster_refinement":broad,
         })
-        if len(out) >= max(0,limit):
-            break
     return out
+
 
 
 def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
@@ -3150,8 +3140,8 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "breakout_probes": breakout_probes,
         "breakout_slots": len(breakout_queries),
         "stagnation_breakout": bool(breakout_queries),
-        "anthropic_convergence": any(x.get("mode") == "anthropic_triangulation" for x in breakout_probes),
-        "anthropic_thesis": next((x.get("thesis") for x in breakout_probes if x.get("mode") == "anthropic_triangulation"), None),
+        "anthropic_convergence": any(str(x.get("mode") or "").startswith("anthropic_") for x in breakout_probes),
+        "anthropic_thesis": next((x.get("thesis") for x in breakout_probes if str(x.get("mode") or "").startswith("anthropic_")), None),
         "policy": "when a concrete problem is near the gate, converge anthropically: hold one falsifiable thesis and triangulate buyer, paid-market, practitioner and disconfirming evidence; never relax the evidence gate",
         "adaptive_policy": policy,
     }
@@ -3367,24 +3357,28 @@ def _evidence_context(title: str, body: str, family: str) -> tuple[str,int,int]:
 
 
 def _problem_signature(family: str, title: str, body: str) -> str:
-    """Produce a conservative, deterministic problem bucket within a commercial family."""
+    """Bucket evidence by a human problem/job-to-be-done, not merely by technology."""
     low = (" " + (title or "") + " " + (body or "") + " ").lower()
     problem_markers = {
         "integration_api": (
-            "webhook", "api integration", "system integration", "integration platform",
-            "sync", "synchronization", "connect saas", "manual transfer", "copy paste",
+            "manual transfer", "copy paste", "sync", "synchronization", "webhook failure",
+            "api integration", "system integration", "connect saas",
         ),
-        "manual_data_entry": ("manual data entry", "data entry", "copy paste", "rekey", "manual entry"),
-        "spreadsheet_process": ("spreadsheet", "excel", "google sheets", "csv", "manual process"),
-        "crm_lead_ops": ("follow up", "follow-up", "lead qualification", "crm", "lead management"),
-        "cybersecurity_tools": ("vulnerability", "phishing", "security assessment", "soc automation", "security automation"),
-        "ai_tools": ("ai automation", "ai assistant", "llm", "agentic", "generative ai"),
-        "ecommerce_tools": ("catalog", "order operations", "shopify", "woocommerce", "ecommerce"),
-        "marketing_seo": ("seo", "keyword research", "content optimization", "marketing automation", "ad campaign"),
-        "customer_support": ("support ticket", "support triage", "customer support", "faq workflow"),
+        "manual_data_entry": ("manual data entry", "copy paste", "rekey", "manual entry"),
+        "spreadsheet_process": ("manual reporting", "spreadsheet cleanup", "excel automation", "csv cleanup", "manual process"),
+        "crm_lead_ops": ("missed follow up", "follow-up", "lead qualification", "lead management", "crm cleanup"),
+        "cybersecurity_tools": ("vulnerability triage", "phishing triage", "security assessment", "alert fatigue", "security reporting"),
+        "ai_tools": (
+            "manual content workflow", "customer support automation", "document extraction",
+            "lead qualification", "data entry", "report generation", "workflow automation",
+            "api integration", "knowledge base", "email triage", "meeting notes",
+        ),
+        "ecommerce_tools": ("catalog cleanup", "order operations", "product description", "inventory sync", "customer support"),
+        "marketing_seo": ("keyword research", "content optimization", "report generation", "lead generation", "campaign reporting"),
+        "customer_support": ("support ticket triage", "support triage", "ticket backlog", "customer support", "faq workflow"),
         "compliance_tools": ("audit evidence", "compliance reporting", "gdpr", "iso 27001", "regulatory reporting"),
-        "document_processing": ("pdf", "document processing", "ocr", "form filling", "document parser"),
-        "analytics_tools": ("reporting dashboard", "automated reporting", "analytics dashboard", "business intelligence"),
+        "document_processing": ("invoice extraction", "pdf extraction", "ocr", "form filling", "document processing"),
+        "analytics_tools": ("manual reporting", "report generation", "reporting dashboard", "analytics dashboard", "business intelligence"),
         "it_hygiene": ("patch reporting", "asset inventory", "it inventory", "security hygiene"),
     }
     markers = problem_markers.get(family) or tuple(_family_relevance_terms(family))
@@ -3392,7 +3386,41 @@ def _problem_signature(family: str, title: str, body: str) -> str:
     if matched:
         marker = sorted(set(matched), key=lambda x: (-len(x), x))[0]
         return family + ":" + marker.replace(" ", "_")[:80]
+
+    # Generic technology words are deliberately not concrete problems. Keep them
+    # separate so anthropic convergence will formulate job-to-be-done hypotheses.
+    generic = {
+        "ai_tools": ("generative ai","llm","ai assistant","ai tool","agentic","ai automation"),
+        "integration_api": ("api integration","integration platform"),
+    }
+    if any(x in low for x in generic.get(family, ())):
+        return family + ":generic_technology"
     return family + ":general"
+
+
+def _human_problem_hypotheses(family: str, problem_key: str) -> list[dict]:
+    """Translate a broad technology cluster into customer + job + pain hypotheses."""
+    catalog = {
+        "ai_tools": [
+            {"customer":"small service businesses","job":"triage inbound customer emails and draft replies","pain":"staff repeatedly copy context between inboxes and business systems","term":"AI email triage customer support"},
+            {"customer":"sales teams","job":"qualify inbound leads and prepare CRM follow-ups","pain":"reps manually read enquiries, update CRM fields and write repetitive follow-ups","term":"AI lead qualification CRM follow up"},
+            {"customer":"operations teams","job":"extract structured data from PDFs and emails into spreadsheets or systems","pain":"staff manually copy data from documents into Excel or back-office tools","term":"AI document data extraction manual entry"},
+            {"customer":"small businesses","job":"produce recurring client and management reports","pain":"employees manually combine spreadsheets and rewrite the same report every week","term":"AI automated reporting spreadsheets"},
+            {"customer":"SaaS operations teams","job":"connect AI workflows to existing APIs and business tools","pain":"teams struggle to move data reliably between AI tools and existing systems","term":"AI workflow API integration"},
+        ],
+        "integration_api": [
+            {"customer":"SaaS operations teams","job":"keep customer data synchronized across business apps","pain":"staff repair failed syncs and manually transfer records between systems","term":"SaaS data sync manual transfer"},
+            {"customer":"automation consultants","job":"connect client tools through APIs and webhooks","pain":"fragile integrations require repeated manual troubleshooting","term":"API webhook integration troubleshooting"},
+        ],
+        "spreadsheet_process": [
+            {"customer":"small operations teams","job":"turn recurring spreadsheet work into reliable reports","pain":"staff repeatedly clean CSVs, copy formulas and assemble reports","term":"Excel recurring report automation"},
+        ],
+        "workflow_automation": [
+            {"customer":"small service businesses","job":"automate repetitive back-office handoffs","pain":"staff copy information between email, spreadsheets and SaaS tools","term":"back office manual workflow automation"},
+        ],
+    }
+    return catalog.get(family, [])[:]
+
 
 
 def _commercial_evidence_quality(web_research: list[dict], scouts: list[dict] | None = None) -> dict:
