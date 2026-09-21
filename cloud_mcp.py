@@ -3396,52 +3396,13 @@ def _director_searches(goal: str) -> list[str]:
 
 
 def _commercial_family(text: str) -> str:
-    low=(text or "").lower()
-    families=[
-        ("cybersecurity_tools", ("cybersecurity","security assessment","vulnerability management","phishing analysis","soc automation","security automation")),
-        ("developer_tools", ("developer tool","developer productivity","api debugging","code review tool","devops tool","software developer workflow")),
-        ("integration_api", ("api integration","webhook","integration platform","connect saas","system integration")),
-        ("ai_tools", ("ai assistant","ai tool","llm","generative ai","ai automation","agentic")),
-        ("micro_saas", ("micro saas","niche saas","small saas","vertical saas")),
-        ("ecommerce_tools", ("ecommerce","shopify","woocommerce","catalog automation","order operations")),
-        ("marketing_seo", ("seo","marketing automation","content optimization","keyword research","ad campaign")),
-        ("analytics_tools", ("analytics dashboard","business intelligence","data analytics","automated reporting","reporting dashboard")),
-        ("compliance_tools", ("compliance reporting","audit evidence","gdpr workflow","iso 27001","regulatory reporting")),
-        ("finance_ops", ("invoice workflow","expense reporting","accounts payable","bookkeeping automation","finance operations")),
-        ("hr_tools", ("hr workflow","employee onboarding","recruiting operations","applicant tracking","leave management")),
-        ("education_tools", ("education software","teacher admin","learning platform","training platform","course workflow")),
-        ("creator_tools", ("creator tool","newsletter automation","podcast workflow","video creator","digital creator")),
-        ("productivity_tools", ("productivity tool","knowledge management","team productivity","note taking","task workflow")),
-        ("local_business_tools", ("appointment booking","quote preparation","local business software","booking admin","service business")),
-        ("document_processing", ("document parser","extracting it from pdf","pdf extraction","form filling","document processing","ocr workflow")),
-        ("manual_data_entry", ("manual data entry","data entry")),
-        ("spreadsheet_process", ("spreadsheet","excel","google sheets","manual process","csv cleanup")),
-        ("crm_lead_ops", ("crm","lead management","sales ops","lead qualification","follow up","follow-up")),
-        ("website_audit", ("website audit","site audit","technical audit","accessibility audit","broken link audit","website qa")),
-        ("it_hygiene", ("it inventory","patch reporting","security hygiene","asset inventory")),
-        ("customer_support", ("customer support","support triage","faq workflow","support ticket")),
-        ("data_cleanup", ("data cleanup","duplicate data","csv cleanup","deduplication")),
-        ("content_tools", ("content repurposing","catalog description","localization workflow","content workflow")),
-        ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow","back office","reporting automation")),
-    ]
-    for family, needles in families:
-        if any(n in low for n in needles):
-            return family
-    return "other"
+    """Classify with token/phrase boundaries; never match substrings such as excel/excellent or llm/Stillman."""
+    return integrity_commercial_family(text)
 
 
-def _demand_signal_type(title: str, body: str) -> list[str]:
-    text=((title or "")+" "+(body or "")).lower()
-    tags=[]
-    if any(x in text for x in ("pain","problem","manual","repetitive","time consuming","frustrat","tired of","waste time")):
-        tags.append("PAIN")
-    if any(x in text for x in ("looking for","need help","need a","seeking","want someone","recommend a","how can i automate","request:")):
-        tags.append("BUY_INTENT")
-    if any(x in text for x in ("budget","paid","paying","will pay","price","pricing","hire","hiring","freelance","contract","quote","rate","per hour","per month")):
-        tags.append("PAID_DEMAND")
-    if any(x in text for x in ("pricing","price","subscription","plans","book a call","enterprise","free trial","one-time purchase","per month","per year")):
-        tags.append("COMPETITION")
-    return tags
+def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str]:
+    """Evidence Integrity v2: separate buyer-paid demand from supply-side pricing."""
+    return integrity_demand_signal_type(title, body, query_role)
 
 
 def _gap_score(tags: list[str], domains: int, strong_domains: int) -> int:
@@ -3492,18 +3453,16 @@ def _evidence_context(title: str, body: str, family: str) -> tuple[str,int,int]:
     terms=_family_relevance_terms(family)
     if not terms:
         return "",0,0
-    title_hits=sum(1 for term in terms if term in title_low)
-    body_hits=sum(1 for term in terms if term in body_low)
+    title_hits=sum(1 for term in terms if contains_term(title_low, term))
+    body_hits=sum(1 for term in terms if contains_term(body_low, term))
     windows=[]
     combined=title_low+" "+body_low
     for term in terms:
-        start=0
-        while True:
-            idx=combined.find(term,start)
-            if idx<0:
-                break
-            windows.append(combined[max(0,idx-220):min(len(combined),idx+len(term)+220)])
-            start=idx+len(term)
+        # Boundary-aware windows prevent "llm" in Stillman and "excel" in excellent.
+        import re as _re
+        pattern=_re.compile(r"(?<!\\w)"+_re.escape(term.lower())+r"(?!\\w)",_re.IGNORECASE)
+        for m in pattern.finditer(combined):
+            windows.append(combined[max(0,m.start()-220):min(len(combined),m.end()+220)])
             if len(windows)>=8:
                 break
         if len(windows)>=8:
@@ -3538,18 +3497,17 @@ def _problem_signature(family: str, title: str, body: str) -> str:
         "it_hygiene": ("patch reporting", "asset inventory", "it inventory", "security hygiene"),
     }
     markers = problem_markers.get(family) or tuple(_family_relevance_terms(family))
-    matched = [m for m in markers if m and m in low]
+    matched = [m for m in markers if m and contains_term(low, m)]
     if matched:
         marker = sorted(set(matched), key=lambda x: (-len(x), x))[0]
-        return family + ":" + marker.replace(" ", "_")[:80]
+        return canonical_problem_key(family, family + ":" + marker.replace(" ", "_")[:80])
 
-    # Generic technology words are deliberately not concrete problems. Keep them
-    # separate so anthropic convergence will formulate job-to-be-done hypotheses.
+    # Technology-only evidence seeds hypotheses but can never qualify the commercial gate.
     generic = {
         "ai_tools": ("generative ai","llm","ai assistant","ai tool","agentic","ai automation"),
         "integration_api": ("api integration","integration platform"),
     }
-    if any(x in low for x in generic.get(family, ())):
+    if contains_any(low, generic.get(family, ())):
         return family + ":generic_technology"
     return family + ":general"
 
