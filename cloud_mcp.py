@@ -3496,6 +3496,38 @@ def _update_family_performance(evidence_quality: dict) -> dict:
     any_progress = False
     current_cycle = int(AUTOPILOT_STATE.get("cycles_completed") or 0)
 
+    problem_perf=dict(AUTOPILOT_STATE.get("problem_performance") or {})
+    current_problem_progress={}
+    for problem_key,pdata in (evidence_quality.get("problem_clusters") or {}).items():
+        if not isinstance(pdata,dict) or not gate_eligible_problem_key(problem_key):
+            continue
+        oldp=dict(problem_perf.get(problem_key) or {})
+        domains=int(pdata.get("independent_domains") or 0)
+        strong=int(pdata.get("strong_commercial_domains") or 0)
+        gap=int(pdata.get("gap_score") or 0)
+        qualified=bool(pdata.get("qualified"))
+        progressed=bool(
+            qualified
+            or domains>int(oldp.get("last_domains") or 0)
+            or strong>int(oldp.get("last_strong_domains") or 0)
+            or gap>int(oldp.get("last_gap_score") or 0)
+        )
+        streak=0 if progressed else int(oldp.get("no_progress_streak") or 0)+1
+        problem_perf[problem_key]={
+            "family":pdata.get("family"),
+            "last_domains":domains,
+            "last_strong_domains":strong,
+            "last_gap_score":gap,
+            "last_signal_types":pdata.get("signal_types") or [],
+            "qualified":qualified,
+            "no_progress_streak":streak,
+            "near_gate":_problem_near_gate(problem_key),
+        }
+        current_problem_progress[problem_key]=progressed
+        if progressed:
+            any_progress=True
+    AUTOPILOT_STATE["problem_performance"]=problem_perf
+
     for family, data in clusters.items():
         if not isinstance(data, dict):
             continue
@@ -3521,10 +3553,12 @@ def _update_family_performance(evidence_quality: dict) -> dict:
         old_weight = float(policy["smoothing_old_weight"])
         smoothed = cycle_score if observations == 1 else round(previous_score * old_weight + cycle_score * (1.0 - old_weight), 2)
 
-        previous_gap=int(old.get("last_gap_score") or 0)
-        previous_domains=int(old.get("last_domains") or 0)
-        previous_strong=int(old.get("last_strong_domains") or 0)
-        progressed = qualified or gap > previous_gap or domains > previous_domains or strong > previous_strong
+        related_progress=any(
+            bool(progressed)
+            for key,progressed in current_problem_progress.items()
+            if (problem_perf.get(key) or {}).get("family")==family
+        )
+        progressed=bool(qualified or related_progress)
         no_progress_streak = 0 if progressed else int(old.get("no_progress_streak") or 0) + 1
 
         best = max(int(old.get("best_gap_score") or 0), gap)
@@ -3532,12 +3566,7 @@ def _update_family_performance(evidence_quality: dict) -> dict:
 
         # After repeated non-progress, stop repeating broad sector searches.
         # Near-gate families remain eligible for hypothesis-specific convergence/falsification.
-        near_gate=bool(
-            domains >= 2
-            and strong >= 1
-            and "PAID_DEMAND" in tags
-            and ("BUY_INTENT" in tags or "PAIN" in tags)
-        )
+        near_gate=_family_near_gate(family)
         if no_progress_streak >= 6 and not qualified:
             prior_until=int((cooldowns.get(family) or {}).get("until_cycle") or 0)
             cooldown_span=4 if near_gate else 6
@@ -3567,9 +3596,6 @@ def _update_family_performance(evidence_quality: dict) -> dict:
             "last_signal_types": sorted(tags),
             "no_progress_streak": no_progress_streak,
         }
-        if progressed:
-            any_progress = True
-
     # Drop expired cooldowns.
     cooldowns={
         family:row for family,row in cooldowns.items()
