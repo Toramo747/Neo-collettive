@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-VERSION = "0.8.1"
+VERSION = "0.8.2"
 JARVIS_SHARED_SECRET = (os.getenv("JARVIS_SHARED_SECRET") or "").strip()
 
 app = FastAPI(title="Jarvis Internal Advisor", version=VERSION)
@@ -18,13 +18,13 @@ class AskRequest(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
 
 
-MAX_CONTEXT_LIST_ITEMS = 24
-MAX_CONTEXT_DICT_ITEMS = 80
+MAX_CONTEXT_LIST_ITEMS = 16
+MAX_CONTEXT_DICT_ITEMS = 60
 
 
 def _bounded_context(value: Any, depth: int = 0) -> Any:
     """Bound request size/work so Jarvis stays responsive on small Render instances."""
-    if depth >= 5:
+    if depth >= 4:
         if isinstance(value, (dict, list)):
             return {"truncated": True, "type": type(value).__name__}
         return value
@@ -34,7 +34,7 @@ def _bounded_context(value: Any, depth: int = 0) -> Any:
         items = list(value.items())[-MAX_CONTEXT_DICT_ITEMS:]
         return {str(k): _bounded_context(v, depth + 1) for k, v in items}
     if isinstance(value, str):
-        return value[:6000]
+        return value[:3000]
     return value
 
 
