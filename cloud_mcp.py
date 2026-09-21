@@ -2986,7 +2986,7 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         strong = len(cl["strong_domains"])
         tags = set(cl["tags"])
         qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
-        if qualified or _family_on_cooldown(cl["family"], purpose="convergence"):
+        if qualified or _family_on_cooldown(cl["family"], purpose="convergence", problem_key=problem_key):
             continue
         # Lower missing count and more existing independent evidence rank first.
         missing = []
@@ -3070,7 +3070,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
 
     ranked=[]
     for key,cl in by_problem.items():
-        if _family_on_cooldown(cl["family"], purpose="convergence"): continue
+        if _family_on_cooldown(cl["family"], purpose=("hypothesis" if not gate_eligible_problem_key(key) else "convergence"), problem_key=key): continue
         d,f,s=len(cl["domains"]),len(cl["fresh"]),len(cl["strong"]); tags=cl["tags"]
         if d>=3 and f>=2 and s>=1 and "PAID_DEMAND" in tags and ({"BUY_INTENT","PAIN"} & tags): continue
         missing=[]
@@ -3138,7 +3138,7 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
         if row.get("domain"):
             cl["domains"].add(str(row.get("domain")))
         cl["tags"].update(row.get("signal_types") or [])
-    by_problem={k:v for k,v in by_problem.items() if not _family_on_cooldown(v["family"], purpose="convergence")}
+    by_problem={k:v for k,v in by_problem.items() if not _family_on_cooldown(v["family"], purpose=("hypothesis" if not gate_eligible_problem_key(k) else "convergence"), problem_key=k)}
     ranked = sorted(by_problem.items(), key=lambda kv: (-(len(kv[1]["domains"])*20),kv[0]))
     out=[]
     for problem_key,cl in ranked[:2]:
@@ -3152,32 +3152,78 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
                 return out
     return out
 
-def _family_near_gate(family: str) -> bool:
-    """Return True when a family has enough real evidence to merit focused falsification."""
-    perf=(AUTOPILOT_STATE.get("family_performance") or {}).get(family) or {}
-    domains=int(perf.get("last_domains") or 0)
-    strong=int(perf.get("last_strong_domains") or 0)
-    tags=set(perf.get("last_signal_types") or [])
+def _problem_snapshot(problem_key: str) -> dict:
+    """Recompute gate-relevant evidence for exactly one concrete problem."""
+    key=canonical_problem_key("",problem_key)
+    now=time.time()
+    domains=set()
+    fresh=set()
+    strong=set()
+    tags=set()
+    for row in AUTOPILOT_STATE.get("commercial_evidence_memory") or []:
+        if not isinstance(row,dict):
+            continue
+        family=str(row.get("family") or "")
+        row_key=canonical_problem_key(family,str(row.get("problem_key") or ""))
+        if row_key!=problem_key:
+            continue
+        if not bool(row.get("gate_eligible")) or not gate_eligible_problem_key(row_key):
+            continue
+        domain=str(row.get("domain") or "")
+        if not domain:
+            continue
+        domains.add(domain)
+        if now-float(row.get("last_seen_epoch") or 0)<=7*24*3600:
+            fresh.add(domain)
+        if row.get("strong_markers"):
+            strong.add(domain)
+        tags.update(set(row.get("signal_types") or []) - {"DISCONFIRM","COMPETITION"})
+    return {
+        "problem_key":problem_key,
+        "domains":domains,
+        "fresh_domains":fresh,
+        "strong_domains":strong,
+        "tags":tags,
+    }
+
+
+def _problem_near_gate(problem_key: str) -> bool:
+    if not gate_eligible_problem_key(problem_key):
+        return False
+    cl=_problem_snapshot(problem_key)
     return bool(
-        domains >= 2
-        and strong >= 1
-        and "PAID_DEMAND" in tags
-        and ("BUY_INTENT" in tags or "PAIN" in tags)
+        len(cl["domains"])>=2
+        and len(cl["strong_domains"])>=1
+        and "PAID_DEMAND" in cl["tags"]
+        and ({"BUY_INTENT","PAIN"} & cl["tags"])
     )
 
 
-def _family_on_cooldown(family: str, purpose: str = "broad") -> bool:
-    """Cooldown stops repetitive broad search, not focused convergence near the gate."""
+def _family_near_gate(family: str) -> bool:
+    """Compatibility telemetry only; convergence decisions are problem-level in v0.67."""
+    keys={
+        str(row.get("problem_key") or "")
+        for row in (AUTOPILOT_STATE.get("commercial_evidence_memory") or [])
+        if isinstance(row,dict) and str(row.get("family") or "")==family
+    }
+    return any(_problem_near_gate(k) for k in keys if k)
+
+
+def _family_on_cooldown(family: str, purpose: str = "broad", problem_key: str = "") -> bool:
+    """Broad cooldown is family-level; convergence bypass is allowed only for the exact near-gate problem."""
     row=(AUTOPILOT_STATE.get("family_cooldowns") or {}).get(family) or {}
     until=int(row.get("until_cycle") or 0)
     current=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
     active=until > current
     if not active:
         return False
-    if purpose == "convergence" and _family_near_gate(family):
+    if purpose=="convergence" and problem_key and _problem_near_gate(problem_key):
+        return False
+    if purpose=="hypothesis" and problem_key and not gate_eligible_problem_key(problem_key):
+        # Generic technology seeds may still be refined into a human hypothesis;
+        # they never count as gate evidence themselves.
         return False
     return True
-
 
 def _active_family_cooldowns() -> dict:
     current=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
