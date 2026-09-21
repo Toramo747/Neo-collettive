@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.61.0"
+VERSION = "0.62.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -76,6 +76,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "recent_sectors": [],
     "last_search_strategy": None,
     "family_performance": {},
+    "family_cooldowns": {},
     "stagnation_cycles": 0,
     "agent_trust": {},
     "build_history": [],
@@ -113,6 +114,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
 def _state_payload() -> dict:
     return {
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
+        "family_cooldowns": AUTOPILOT_STATE.get("family_cooldowns") or {},
         "recent_sectors": list(AUTOPILOT_STATE.get("recent_sectors") or [])[-12:],
         "stagnation_cycles": int(AUTOPILOT_STATE.get("stagnation_cycles") or 0),
         "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
@@ -141,6 +143,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
     recent = payload.get("recent_sectors")
     if isinstance(perf, dict):
         AUTOPILOT_STATE["family_performance"] = perf
+    if isinstance(payload.get("family_cooldowns"), dict):
+        AUTOPILOT_STATE["family_cooldowns"] = payload.get("family_cooldowns") or {}
     if isinstance(recent, list):
         AUTOPILOT_STATE["recent_sectors"] = [str(x) for x in recent][-12:]
     AUTOPILOT_STATE["stagnation_cycles"] = max(0, min(20, int(payload.get("stagnation_cycles") or 0)))
@@ -2864,7 +2868,7 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         strong = len(cl["strong_domains"])
         tags = set(cl["tags"])
         qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
-        if qualified:
+        if qualified or _family_on_cooldown(cl["family"]):
             continue
         # Lower missing count and more existing independent evidence rank first.
         missing = []
@@ -2939,11 +2943,16 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
         if row.get("domain"):
             cl["domains"].add(str(row.get("domain")))
         cl["tags"].update(row.get("signal_types") or [])
+    by_problem={k:v for k,v in by_problem.items() if not _family_on_cooldown(v["family"])}
     ranked = sorted(
         by_problem.items(),
         key=lambda kv: (-(len(kv[1]["domains"]) * 20 + (20 if "PAID_DEMAND" in kv[1]["tags"] else 0) + (15 if "PAIN" in kv[1]["tags"] else 0)), kv[0])
     )
     source_patterns = [
+        'site:upwork.com/freelance-jobs "{term}" "posted" automation OR integration',
+        'site:freelancer.com/jobs "{term}" budget OR fixed OR hourly',
+        'site:peopleperhour.com "{term}" project OR proposal',
+        'site:guru.com/jobs "{term}" automation OR integration',
         'site:upwork.com "{term}" automation OR integration OR consultant',
         'site:freelancer.com "{term}" automation OR integration',
         'site:stackoverflow.com "{term}" "manual" OR "workaround" OR "pain"',
@@ -2968,6 +2977,25 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
     return out
 
 
+def _family_on_cooldown(family: str) -> bool:
+    row=(AUTOPILOT_STATE.get("family_cooldowns") or {}).get(family) or {}
+    until=int(row.get("until_cycle") or 0)
+    current=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    return until > current
+
+
+def _active_family_cooldowns() -> dict:
+    current=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    out={}
+    for family,row in (AUTOPILOT_STATE.get("family_cooldowns") or {}).items():
+        if not isinstance(row,dict):
+            continue
+        until=int(row.get("until_cycle") or 0)
+        if until > current:
+            out[family]=row
+    return out
+
+
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
     count = max(4, min(count, 10))
@@ -2984,11 +3012,12 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     exploit_pool = [
         x for x in ranked
         if _performance_score(_sector_family(x["id"])) > 0
+        and not _family_on_cooldown(_sector_family(x["id"]))
         and int((AUTOPILOT_STATE.get("family_performance") or {}).get(_sector_family(x["id"]), {}).get("observations") or 0) >= int(policy["minimum_observations_for_exploitation"])
         and x["id"] not in recent_set
     ]
     if not exploit_pool:
-        exploit_pool = [x for x in ranked if _performance_score(_sector_family(x["id"])) > 0]
+        exploit_pool = [x for x in ranked if _performance_score(_sector_family(x["id"])) > 0 and not _family_on_cooldown(_sector_family(x["id"]))]
 
     stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
     exploration_slots = int(policy["exploration_stagnant"] if stagnation >= int(policy["stagnation_threshold"]) else policy["exploration_base"])
@@ -2999,9 +3028,9 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         if sector not in chosen:
             chosen.append(sector)
 
-    exploration_pool = [x for x in ENTROPY_SECTORS if x["id"] not in recent_set and x not in chosen]
+    exploration_pool = [x for x in ENTROPY_SECTORS if x["id"] not in recent_set and x not in chosen and not _family_on_cooldown(_sector_family(x["id"]))]
     if len(exploration_pool) < exploration_slots:
-        exploration_pool = [x for x in ENTROPY_SECTORS if x not in chosen]
+        exploration_pool = [x for x in ENTROPY_SECTORS if x not in chosen and not _family_on_cooldown(_sector_family(x["id"]))]
     rng.shuffle(exploration_pool)
     chosen.extend(exploration_pool[:exploration_slots])
 
@@ -3051,6 +3080,7 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "exploration_slots": exploration_slots,
         "exploitation_slots": exploitation_slots,
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
+        "family_cooldowns": _active_family_cooldowns(),
         "hypothesis_probes": hypothesis_probes,
         "convergence_probes": convergence_probes,
         "convergence_slots": len(convergence_queries),
@@ -3065,10 +3095,12 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
 
 
 def _update_family_performance(evidence_quality: dict) -> dict:
-    """Update bounded evidence performance memory after each Director cycle."""
+    """Update performance and temporarily cool families that consume cycles without new evidence."""
     perf = dict(AUTOPILOT_STATE.get("family_performance") or {})
+    cooldowns = dict(AUTOPILOT_STATE.get("family_cooldowns") or {})
     clusters = evidence_quality.get("clusters") or {}
     any_progress = False
+    current_cycle = int(AUTOPILOT_STATE.get("cycles_completed") or 0)
 
     for family, data in clusters.items():
         if not isinstance(data, dict):
@@ -3080,6 +3112,7 @@ def _update_family_performance(evidence_quality: dict) -> dict:
         gap = int(data.get("gap_score") or 0)
         tags = set(data.get("signal_types") or [])
         qualified = bool(data.get("qualified"))
+
         cycle_score = (
             min(35, gap)
             + min(20, domains * 5)
@@ -3093,8 +3126,32 @@ def _update_family_performance(evidence_quality: dict) -> dict:
         policy = _load_policy()
         old_weight = float(policy["smoothing_old_weight"])
         smoothed = cycle_score if observations == 1 else round(previous_score * old_weight + cycle_score * (1.0 - old_weight), 2)
+
+        previous_gap=int(old.get("last_gap_score") or 0)
+        previous_domains=int(old.get("last_domains") or 0)
+        previous_strong=int(old.get("last_strong_domains") or 0)
+        progressed = qualified or gap > previous_gap or domains > previous_domains or strong > previous_strong
+        no_progress_streak = 0 if progressed else int(old.get("no_progress_streak") or 0) + 1
+
         best = max(int(old.get("best_gap_score") or 0), gap)
         qualified_hits = int(old.get("qualified_hits") or 0) + (1 if qualified else 0)
+
+        # After repeated non-progress, pause exploitation of this family for several cycles.
+        # This is a search-allocation pivot only; evidence is retained and gates are unchanged.
+        if no_progress_streak >= 6 and not qualified:
+            prior_until=int((cooldowns.get(family) or {}).get("until_cycle") or 0)
+            until=max(prior_until,current_cycle + 6)
+            cooldowns[family]={
+                "until_cycle":until,
+                "reason":"no_new_independent_evidence",
+                "no_progress_streak":no_progress_streak,
+                "last_domains":domains,
+                "last_gap_score":gap,
+            }
+            no_progress_streak=0
+        elif progressed and family in cooldowns:
+            cooldowns.pop(family,None)
+
         perf[family] = {
             "score": smoothed,
             "observations": observations,
@@ -3104,11 +3161,18 @@ def _update_family_performance(evidence_quality: dict) -> dict:
             "last_domains": domains,
             "last_strong_domains": strong,
             "last_signal_types": sorted(tags),
+            "no_progress_streak": no_progress_streak,
         }
-        if gap > int(old.get("last_gap_score") or 0) or qualified:
+        if progressed:
             any_progress = True
 
+    # Drop expired cooldowns.
+    cooldowns={
+        family:row for family,row in cooldowns.items()
+        if isinstance(row,dict) and int(row.get("until_cycle") or 0) > current_cycle
+    }
     AUTOPILOT_STATE["family_performance"] = perf
+    AUTOPILOT_STATE["family_cooldowns"] = cooldowns
     if any_progress:
         AUTOPILOT_STATE["stagnation_cycles"] = 0
     else:
