@@ -2952,102 +2952,80 @@ def _hypothesis_search_queries(limit: int = 2) -> list[dict]:
 
 
 def _convergence_search_queries(limit: int = 3) -> list[dict]:
-    """Target the concrete persistent problem clusters closest to the commercial gate."""
-    memory = [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x, dict)]
-    now = time.time()
-    fresh_cutoff = 7 * 24 * 3600
-    clusters: dict[str, dict] = {}
-
+    """Target only concrete, gate-eligible problems; generic technology is handled by thesis refinement."""
+    memory=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
+    candidates={}
     for row in memory:
-        family = str(row.get("family") or "")
-        problem_key = str(row.get("problem_key") or "")
-        domain = str(row.get("domain") or "")
-        if not family or not problem_key or not domain:
+        family=str(row.get("family") or "")
+        key=canonical_problem_key(family,str(row.get("problem_key") or ""))
+        if not family or not key or not gate_eligible_problem_key(key):
             continue
-        cl = clusters.setdefault(problem_key, {
-            "family": family, "domains": set(), "fresh_domains": set(),
-            "strong_domains": set(), "tags": set(), "markers": set(), "titles": [],
-        })
-        cl["domains"].add(domain)
-        if now - float(row.get("last_seen_epoch") or 0) <= fresh_cutoff:
-            cl["fresh_domains"].add(domain)
-        if row.get("strong_markers"):
-            cl["strong_domains"].add(domain)
-        cl["tags"].update(row.get("signal_types") or [])
-        cl["markers"].update(row.get("weak_markers") or [])
-        cl["markers"].update(row.get("strong_markers") or [])
-        if row.get("title"):
-            cl["titles"].append(str(row.get("title")))
+        candidates[key]=family
 
-    ranked = []
-    for problem_key, cl in clusters.items():
-        domains = len(cl["domains"])
-        fresh = len(cl["fresh_domains"])
-        strong = len(cl["strong_domains"])
-        tags = set(cl["tags"])
-        qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
-        if qualified or _family_on_cooldown(cl["family"], purpose="convergence", problem_key=problem_key):
+    ranked=[]
+    for key,family in candidates.items():
+        snap=_problem_snapshot(key)
+        d=len(snap["domains"])
+        fresh=len(snap["fresh_domains"])
+        strong=len(snap["strong_domains"])
+        tags=set(snap["tags"])
+        qualified=d>=3 and fresh>=2 and strong>=1 and "PAID_DEMAND" in tags and bool({"BUY_INTENT","PAIN"} & tags)
+        if qualified:
             continue
-        # Lower missing count and more existing independent evidence rank first.
-        missing = []
-        if domains < 3: missing.append("independent_domains")
-        if fresh < 2: missing.append("fresh_independent_domains")
-        if strong < 1: missing.append("commercial_source")
+        if _family_on_cooldown(family,purpose="convergence",problem_key=key):
+            continue
+        missing=[]
+        if d<3: missing.append("independent_domains")
+        if fresh<2: missing.append("fresh_independent_domains")
+        if strong<1: missing.append("commercial_source")
         if "PAID_DEMAND" not in tags: missing.append("paid_demand")
-        if "BUY_INTENT" not in tags and "PAIN" not in tags: missing.append("buy_intent_or_pain")
-        rank = (domains * 30 + fresh * 15 + strong * 15 + (20 if "PAID_DEMAND" in tags else 0)
-                + (15 if ("BUY_INTENT" in tags or "PAIN" in tags) else 0) - len(missing) * 5)
-        ranked.append((rank, problem_key, cl, missing))
+        if not ({"BUY_INTENT","PAIN"} & tags): missing.append("buyer_pain")
+        rank=d*30+fresh*15+strong*15+(20 if "PAID_DEMAND" in tags else 0)+(15 if ({"BUY_INTENT","PAIN"} & tags) else 0)-len(missing)*5
+        ranked.append((rank,key,family,snap,missing))
 
-    ranked.sort(key=lambda x: (-x[0], x[1]))
-    out = []
-    seen = set()
-    # Give two convergence probes to the closest cluster, then diversify.
-    for pos, (rank, problem_key, cl, missing) in enumerate(ranked[:3]):
-        family = cl["family"]
-        marker = problem_key.split(":", 1)[-1].replace("_", " ")
-        if marker == "general" or len(marker) < 4:
-            terms = sorted(_family_relevance_terms(family), key=lambda x: (-len(x), x))
-            marker = terms[0] if terms else family.replace("_", " ")
-        exclusions=" ".join("-site:"+d for d in sorted(cl["domains"]) if d)[:500]
-        patterns = []
+    ranked.sort(key=lambda x:(-x[0],x[1]))
+    out=[]
+    seen=set()
+    for pos,(rank,key,family,snap,missing) in enumerate(ranked[:3]):
+        marker=key.split(":",1)[-1].replace("_"," ")
+        exclusions=" ".join("-site:"+d for d in sorted(snap["domains"]) if d)[:500]
+        patterns=[]
         if "independent_domains" in missing or "fresh_independent_domains" in missing:
             patterns += [
-                '"{term}" "need help" OR "looking for" OR "pain point" {exclude}',
-                'site:reddit.com "{term}" ("need help" OR "looking for" OR manual) {exclude}',
-                'site:upwork.com/freelance-jobs "{term}" (budget OR hiring OR freelance) {exclude}',
-                'site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly) {exclude}',
-                '"{term}" customer problem OR manual OR repetitive {exclude}',
+                ('buyer','"{term}" "need help" OR "looking for" OR "pain point" {exclude}'),
+                ('buyer','site:reddit.com "{term}" ("need help" OR "looking for" OR manual) {exclude}'),
+                ('paid_market','site:upwork.com/freelance-jobs "{term}" (budget OR hiring OR freelance) {exclude}'),
+                ('paid_market','site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly) {exclude}'),
             ]
         if "commercial_source" in missing or "paid_demand" in missing:
             patterns += [
-                '"{term}" pricing OR budget OR hiring OR consultant -site:github.com',
-                '"{term}" "will pay" OR paid OR subscription OR contract -site:github.com',
+                ('paid_market','"{term}" budget OR hiring OR contractor -site:github.com {exclude}'),
+                ('paid_market','"{term}" "will pay" OR "fixed-price" OR hourly -site:github.com {exclude}'),
             ]
-        if "buy_intent_or_pain" in missing:
-            patterns += ['"{term}" "looking for" OR "need help" OR frustrating -site:github.com']
+        if "buyer_pain" in missing:
+            patterns += [('buyer','"{term}" "looking for" OR "need help" OR frustrating -site:github.com {exclude}')]
         patterns += [
-            'site:reddit.com "{term}" "need help" OR "looking for" OR manual',
-            'site:news.ycombinator.com "{term}" customer OR problem OR workflow',
+            ('buyer','site:reddit.com "{term}" "need help" OR "looking for" OR manual {exclude}'),
+            ('practitioner','site:news.ycombinator.com "{term}" customer OR problem OR workflow {exclude}'),
         ]
-        quota = 2 if pos == 0 else 1
-        added = 0
-        for pattern in patterns:
-            q = pattern.format(term=marker, exclude=exclusions)
+        quota=2 if pos==0 else 1
+        added=0
+        for role,pattern in patterns:
+            q=" ".join(pattern.format(term=marker,exclude=exclusions).split())
             if q.lower() in seen:
                 continue
             seen.add(q.lower())
             out.append({
-                "family": family, "problem_key": problem_key, "query": q,
-                "rank": rank, "missing": missing, "existing_domains": sorted(cl["domains"]),
+                "family":family,"problem_key":key,"query":q,"role":role,
+                "class":"convergence","rank":rank,"missing":missing,
+                "existing_domains":sorted(snap["domains"]),
             })
-            added += 1
-            if len(out) >= max(0, limit):
+            added+=1
+            if len(out)>=max(0,limit):
                 return out
-            if added >= quota:
+            if added>=quota:
                 break
     return out
-
 
 def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     """Hold one falsifiable human thesis across cycles instead of rotating technology labels."""
