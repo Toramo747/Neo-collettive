@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.65.1"
+VERSION = "0.66.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -2930,7 +2930,7 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         strong = len(cl["strong_domains"])
         tags = set(cl["tags"])
         qualified = domains >= 3 and fresh >= 2 and strong >= 1 and "PAID_DEMAND" in tags and ("BUY_INTENT" in tags or "PAIN" in tags)
-        if qualified or _family_on_cooldown(cl["family"]):
+        if qualified or _family_on_cooldown(cl["family"], purpose="convergence"):
             continue
         # Lower missing count and more existing independent evidence rank first.
         missing = []
@@ -2953,11 +2953,15 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         if marker == "general" or len(marker) < 4:
             terms = sorted(_family_relevance_terms(family), key=lambda x: (-len(x), x))
             marker = terms[0] if terms else family.replace("_", " ")
+        exclusions=" ".join("-site:"+d for d in sorted(cl["domains"]) if d)[:500]
         patterns = []
         if "independent_domains" in missing or "fresh_independent_domains" in missing:
             patterns += [
-                '"{term}" "need help" OR "looking for" OR "pain point"',
-                '"{term}" customer problem OR manual OR repetitive -site:github.com',
+                '"{term}" "need help" OR "looking for" OR "pain point" {exclude}',
+                'site:reddit.com "{term}" ("need help" OR "looking for" OR manual) {exclude}',
+                'site:upwork.com/freelance-jobs "{term}" (budget OR hiring OR freelance) {exclude}',
+                'site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly) {exclude}',
+                '"{term}" customer problem OR manual OR repetitive {exclude}',
             ]
         if "commercial_source" in missing or "paid_demand" in missing:
             patterns += [
@@ -2973,7 +2977,7 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         quota = 2 if pos == 0 else 1
         added = 0
         for pattern in patterns:
-            q = pattern.format(term=marker)
+            q = pattern.format(term=marker, exclude=exclusions)
             if q.lower() in seen:
                 continue
             seen.add(q.lower())
@@ -3010,7 +3014,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
 
     ranked=[]
     for key,cl in by_problem.items():
-        if _family_on_cooldown(cl["family"]): continue
+        if _family_on_cooldown(cl["family"], purpose="convergence"): continue
         d,f,s=len(cl["domains"]),len(cl["fresh"]),len(cl["strong"]); tags=cl["tags"]
         if d>=3 and f>=2 and s>=1 and "PAID_DEMAND" in tags and ({"BUY_INTENT","PAIN"} & tags): continue
         missing=[]
@@ -3078,7 +3082,7 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
         if row.get("domain"):
             cl["domains"].add(str(row.get("domain")))
         cl["tags"].update(row.get("signal_types") or [])
-    by_problem={k:v for k,v in by_problem.items() if not _family_on_cooldown(v["family"])}
+    by_problem={k:v for k,v in by_problem.items() if not _family_on_cooldown(v["family"], purpose="convergence")}
     ranked = sorted(by_problem.items(), key=lambda kv: (-(len(kv[1]["domains"])*20),kv[0]))
     out=[]
     for problem_key,cl in ranked[:2]:
@@ -3092,11 +3096,31 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
                 return out
     return out
 
-def _family_on_cooldown(family: str) -> bool:
+def _family_near_gate(family: str) -> bool:
+    """Return True when a family has enough real evidence to merit focused falsification."""
+    perf=(AUTOPILOT_STATE.get("family_performance") or {}).get(family) or {}
+    domains=int(perf.get("last_domains") or 0)
+    strong=int(perf.get("last_strong_domains") or 0)
+    tags=set(perf.get("last_signal_types") or [])
+    return bool(
+        domains >= 2
+        and strong >= 1
+        and "PAID_DEMAND" in tags
+        and ("BUY_INTENT" in tags or "PAIN" in tags)
+    )
+
+
+def _family_on_cooldown(family: str, purpose: str = "broad") -> bool:
+    """Cooldown stops repetitive broad search, not focused convergence near the gate."""
     row=(AUTOPILOT_STATE.get("family_cooldowns") or {}).get(family) or {}
     until=int(row.get("until_cycle") or 0)
     current=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
-    return until > current
+    active=until > current
+    if not active:
+        return False
+    if purpose == "convergence" and _family_near_gate(family):
+        return False
+    return True
 
 
 def _active_family_cooldowns() -> dict:
@@ -3196,6 +3220,10 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         "exploitation_slots": exploitation_slots,
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
         "family_cooldowns": _active_family_cooldowns(),
+        "convergence_through_cooldown": sorted([
+            family for family in _active_family_cooldowns()
+            if not _family_on_cooldown(family, purpose="convergence")
+        ]),
         "hypothesis_probes": hypothesis_probes,
         "convergence_probes": convergence_probes,
         "convergence_slots": len(convergence_queries),
@@ -3253,16 +3281,26 @@ def _update_family_performance(evidence_quality: dict) -> dict:
         best = max(int(old.get("best_gap_score") or 0), gap)
         qualified_hits = int(old.get("qualified_hits") or 0) + (1 if qualified else 0)
 
-        # After repeated non-progress, pause exploitation of this family for several cycles.
-        # This is a search-allocation pivot only; evidence is retained and gates are unchanged.
+        # After repeated non-progress, stop repeating broad sector searches.
+        # Near-gate families remain eligible for hypothesis-specific convergence/falsification.
+        near_gate=bool(
+            domains >= 2
+            and strong >= 1
+            and "PAID_DEMAND" in tags
+            and ("BUY_INTENT" in tags or "PAIN" in tags)
+        )
         if no_progress_streak >= 6 and not qualified:
             prior_until=int((cooldowns.get(family) or {}).get("until_cycle") or 0)
-            until=max(prior_until,current_cycle + 6)
+            cooldown_span=4 if near_gate else 6
+            until=max(prior_until,current_cycle + cooldown_span)
             cooldowns[family]={
                 "until_cycle":until,
-                "reason":"no_new_independent_evidence",
+                "reason":"broad_search_paused_near_gate" if near_gate else "no_new_independent_evidence",
+                "mode":"convergence_only" if near_gate else "full",
                 "no_progress_streak":no_progress_streak,
                 "last_domains":domains,
+                "last_strong_domains":strong,
+                "last_signal_types":sorted(tags),
                 "last_gap_score":gap,
             }
             no_progress_streak=0
