@@ -5053,6 +5053,11 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
 
     search_strategy = _entropy_search_strategy(goal, 8)
     searches = search_strategy["queries"]
+    query_meta={
+        " ".join(str(x.get("query") or "").split()).lower(): x
+        for x in (search_strategy.get("query_plan") or [])
+        if isinstance(x,dict) and str(x.get("query") or "").strip()
+    }
     demand_evidence = await evidence_scouts(goal, limit=20)
 
     # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
@@ -5097,7 +5102,18 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "Non dichiarare guadagni certi e non eseguire azioni finanziarie o irreversibili.\n\nOBIETTIVO:\n" + goal
     )
     web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
-    evidence_quality = _commercial_evidence_quality(web_research, demand_evidence)
+    AUTOPILOT_STATE["query_execution"]={
+        "planned":search_strategy.get("query_plan") or [],
+        "executed":[
+            {
+                **dict(query_meta.get(" ".join(q.split()).lower()) or {}),
+                "query":q,
+                "agent_search_completed":True,
+            }
+            for q in searches
+        ],
+    }
+    evidence_quality = _commercial_evidence_quality(web_research, demand_evidence, query_meta)
     family_performance = _update_family_performance(evidence_quality)
     product_candidate = build_candidate(evidence_quality)
 
