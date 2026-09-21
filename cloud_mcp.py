@@ -12,6 +12,22 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 
+from evidence_integrity import (
+    EVIDENCE_SCHEMA_VERSION,
+    TAGGER_VERSION,
+    canonical_domain,
+    canonical_problem_key,
+    canonical_url,
+    commercial_family as integrity_commercial_family,
+    contains_any,
+    contains_term,
+    demand_signal_type as integrity_demand_signal_type,
+    gate_eligible_problem_key,
+    make_problem_id,
+    make_thesis_id,
+    migrate_evidence_memory,
+)
+
 import httpx
 import uvicorn
 from mcp.server.mcpserver import MCPServer
@@ -21,7 +37,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.66.0"
+VERSION = "0.67.0"
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -91,6 +107,21 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_agent_stats": {},
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "evidence_integrity": {
+        "schema_v": EVIDENCE_SCHEMA_VERSION,
+        "tagger_v": TAGGER_VERSION,
+        "rows": 0,
+        "changed": 0,
+        "quarantined": 0,
+    },
+    "active_thesis": None,
+    "thesis_history": [],
+    "problem_performance": {},
+    "problem_cooldowns": {},
+    "query_execution": {
+        "planned": [],
+        "executed": [],
+    },
     "jarvis_runtime": {
         "last_request_utc": None,
         "last_response_utc": None,
@@ -130,7 +161,13 @@ def _state_payload() -> dict:
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
-        "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-180:],
+        "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
+        "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
+        "active_thesis": AUTOPILOT_STATE.get("active_thesis"),
+        "thesis_history": list(AUTOPILOT_STATE.get("thesis_history") or [])[-30:],
+        "problem_performance": AUTOPILOT_STATE.get("problem_performance") or {},
+        "problem_cooldowns": AUTOPILOT_STATE.get("problem_cooldowns") or {},
+        "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
         "jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
     }
@@ -174,7 +211,26 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(payload.get("jarvis_dialogue_history"), list):
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
     if isinstance(payload.get("commercial_evidence_memory"), list):
-        AUTOPILOT_STATE["commercial_evidence_memory"] = payload.get("commercial_evidence_memory")[-180:]
+        migrated, migration = migrate_evidence_memory(payload.get("commercial_evidence_memory")[-240:])
+        AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
+        AUTOPILOT_STATE["evidence_integrity"] = migration
+        if migration.get("changed") or migration.get("quarantined"):
+            # Derived commercial scores from tagger v1 are not safe guidance for v2.
+            AUTOPILOT_STATE["family_performance"] = {}
+            AUTOPILOT_STATE["family_cooldowns"] = {}
+            AUTOPILOT_STATE["problem_performance"] = {}
+            AUTOPILOT_STATE["problem_cooldowns"] = {}
+            AUTOPILOT_STATE["stagnation_cycles"] = 0
+    if isinstance(payload.get("active_thesis"), dict):
+        AUTOPILOT_STATE["active_thesis"] = payload.get("active_thesis")
+    if isinstance(payload.get("thesis_history"), list):
+        AUTOPILOT_STATE["thesis_history"] = payload.get("thesis_history")[-30:]
+    if isinstance(payload.get("problem_performance"), dict):
+        AUTOPILOT_STATE["problem_performance"] = payload.get("problem_performance") or {}
+    if isinstance(payload.get("problem_cooldowns"), dict):
+        AUTOPILOT_STATE["problem_cooldowns"] = payload.get("problem_cooldowns") or {}
+    if isinstance(payload.get("query_execution"), dict):
+        AUTOPILOT_STATE["query_execution"] = payload.get("query_execution") or {}
     if isinstance(payload.get("jarvis_runtime"), dict):
         AUTOPILOT_STATE["jarvis_runtime"] = payload.get("jarvis_runtime") or {}
     if isinstance(payload.get("venture_metrics"), dict):
