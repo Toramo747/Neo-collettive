@@ -3293,108 +3293,200 @@ def _active_family_cooldowns() -> dict:
 
 
 def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
-    """Adaptive explore/exploit portfolio with bounded entropy and anti-repetition."""
-    count = max(4, min(count, 10))
-    policy = _load_policy()
-    recent = list(AUTOPILOT_STATE.get("recent_sectors") or [])
-    recent_set = set(recent[-6:])
-    rng = secrets.SystemRandom()
+    """Evidence Integrity planner: allocate query budget before generation, never truncate silently."""
+    count=max(4,min(count,10))
+    policy=_load_policy()
+    recent=list(AUTOPILOT_STATE.get("recent_sectors") or [])
+    recent_set=set(recent[-6:])
+    rng=secrets.SystemRandom()
+    stagnation=int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
 
-    ranked = sorted(
+    ranked=sorted(
         ENTROPY_SECTORS,
-        key=lambda x: (_performance_score(_sector_family(x["id"])), x["id"]),
+        key=lambda x:(_performance_score(_sector_family(x["id"])),x["id"]),
         reverse=True,
     )
-    exploit_pool = [
+    exploit_pool=[
         x for x in ranked
-        if _performance_score(_sector_family(x["id"])) > 0
+        if _performance_score(_sector_family(x["id"]))>0
         and not _family_on_cooldown(_sector_family(x["id"]))
-        and int((AUTOPILOT_STATE.get("family_performance") or {}).get(_sector_family(x["id"]), {}).get("observations") or 0) >= int(policy["minimum_observations_for_exploitation"])
+        and int((AUTOPILOT_STATE.get("family_performance") or {}).get(_sector_family(x["id"]),{}).get("observations") or 0)
+            >=int(policy["minimum_observations_for_exploitation"])
         and x["id"] not in recent_set
     ]
     if not exploit_pool:
-        exploit_pool = [x for x in ranked if _performance_score(_sector_family(x["id"])) > 0 and not _family_on_cooldown(_sector_family(x["id"]))]
+        exploit_pool=[
+            x for x in ranked
+            if _performance_score(_sector_family(x["id"]))>0
+            and not _family_on_cooldown(_sector_family(x["id"]))
+        ]
 
-    stagnation = int(AUTOPILOT_STATE.get("stagnation_cycles") or 0)
-    exploration_slots = int(policy["exploration_stagnant"] if stagnation >= int(policy["stagnation_threshold"]) else policy["exploration_base"])
-    exploitation_slots = max(1, min(int(policy["max_exploitation_slots"]), count - exploration_slots - 1))
-
-    chosen = []
-    for sector in exploit_pool[:exploitation_slots]:
-        if sector not in chosen:
-            chosen.append(sector)
-
-    exploration_pool = [x for x in ENTROPY_SECTORS if x["id"] not in recent_set and x not in chosen and not _family_on_cooldown(_sector_family(x["id"]))]
-    if len(exploration_pool) < exploration_slots:
-        exploration_pool = [x for x in ENTROPY_SECTORS if x not in chosen and not _family_on_cooldown(_sector_family(x["id"]))]
-    rng.shuffle(exploration_pool)
-    chosen.extend(exploration_pool[:exploration_slots])
-
-    queries = []
-    sectors = []
-    for sector in chosen:
-        sectors.append(sector["id"])
-        term = rng.choice(sector["terms"])
-        pattern = rng.choice(ENTROPY_PATTERNS)
-        queries.append(pattern.format(term=term))
-
-    # When evidence is repeatedly promising but fragmented, reserve search capacity
-    # for convergence on the same commercial family instead of adding more random sectors.
-    convergence_limit = 3 if stagnation >= int(policy["stagnation_threshold"]) else 2
-    convergence_probes = _convergence_search_queries(convergence_limit)
-    convergence_queries = [str(x.get("query") or "") for x in convergence_probes if str(x.get("query") or "").strip()]
-
-    breakout_limit = 6 if stagnation >= 12 else (4 if stagnation >= 5 else 0)
-    breakout_probes = _stagnation_breakout_queries(breakout_limit)
-    breakout_queries = [str(x.get("query") or "") for x in breakout_probes if str(x.get("query") or "").strip()]
-
-    hypothesis_probes = _hypothesis_search_queries(1)
-    hypothesis_queries = [str(x.get("query") or "") for x in hypothesis_probes if str(x.get("query") or "").strip()]
-
-    # During prolonged stagnation, change source class before repeating broad exploration.
-    # Evidence thresholds remain identical; only discovery strategy changes.
-    queries = breakout_queries + convergence_queries + queries + hypothesis_queries + [
-        '"will pay" "manual process" small business',
-        '"hiring" freelancer "repetitive task" automation',
+    exploration_pool=[
+        x for x in ENTROPY_SECTORS
+        if x["id"] not in recent_set and x not in exploit_pool[:3]
+        and not _family_on_cooldown(_sector_family(x["id"]))
     ]
+    if len(exploration_pool)<3:
+        exploration_pool=[
+            x for x in ENTROPY_SECTORS
+            if x not in exploit_pool[:3] and not _family_on_cooldown(_sector_family(x["id"]))
+        ]
+    rng.shuffle(exploration_pool)
 
-    out = []
-    for q in queries:
-        q = " ".join(q.split())
-        if q and q.lower() not in {x.lower() for x in out}:
-            out.append(q)
+    def sector_entry(sector: dict, cls: str) -> dict:
+        term=rng.choice(sector["terms"])
+        pattern=rng.choice(ENTROPY_PATTERNS)
+        return {
+            "query":" ".join(pattern.format(term=term).split()),
+            "class":cls,
+            "role":"discovery",
+            "sector":sector["id"],
+            "family":_sector_family(sector["id"]),
+        }
 
-    AUTOPILOT_STATE["recent_sectors"] = (recent + sectors)[-12:]
-    strategy = {
-        "mode": "adaptive_entropy_explore_exploit",
-        "entropy_source": "system_random",
-        "queries": out[:count],
-        "sectors": sectors[:count],
-        "sector_families": {sid: _sector_family(sid) for sid in sectors[:count]},
-        "recent_sector_memory": AUTOPILOT_STATE["recent_sectors"],
-        "stagnation_cycles": stagnation,
-        "exploration_slots": exploration_slots,
-        "exploitation_slots": exploitation_slots,
-        "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
-        "family_cooldowns": _active_family_cooldowns(),
-        "convergence_through_cooldown": sorted([
-            family for family in _active_family_cooldowns()
-            if not _family_on_cooldown(family, purpose="convergence")
-        ]),
-        "hypothesis_probes": hypothesis_probes,
-        "convergence_probes": convergence_probes,
-        "convergence_slots": len(convergence_queries),
-        "breakout_probes": breakout_probes,
-        "breakout_slots": len(breakout_queries),
-        "stagnation_breakout": bool(breakout_queries),
-        "anthropic_convergence": any(str(x.get("mode") or "").startswith("anthropic_") for x in breakout_probes),
-        "anthropic_thesis": next((x.get("thesis") for x in breakout_probes if str(x.get("mode") or "").startswith("anthropic_")), None),
-        "policy": "when a concrete problem is near the gate, converge anthropically: hold one falsifiable thesis and triangulate buyer, paid-market, practitioner and disconfirming evidence; never relax the evidence gate",
-        "adaptive_policy": policy,
+    exploit_entries=[sector_entry(x,"exploit") for x in exploit_pool[:3]]
+    explore_entries=[sector_entry(x,"explore") for x in exploration_pool[:4]]
+    convergence_probes=_convergence_search_queries(3 if stagnation>=int(policy["stagnation_threshold"]) else 2)
+    convergence_entries=[dict(x,class_="convergence") for x in []]  # schema marker; entries normalized below
+    convergence_entries=[]
+    for x in convergence_probes:
+        if not str(x.get("query") or "").strip():
+            continue
+        row=dict(x)
+        row["class"]="convergence"
+        row.setdefault("role","buyer")
+        convergence_entries.append(row)
+
+    anthropic_probes=_anthropic_convergence_queries(6) if stagnation>=5 else []
+    thesis_entries=[]
+    # Preserve a falsification probe every cycle. Never let list order silently drop it.
+    preferred_roles=("buyer","paid_market","practitioner","disconfirm")
+    for role in preferred_roles:
+        item=next((x for x in anthropic_probes if x.get("role")==role and str(x.get("query") or "").strip()),None)
+        if item:
+            row=dict(item)
+            row["class"]="thesis"
+            thesis_entries.append(row)
+
+    hypothesis_probes=_hypothesis_search_queries(1)
+    hypothesis_entries=[]
+    for x in hypothesis_probes:
+        if str(x.get("query") or "").strip():
+            row=dict(x)
+            row["class"]="hypothesis"
+            row.setdefault("role","discovery")
+            hypothesis_entries.append(row)
+
+    # Allocate before assembling. In prolonged stagnation the active thesis receives
+    # half the budget, but two slots remain for diversity and two for concrete convergence.
+    if thesis_entries:
+        budget={"thesis":min(4,count),"convergence":min(2,max(0,count-4)),"explore":max(0,count-6)}
+        sources=[
+            ("thesis",thesis_entries),
+            ("convergence",convergence_entries),
+            ("explore",explore_entries),
+        ]
+    elif convergence_entries:
+        conv=min(3,count)
+        exploit=min(3,max(0,count-conv))
+        budget={"convergence":conv,"exploit":exploit,"explore":max(0,count-conv-exploit)}
+        sources=[
+            ("convergence",convergence_entries),
+            ("exploit",exploit_entries),
+            ("explore",explore_entries),
+        ]
+    else:
+        exploit=min(3,count)
+        hyp=min(1,max(0,count-exploit))
+        budget={"exploit":exploit,"hypothesis":hyp,"explore":max(0,count-exploit-hyp)}
+        sources=[
+            ("exploit",exploit_entries),
+            ("hypothesis",hypothesis_entries),
+            ("explore",explore_entries),
+        ]
+
+    planned=[]
+    seen=set()
+    for cls,entries in sources:
+        need=int(budget.get(cls) or 0)
+        taken=0
+        for entry in entries:
+            q=" ".join(str(entry.get("query") or "").split())
+            if not q or q.lower() in seen:
+                continue
+            row=dict(entry)
+            row["query"]=q
+            row["class"]=cls
+            planned.append(row)
+            seen.add(q.lower())
+            taken+=1
+            if taken>=need or len(planned)>=count:
+                break
+
+    # Backfill unused capacity with real exploration entries, never phantom telemetry.
+    if len(planned)<count:
+        for entry in explore_entries+exploit_entries+hypothesis_entries:
+            q=" ".join(str(entry.get("query") or "").split())
+            if not q or q.lower() in seen:
+                continue
+            row=dict(entry)
+            planned.append(row)
+            seen.add(q.lower())
+            if len(planned)>=count:
+                break
+
+    planned=planned[:count]
+    executed_sectors=[str(x.get("sector")) for x in planned if x.get("sector")]
+    AUTOPILOT_STATE["recent_sectors"]=(recent+executed_sectors)[-12:]
+    AUTOPILOT_STATE["query_execution"]={"planned":planned,"executed":[]}
+
+    cooldown_problems=[]
+    active_cooldowns=_active_family_cooldowns()
+    for row in AUTOPILOT_STATE.get("commercial_evidence_memory") or []:
+        if not isinstance(row,dict):
+            continue
+        family=str(row.get("family") or "")
+        key=str(row.get("problem_key") or "")
+        if family in active_cooldowns and key and _problem_near_gate(key):
+            cooldown_problems.append(key)
+
+    actual_budget={}
+    for row in planned:
+        cls=str(row.get("class") or "unknown")
+        actual_budget[cls]=actual_budget.get(cls,0)+1
+
+    strategy={
+        "mode":"evidence_integrity_query_budget",
+        "entropy_source":"system_random",
+        "queries":[x["query"] for x in planned],
+        "query_plan":planned,
+        "query_budget":actual_budget,
+        "planned_query_count":len(planned),
+        "sectors":executed_sectors,
+        "sector_families":{sid:_sector_family(sid) for sid in executed_sectors},
+        "recent_sector_memory":AUTOPILOT_STATE["recent_sectors"],
+        "stagnation_cycles":stagnation,
+        "exploration_slots":actual_budget.get("explore",0),
+        "exploitation_slots":actual_budget.get("exploit",0)+actual_budget.get("convergence",0),
+        "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
+        "problem_performance":AUTOPILOT_STATE.get("problem_performance") or {},
+        "family_cooldowns":active_cooldowns,
+        "convergence_through_cooldown":sorted(set(cooldown_problems)),
+        "hypothesis_probes":hypothesis_probes,
+        "convergence_probes":convergence_probes,
+        "convergence_slots":actual_budget.get("convergence",0),
+        "breakout_probes":anthropic_probes,
+        "breakout_slots":actual_budget.get("thesis",0),
+        "stagnation_breakout":bool(thesis_entries),
+        "anthropic_convergence":bool(thesis_entries),
+        "anthropic_thesis":(AUTOPILOT_STATE.get("active_thesis") or {}).get("thesis"),
+        "active_thesis":AUTOPILOT_STATE.get("active_thesis"),
+        "evidence_integrity":AUTOPILOT_STATE.get("evidence_integrity") or {},
+        "policy":"hold one falsifiable human thesis, preserve disconfirming search, and never relax the commercial evidence gate",
+        "adaptive_policy":policy,
     }
-    AUTOPILOT_STATE["last_search_strategy"] = strategy
+    AUTOPILOT_STATE["last_search_strategy"]=strategy
     return strategy
-
 
 def _update_family_performance(evidence_quality: dict) -> dict:
     """Update performance and temporarily cool families that consume cycles without new evidence."""
