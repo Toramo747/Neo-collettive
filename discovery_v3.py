@@ -31,7 +31,7 @@ STOP = {
 }
 
 
-OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 4
+OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 5
 
 # Generic employment vacancies can contain words such as "hiring", "looking for"
 # and "compensation", which are not evidence of a buyer problem by themselves.
@@ -59,6 +59,12 @@ MAKER_SELF_REPORT_MARKERS = (
     "i built","i made","i created","my project","our project","our product",
     "i've been a developer","i have been a developer","vibe-coded","vibe coded",
     "i've been using it","i have been using it","fixing the problems as they come",
+)
+
+RECRUITING_INTERVIEW_MARKERS = (
+    "technical interview","job interview","interview loop","interview process",
+    "interview question","interview outcome","hiring decision","recruiting process",
+    "candidate interview","no hire",
 )
 
 
@@ -200,6 +206,14 @@ def _is_launch_title(title: str) -> bool:
 def _is_maker_self_report(body: str) -> bool:
     low=_clean_source_text(body).lower()
     return any(x in low for x in MAKER_SELF_REPORT_MARKERS)
+
+
+def _is_recruiting_or_interview_context(title: str, body: str) -> bool:
+    title_low=_clean_source_text(title).lower()
+    text=(" "+title_low+" "+_clean_source_text(body).lower()+" ")
+    if "interview" in title_low:
+        return True
+    return any(marker in text for marker in RECRUITING_INTERVIEW_MARKERS)
 
 
 def _is_generic_job_listing(title: str, body: str) -> bool:
@@ -371,6 +385,10 @@ def observed_pain_candidates(
             # operational problem. Keep a vacancy only when it explicitly states the
             # workflow pain that is driving the hiring.
             if _is_generic_job_listing(clean_title,clean_body) and not _has_explicit_operational_pain(clean_title,clean_body):
+                continue
+            # Recruiting/interview analysis can contain buyer-like words ("looking for",
+            # "hire", "problem") without describing an operational workflow pain.
+            if _is_recruiting_or_interview_context(clean_title,clean_body) and not _has_explicit_operational_pain(clean_title,clean_body):
                 continue
             # Product-launch posts describing the maker's own build pain are useful
             # technical anecdotes, but not a source-backed customer problem.
