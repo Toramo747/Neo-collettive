@@ -7,9 +7,12 @@ from urllib.parse import urlparse
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 4
+SETI_ENGINE_VERSION = 5
 
 DEFAULT_PASSIVE_QUERIES = [
+    'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
+    '"https://" "/.well-known/agent-card.json" "Agent2Agent" -site:a2aregistry.org',
+    '"agent-card.json" "protocolVersion" "skills" -site:a2aregistry.org',
     '"message/send" "jsonrpc" agent -site:a2aregistry.org',
     '"/.well-known/agent-card.json" -site:a2aregistry.org',
     '"agent-card.json" "A2A" -site:a2aregistry.org',
@@ -30,6 +33,9 @@ OFFICIAL_OR_LOW_VALUE_DOMAINS = {
     "wikipedia.org",
     "bing.com",
     "google.com",
+    "example.com",
+    "example.org",
+    "example.net",
 }
 
 COMMON_HOSTS = {
@@ -89,6 +95,73 @@ def _clean_text(value: Any) -> str:
     return text.strip()
 
 
+EXPLICIT_AGENT_CARD_PATHS = (
+    "/.well-known/agent-card.json",
+    "/.well-known/agent.json",
+)
+EXPLICIT_A2A_PATHS = (
+    "/a2a",
+    "/message/send",
+    "/agent/a2a",
+    "/agents/a2a",
+)
+
+
+def explicit_agent_endpoint_url(url: str) -> bool:
+    try:
+        p=urlparse(str(url or "").strip())
+        host=(p.hostname or "").lower().strip(".")
+        path=(p.path or "/").lower().rstrip("/") or "/"
+    except Exception:
+        return False
+    if p.scheme!="https" or not host:
+        return False
+    if host in OFFICIAL_OR_LOW_VALUE_DOMAINS or host in COMMON_HOSTS:
+        return False
+    if host in {"localhost","localhost.localdomain"} or host.endswith(".local"):
+        return False
+    if any(path.endswith(x) for x in EXPLICIT_AGENT_CARD_PATHS):
+        return True
+    return any(path==x or path.endswith(x) for x in EXPLICIT_A2A_PATHS)
+
+
+def indexed_endpoint_leads(row: dict, limit: int = 4) -> list[dict]:
+    """Extract explicitly declared public A2A endpoints from indexed text only.
+
+    This does not fetch, resolve or probe the extracted host. It turns a URL that is
+    already visible in a public search/code index into a quarantined SETI lead.
+    """
+    if not isinstance(row,dict):
+        return []
+    text=" ".join([
+        str(row.get("title") or ""),
+        str(row.get("snippet") or row.get("description") or ""),
+    ])
+    urls=re.findall(r'https://[^\s<>"\]\[(){}]+',text,re.I)
+    out=[]
+    seen=set()
+    provenance=str(row.get("url") or "").strip()
+    source=str(row.get("source") or "public_index")
+    for raw in urls:
+        url=raw.rstrip(".,;:!?")
+        if url in seen or not explicit_agent_endpoint_url(url):
+            continue
+        seen.add(url)
+        host=canonical_host(url)
+        out.append({
+            "title":"Indexed public A2A endpoint: "+host,
+            "url":url,
+            "snippet":_clean_text(text)[:1400],
+            "source":source+"-declared-endpoint",
+            "source_provenance":[source],
+            "provenance_url":provenance,
+            "indexed_declared_endpoint":True,
+        })
+        if len(out)>=max(1,min(limit,8)):
+            break
+    return out
+
+
 def _tokens(text: str) -> set[str]:
     stop={
         "the","and","for","with","from","this","that","into","your","using","about",
@@ -102,11 +175,21 @@ def _tokens(text: str) -> set[str]:
 
 
 def signal_fingerprint(row: dict) -> str:
-    raw="|".join([
-        canonical_host(str(row.get("url") or "")),
-        str(row.get("url") or "").strip().lower(),
-        _clean_text(row.get("title")).lower(),
-    ])
+    url=str(row.get("url") or "").strip()
+    if explicit_agent_endpoint_url(url):
+        try:
+            p=urlparse(url)
+            host=(p.hostname or "").lower().strip(".")
+            path=re.sub(r"/+","/",p.path or "/").rstrip("/") or "/"
+            raw="endpoint|"+host+"|"+path.lower()
+        except Exception:
+            raw="endpoint|"+url.lower()
+    else:
+        raw="|".join([
+            canonical_host(url),
+            url.lower(),
+            _clean_text(row.get("title")).lower(),
+        ])
     return hashlib.sha256(raw.encode("utf-8","ignore")).hexdigest()[:24]
 
 
