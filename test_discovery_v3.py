@@ -114,6 +114,46 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
 
+    def test_generic_job_listing_is_not_observed_pain(self):
+        q="DevOps workflow freelance hiring budget"
+        meta={
+            q.lower():{
+                "family":"ai_tools",
+                "role":"paid_market",
+                "search_alias_used":"DevOps workflow",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Senior Data Scientist",
+                "url":"https://remotive.com/remote-jobs/data/senior-data-scientist-2091129",
+                "snippet":"Hiring Senior Data Scientist at Lemon.io Category: Data and Analytics Job type: full_time. Are you a talented Senior Data Scientist looking for a remote job that lets you show your skills and get decent compensation?",
+            }],
+        }]
+        self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
+
+    def test_job_listing_with_explicit_operational_pain_can_be_kept(self):
+        q="DevOps workflow freelance hiring budget"
+        meta={
+            q.lower():{
+                "family":"developer_tools",
+                "role":"paid_market",
+                "search_alias_used":"DevOps workflow",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"DevOps Engineer",
+                "url":"https://example.com/jobs/devops",
+                "snippet":"Job type: full time. We are hiring because deployments are manually repeated across environments, take hours per week, and are error-prone.",
+            }],
+        }]
+        rows=observed_pain_candidates(groups,meta,limit=5)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],3)
+
 
 if __name__ == "__main__":
     unittest.main()
