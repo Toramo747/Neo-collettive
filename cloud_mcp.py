@@ -56,7 +56,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.76.2"  # reject false observed-pain job listings
+VERSION = "0.77.0"  # use real retrieval aliases and reject generic paid-market matches
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -3397,15 +3397,16 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     # The thesis remains human-readable and stable. Search vocabulary is deliberately
     # shorter and rotates across synonyms so Bing does not overfit one literal sentence.
     probes=[
-        ("buyer",f'{alias(0)} need help manual workaround'),
-        ("paid_market",f'{alias(1)} freelance hiring budget'),
-        ("paid_market",f'{alias(2)} fixed price hourly job'),
-        ("practitioner",f'{alias(3)} manual repetitive workflow problem'),
-        ("alternative",f'{alias(4)} software pricing subscription'),
-        ("disconfirm",f'{alias(5)} already automated solved no need'),
+        ("buyer",alias(0),"need help manual workaround"),
+        ("paid_market",alias(1),"freelance hiring budget"),
+        ("paid_market",alias(2),"fixed price hourly job"),
+        ("practitioner",alias(3),"manual repetitive workflow problem"),
+        ("alternative",alias(4),"software pricing subscription"),
+        ("disconfirm",alias(5),"already automated solved no need"),
     ]
     out=[]
-    for role,q in probes[:max(0,limit)]:
+    for role,probe_alias,suffix in probes[:max(0,limit)]:
+        q=" ".join((str(probe_alias)+" "+suffix).split())
         out.append({
             "family":active.get("family"),
             "problem_key":active.get("seed_problem_key"),
@@ -3421,7 +3422,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             "pain":active.get("pain"),
             "thesis":active.get("thesis"),
             "search_aliases":aliases,
-            "search_alias_used":q.split('"')[1] if '"' in q else "",
+            "search_alias_used":str(probe_alias),
             "cycles_used":active.get("cycles_used"),
             "budget_cycles":active.get("budget_cycles"),
             "broad_cluster_refinement":active.get("broad_cluster_refinement"),
