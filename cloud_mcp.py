@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 
-from seti_radar import deep_space_scan, merge_signal_memory
+from seti_radar import SETI_ENGINE_VERSION, deep_space_scan, merge_signal_memory
 from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance
 
 from evidence_integrity import (
@@ -42,7 +42,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.71.0"  # problem-first discovery + routed public retrieval
+VERSION = "0.71.1"  # SETI multi-source passive listening
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -4440,6 +4440,88 @@ async def _stackexchange_query_search(query: str, limit: int = 4) -> list[dict]:
         return []
 
 
+async def _grep_app_code_search(query: str, limit: int = 5) -> list[dict]:
+    """Search the public grep.app code index. This never connects to discovered targets."""
+    seed=" ".join(str(query or "").strip().split())
+    if not seed:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=True) as client:
+            r=await client.get(
+                "https://grep.app/api/search",
+                params={"q":seed,"page":1},
+                headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+            )
+            if not r.is_success:
+                return []
+            data=r.json()
+        hits=((data.get("hits") or {}).get("hits") or []) if isinstance(data,dict) else []
+        out=[]
+        for x in hits[:max(1,min(limit,10))]:
+            if not isinstance(x,dict):
+                continue
+            repo=str(x.get("repo") or "")
+            branch=str(x.get("branch") or "main")
+            path=str(x.get("path") or "")
+            snippet=""
+            content=x.get("content")
+            if isinstance(content,dict):
+                snippet=str(content.get("snippet") or "")
+            if not repo or not path:
+                continue
+            url="https://github.com/"+repo+"/blob/"+branch+"/"+path
+            out.append({
+                "title":(repo+" / "+path)[:300],
+                "url":url,
+                "snippet":snippet[:1400],
+                "source":"github-code-index-grepapp",
+            })
+        return out
+    except Exception:
+        return []
+
+
+async def seti_public_search(query: str, limit: int = 6) -> dict:
+    """SETI-only passive multi-source search over public indexes."""
+    meta={"role":"discovery","class":"seti"}
+    routed,code=await asyncio.gather(
+        routed_public_search(query,meta,max(3,min(limit,8))),
+        _grep_app_code_search(query,max(3,min(limit,8))),
+        return_exceptions=True,
+    )
+    results=[]
+    seen=set()
+    source_counts={}
+
+    def add_rows(rows):
+        for row in rows or []:
+            if not isinstance(row,dict):
+                continue
+            url=str(row.get("url") or "").strip()
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            results.append(row)
+            src=str(row.get("source") or "unknown")
+            source_counts[src]=source_counts.get(src,0)+1
+            if len(results)>=max(1,min(limit*2,16)):
+                break
+
+    if isinstance(routed,dict):
+        add_rows(routed.get("results") or [])
+    if isinstance(code,list):
+        add_rows(code)
+
+    return {
+        "ok":True,
+        "query":query,
+        "results":results,
+        "count":len(results),
+        "source_counts":source_counts,
+        "passive_only":True,
+    }
+
+
 async def routed_public_search(query: str, meta: dict | None = None, limit: int = 6) -> dict:
     """Route one probe across public sources, with Bing RSS only as fallback/supplement."""
     meta=meta if isinstance(meta,dict) else {}
@@ -6857,13 +6939,14 @@ async def _seti_passive_cycle_if_due() -> dict | None:
     if not SETI_ENABLED:
         return None
     cycles=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
-    # First passive listen runs as soon as the feature is live; later scans are sparse.
-    if state.get("last_scan_utc") and cycles % SETI_EVERY_CYCLES != 0:
+    engine_changed=int(state.get("engine_version") or 0) != int(SETI_ENGINE_VERSION)
+    # First listen and radar-engine upgrades run immediately; later scans stay sparse.
+    if state.get("last_scan_utc") and not engine_changed and cycles % SETI_EVERY_CYCLES != 0:
         return None
 
     try:
         scan=await deep_space_scan(
-            search_fn=free_web_search,
+            search_fn=seti_public_search,
             discover_fn=discover_data,
             limit=SETI_RESULT_LIMIT,
             per_query=5,
@@ -6875,12 +6958,14 @@ async def _seti_passive_cycle_if_due() -> dict | None:
         state.update({
             "enabled":True,
             "mode":"passive",
+            "engine_version":SETI_ENGINE_VERSION,
             "every_cycles":SETI_EVERY_CYCLES,
             "last_scan_utc":scan.get("scanned_at_utc"),
             "last_error":None,
             "signal_memory":memory,
             "last_summary":{
                 "search_results_seen":scan.get("search_results_seen",0),
+                "source_counts":scan.get("source_counts") or {},
                 "machine_like_results":scan.get("machine_like_results",0),
                 "registry_checks":scan.get("registry_checks",0),
                 "known_space_filtered":scan.get("known_space_filtered",0),
