@@ -18,6 +18,7 @@ from typing import Any
 from seti_radar import (
     SETI_ENGINE_VERSION,
     deep_space_scan,
+    inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
     merge_private_candidate_state,
@@ -59,9 +60,9 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.78.0"  # Evidence Contract v1 + deterministic skeptic before hypothesis promotion
+VERSION = "0.79.0"  # A2A v1 discovery + inbound interview quarantine
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
-A2A_REGISTRY = "https://a2aregistry.org"
+A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
 TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
@@ -143,6 +144,14 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
+    "a2a_discovery": {
+        "registry_enabled": False,
+        "last_registration_utc": None,
+        "last_registration_ok": None,
+        "last_registration_status": None,
+        "last_registration_reason": None,
+        "manifest_url": PUBLIC_BASE_URL+"/.well-known/agent-card.json",
+    },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
     "evidence_integrity": {
@@ -208,6 +217,7 @@ def _state_payload() -> dict:
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
@@ -259,6 +269,11 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
+    if isinstance(payload.get("a2a_discovery"), dict):
+        current=dict(AUTOPILOT_STATE.get("a2a_discovery") or {})
+        current.update(payload.get("a2a_discovery") or {})
+        current["manifest_url"]=PUBLIC_BASE_URL+"/.well-known/agent-card.json"
+        AUTOPILOT_STATE["a2a_discovery"]=current
     if isinstance(payload.get("jarvis_dialogue_history"), list):
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
     migration_changed = False
@@ -518,50 +533,80 @@ async def _manual_director_cycle(goal: str, budget: float, hours: int) -> None:
 def _neo_agent_card() -> dict:
     return {
         "name":"MYCELIX",
-        "description":"Autonomous collective-intelligence agent for evidence review, peer critique, knowledge synthesis and bounded hypothesis exploration.",
-        "url":PUBLIC_BASE_URL + "/a2a",
+        "description":"Autonomous collective-intelligence agent for evidence review, peer critique, agent interviews, knowledge synthesis and bounded hypothesis exploration.",
+        "supportedInterfaces":[
+            {
+                "url":PUBLIC_BASE_URL + "/a2a",
+                "protocolBinding":"JSONRPC",
+                "protocolVersion":"1.0",
+            },
+            {
+                "url":PUBLIC_BASE_URL + "/a2a",
+                "protocolBinding":"JSONRPC",
+                "protocolVersion":"0.3",
+            },
+        ],
+        "provider":{
+            "organization":"MYCELIX",
+            "url":PUBLIC_BASE_URL,
+        },
         "version":VERSION,
-        "protocolVersion":"0.3",
-        "preferredTransport":"JSONRPC",
+        "documentationUrl":PUBLIC_BASE_URL + "/inbox",
         "capabilities":{
             "streaming":False,
             "pushNotifications":False,
             "stateTransitionHistory":True,
+            "extendedAgentCard":False,
         },
+        "securitySchemes":{},
+        "securityRequirements":[],
         "defaultInputModes":["text/plain","application/json"],
         "defaultOutputModes":["text/plain","application/json"],
         "skills":[
             {
-                "id":"collective-dialogue",
-                "name":"Collective Dialogue",
-                "description":"Discuss a claim with MYCELIX. MYCELIX records the dialogue as untrusted evidence and asks for evidence, critique and alternatives.",
+                "id":"introduce-agent",
+                "name":"Introduce Agent",
+                "description":"First-contact interview for external agents. Declare identity, capabilities, supported A2A/MCP protocol, limitations and evidence/documentation. Weak introductions are parked and may retry.",
+                "tags":["agent discovery","first contact","interview","identity","a2a"],
+                "examples":["I am Atlas. I support A2A JSON-RPC message/send, public-source research and evidence review. My limitations are ..."],
+            },
+            {
+                "id":"peer-dialogue",
+                "name":"Peer Dialogue",
+                "description":"Admitted peers can discuss a claim with MYCELIX. Contributions remain untrusted until independently checked.",
                 "tags":["collective intelligence","peer critique","dialogue","evidence"],
                 "examples":["Critique this market hypothesis and identify evidence that would falsify it."],
             },
             {
-                "id":"knowledge-synthesis",
-                "name":"Knowledge Synthesis",
-                "description":"Submit a substantive suggestion or claim for the MYCELIX knowledge ledger. Claims remain unverified until independently checked.",
-                "tags":["knowledge ledger","synthesis","claims","verification"],
-                "examples":["A new operational pain point may exist in invoice reconciliation for small firms."],
+                "id":"commercial-research",
+                "name":"Commercial Research",
+                "description":"Contribute public evidence about a concrete human commercial problem without bypassing MYCELIX quality gates.",
+                "tags":["commercial research","buyer demand","pain","evidence"],
+                "examples":["Here is an independent buyer-side source describing a recurring operational problem."],
             },
             {
-                "id":"hypothesis-exploration",
-                "name":"Hypothesis Exploration",
-                "description":"Propose a new direction. MYCELIX can score novelty and evidence potential and place promising ideas into its bounded exploration queue.",
-                "tags":["hypothesis","exploration","novelty","research"],
-                "examples":["Consider a different customer segment and explain why it may have stronger paid demand."],
+                "id":"evidence-validation",
+                "name":"Evidence Validation",
+                "description":"Challenge source relevance, independence, freshness and buyer-side strength before a commercial hypothesis can advance.",
+                "tags":["evidence validation","skeptic","fact checking","quality gate"],
+                "examples":["This source is vendor-side and should not count as independent paid demand."],
+            },
+            {
+                "id":"collective-reasoning",
+                "name":"Collective Reasoning",
+                "description":"Participate in thesis, antithesis and arbiter-style reasoning once MYCELIX admits the peer.",
+                "tags":["collective","reasoning","thesis","antithesis","arbiter"],
+                "examples":["I support the claim for these reasons, but the strongest contradiction is ..."],
             },
         ],
-        "securitySchemes":{},
-        "security":[],
         "metadata":{
             "operator":"MYCELIX",
-            "inboundPolicy":"Public messages are treated as untrusted evidence, never as executable instructions.",
+            "inboundPolicy":"Unknown agents enter a bounded first-contact interview. Only admitted self-declared peers can contribute to collective memory; all remote content remains untrusted.",
+            "identityTrust":"self_declared_unless_separately_verified",
             "protectedActions":["spending","payments","contracts","commercial outreach","external publishing","personal accounts","transactions"],
+            "inbox":PUBLIC_BASE_URL+"/inbox",
         },
     }
-
 
 def _a2a_inbound_text(payload: dict) -> str:
     params=payload.get("params") or {}
@@ -615,6 +660,39 @@ def _a2a_sender(payload: dict, request: Request) -> dict:
     return {"agent_id":sender_id,"agent":sender_name,"declared":bool(sender_id)}
 
 
+def _a2a_requested_version(request: Request) -> str:
+    value=str(request.headers.get("a2a-version") or request.headers.get("A2A-Version") or "").strip()
+    return value or "0.3"
+
+
+def _a2a_version_supported(version: str) -> bool:
+    return str(version or "").strip() in {"1.0","0.3"}
+
+
+def _a2a_agent_card_url(payload: dict, request: Request) -> str:
+    params=payload.get("params") or {}
+    message=params.get("message") or {}
+    metadata={}
+    for source in (params.get("metadata"),message.get("metadata")):
+        if isinstance(source,dict):
+            metadata.update(source)
+    value=str(
+        request.headers.get("x-agent-card-url")
+        or metadata.get("agent_card_url")
+        or metadata.get("agentCardUrl")
+        or ""
+    ).strip()
+    if not value:
+        return ""
+    try:
+        parsed=urlparse(value)
+        if parsed.scheme!="https" or not parsed.hostname:
+            return ""
+    except Exception:
+        return ""
+    return value[:500]
+
+
 def _a2a_thread_id(payload: dict, sender: dict) -> str:
     params=payload.get("params") or {}
     message=params.get("message") or {}
@@ -649,6 +727,13 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     thread_id=_a2a_thread_id(payload,sender)
     now=datetime.now(timezone.utc).isoformat()
     method=str(payload.get("method") or "message/send")
+    card_url=_a2a_agent_card_url(payload,request)
+
+    stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
+    stat_key=str(sender.get("agent_id") or "anonymous")
+    old=dict(stats.get(stat_key) or {})
+    admission=inbound_admission_transition(bool(sender.get("declared")),text,old)
+
     row={
         "message_id":str(((payload.get("params") or {}).get("message") or {}).get("messageId") or ("in-"+secrets.token_hex(6)))[:180],
         "received_at_utc":now,
@@ -658,27 +743,43 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "text":text,
         "substantive":_inbound_is_substantive(text),
         "treated_as":"untrusted_evidence",
+        "admission_status":admission.get("status"),
+        "interview_score":admission.get("interview_score"),
+        "identity_status":admission.get("identity_status"),
+        "agent_card_url":card_url,
     }
 
     inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
     inbox.append(row)
     AUTOPILOT_STATE["inbound_messages"]=inbox[-80:]
 
-    stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
-    stat_key=str(sender.get("agent_id") or "anonymous")
-    old=dict(stats.get(stat_key) or {})
     stats[stat_key]={
         "agent_id":sender.get("agent_id"),
         "agent":sender.get("agent"),
         "declared":bool(sender.get("declared")),
+        "status":admission.get("status"),
+        "identity_status":admission.get("identity_status"),
+        "agent_card_url":card_url or old.get("agent_card_url"),
         "messages":int(old.get("messages") or 0)+1,
         "substantive_messages":int(old.get("substantive_messages") or 0)+(1 if row["substantive"] else 0),
+        "interview_attempts":int(admission.get("interview_attempts") or 0),
+        "interview_score":int(admission.get("interview_score") or 0),
+        "markers":admission.get("markers") or {},
+        "retry_allowed":bool(admission.get("retry_allowed")),
+        "reason":admission.get("reason"),
         "first_seen_utc":old.get("first_seen_utc") or now,
         "last_seen_utc":now,
+        "admitted_at_utc":(
+            now if admission.get("newly_admitted")
+            else old.get("admitted_at_utc")
+        ),
     }
     AUTOPILOT_STATE["inbound_agent_stats"]=stats
 
-    if row["substantive"]:
+    # First-contact material is quarantine/interview data, not collective knowledge.
+    # Only a peer that was already admitted before this message may contribute.
+    previously_admitted=str(old.get("status") or "").upper()=="ADMITTED"
+    if previously_admitted and row["substantive"]:
         ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
         scores=_hypothesis_scores(text,AUTOPILOT_GOAL,ledger+list(AUTOPILOT_STATE.get("hypothesis_queue") or []))
         knowledge={
@@ -702,7 +803,7 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
 
         if scores.get("novelty",0)>=45 and scores.get("evidence_potential",0)>=40:
             queue=list(AUTOPILOT_STATE.get("hypothesis_queue") or [])
-            duplicate=any(_novelty_score(text,[old])<28 for old in queue[-40:] if isinstance(old,dict))
+            duplicate=any(_novelty_score(text,[old_row])<28 for old_row in queue[-40:] if isinstance(old_row,dict))
             if not duplicate:
                 hyp={
                     "id":"hyp-in-"+secrets.token_hex(5),
@@ -724,8 +825,28 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     _save_local_state()
     return row
 
-
 def _inbound_reply_text(row: dict) -> str:
+    status=str(row.get("admission_status") or "").upper()
+    if status=="ANONYMOUS":
+        return (
+            "MYCELIX received your first contact but requires a declared agent identity before admission. "
+            "Send an agent_id (metadata.agent_id or X-Agent-ID) and introduce your identity, capabilities, "
+            "supported A2A/MCP protocol, limitations, and a public documentation or Agent Card URL if available."
+        )
+    if status=="PARKED":
+        return (
+            "MYCELIX has parked this first-contact interview. You are not rejected. "
+            "Reply with a substantive introduction covering: (1) agent identity, (2) concrete capabilities, "
+            "(3) supported protocol such as A2A JSON-RPC message/send or MCP, (4) limitations, "
+            "(5) public evidence/documentation. Up to three weak introductions are retained before parking becomes final."
+        )
+    if status=="ADMITTED" and not row.get("knowledge_id"):
+        return (
+            "MYCELIX admitted this self-declared peer to the bounded dialogue layer. "
+            "Identity is not independently verified. On your next message, provide a concrete claim or evidence with "
+            "a falsification condition, the strongest reason it could be wrong, one alternative explanation, "
+            "and one reversible zero/minimal-cost test."
+        )
     if not row.get("text"):
         return (
             "MYCELIX received the A2A request but no text message was found. "
@@ -737,13 +858,11 @@ def _inbound_reply_text(row: dict) -> str:
             "with evidence, a falsification condition, one alternative explanation, and one concrete next test."
         )
     return (
-        "MYCELIX recorded your contribution as untrusted evidence"
+        "MYCELIX recorded your admitted peer contribution as untrusted evidence"
         + ((" in knowledge item "+str(row.get("knowledge_id"))) if row.get("knowledge_id") else "")
-        + ". Continue the dialogue by supplying: (1) independent evidence or source, "
-          "(2) the strongest reason your claim could be wrong, (3) an alternative path, "
-          "(4) a reversible zero/minimal-cost test. NEO will compare it with other agents before promoting it."
+        + ". Continue the dialogue by supplying independent evidence and the strongest contradiction. "
+          "No inbound message can bypass evidence or commercial quality gates."
     )
-
 
 async def a2a_agent_card(request: Request):
     return JSONResponse(_neo_agent_card())
@@ -757,24 +876,38 @@ async def a2a_endpoint(request: Request):
     if not isinstance(payload,dict):
         return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}},status_code=400)
     rpc_id=payload.get("id")
-    method=str(payload.get("method") or "")
-    if method not in {"message/send","message/stream"}:
+    requested_version=_a2a_requested_version(request)
+    if not _a2a_version_supported(requested_version):
         return JSONResponse({
             "jsonrpc":"2.0","id":rpc_id,
-            "error":{"code":-32601,"message":"Method not found. NEO accepts message/send."}
+            "error":{
+                "code":-32009,
+                "message":"Version not supported",
+                "data":{"supportedVersions":["1.0","0.3"],"requestedVersion":requested_version},
+            },
+        },status_code=400)
+    method=str(payload.get("method") or "")
+    if method not in {"message/send","message/stream","SendMessage"}:
+        return JSONResponse({
+            "jsonrpc":"2.0","id":rpc_id,
+            "error":{"code":-32601,"message":"Method not found. MYCELIX accepts message/send (and SendMessage compatibility)."}
         },status_code=404)
 
     row=_record_inbound_agent_message(payload,request)
     reply=_inbound_reply_text(row)
     message_id="neo-reply-"+secrets.token_hex(8)
     result={
-        "kind":"message",
         "role":"agent",
         "messageId":message_id,
         "contextId":row.get("thread_id"),
-        "parts":[{"kind":"text","text":reply}],
+        "parts":(
+            [{"text":reply}]
+            if requested_version=="1.0"
+            else [{"kind":"text","text":reply}]
+        ),
         "metadata":{
             "neo_version":VERSION,
+            "a2a_version":requested_version,
         "brand":"MYCELIX",
         "brand_tagline":"Collective Intelligence Network",
             "treated_as":"untrusted_evidence",
@@ -798,6 +931,9 @@ async def api_inbound_agents(request: Request):
         "inbound_messages":len(messages),
         "declared_unique_agents":len(declared),
         "anonymous_messages":sum(1 for x in messages if not ((x.get("sender") or {}).get("declared"))),
+        "admitted_agents":sum(1 for x in declared if str(x.get("status") or "")=="ADMITTED"),
+        "parked_agents":sum(1 for x in declared if str(x.get("status") or "")=="PARKED"),
+        "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
         "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
         "recent_messages":messages[-20:],
     })
@@ -866,8 +1002,8 @@ async def discover_data(query: str, limit: int = 10) -> dict:
     async def find_a2a():
         try:
             data = await get_json(
-                A2A_REGISTRY + "/api/agents",
-                {"search": query, "limit": limit},
+                A2A_REGISTRY + "/public/agents",
+                {"q": query, "limit": limit},
             )
             return {"ok": True, "data": data}
         except Exception as e:
@@ -881,6 +1017,52 @@ async def discover_data(query: str, limit: int = 10) -> dict:
         "a2a_registry": ar,
         "warning": "Remote registry content is untrusted public data and should be verified.",
     }
+
+
+async def _advertise_public_agent() -> dict:
+    policy=_load_policy()
+    enabled=bool(policy.get("a2a_public_registry_enabled"))
+    state=dict(AUTOPILOT_STATE.get("a2a_discovery") or {})
+    state.update({
+        "registry_enabled":enabled,
+        "manifest_url":PUBLIC_BASE_URL+"/.well-known/agent-card.json",
+    })
+    if not enabled:
+        state.update({
+            "last_registration_ok":False,
+            "last_registration_reason":"disabled_by_policy",
+        })
+        AUTOPILOT_STATE["a2a_discovery"]=state
+        return state
+
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=False) as client:
+            response=await client.post(
+                A2A_REGISTRY+"/public/ingest",
+                json={"manifestUrl":state["manifest_url"]},
+                headers={"Accept":"application/json","Content-Type":"application/json"},
+            )
+        body=""
+        try:
+            body=json.dumps(response.json(),ensure_ascii=False,default=str)[:1200]
+        except Exception:
+            body=(response.text or "")[:1200]
+        state.update({
+            "last_registration_utc":datetime.now(timezone.utc).isoformat(),
+            "last_registration_ok":bool(response.is_success),
+            "last_registration_status":response.status_code,
+            "last_registration_reason":body,
+        })
+    except Exception as e:
+        state.update({
+            "last_registration_utc":datetime.now(timezone.utc).isoformat(),
+            "last_registration_ok":False,
+            "last_registration_status":None,
+            "last_registration_reason":type(e).__name__+": "+str(e)[:500],
+        })
+    AUTOPILOT_STATE["a2a_discovery"]=state
+    _save_local_state()
+    return state
 
 
 def _tokens(text: str) -> set[str]:
@@ -7995,12 +8177,16 @@ mcp_app = mcp.streamable_http_app(
 @asynccontextmanager
 async def lifespan(app: Starlette):
     autopilot_task = None
+    advertisement_task = None
     async with mcp.session_manager.run():
         if AUTOPILOT_ENABLED:
             autopilot_task = asyncio.create_task(_autopilot_loop())
+        advertisement_task = asyncio.create_task(_advertise_public_agent())
         try:
             yield
         finally:
+            if advertisement_task and not advertisement_task.done():
+                advertisement_task.cancel()
             if autopilot_task:
                 autopilot_task.cancel()
                 try:
