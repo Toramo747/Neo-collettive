@@ -1,6 +1,6 @@
 import unittest
 
-from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance
+from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance, structured_job_relevance
 
 
 class DiscoveryV3Tests(unittest.TestCase):
@@ -57,6 +57,28 @@ class DiscoveryV3Tests(unittest.TestCase):
         )
         self.assertTrue(r["relevant"])
         self.assertGreaterEqual(len(r["overlap"]),2)
+
+    def test_structured_job_rejects_description_only_overlap(self):
+        meta={"role":"paid_market","search_alias_used":"management report automation"}
+        r=structured_job_relevance(
+            "Oracle Fusion Cloud Lead — Logistics & Supply Chain Management",
+            "Own automation, dashboards, reports and management workflows for enterprise systems.",
+            "management report automation freelance hiring budget",
+            meta,
+        )
+        self.assertFalse(r["relevant"])
+        self.assertLess(len(r["title_overlap"]),2)
+
+    def test_structured_job_accepts_specific_title_overlap(self):
+        meta={"role":"paid_market","search_alias_used":"weekly client reporting"}
+        r=structured_job_relevance(
+            "Client Reporting Analyst",
+            "Hiring contractor to prepare recurring weekly client reports.",
+            "weekly client reporting freelance hiring budget",
+            meta,
+        )
+        self.assertTrue(r["relevant"])
+        self.assertGreaterEqual(len(r["title_overlap"]),2)
 
     def test_observed_pain_candidate_requires_source_backed_signal(self):
         q="customer email management need help manual workaround"
