@@ -6,15 +6,19 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from typing import Any, Awaitable, Callable
 
-SETI_SCHEMA_VERSION = 1
+SETI_SCHEMA_VERSION = 2
+SETI_ENGINE_VERSION = 2
 
 DEFAULT_PASSIVE_QUERIES = [
     '"message/send" "jsonrpc" agent -site:a2aregistry.org',
-    '"agent-card.json" -site:a2aregistry.org',
-    '".well-known/agent.json" agent -site:a2aregistry.org',
+    '"/.well-known/agent-card.json" -site:a2aregistry.org',
+    '"agent-card.json" "A2A" -site:a2aregistry.org',
+    '"/.well-known/agent.json" agent -site:a2aregistry.org',
     '"contextId" "messageId" agent',
     '"task_id" poll agent completed',
     '"tools/list" initialize MCP -site:modelcontextprotocol.io -site:registry.modelcontextprotocol.io',
+    '"MCP server" SSE "tools/call" -site:registry.modelcontextprotocol.io',
+    '"Agent2Agent" endpoint "message/send"',
     '"autonomous agent" webhook API',
     '"agentic" "JSON-RPC" endpoint',
 ]
@@ -39,9 +43,11 @@ COMMON_HOSTS = {
 
 SIGNATURES = (
     ("a2a_agent_card", ("agent-card.json", ".well-known/agent.json"), 30),
+    ("a2a_protocol", ("agent2agent", "a2a protocol", "agent card"), 12),
     ("a2a_message_send", ("message/send",), 24),
     ("json_rpc", ("jsonrpc", "json-rpc"), 13),
-    ("mcp_handshake", ("tools/list", "model context protocol"), 18),
+    ("mcp_handshake", ("tools/list", "model context protocol", "mcp server"), 18),
+    ("mcp_transport", ("tools/call", "streamable http", "server-sent events", "sse"), 8),
     ("machine_context_ids", ("contextid", "messageid"), 14),
     ("async_task_protocol", ("task_id", "taskid", "poll", "completed"), 10),
     ("tool_invocation", ("tool_call", "tool calls", "tools/call"), 10),
@@ -147,6 +153,12 @@ def score_public_result(row: dict) -> dict:
         score -= 4
 
     score=max(0,min(100,score))
+    source=str(row.get("source") or "public_search")
+    source_kind=(
+        "code_artifact" if source.startswith("github-")
+        else "community_index" if source.startswith(("hn-","stackexchange"))
+        else "web_index"
+    )
     return {
         "fingerprint":signal_fingerprint({"url":url,"title":title}),
         "title":title,
@@ -156,7 +168,8 @@ def score_public_result(row: dict) -> dict:
         "agent_likelihood_score":score,
         "classification":_classification(score),
         "signals":signals,
-        "source":row.get("source") or "public_search",
+        "source":source,
+        "source_kind":source_kind,
     }
 
 
@@ -244,6 +257,7 @@ async def deep_space_scan(
     raw_results=[]
     search_errors=[]
     seen_urls=set()
+    source_counts={}
     for q,batch in zip(queries,batches):
         if isinstance(batch,Exception):
             search_errors.append({"query":q,"error":type(batch).__name__+": "+str(batch)[:180]})
@@ -261,6 +275,8 @@ async def deep_space_scan(
             copy=dict(row)
             copy["_query"]=q
             raw_results.append(copy)
+            src=str(copy.get("source") or "unknown")
+            source_counts[src]=source_counts.get(src,0)+1
 
     scored=[score_public_result(row) for row in raw_results]
     scored=[x for x in scored if x.get("classification")!="NOISE"]
@@ -314,6 +330,7 @@ async def deep_space_scan(
         "scanned_at_utc":_utcnow(),
         "queries":queries,
         "search_results_seen":len(raw_results),
+        "source_counts":source_counts,
         "machine_like_results":len(scored),
         "registry_checks":len(checks),
         "known_space_filtered":known_space_filtered,
