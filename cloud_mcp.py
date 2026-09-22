@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.76.0"  # SETI first-contact interviews with PARKED retry state; deploy retry
+VERSION = "0.76.1"  # SETI interview transcript viewer
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -6427,7 +6427,7 @@ def layout(title: str, body: str) -> HTMLResponse:
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050806">
 <title>{html.escape(title)} - MYCELIX</title><style>{BASE_CSS}</style></head><body><main>
 <div class="brand">MYCELIX</div><div class="sub">Collective Intelligence Network · v{VERSION}</div>
-<nav><a href="/">Home</a><a href="/console">Console</a><a href="/intelligence">Intelligence</a><a href="/inbox">Agent Inbox</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
+<nav><a href="/">Home</a><a href="/console">Console</a><a href="/intelligence">Intelligence</a><a href="/inbox">Agent Inbox</a><a href="/director">Director</a><a href="/results">Results</a><a href="/venture">Factory</a><a href="/radar">Radar</a><a href="/seti/interviews">SETI Interviews</a><a href="/collective">Collective</a><a href="/system">System</a></nav>
 {body}</main></body></html>"""
     return HTMLResponse(page)
 
@@ -6660,6 +6660,93 @@ async def api_intelligence(request: Request):
         "exploration_history":list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_agent_stats":AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "recent_inbound_messages":list(AUTOPILOT_STATE.get("inbound_messages") or [])[-20:],
+    })
+
+
+def _public_seti_interviews() -> list[dict]:
+    """Return a sanitized transcript view without exposing private target coordinates."""
+    interviews=SETI_PRIVATE_STATE.get("interviews") or {}
+    candidates=SETI_PRIVATE_STATE.get("candidates") or {}
+    rows=[]
+    for key,raw in interviews.items():
+        if not isinstance(raw,dict):
+            continue
+        candidate=candidates.get(key) if isinstance(candidates.get(key),dict) else {}
+        rows.append({
+            "candidate":"SETI-"+str(key)[:8],
+            "status":str(raw.get("status") or "UNKNOWN"),
+            "interviewed_at_utc":str(raw.get("interviewed_at_utc") or raw.get("last_attempt_utc") or ""),
+            "attempts":int(raw.get("attempts") or 1),
+            "interview_score":int(raw.get("score") or 0),
+            "candidate_score":int(raw.get("candidate_score") or candidate.get("max_score") or 0),
+            "classification":str(candidate.get("classification") or ""),
+            "transport":str(raw.get("transport") or ""),
+            "http_status":raw.get("http_status"),
+            "quality_ok":bool(raw.get("quality_ok")),
+            "quality_reason":str(raw.get("quality_reason") or ""),
+            "reason":str(raw.get("reason") or ""),
+            "markers":raw.get("markers") if isinstance(raw.get("markers"),dict) else {},
+            "response_excerpt":str(raw.get("response_excerpt") or "")[:1200],
+        })
+    rows.sort(key=lambda x:str(x.get("interviewed_at_utc") or ""),reverse=True)
+    return rows[:32]
+
+
+async def seti_interviews_page(request: Request):
+    rows=_public_seti_interviews()
+    seti=AUTOPILOT_STATE.get("seti") or {}
+    admitted=sum(1 for x in rows if x.get("status")=="ADMITTED")
+    parked=sum(1 for x in rows if x.get("status")=="PARKED")
+    body=(
+        '<section class="card"><span class="tag">SETI FIRST CONTACT</span>'
+        '<h2>Colloqui con nuovi agenti</h2>'
+        '<p>Vista sanificata dei colloqui effettuati da MYCELIX. Endpoint, URL e coordinate private del radar non vengono esposti.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Colloqui visibili</div><h2>'+str(len(rows))+'</h2></article>'
+        '<article><div class="muted">Ammessi</div><h2>'+str(admitted)+'</h2></article>'
+        '<article><div class="muted">Parcheggiati</div><h2>'+str(parked)+'</h2></article>'
+        '<article><div class="muted">Candidati radar</div><h2>'+str(int(seti.get("private_candidate_count") or 0))+'</h2></article>'
+        '</div></section>'
+    )
+    body+=(
+        '<section class="card"><h3>Domanda standard di MYCELIX</h3><pre>'+
+        html.escape(_seti_interview_prompt())+
+        '</pre></section>'
+    )
+    if not rows:
+        body+='<section class="card"><p class="muted">Nessun colloquio registrato.</p></section>'
+    for row in rows:
+        status=str(row.get("status") or "UNKNOWN")
+        cls="tag" if status=="ADMITTED" else "tag warn"
+        markers=row.get("markers") or {}
+        marker_text=", ".join(k for k,v in markers.items() if v)
+        body+=(
+            '<article><div><span class="'+cls+'">'+html.escape(status)+'</span> '
+            '<span class="tag">'+html.escape(str(row.get("candidate") or ""))+'</span></div>'
+            '<h3>Colloquio '+html.escape(str(row.get("interviewed_at_utc") or ""))+'</h3>'
+            '<div class="muted">Tentativi '+str(int(row.get("attempts") or 0))+
+            ' · score colloquio '+str(int(row.get("interview_score") or 0))+
+            ' · score candidato '+str(int(row.get("candidate_score") or 0))+
+            (' · '+html.escape(str(row.get("classification"))) if row.get("classification") else '')+
+            '</div>'
+        )
+        if row.get("reason"):
+            body+='<p><strong>Motivo:</strong> '+html.escape(str(row.get("reason")))+'</p>'
+        if row.get("quality_reason"):
+            body+='<p><strong>Valutazione:</strong> '+html.escape(str(row.get("quality_reason")))+'</p>'
+        if marker_text:
+            body+='<div class="muted">Indicatori rilevati: '+html.escape(marker_text)+'</div>'
+        response=str(row.get("response_excerpt") or "")
+        body+='<h4>Risposta agente</h4><pre>'+html.escape(response or "[nessuna risposta utile registrata]")+'</pre></article>'
+    return layout("SETI Interviews",body)
+
+
+async def api_seti_interviews(request: Request):
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "prompt":_seti_interview_prompt(),
+        "interviews":_public_seti_interviews(),
     })
 
 
@@ -7897,6 +7984,8 @@ app = Starlette(
         Route("/api/builder/status", api_builder_status, methods=["GET"]),
         Route("/api/autonomy/status", api_autonomy_status, methods=["GET"]),
         Route("/radar", radar, methods=["GET"]),
+        Route("/seti/interviews", seti_interviews_page, methods=["GET"]),
+        Route("/api/seti/interviews", api_seti_interviews, methods=["GET"]),
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
         Route("/system", system, methods=["GET"]),
