@@ -31,7 +31,7 @@ STOP = {
 }
 
 
-OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 5
+OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 6
 
 # Generic employment vacancies can contain words such as "hiring", "looking for"
 # and "compensation", which are not evidence of a buyer problem by themselves.
@@ -50,6 +50,16 @@ OPERATIONAL_TIME_BURDEN_RE = re.compile(
     r"\b(?:takes?|spend(?:s|ing)?|waste(?:s|d|ing)?)\b"
     r"[^.!?\n]{0,60}\b(?:\d+(?:\s*-\s*\d+)?\s+)?hours?\s+(?:per|a)\s+week\b",
     re.I,
+)
+
+EVIDENCE_CONTRACT_SCHEMA_VERSION = 1
+FREQUENCY_MARKERS = (
+    "every day","daily","every week","weekly","each week","per week",
+    "every month","monthly","repeatedly","recurring","again and again",
+)
+IMPACT_MARKERS = (
+    "waste time","takes hours","take hours","time consuming","time-consuming",
+    "error-prone","error prone","backlog","delay","delays","missed","rework",
 )
 
 LAUNCH_TITLE_MARKERS = (
@@ -196,6 +206,105 @@ def _clean_source_text(value: str) -> str:
     text=re.sub(r"<[^>]+>"," ",text)
     text=re.sub(r"\s+"," ",text)
     return text.strip()
+
+
+def _sentence_chunks(value: str) -> list[str]:
+    cleaned=_clean_source_text(value)
+    return [
+        x.strip(" \t\r\n-:;")
+        for x in re.split(r"(?<=[.!?])\s+|\n+",cleaned)
+        if x.strip()
+    ]
+
+
+def _first_operational_pain_sentence(value: str) -> str:
+    for chunk in _sentence_chunks(value):
+        low=chunk.lower()
+        if any(marker in low for marker in OPERATIONAL_PAIN_MARKERS):
+            return chunk[:280]
+        if OPERATIONAL_TIME_BURDEN_RE.search(low):
+            return chunk[:280]
+    return ""
+
+
+def build_evidence_contract(
+    title: str,
+    body: str,
+    query: str,
+    family: str,
+    role: str,
+    customer: str,
+    job: str,
+) -> dict:
+    """Create a source-backed evidence contract and run a deterministic skeptic.
+
+    The contract separates what the source literally states from NEO's inference.
+    It guards hypothesis creation only; it does not relax or replace the commercial gate.
+    """
+    clean_title=_clean_source_text(title)
+    clean_body=_clean_source_text(body)
+    text=(" "+clean_title+" "+clean_body+" ").lower()
+    source_fact=_first_operational_pain_sentence(clean_body)
+    buyer_signals=sorted({
+        marker for marker in BUY_MARKERS+PAID_MARKERS
+        if marker in text
+    })
+    frequency=[marker for marker in FREQUENCY_MARKERS if marker in text][:4]
+    impact=[marker for marker in IMPACT_MARKERS if marker in text][:4]
+
+    if _is_recruiting_or_interview_context(clean_title,clean_body):
+        context_type="recruiting_interview"
+    elif _is_generic_job_listing(clean_title,clean_body):
+        context_type="job_listing"
+    elif _is_launch_title(clean_title):
+        context_type="product_launch"
+    else:
+        context_type="operational"
+
+    reasons=[]
+    if not source_fact:
+        reasons.append("no_explicit_operational_pain")
+    if not str(customer or "").strip():
+        reasons.append("actor_missing")
+    if not str(job or "").strip():
+        reasons.append("process_missing")
+    if context_type=="product_launch" and _is_maker_self_report(clean_body) and not buyer_signals:
+        reasons.append("maker_self_report_without_buyer_signal")
+
+    passed=not reasons
+    confidence=(
+        0.9 if source_fact and buyer_signals and (frequency or impact)
+        else 0.82 if source_fact and buyer_signals
+        else 0.72 if source_fact
+        else 0.2
+    )
+    inference=(
+        f"{customer} may pay to solve {job} because the source reports an operational pain."
+        if customer and job and source_fact else ""
+    )
+    return {
+        "schema_v":EVIDENCE_CONTRACT_SCHEMA_VERSION,
+        "actor":str(customer or "")[:160],
+        "process":str(job or "")[:180],
+        "pain":source_fact,
+        "frequency":frequency,
+        "cost_or_impact":impact,
+        "buyer_signal":buyer_signals[:8],
+        "source_fact":source_fact,
+        "inference":inference[:300],
+        "confidence":round(confidence,2),
+        "context_type":context_type,
+        "source_query":str(query or "")[:500],
+        "skeptic":{
+            "passed":passed,
+            "reasons":reasons,
+            "checks":{
+                "source_fact_present":bool(source_fact),
+                "fact_inference_separated":bool(source_fact and inference and source_fact!=inference),
+                "operational_pain_supported":bool(source_fact),
+            },
+        },
+    }
 
 
 def _is_launch_title(title: str) -> bool:
@@ -399,10 +508,15 @@ def observed_pain_candidates(
             if key in seen:
                 continue
             seen.add(key)
-            observed=_sentence_with_marker(clean_body) or clean_body[:280] or clean_title[:280]
             customer=_customer_from_source(clean_title+" "+clean_body,family,query)
             seed=rel["seed"] or clean_title[:120]
             job,term,aliases=_human_job_hint(clean_title,clean_body,seed,family)
+            contract=build_evidence_contract(
+                clean_title,clean_body,query,family,role,customer,job
+            )
+            if not bool((contract.get("skeptic") or {}).get("passed")):
+                continue
+            observed=str(contract.get("source_fact") or "")[:280]
             score=min(100,35+rel["score"]//3+min(20,len(pain)*5)+min(15,len(buy)*7)+min(15,len(paid)*7))
             if _is_launch_title(clean_title):
                 score=max(0,score-12)
@@ -423,6 +537,7 @@ def observed_pain_candidates(
                 "pain_markers":pain[:8],
                 "buy_markers":buy[:8],
                 "paid_markers":paid[:8],
+                "evidence_contract":contract,
                 "priority":score,
             })
     out.sort(key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),reverse=True)
