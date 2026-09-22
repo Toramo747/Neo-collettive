@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.74.0"  # SETI indexed Agent Card discovery
+VERSION = "0.75.0"  # observed-pain human problem extraction
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -3288,7 +3288,9 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
 
         observed=[
             x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
-            if isinstance(x,dict) and str(x.get("family") or "")==family
+            if isinstance(x,dict)
+            and str(x.get("family") or "")==family
+            and int(x.get("hypothesis_schema_v") or 1)>=2
         ]
         used_sources={
             str(x.get("source_url") or "")
@@ -6000,7 +6002,14 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             if not key.strip("|"):
                 continue
             prev=merged.get(key)
-            if not prev or int(row.get("priority") or 0)>int(prev.get("priority") or 0):
+            if (
+                not prev
+                or int(row.get("hypothesis_schema_v") or 1)>int(prev.get("hypothesis_schema_v") or 1)
+                or (
+                    int(row.get("hypothesis_schema_v") or 1)==int(prev.get("hypothesis_schema_v") or 1)
+                    and int(row.get("priority") or 0)>int(prev.get("priority") or 0)
+                )
+            ):
                 merged[key]=row
         AUTOPILOT_STATE["observed_pain_candidates"]=sorted(
             merged.values(),
