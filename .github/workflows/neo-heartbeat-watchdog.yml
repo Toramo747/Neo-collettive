@@ -82,6 +82,24 @@ jobs:
           }, ensure_ascii=False, indent=2, default=str))
           PY
 
+      - name: Capture sanitized NEO Render errors
+        continue-on-error: true
+        run: |
+          set +e
+          curl --silent --show-error --max-time 45 \
+            "https://neo-collettive.onrender.com/api/render/errors?target=neo" \
+            -o /tmp/render-errors.json
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "Render errors unavailable (curl rc=$rc)"
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/render-errors.json",encoding="utf-8"))
+          print(json.dumps(d, ensure_ascii=False, indent=2, default=str))
+          PY
+
       - name: Check published snapshot freshness
         env:
           GH_TOKEN: ${{ github.token }}
