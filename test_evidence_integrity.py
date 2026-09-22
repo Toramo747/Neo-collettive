@@ -77,6 +77,42 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertEqual(once[0]["problem_key"],"ai_tools:generic_technology")
         self.assertEqual(meta2["changed"],0)
 
+    def test_tagger_upgrade_quarantines_pre_v3_gate_row(self):
+        rows=[{
+            "schema_v":2,
+            "tagger_v":2,
+            "migration_v":2,
+            "gate_eligible":True,
+            "problem_key":"ai_tools:small_businesses:produce_recurring_client_and_management_reports",
+            "problem_key_raw":"ecommerce_tools:general",
+            "signal_types":["BUY_INTENT","PAID_DEMAND"],
+            "domain":"remoteok.com",
+            "url":"https://remoteok.com/example",
+            "last_seen_epoch":1,
+        }]
+        migrated,meta=migrate_evidence_memory(rows)
+        self.assertFalse(migrated[0]["gate_eligible"])
+        self.assertEqual(migrated[0]["tagger_v"],2)
+        self.assertEqual(migrated[0]["quarantine_reason"],"legacy_unverified_tagger_v1")
+        self.assertEqual(meta["changed"],1)
+
+    def test_current_disconfirm_can_never_be_gate_eligible(self):
+        rows=[{
+            "schema_v":2,
+            "tagger_v":3,
+            "migration_v":2,
+            "gate_eligible":True,
+            "problem_key":"ai_tools:small_businesses:produce_recurring_client_and_management_reports",
+            "problem_key_raw":"spreadsheet_process:general",
+            "signal_types":["PAIN","DISCONFIRM"],
+            "domain":"example.com",
+            "url":"https://example.com/problem",
+            "last_seen_epoch":1,
+        }]
+        migrated,_=migrate_evidence_memory(rows)
+        self.assertFalse(migrated[0]["gate_eligible"])
+        self.assertEqual(migrated[0]["quarantine_reason"],"disconfirm")
+
     def test_structured_paid_source_requires_paid_market_role(self):
         self.assertTrue(structured_paid_source("remotive-api","paid_market"))
         self.assertTrue(structured_paid_source("remoteok-api","paid_market"))
