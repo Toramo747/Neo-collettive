@@ -112,6 +112,7 @@ def natural_search_seed(query: str, meta: dict | None = None) -> str:
 
 
 def query_relevance(title: str, body: str, query: str, meta: dict | None = None) -> dict:
+    meta=meta if isinstance(meta,dict) else {}
     seed=natural_search_seed(query,meta)
     target=_tokens(seed)
     text=_tokens((title or "")+" "+(body or ""))
@@ -125,12 +126,26 @@ def query_relevance(title: str, body: str, query: str, meta: dict | None = None)
             score=max(score,55)
         elif len(overlap)==1 and len(target)<=3:
             score=max(score,45)
+
+    role=str(meta.get("role") or meta.get("class") or "").strip().lower()
+    min_score=45
+    min_overlap=1
+    # Structured commercial/job feeds are noisy. One generic token such as
+    # "automation" or "workflow" must not make an unrelated vacancy evidence
+    # for the active thesis.
+    if role=="paid_market":
+        min_score=55
+        min_overlap=1 if len(target)<=1 else 2
+
     return {
         "seed":seed,
         "target_tokens":sorted(target),
         "overlap":overlap,
         "score":score,
-        "relevant":bool(score>=45 and overlap),
+        "role":role,
+        "min_score":min_score,
+        "min_overlap":min_overlap,
+        "relevant":bool(score>=min_score and len(overlap)>=min_overlap),
     }
 
 
