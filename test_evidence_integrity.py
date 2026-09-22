@@ -7,6 +7,7 @@ from evidence_integrity import (
     demand_signal_type,
     gate_eligible_problem_key,
     migrate_evidence_memory,
+    structured_paid_source,
 )
 
 
@@ -74,6 +75,15 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertFalse(once[0]["gate_eligible"])
         self.assertEqual(once[0]["problem_key"],"ai_tools:generic_technology")
         self.assertEqual(meta2["changed"],0)
+
+    def test_structured_paid_source_requires_paid_market_role(self):
+        self.assertTrue(structured_paid_source("remotive-api","paid_market"))
+        self.assertTrue(structured_paid_source("remoteok-api","paid_market"))
+        self.assertFalse(structured_paid_source("remotive-api","buyer"))
+        self.assertFalse(structured_paid_source("web","paid_market"))
+
+    def test_plain_devops_maps_to_developer_tools(self):
+        self.assertEqual(commercial_family("Hiring DevOps engineer for deployment automation"),"developer_tools")
 
     def test_generic_hypothesis_terms_remain_nonqualifying(self):
         self.assertFalse(gate_eligible_problem_key("ai_tools:generic_technology"))
