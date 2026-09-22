@@ -93,7 +93,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertNotIn("Show HN",rows[0]["job"])
         self.assertIn("customer emails",rows[0]["job"].lower())
-        self.assertEqual(rows[0]["hypothesis_schema_v"],2)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],3)
 
     def test_observed_pain_ignores_irrelevant_noise(self):
         q="customer email management need help manual workaround"
