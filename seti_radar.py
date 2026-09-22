@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 2
+SETI_ENGINE_VERSION = 3
 
 DEFAULT_PASSIVE_QUERIES = [
     '"message/send" "jsonrpc" agent -site:a2aregistry.org',
@@ -345,6 +345,107 @@ async def deep_space_scan(
             "registry_and_public_index_only":True,
         },
     }
+
+
+def private_candidate_key(row: dict) -> str:
+    """Stable private correlation key based on the public target URL, not the title."""
+    url=str(row.get("url") or "").strip()
+    try:
+        p=urlparse(url)
+        host=(p.hostname or "").lower().strip(".")
+        if host.startswith("www."):
+            host=host[4:]
+        path=re.sub(r"/+","/",p.path or "/").rstrip("/") or "/"
+        raw=host+"|"+path.lower()
+    except Exception:
+        raw=url.lower()
+    if not raw.strip("|/"):
+        raw=str(row.get("fingerprint") or row.get("title") or "unknown")
+    return hashlib.sha256(raw.encode("utf-8","ignore")).hexdigest()[:24]
+
+
+def merge_private_candidate_state(
+    private_state: dict,
+    enriched: list[dict],
+    max_entries: int = 16,
+) -> tuple[dict, dict]:
+    """Keep detailed SETI candidates for internal correlation only.
+
+    Caller decides where this state is stored. This function intentionally keeps
+    URLs/titles/snippets because the public AUTOPILOT state stores fingerprints only.
+    """
+    state=dict(private_state) if isinstance(private_state,dict) else {}
+    candidates=dict(state.get("candidates") or {})
+    now=_utcnow()
+    newly_high=0
+    reobserved=0
+
+    for row in enriched or []:
+        if not isinstance(row,dict):
+            continue
+        classification=str(row.get("classification") or "")
+        if classification not in {"WEAK_SIGNAL","INTERESTING","HIGH_INTEREST"}:
+            continue
+        key=private_candidate_key(row)
+        prev=dict(candidates.get(key) or {})
+        observations=int(prev.get("observations") or 0)+1
+        if observations>1:
+            reobserved += 1
+        if classification=="HIGH_INTEREST" and str(prev.get("classification") or "")!="HIGH_INTEREST":
+            newly_high += 1
+        sources=sorted(set(
+            list(prev.get("sources") or [])
+            + ([str(row.get("source"))] if row.get("source") else [])
+        ))[:8]
+        registry_statuses=sorted(set(
+            list(prev.get("registry_statuses") or [])
+            + ([str(row.get("registry_status"))] if row.get("registry_status") else [])
+        ))[:8]
+        score=max(int(prev.get("max_score") or 0),int(row.get("agent_likelihood_score") or 0))
+        candidates[key]={
+            "key":key,
+            "fingerprint":str(row.get("fingerprint") or prev.get("fingerprint") or ""),
+            "url":str(row.get("url") or prev.get("url") or "")[:1200],
+            "title":str(row.get("title") or prev.get("title") or "")[:300],
+            "domain":str(row.get("domain") or prev.get("domain") or "")[:180],
+            "snippet":str(row.get("snippet") or prev.get("snippet") or "")[:600],
+            "classification":classification,
+            "max_score":score,
+            "signals":list(row.get("signals") or prev.get("signals") or [])[:12],
+            "sources":sources,
+            "source_diversity":len(sources),
+            "registry_statuses":registry_statuses,
+            "observations":observations,
+            "first_seen_utc":str(prev.get("first_seen_utc") or row.get("first_seen_utc") or now),
+            "last_seen_utc":str(row.get("last_seen_utc") or now),
+        }
+
+    ranked=sorted(
+        candidates.items(),
+        key=lambda kv:(
+            int((kv[1] or {}).get("max_score") or 0),
+            int((kv[1] or {}).get("source_diversity") or 0),
+            int((kv[1] or {}).get("observations") or 0),
+            str((kv[1] or {}).get("last_seen_utc") or ""),
+        ),
+        reverse=True,
+    )[:max(4,min(max_entries,24))]
+
+    state={
+        "schema_v":1,
+        "updated_at_utc":now,
+        "candidates":dict(ranked),
+    }
+    summary={
+        "private_candidates":len(ranked),
+        "private_high_interest":sum(1 for _,v in ranked if (v or {}).get("classification")=="HIGH_INTEREST"),
+        "private_interesting":sum(1 for _,v in ranked if (v or {}).get("classification")=="INTERESTING"),
+        "reobserved_this_scan":reobserved,
+        "new_high_interest_this_scan":newly_high,
+        "max_private_score":max([int((v or {}).get("max_score") or 0) for _,v in ranked] or [0]),
+        "max_source_diversity":max([int((v or {}).get("source_diversity") or 0) for _,v in ranked] or [0]),
+    }
+    return state,summary
 
 
 def merge_signal_memory(memory: dict, scan: dict, max_entries: int = 80) -> tuple[dict,list[dict]]:
