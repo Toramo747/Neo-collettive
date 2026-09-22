@@ -2,6 +2,8 @@ import unittest
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
+    explicit_agent_endpoint_url,
+    indexed_endpoint_leads,
     interview_candidate_eligibility,
     interview_response_score,
     merge_private_candidate_state,
@@ -59,6 +61,22 @@ class SetiRadarTests(unittest.TestCase):
             "mcp_registry":{"ok":True,"data":{"servers":[]}},
         }
         self.assertTrue(registry_match(candidate,discovery))
+
+    def test_indexed_agent_card_endpoint_is_extracted_without_fetch(self):
+        row={
+            "title":"Public agent manifest",
+            "url":"https://github.com/acme/agent/blob/main/README.md",
+            "snippet":"Agent card available at https://runtime.acme.ai/.well-known/agent-card.json and supports message/send.",
+            "source":"github-code-index-grepapp",
+        }
+        leads=indexed_endpoint_leads(row)
+        self.assertEqual(len(leads),1)
+        self.assertEqual(leads[0]["url"],"https://runtime.acme.ai/.well-known/agent-card.json")
+        self.assertTrue(leads[0]["indexed_declared_endpoint"])
+
+    def test_explicit_endpoint_rejects_artifact_host(self):
+        self.assertTrue(explicit_agent_endpoint_url("https://agent.example.ai/a2a"))
+        self.assertFalse(explicit_agent_endpoint_url("https://github.com/acme/agent/a2a"))
 
     def test_interview_gate_requires_repeat_and_explicit_endpoint(self):
         base={
