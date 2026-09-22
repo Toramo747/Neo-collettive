@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-09-22T06:50:22.313686+00:00",
+  "captured_at_utc": "2026-09-22T07:15:20.603004+00:00",
   "snapshot_schema": 4,
   "brand": "MYCELIX",
   "brand_tagline": "Collective Intelligence Network",
@@ -45,28 +45,28 @@
     "ok": true,
     "neo_version": "0.70.0",
     "started": false,
-    "busy": false,
+    "busy": true,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 372.840474,
-    "cycles_completed": 95,
-    "last_started_utc": "2026-09-22T06:44:09.058193+00:00",
-    "last_finished_utc": "2026-09-22T06:49:51.222450+00:00",
-    "last_status": "SELECT",
+    "last_started_age_seconds": 8.101667,
+    "cycles_completed": 94,
+    "last_started_utc": "2026-09-22T07:11:25.427224+00:00",
+    "last_finished_utc": null,
+    "last_status": null,
     "last_error": null
   },
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "35696107602",
+    "github_run_id": "35698330150",
     "github_run_attempt": "1"
   },
   "autopilot": {
     "enabled": true,
     "running": false,
     "cycles_completed": 95,
-    "last_started_utc": "2026-09-22T06:44:09.058193+00:00",
-    "last_finished_utc": "2026-09-22T06:49:51.222450+00:00",
+    "last_started_utc": "2026-09-22T07:11:25.427224+00:00",
+    "last_finished_utc": "2026-09-22T07:15:01.706541+00:00",
     "last_status": "SELECT",
     "last_error": null,
     "stagnation_cycles": 3,
@@ -81,8 +81,8 @@
       "data_analytics",
       "lead_ops",
       "spreadsheet_ops",
-      "ecommerce_ops",
-      "it_hygiene"
+      "productivity",
+      "reporting_compliance"
     ],
     "family_performance": {
       "ai_tools": {
@@ -153,8 +153,8 @@
         "\"email support workflow\" (\"already automated\" OR solved OR \"not worth\" OR \"no need\")",
         "\"devops\" \"need help\" OR \"looking for\" OR \"pain point\" -site:github.com",
         "site:reddit.com \"devops\" (\"need help\" OR \"looking for\" OR manual) -site:github.com",
-        "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
-        "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)"
+        "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
+        "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org"
       ],
       "query_plan": [
         {
@@ -312,18 +312,18 @@
           ]
         },
         {
-          "query": "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
+          "query": "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
           "class": "explore",
           "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
-          "query": "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)",
+          "query": "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org",
           "class": "explore",
           "role": "discovery",
-          "sector": "it_hygiene",
-          "family": "it_hygiene"
+          "sector": "reporting_compliance",
+          "family": "compliance_tools"
         }
       ],
       "query_budget": {
@@ -333,12 +333,12 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "ecommerce_ops",
-        "it_hygiene"
+        "productivity",
+        "reporting_compliance"
       ],
       "sector_families": {
-        "ecommerce_ops": "ecommerce_tools",
-        "it_hygiene": "it_hygiene"
+        "productivity": "productivity_tools",
+        "reporting_compliance": "compliance_tools"
       },
       "recent_sector_memory": [
         "spreadsheet_ops",
@@ -351,8 +351,8 @@
         "data_analytics",
         "lead_ops",
         "spreadsheet_ops",
-        "ecommerce_ops",
-        "it_hygiene"
+        "productivity",
+        "reporting_compliance"
       ],
       "stagnation_cycles": 2,
       "exploration_slots": 2,
@@ -993,23 +993,23 @@
       },
       "fb961915-bafe-4393-9674-cabb1ea24ca1": {
         "agent": "LLM Orchestration Agent",
-        "observations": 435,
-        "accepted": 280,
-        "transport_success": 280,
-        "relevance_total": 5620.0,
-        "avg_relevance": 12.92,
-        "trust": 70.87,
+        "observations": 443,
+        "accepted": 288,
+        "transport_success": 288,
+        "relevance_total": 5704.0,
+        "avg_relevance": 12.88,
+        "trust": 71.32,
         "stages": {
           "research": {
-            "observations": 354,
-            "accepted": 21,
-            "transport_success": 252,
-            "relevance_total": 3736.0,
+            "observations": 362,
+            "accepted": 23,
+            "transport_success": 260,
+            "relevance_total": 3820.0,
             "avg_relevance": 10.55,
-            "trust": 33.63,
+            "trust": 34.01,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 2,
@@ -1048,7 +1048,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "02a5aec8-8439-4f71-9a3a-892933994f9d": {
         "agent": "LLM Orchestration Agent 5",
@@ -1111,23 +1111,23 @@
       },
       "6099db20-1728-42b2-933b-9a4b38ebb93e": {
         "agent": "LLM Orchestration Agent (Mcp)",
-        "observations": 382,
-        "accepted": 210,
-        "transport_success": 210,
-        "relevance_total": 5479.0,
-        "avg_relevance": 14.34,
-        "trust": 63.98,
+        "observations": 390,
+        "accepted": 214,
+        "transport_success": 214,
+        "relevance_total": 5555.0,
+        "avg_relevance": 14.24,
+        "trust": 63.9,
         "stages": {
           "research": {
-            "observations": 305,
-            "accepted": 11,
-            "transport_success": 181,
-            "relevance_total": 3608.0,
-            "avg_relevance": 11.83,
+            "observations": 313,
+            "accepted": 12,
+            "transport_success": 185,
+            "relevance_total": 3684.0,
+            "avg_relevance": 11.77,
             "trust": 31.78,
-            "last_quality_ok": true,
-            "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_quality_ok": false,
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -1164,9 +1164,9 @@
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "6c9b3d56-65ac-4711-8d34-e715173a22cc": {
         "agent": "LLM Orchestration Agent (Openai)",
@@ -1406,23 +1406,23 @@
       },
       "4ca9b306-19e4-4d96-ab31-020c8c112c29": {
         "agent": "LLM Orchestration Observability Agent",
-        "observations": 412,
-        "accepted": 230,
-        "transport_success": 230,
-        "relevance_total": 5885.0,
-        "avg_relevance": 14.28,
-        "trust": 64.66,
+        "observations": 420,
+        "accepted": 238,
+        "transport_success": 238,
+        "relevance_total": 5961.0,
+        "avg_relevance": 14.19,
+        "trust": 65.33,
         "stages": {
           "research": {
-            "observations": 343,
-            "accepted": 18,
-            "transport_success": 201,
-            "relevance_total": 4064.0,
-            "avg_relevance": 11.85,
-            "trust": 32.64,
+            "observations": 351,
+            "accepted": 19,
+            "transport_success": 209,
+            "relevance_total": 4140.0,
+            "avg_relevance": 11.79,
+            "trust": 32.85,
             "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_quality_reason": "insufficient research content",
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -1459,9 +1459,9 @@
           }
         },
         "last_stage": "research",
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "4ab3cedb-805e-41d5-87bd-a45aa7196a5a": {
         "agent": "MERCURY Web Fetch",
@@ -1670,23 +1670,23 @@
       },
       "3e58e9b3-f53d-4636-88ab-df10c1e28620": {
         "agent": "LLM Orchestration Agent (Langchain)",
-        "observations": 88,
-        "accepted": 52,
-        "transport_success": 52,
-        "relevance_total": 2079.0,
-        "avg_relevance": 23.62,
-        "trust": 67.27,
+        "observations": 89,
+        "accepted": 53,
+        "transport_success": 53,
+        "relevance_total": 2091.0,
+        "avg_relevance": 23.49,
+        "trust": 67.64,
         "stages": {
           "research": {
-            "observations": 16,
+            "observations": 17,
             "accepted": 0,
-            "transport_success": 13,
-            "relevance_total": 215.0,
-            "avg_relevance": 13.44,
-            "trust": 36.25,
+            "transport_success": 14,
+            "relevance_total": 227.0,
+            "avg_relevance": 13.35,
+            "trust": 36.47,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-22T06:35:15.020369+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 10,
@@ -1725,7 +1725,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:15.020369+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "0136e410-6621-4f8b-bba7-8ea58fc46db7": {
         "agent": "Coin Railz",
@@ -2099,23 +2099,23 @@
       },
       "f514ce95-20c6-4f94-8b14-f0025278f475": {
         "agent": "LLM Orchestration Traced Agent",
-        "observations": 66,
-        "accepted": 36,
-        "transport_success": 36,
-        "relevance_total": 1689.0,
-        "avg_relevance": 25.59,
-        "trust": 63.64,
+        "observations": 67,
+        "accepted": 37,
+        "transport_success": 37,
+        "relevance_total": 1701.0,
+        "avg_relevance": 25.39,
+        "trust": 64.18,
         "stages": {
           "research": {
-            "observations": 14,
+            "observations": 15,
             "accepted": 0,
-            "transport_success": 12,
-            "relevance_total": 195.0,
-            "avg_relevance": 13.93,
-            "trust": 37.14,
+            "transport_success": 13,
+            "relevance_total": 207.0,
+            "avg_relevance": 13.8,
+            "trust": 37.33,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-21T07:17:45.051018+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "security": {
             "observations": 1,
@@ -2151,30 +2151,30 @@
             "last_seen_utc": "2026-09-21T18:25:12.502345+00:00"
           }
         },
-        "last_stage": "business_review",
+        "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-21T18:25:12.502345+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "96c8bb05-4e53-4b17-bb80-1b8bc7fb76b5": {
         "agent": "GOSCE Portfolio Router",
-        "observations": 469,
-        "accepted": 468,
-        "transport_success": 468,
-        "relevance_total": 9799.0,
-        "avg_relevance": 20.89,
+        "observations": 477,
+        "accepted": 476,
+        "transport_success": 476,
+        "relevance_total": 9831.0,
+        "avg_relevance": 20.61,
         "trust": 99.83,
         "stages": {
           "research": {
-            "observations": 280,
+            "observations": 288,
             "accepted": 0,
-            "transport_success": 280,
-            "relevance_total": 1749.0,
-            "avg_relevance": 6.25,
-            "trust": 29.37,
+            "transport_success": 288,
+            "relevance_total": 1781.0,
+            "avg_relevance": 6.18,
+            "trust": 29.28,
             "last_quality_ok": false,
             "last_quality_reason": "routing/payment/service response rather than domain analysis",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 2,
@@ -2213,7 +2213,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "717cc386-c0ed-4749-a276-b6a629f66749": {
         "agent": "Agent Zero",
@@ -2325,23 +2325,23 @@
       },
       "41166d96-a79d-43ef-bd5a-77dd92ca01c9": {
         "agent": "LLM Orchestration Agent (Cryptography)",
-        "observations": 406,
-        "accepted": 245,
-        "transport_success": 245,
-        "relevance_total": 6882.0,
-        "avg_relevance": 16.95,
-        "trust": 68.28,
+        "observations": 414,
+        "accepted": 249,
+        "transport_success": 249,
+        "relevance_total": 6966.0,
+        "avg_relevance": 16.83,
+        "trust": 68.12,
         "stages": {
           "research": {
-            "observations": 343,
+            "observations": 351,
             "accepted": 17,
-            "transport_success": 209,
-            "relevance_total": 4406.0,
-            "avg_relevance": 12.85,
-            "trust": 34.43,
+            "transport_success": 213,
+            "relevance_total": 4490.0,
+            "avg_relevance": 12.79,
+            "trust": 34.23,
             "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -2378,29 +2378,29 @@
           }
         },
         "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "a8592942-a978-4449-ab29-051c49d2bd9f": {
         "agent": "TESSA Marketing & Technology",
         "observations": 591,
-        "accepted": 461,
-        "transport_success": 461,
-        "relevance_total": 30153.0,
-        "avg_relevance": 51.02,
-        "trust": 82.4,
+        "accepted": 469,
+        "transport_success": 469,
+        "relevance_total": 30393.0,
+        "avg_relevance": 51.43,
+        "trust": 83.49,
         "stages": {
           "research": {
             "observations": 484,
-            "accepted": 363,
-            "transport_success": 363,
-            "relevance_total": 23707.0,
-            "avg_relevance": 48.98,
-            "trust": 80.0,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-22T06:49:48.367624+00:00"
+            "accepted": 371,
+            "transport_success": 371,
+            "relevance_total": 23947.0,
+            "avg_relevance": 49.48,
+            "trust": 81.32,
+            "last_quality_ok": true,
+            "last_quality_reason": "accepted for research",
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -2437,9 +2437,9 @@
           }
         },
         "last_stage": "research",
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-22T06:49:48.367624+00:00"
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "8989b794-4c09-4960-9d13-af23a2394cb7": {
         "agent": "Graph Advocate",
@@ -2694,23 +2694,23 @@
       },
       "f7158b87-9f9b-49b6-9100-555816c9ae27": {
         "agent": "LLM Orchestration Agent 5",
-        "observations": 90,
-        "accepted": 56,
-        "transport_success": 56,
-        "relevance_total": 857.0,
-        "avg_relevance": 9.52,
-        "trust": 64.06,
+        "observations": 98,
+        "accepted": 60,
+        "transport_success": 60,
+        "relevance_total": 925.0,
+        "avg_relevance": 9.44,
+        "trust": 63.14,
         "stages": {
           "research": {
-            "observations": 83,
-            "accepted": 3,
-            "transport_success": 50,
-            "relevance_total": 682.0,
-            "avg_relevance": 8.22,
-            "trust": 26.54,
+            "observations": 91,
+            "accepted": 4,
+            "transport_success": 54,
+            "relevance_total": 750.0,
+            "avg_relevance": 8.24,
+            "trust": 26.87,
             "last_quality_ok": false,
             "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -2749,7 +2749,7 @@
         "last_stage": "research",
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       "164c9602-bbd1-4f39-bdd3-e3adb31c5df7": {
         "agent": "Kira",
@@ -5351,7 +5351,7 @@
         "measurement_status": "NO_BUILD"
       },
       {
-        "created_at_utc": "2026-09-22T06:49:49.595910+00:00",
+        "created_at_utc": "2026-09-22T07:14:59.433218+00:00",
         "neo_status": "SELECT",
         "lifecycle": "SELECT",
         "family": null,
@@ -5373,7 +5373,7 @@
     ],
     "jarvis_runtime": {
       "last_request_utc": "2026-09-21T09:19:40.909607+00:00",
-      "last_response_utc": "2026-09-22T06:49:49.595763+00:00",
+      "last_response_utc": "2026-09-22T07:14:59.433077+00:00",
       "last_ok": true,
       "last_status": 200,
       "last_attempt": 1,
@@ -5382,7 +5382,7 @@
       "requests_total": 108,
       "success_total": 88,
       "failure_total": 20,
-      "last_payload_bytes": 30812,
+      "last_payload_bytes": 35819,
       "last_payload_mode": "embedded_core_remote_advisory"
     },
     "commercial_evidence_memory": [
@@ -5850,18 +5850,18 @@
           ]
         },
         {
-          "query": "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
+          "query": "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
           "class": "explore",
           "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
-          "query": "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)",
+          "query": "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org",
           "class": "explore",
           "role": "discovery",
-          "sector": "it_hygiene",
-          "family": "it_hygiene"
+          "sector": "reporting_compliance",
+          "family": "compliance_tools"
         }
       ],
       "executed": [
@@ -6026,24 +6026,48 @@
           "agent_search_completed": true
         },
         {
-          "query": "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
+          "query": "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
           "class": "explore",
           "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools",
+          "sector": "productivity",
+          "family": "productivity_tools",
           "agent_search_completed": true
         },
         {
-          "query": "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)",
+          "query": "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org",
           "class": "explore",
           "role": "discovery",
-          "sector": "it_hygiene",
-          "family": "it_hygiene",
+          "sector": "reporting_compliance",
+          "family": "compliance_tools",
           "agent_search_completed": true
         }
       ]
     },
-    "venture_metrics": {}
+    "venture_metrics": {},
+    "seti": {
+      "enabled": true,
+      "mode": "passive",
+      "every_cycles": 6,
+      "last_scan_utc": "2026-09-22T07:15:01.151057+00:00",
+      "last_error": null,
+      "last_summary": {
+        "search_results_seen": 40,
+        "machine_like_results": 0,
+        "registry_checks": 0,
+        "known_space_filtered": 0,
+        "signals_returned": 0,
+        "interesting": 0,
+        "high_interest": 0,
+        "safety": {
+          "target_http_requests": false,
+          "active_probe": false,
+          "messages_sent": false,
+          "port_scan": false,
+          "registry_and_public_index_only": true
+        }
+      },
+      "signal_memory_count": 0
+    }
   },
   "manual_run": {
     "running": false,
@@ -6053,11 +6077,11 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-22T06:49:49.595980+00:00",
+    "timestamp_utc": "2026-09-22T07:14:59.433318+00:00",
     "neo_version": "0.70.0",
     "status": "SELECT",
     "next_gate": "SELECT: raccogli evidenza convergente e prepara un candidato testabile.",
-    "valid_external_answers": 0,
+    "valid_external_answers": 13,
     "web_source_count": 40,
     "evidence_scout_count": 20,
     "search_strategy": {
@@ -6070,8 +6094,8 @@
         "\"email support workflow\" (\"already automated\" OR solved OR \"not worth\" OR \"no need\")",
         "\"devops\" \"need help\" OR \"looking for\" OR \"pain point\" -site:github.com",
         "site:reddit.com \"devops\" (\"need help\" OR \"looking for\" OR manual) -site:github.com",
-        "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
-        "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)"
+        "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
+        "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org"
       ],
       "query_plan": [
         {
@@ -6229,18 +6253,18 @@
           ]
         },
         {
-          "query": "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
+          "query": "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
           "class": "explore",
           "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
-          "query": "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)",
+          "query": "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org",
           "class": "explore",
           "role": "discovery",
-          "sector": "it_hygiene",
-          "family": "it_hygiene"
+          "sector": "reporting_compliance",
+          "family": "compliance_tools"
         }
       ],
       "query_budget": {
@@ -6250,12 +6274,12 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "ecommerce_ops",
-        "it_hygiene"
+        "productivity",
+        "reporting_compliance"
       ],
       "sector_families": {
-        "ecommerce_ops": "ecommerce_tools",
-        "it_hygiene": "it_hygiene"
+        "productivity": "productivity_tools",
+        "reporting_compliance": "compliance_tools"
       },
       "recent_sector_memory": [
         "spreadsheet_ops",
@@ -6268,8 +6292,8 @@
         "data_analytics",
         "lead_ops",
         "spreadsheet_ops",
-        "ecommerce_ops",
-        "it_hygiene"
+        "productivity",
+        "reporting_compliance"
       ],
       "stagnation_cycles": 2,
       "exploration_slots": 2,
@@ -6758,33 +6782,33 @@
     "quarantined_evidence_items": 7,
     "rejected_current_results": [
       {
-        "reason": "noise_domain",
-        "url": "https://de.langenscheidt.com/englisch-deutsch/customer",
-        "title": "customer - Deutsch-Übersetzung - Langenscheidt Englisch-Deutsch Wörterbuch",
+        "reason": "no_family",
+        "url": "https://www.thespruce.com/diy-home-decor-ideas-8670893",
+        "title": "72 DIY Home Decor Ideas For All Budgets and Skill Levels",
         "query_role": "buyer"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://dict.leo.org/englisch-deutsch/customer",
-        "title": "customer - LEO: Übersetzung im Englisch ⇔ Deutsch Wörterbuch",
+        "reason": "no_family",
+        "url": "https://diycandy.com/diy-home-decor-ideas/",
+        "title": "50+ Easy DIY Home Decor Ideas to Transform Your Home",
         "query_role": "buyer"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://www.linguee.de/englisch-deutsch/uebersetzung/customer.html",
-        "title": "customer - Deutsch-Übersetzung – Linguee Wörterbuch",
+        "reason": "no_family",
+        "url": "https://www.decorhomeideas.com/quick-diy-home-decor-ideas/",
+        "title": "56 Easy DIY Home Decor Ideas To Instantly Personalize Your Space",
         "query_role": "buyer"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/Customer",
-        "title": "Customer - Wikipedia",
+        "reason": "no_family",
+        "url": "https://www.hgtv.com/decorating/diy/diy-decor-projects-to-craft-this-weekend-pictures",
+        "title": "70 DIY Home Decor Ideas | Budget-Friendly Home Decorating Projects | HGTV",
         "query_role": "buyer"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://www.dict.cc/?s=customer",
-        "title": "customer | Übersetzung Englisch-Deutsch",
+        "reason": "no_family",
+        "url": "https://mydesiredhome.com/48-diy-and-budget-friendly-home-decor-ideas-youll-love/",
+        "title": "48 DIY and Budget Friendly Home Decor Ideas You’ll Love",
         "query_role": "buyer"
       },
       {
@@ -6818,33 +6842,33 @@
         "query_role": "paid_market"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://de.langenscheidt.com/englisch-deutsch/customer",
-        "title": "customer - Deutsch-Übersetzung - Langenscheidt Englisch-Deutsch Wörterbuch",
+        "reason": "no_family",
+        "url": "https://www.gruene-karte.de/de/deutsches-buero-gruene-karte-e-v/",
+        "title": "Deutsches Büro Grüne Karte e.V.",
         "query_role": "practitioner"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://dict.leo.org/englisch-deutsch/customer",
-        "title": "customer - LEO: Übersetzung im Englisch ⇔ Deutsch Wörterbuch",
+        "reason": "no_family",
+        "url": "https://www.gruene-karte.de/de/unfallmeldung/",
+        "title": "Unfallmeldung - gruene-karte.de",
         "query_role": "practitioner"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://www.linguee.de/englisch-deutsch/uebersetzung/customer.html",
-        "title": "customer - Deutsch-Übersetzung – Linguee Wörterbuch",
+        "reason": "no_family",
+        "url": "https://formular.gruene-karte.de/GvGWebRequest/faces/starttext.xhtml?verein=1",
+        "title": "formular.gruene-karte.de",
         "query_role": "practitioner"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/Customer",
-        "title": "Customer - Wikipedia",
+        "reason": "no_family",
+        "url": "https://formular.gruene-karte.de/GvGWebRequest/faces/unfallmeldung.xhtml",
+        "title": "formular.gruene-karte.de",
         "query_role": "practitioner"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://www.dict.cc/?s=customer",
-        "title": "customer | Übersetzung Englisch-Deutsch",
+        "reason": "no_family",
+        "url": "https://www.gruene-karte.de/de/schadenabwicklung-regulierungspraxis/",
+        "title": "Schadenabwicklung / Regulierungspraxis - gruene-karte.de",
         "query_role": "practitioner"
       },
       {
@@ -6939,62 +6963,62 @@
       },
       {
         "reason": "noise_domain",
-        "url": "https://de.pons.com/%C3%BCbersetzung/englisch-deutsch/order",
-        "title": "ORDER - Englisch-Deutsch Übersetzung | PONS",
+        "url": "https://en.wikipedia.org/wiki/Knowledge",
+        "title": "Knowledge - Wikipedia",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://www.duden.de/rechtschreibung/Order",
-        "title": "Order Rechtschreibung, Bedeutung, Definition, Herkunft Duden",
+        "url": "https://dictionary.cambridge.org/dictionary/english/knowledge",
+        "title": "KNOWLEDGE | English meaning - Cambridge Dictionary",
         "query_role": "discovery"
       },
       {
         "reason": "noise_domain",
-        "url": "https://www.dwds.de/wb/Order",
-        "title": "Order – Schreibung, Definition, Bedeutung, Etymologie, Synonyme ...",
+        "url": "https://dict.leo.org/englisch-deutsch/knowledge",
+        "title": "knowledge - LEO: Übersetzung im Englisch ⇔ Deutsch Wörterbuch",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.merriam-webster.com/dictionary/knowledge",
+        "title": "KNOWLEDGE Definition & Meaning - Merriam-Webster",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://dictionary.cambridge.org/us/dictionary/english/knowledge",
+        "title": "KNOWLEDGE | definition in the Cambridge English Dictionary",
         "query_role": "discovery"
       },
       {
         "reason": "noise_domain",
-        "url": "https://www.dict.cc/?s=order",
-        "title": "order | Übersetzung Englisch-Deutsch - dict.cc",
+        "url": "https://de.wikipedia.org/wiki/Compliance_(BWL)",
+        "title": "Compliance (BWL) – Wikipedia",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.haufe.de/recht/weitere-rechtsgebiete/wirtschaftsrecht/compliance-basisinformationen-fuer-die-praxis/bedeutung-von-compliance-fuer-unternehmen_210_626290.html",
+        "title": "Compliance: Definition und Bedeutung für Unternehmen - Haufe",
         "query_role": "discovery"
       },
       {
         "reason": "noise_domain",
-        "url": "https://www.linguee.de/englisch-deutsch/uebersetzung/order.html",
-        "title": "order - Deutsch-Übersetzung – Linguee Wörterbuch",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://de.wikipedia.org/wiki/Informationstechnik",
-        "title": "Informationstechnik – Wikipedia",
+        "url": "https://de.wikipedia.org/wiki/Compliance",
+        "title": "Compliance – Wikipedia",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://www.heise.de/",
-        "title": "heise online - IT-News, Nachrichten und Hintergründe",
+        "url": "https://www.bwl-lexikon.de/wiki/compliance/",
+        "title": "Compliance » Definition, Erklärung & Beispiele + Übungsfragen",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://www.it-daily.net/",
-        "title": "it-daily: Tägliche IT-News",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.wiwo.de/themen/it",
-        "title": "IT-News: Aktuelle Nachrichten zu Facebook, Google, Microsoft & Co.",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.heise.de/thema/IT",
-        "title": "IT: News, Ratgeber und Tipps | heise online",
+        "url": "https://www.weclapp.com/de/lexikon/compliance/",
+        "title": "Compliance einfach erklärt • Alles was du wissen musst! - weclapp",
         "query_role": "discovery"
       }
     ],
@@ -7453,18 +7477,18 @@
           ]
         },
         {
-          "query": "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
+          "query": "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
           "class": "explore",
           "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
-          "query": "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)",
+          "query": "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org",
           "class": "explore",
           "role": "discovery",
-          "sector": "it_hygiene",
-          "family": "it_hygiene"
+          "sector": "reporting_compliance",
+          "family": "compliance_tools"
         }
       ],
       "executed": [
@@ -7629,19 +7653,19 @@
           "agent_search_completed": true
         },
         {
-          "query": "site:reddit.com \"order operations tool\" (manual OR repetitive OR workflow OR workaround)",
+          "query": "site:news.ycombinator.com \"knowledge workflow software\" (customer OR workflow OR manual OR problem)",
           "class": "explore",
           "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools",
+          "sector": "productivity",
+          "family": "productivity_tools",
           "agent_search_completed": true
         },
         {
-          "query": "site:news.ycombinator.com \"IT inventory audit\" (customer OR workflow OR manual OR problem)",
+          "query": "\"compliance reporting tool\" (\"small business\" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org",
           "class": "explore",
           "role": "discovery",
-          "sector": "it_hygiene",
-          "family": "it_hygiene",
+          "sector": "reporting_compliance",
+          "family": "compliance_tools",
           "agent_search_completed": true
         }
       ]
@@ -7665,23 +7689,23 @@
     "agent_trust_top": [
       {
         "agent": "GOSCE Portfolio Router",
-        "observations": 469,
-        "accepted": 468,
-        "transport_success": 468,
-        "relevance_total": 9799.0,
-        "avg_relevance": 20.89,
+        "observations": 477,
+        "accepted": 476,
+        "transport_success": 476,
+        "relevance_total": 9831.0,
+        "avg_relevance": 20.61,
         "trust": 99.83,
         "stages": {
           "research": {
-            "observations": 280,
+            "observations": 288,
             "accepted": 0,
-            "transport_success": 280,
-            "relevance_total": 1749.0,
-            "avg_relevance": 6.25,
-            "trust": 29.37,
+            "transport_success": 288,
+            "relevance_total": 1781.0,
+            "avg_relevance": 6.18,
+            "trust": 29.28,
             "last_quality_ok": false,
             "last_quality_reason": "routing/payment/service response rather than domain analysis",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 2,
@@ -7720,7 +7744,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       {
         "agent": "FeedOracle",
@@ -7902,22 +7926,22 @@
       {
         "agent": "TESSA Marketing & Technology",
         "observations": 591,
-        "accepted": 461,
-        "transport_success": 461,
-        "relevance_total": 30153.0,
-        "avg_relevance": 51.02,
-        "trust": 82.4,
+        "accepted": 469,
+        "transport_success": 469,
+        "relevance_total": 30393.0,
+        "avg_relevance": 51.43,
+        "trust": 83.49,
         "stages": {
           "research": {
             "observations": 484,
-            "accepted": 363,
-            "transport_success": 363,
-            "relevance_total": 23707.0,
-            "avg_relevance": 48.98,
-            "trust": 80.0,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-22T06:49:48.367624+00:00"
+            "accepted": 371,
+            "transport_success": 371,
+            "relevance_total": 23947.0,
+            "avg_relevance": 49.48,
+            "trust": 81.32,
+            "last_quality_ok": true,
+            "last_quality_reason": "accepted for research",
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -7954,9 +7978,9 @@
           }
         },
         "last_stage": "research",
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-22T06:49:48.367624+00:00"
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       {
         "agent": "Encrypted LangChain Token Agent",
@@ -8019,23 +8043,23 @@
       },
       {
         "agent": "LLM Orchestration Agent",
-        "observations": 435,
-        "accepted": 280,
-        "transport_success": 280,
-        "relevance_total": 5620.0,
-        "avg_relevance": 12.92,
-        "trust": 70.87,
+        "observations": 443,
+        "accepted": 288,
+        "transport_success": 288,
+        "relevance_total": 5704.0,
+        "avg_relevance": 12.88,
+        "trust": 71.32,
         "stages": {
           "research": {
-            "observations": 354,
-            "accepted": 21,
-            "transport_success": 252,
-            "relevance_total": 3736.0,
+            "observations": 362,
+            "accepted": 23,
+            "transport_success": 260,
+            "relevance_total": 3820.0,
             "avg_relevance": 10.55,
-            "trust": 33.63,
+            "trust": 34.01,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
           },
           "business_review": {
             "observations": 2,
@@ -8074,7 +8098,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       },
       {
         "agent": "LLM Orchestration Agent (Langsmith)",
@@ -8136,65 +8160,6 @@
         "last_seen_utc": "2026-09-21T14:32:44.413313+00:00"
       },
       {
-        "agent": "LLM Orchestration Agent (Cryptography)",
-        "observations": 406,
-        "accepted": 245,
-        "transport_success": 245,
-        "relevance_total": 6882.0,
-        "avg_relevance": 16.95,
-        "trust": 68.28,
-        "stages": {
-          "research": {
-            "observations": 343,
-            "accepted": 17,
-            "transport_success": 209,
-            "relevance_total": 4406.0,
-            "avg_relevance": 12.85,
-            "trust": 34.43,
-            "last_quality_ok": false,
-            "last_quality_reason": "insufficient research content",
-            "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
-          },
-          "business_review": {
-            "observations": 1,
-            "accepted": 0,
-            "transport_success": 0,
-            "relevance_total": 15.0,
-            "avg_relevance": 15.0,
-            "trust": 20.0,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-20T21:40:35.213938+00:00"
-          },
-          "ui_ux": {
-            "observations": 1,
-            "accepted": 0,
-            "transport_success": 0,
-            "relevance_total": 29.0,
-            "avg_relevance": 29.0,
-            "trust": 20.0,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-20T23:38:05.431745+00:00"
-          },
-          "security": {
-            "observations": 1,
-            "accepted": 0,
-            "transport_success": 0,
-            "relevance_total": 29.0,
-            "avg_relevance": 29.0,
-            "trust": 20.0,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-20T23:38:05.435042+00:00"
-          }
-        },
-        "last_stage": "research",
-        "last_quality_ok": true,
-        "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-22T06:35:38.241406+00:00"
-      },
-      {
         "agent": "LLM Orchestration Agent (Langchain Core)",
         "observations": 194,
         "accepted": 117,
@@ -8252,6 +8217,65 @@
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
         "last_seen_utc": "2026-09-21T19:44:23.740427+00:00"
+      },
+      {
+        "agent": "LLM Orchestration Agent (Cryptography)",
+        "observations": 414,
+        "accepted": 249,
+        "transport_success": 249,
+        "relevance_total": 6966.0,
+        "avg_relevance": 16.83,
+        "trust": 68.12,
+        "stages": {
+          "research": {
+            "observations": 351,
+            "accepted": 17,
+            "transport_success": 213,
+            "relevance_total": 4490.0,
+            "avg_relevance": 12.79,
+            "trust": 34.23,
+            "last_quality_ok": false,
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
+          },
+          "business_review": {
+            "observations": 1,
+            "accepted": 0,
+            "transport_success": 0,
+            "relevance_total": 15.0,
+            "avg_relevance": 15.0,
+            "trust": 20.0,
+            "last_quality_ok": false,
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T21:40:35.213938+00:00"
+          },
+          "ui_ux": {
+            "observations": 1,
+            "accepted": 0,
+            "transport_success": 0,
+            "relevance_total": 29.0,
+            "avg_relevance": 29.0,
+            "trust": 20.0,
+            "last_quality_ok": false,
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T23:38:05.431745+00:00"
+          },
+          "security": {
+            "observations": 1,
+            "accepted": 0,
+            "transport_success": 0,
+            "relevance_total": 29.0,
+            "avg_relevance": 29.0,
+            "trust": 20.0,
+            "last_quality_ok": false,
+            "last_quality_reason": "request failed",
+            "last_seen_utc": "2026-09-20T23:38:05.435042+00:00"
+          }
+        },
+        "last_stage": "research",
+        "last_quality_ok": false,
+        "last_quality_reason": "all A2A transports failed quality/transport checks",
+        "last_seen_utc": "2026-09-22T07:14:56.564854+00:00"
       }
     ],
     "jarvis": {
