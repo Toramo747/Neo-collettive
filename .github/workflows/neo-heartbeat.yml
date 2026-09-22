@@ -200,7 +200,16 @@ jobs:
                   "problem_performance": ap.get("problem_performance") or {},
                   "problem_cooldowns": ap.get("problem_cooldowns") or {},
                   "query_execution": ap.get("query_execution") or {},
-                  "venture_metrics": ap.get("venture_metrics") or {}
+                  "venture_metrics": ap.get("venture_metrics") or {},
+                  "seti": {
+                      "enabled": (ap.get("seti") or {}).get("enabled"),
+                      "mode": (ap.get("seti") or {}).get("mode"),
+                      "every_cycles": (ap.get("seti") or {}).get("every_cycles"),
+                      "last_scan_utc": (ap.get("seti") or {}).get("last_scan_utc"),
+                      "last_error": (ap.get("seti") or {}).get("last_error"),
+                      "last_summary": (ap.get("seti") or {}).get("last_summary"),
+                      "signal_memory_count": len((ap.get("seti") or {}).get("signal_memory") or {}),
+                  }
               },
               "manual_run": raw.get("manual_run") or {},
               "latest_result": ap.get("latest_result")
