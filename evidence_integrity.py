@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 EVIDENCE_SCHEMA_VERSION = 2
-TAGGER_VERSION = 2
+TAGGER_VERSION = 3
 
 LEGACY_GENERIC_TAILS = {
     "llm",
@@ -288,6 +288,11 @@ def migrate_evidence_row(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         if "gate_eligible" not in out:
             out["gate_eligible"] = gate_eligible_problem_key(canonical)
             changed = True
+        if "DISCONFIRM" in set(out.get("signal_types") or []):
+            if out.get("gate_eligible") is not False or out.get("quarantine_reason") != "disconfirm":
+                out["gate_eligible"] = False
+                out["quarantine_reason"] = "disconfirm"
+                changed = True
         if out.get("migration_v") != EVIDENCE_SCHEMA_VERSION:
             out["migration_v"] = EVIDENCE_SCHEMA_VERSION
             changed = True
