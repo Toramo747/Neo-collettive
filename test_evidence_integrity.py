@@ -8,6 +8,7 @@ from evidence_integrity import (
     gate_eligible_problem_key,
     migrate_evidence_memory,
     structured_paid_source,
+    thesis_attributed_problem_key,
 )
 
 
@@ -81,6 +82,27 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertTrue(structured_paid_source("remoteok-api","paid_market"))
         self.assertFalse(structured_paid_source("remotive-api","buyer"))
         self.assertFalse(structured_paid_source("web","paid_market"))
+
+    def test_thesis_attribution_requires_strong_relevance(self):
+        observed="spreadsheet_process:general"
+        problem_id="ai_tools:small_businesses:produce_recurring_client_and_management_reports"
+        self.assertEqual(
+            thesis_attributed_problem_key(observed,problem_id,"th-123",54,2),
+            observed,
+        )
+        self.assertEqual(
+            thesis_attributed_problem_key(observed,problem_id,"th-123",80,1),
+            observed,
+        )
+
+    def test_thesis_attribution_uses_concrete_problem_id_when_strong(self):
+        observed="spreadsheet_process:general"
+        problem_id="ai_tools:small_businesses:produce_recurring_client_and_management_reports"
+        self.assertEqual(
+            thesis_attributed_problem_key(observed,problem_id,"th-123",55,2),
+            problem_id,
+        )
+        self.assertTrue(gate_eligible_problem_key(problem_id))
 
     def test_plain_devops_maps_to_developer_tools(self):
         self.assertEqual(commercial_family("Hiring DevOps engineer for deployment automation"),"developer_tools")
