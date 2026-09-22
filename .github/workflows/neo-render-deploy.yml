@@ -46,6 +46,11 @@ jobs:
           set -euo pipefail
           python -m unittest -v test_evidence_integrity.py
 
+      - name: Build Docker image in GitHub CI
+        run: |
+          set -euo pipefail
+          docker build --pull -t neo-ci .
+
       - name: Resolve expected NEO version
         run: |
           set -euo pipefail
