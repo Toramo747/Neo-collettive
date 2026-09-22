@@ -6615,7 +6615,8 @@ async def _seti_passive_cycle_if_due() -> dict | None:
     if not SETI_ENABLED:
         return None
     cycles=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
-    if cycles % SETI_EVERY_CYCLES != 0:
+    # First passive listen runs as soon as the feature is live; later scans are sparse.
+    if state.get("last_scan_utc") and cycles % SETI_EVERY_CYCLES != 0:
         return None
 
     try:
