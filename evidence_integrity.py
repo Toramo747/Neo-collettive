@@ -10,8 +10,8 @@ import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-EVIDENCE_SCHEMA_VERSION = 2
-TAGGER_VERSION = 2
+EVIDENCE_SCHEMA_VERSION = 3
+TAGGER_VERSION = 3
 
 LEGACY_GENERIC_TAILS = {
     "llm",
