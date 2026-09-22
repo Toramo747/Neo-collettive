@@ -28,6 +28,7 @@ from discovery_v3 import (
     natural_search_seed,
     observed_pain_candidates,
     query_relevance,
+    structured_job_relevance,
 )
 
 from evidence_integrity import (
@@ -57,7 +58,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.77.1"  # bind strongly relevant evidence to the active human thesis
+VERSION = "0.77.2"  # require structured job titles to match the active thesis
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -4689,6 +4690,9 @@ async def _remotive_paid_search(query: str, meta: dict | None = None, limit: int
             if not title or not url:
                 continue
             description=_strip_html_text(x.get("description") or "",2600)
+            rel=structured_job_relevance(title,description,query,meta or {})
+            if not rel.get("relevant"):
+                continue
             category=str(x.get("category") or "")
             job_type=str(x.get("job_type") or "")
             salary=str(x.get("salary") or "")
@@ -4708,6 +4712,7 @@ async def _remotive_paid_search(query: str, meta: dict | None = None, limit: int
                 "source":"remotive-api",
                 "commercial_source":True,
                 "published_at":x.get("publication_date"),
+                "query_relevance":rel,
             })
         return out
     except Exception:
@@ -4744,7 +4749,7 @@ async def _remoteok_paid_search(query: str, meta: dict | None = None, limit: int
             if salary_min or salary_max:
                 salary="Compensation range: "+str(salary_min or "?")+"-"+str(salary_max or "?")
             text=" ".join(v for v in [title,company,tags,description] if v)
-            rel=query_relevance(title,text,query,meta or {})
+            rel=structured_job_relevance(title,text,query,meta or {})
             if not rel.get("relevant"):
                 continue
             url=str(x.get("url") or x.get("apply_url") or "").strip()
