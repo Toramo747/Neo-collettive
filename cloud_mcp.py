@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.75.0"  # observed-pain human problem extraction
+VERSION = "0.75.0"  # observed-pain human problem extraction + plural-normalized relevance
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
