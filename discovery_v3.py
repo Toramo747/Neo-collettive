@@ -31,7 +31,7 @@ STOP = {
 }
 
 
-OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 3
+OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 4
 
 # Generic employment vacancies can contain words such as "hiring", "looking for"
 # and "compensation", which are not evidence of a buyer problem by themselves.
@@ -44,7 +44,12 @@ OPERATIONAL_PAIN_MARKERS = (
     "manual","manually","repetitive","time consuming","time-consuming",
     "frustrat","waste time","workaround","backlog","copy paste","copy/paste",
     "rekey","struggle","struggling","pain point","bottleneck","error-prone",
-    "error prone","takes hours","hours per week","hours a week",
+    "error prone","take hours","takes hours",
+)
+OPERATIONAL_TIME_BURDEN_RE = re.compile(
+    r"\b(?:takes?|spend(?:s|ing)?|waste(?:s|d|ing)?)\b"
+    r"[^.!?\n]{0,60}\b(?:\d+(?:\s*-\s*\d+)?\s+)?hours?\s+(?:per|a)\s+week\b",
+    re.I,
 )
 
 LAUNCH_TITLE_MARKERS = (
@@ -170,7 +175,10 @@ def _is_generic_job_listing(title: str, body: str) -> bool:
 
 def _has_explicit_operational_pain(title: str, body: str) -> bool:
     text=(" "+_clean_source_text(title)+" "+_clean_source_text(body)+" ").lower()
-    return any(marker in text for marker in OPERATIONAL_PAIN_MARKERS)
+    return (
+        any(marker in text for marker in OPERATIONAL_PAIN_MARKERS)
+        or bool(OPERATIONAL_TIME_BURDEN_RE.search(text))
+    )
 
 
 def _concise_seed(seed: str, family: str) -> str:

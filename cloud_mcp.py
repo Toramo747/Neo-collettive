@@ -23,7 +23,12 @@ from seti_radar import (
     merge_private_candidate_state,
     merge_signal_memory,
 )
-from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance
+from discovery_v3 import (
+    OBSERVED_HYPOTHESIS_SCHEMA_VERSION,
+    natural_search_seed,
+    observed_pain_candidates,
+    query_relevance,
+)
 
 from evidence_integrity import (
     EVIDENCE_SCHEMA_VERSION,
@@ -51,7 +56,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.76.1"  # SETI interview transcript viewer
+VERSION = "0.76.2"  # reject false observed-pain job listings
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -3272,7 +3277,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         # created by the pre-humanization schema keep consuming convergence cycles.
         stale_observed=(
             str(active.get("origin") or "")=="observed_pain"
-            and int(active.get("hypothesis_schema_v") or 1)<3
+            and int(active.get("hypothesis_schema_v") or 1)<OBSERVED_HYPOTHESIS_SCHEMA_VERSION
         )
         used=int(active.get("cycles_used") or 0)
         budget=max(1,int(active.get("budget_cycles") or 4))
@@ -3296,7 +3301,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
             if isinstance(x,dict)
             and str(x.get("family") or "")==family
-            and int(x.get("hypothesis_schema_v") or 1)>=3
+            and int(x.get("hypothesis_schema_v") or 1)>=OBSERVED_HYPOTHESIS_SCHEMA_VERSION
         ]
         used_sources={
             str(x.get("source_url") or "")
@@ -5875,8 +5880,9 @@ def _collective_summary(review: dict) -> dict:
         external_r1=int(review.get("external_round1_valid_count") or (len(r1) if isinstance(r1,list) else 0))
         external_r2=int(review.get("external_round2_valid_count") or len(valid_r2))
     return {
-        "ran": True,
+        "ran": bool(review.get("ran", True)),
         "ok": bool(review.get("ok")),
+        "reason": review.get("reason"),
         "stage": review.get("stage"),
         "round1_valid": external_r1,
         "round2_valid": external_r2,
