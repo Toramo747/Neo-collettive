@@ -1,0 +1,376 @@
+import asyncio
+import hashlib
+import json
+import re
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+from typing import Any, Awaitable, Callable
+
+SETI_SCHEMA_VERSION = 1
+
+DEFAULT_PASSIVE_QUERIES = [
+    '"message/send" "jsonrpc" agent -site:a2aregistry.org',
+    '"agent-card.json" -site:a2aregistry.org',
+    '".well-known/agent.json" agent -site:a2aregistry.org',
+    '"contextId" "messageId" agent',
+    '"task_id" poll agent completed',
+    '"tools/list" initialize MCP -site:modelcontextprotocol.io -site:registry.modelcontextprotocol.io',
+    '"autonomous agent" webhook API',
+    '"agentic" "JSON-RPC" endpoint',
+]
+
+OFFICIAL_OR_LOW_VALUE_DOMAINS = {
+    "a2aregistry.org",
+    "registry.modelcontextprotocol.io",
+    "modelcontextprotocol.io",
+    "wikipedia.org",
+    "bing.com",
+    "google.com",
+}
+
+COMMON_HOSTS = {
+    "github.com",
+    "gitlab.com",
+    "medium.com",
+    "dev.to",
+    "reddit.com",
+    "news.ycombinator.com",
+}
+
+SIGNATURES = (
+    ("a2a_agent_card", ("agent-card.json", ".well-known/agent.json"), 30),
+    ("a2a_message_send", ("message/send",), 24),
+    ("json_rpc", ("jsonrpc", "json-rpc"), 13),
+    ("mcp_handshake", ("tools/list", "model context protocol"), 18),
+    ("machine_context_ids", ("contextid", "messageid"), 14),
+    ("async_task_protocol", ("task_id", "taskid", "poll", "completed"), 10),
+    ("tool_invocation", ("tool_call", "tool calls", "tools/call"), 10),
+    ("machine_callbacks", ("webhook", "callback"), 6),
+    ("declared_agentic", ("autonomous agent", "ai agent", "agentic"), 5),
+)
+
+DOC_MARKERS = (
+    "tutorial",
+    "how to",
+    "guide",
+    "documentation",
+    "docs:",
+    "what is",
+    "introduction to",
+    "course",
+    "blog",
+)
+
+
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def canonical_host(url: str) -> str:
+    try:
+        host=(urlparse(url).hostname or "").lower().strip(".")
+    except Exception:
+        return ""
+    if host.startswith("www."):
+        host=host[4:]
+    return host
+
+
+def _clean_text(value: Any) -> str:
+    text=str(value or "")
+    text=re.sub(r"<[^>]+>", " ", text)
+    text=re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _tokens(text: str) -> set[str]:
+    stop={
+        "the","and","for","with","from","this","that","into","your","using","about",
+        "agent","agents","api","http","https","www","com","org","github","server",
+    }
+    out=set()
+    for raw in re.split(r"[^a-zA-Z0-9]+",(text or "").lower()):
+        if len(raw)>=4 and raw not in stop:
+            out.add(raw)
+    return out
+
+
+def signal_fingerprint(row: dict) -> str:
+    raw="|".join([
+        canonical_host(str(row.get("url") or "")),
+        str(row.get("url") or "").strip().lower(),
+        _clean_text(row.get("title")).lower(),
+    ])
+    return hashlib.sha256(raw.encode("utf-8","ignore")).hexdigest()[:24]
+
+
+def _classification(score: int) -> str:
+    if score >= 75:
+        return "HIGH_INTEREST"
+    if score >= 50:
+        return "INTERESTING"
+    if score >= 30:
+        return "WEAK_SIGNAL"
+    return "NOISE"
+
+
+def score_public_result(row: dict) -> dict:
+    title=_clean_text(row.get("title"))[:300]
+    snippet=_clean_text(row.get("snippet") or row.get("description"))[:1400]
+    url=str(row.get("url") or "").strip()
+    host=canonical_host(url)
+    low=(" "+title+" "+snippet+" "+url+" ").lower()
+
+    score=0
+    signals=[]
+    for name, markers, weight in SIGNATURES:
+        hits=[m for m in markers if m in low]
+        if hits:
+            # Multi-marker signatures are stronger when more than one marker survives search indexing.
+            bonus=min(8,max(0,len(hits)-1)*4)
+            score += weight + bonus
+            signals.append({"type":name,"markers":hits[:4],"weight":weight+bonus})
+
+    path=(urlparse(url).path or "").lower() if url else ""
+    if "/.well-known/" in path:
+        score += 16
+        signals.append({"type":"well_known_machine_manifest","markers":["/.well-known/"],"weight":16})
+    if any(x in path for x in ("/a2a","/mcp","/sse","/rpc","/tasks","/invoke")):
+        score += 8
+        signals.append({"type":"machine_endpoint_path","markers":[path[:160]],"weight":8})
+
+    if host in OFFICIAL_OR_LOW_VALUE_DOMAINS:
+        score -= 100
+    if any(marker in low for marker in DOC_MARKERS):
+        score -= 9
+    if host in COMMON_HOSTS:
+        score -= 4
+
+    score=max(0,min(100,score))
+    return {
+        "fingerprint":signal_fingerprint({"url":url,"title":title}),
+        "title":title,
+        "url":url,
+        "domain":host,
+        "snippet":snippet,
+        "agent_likelihood_score":score,
+        "classification":_classification(score),
+        "signals":signals,
+        "source":row.get("source") or "public_search",
+    }
+
+
+def _registry_items(discovery: dict) -> list[dict]:
+    out=[]
+    for key in ("a2a_registry","mcp_registry"):
+        wrapper=discovery.get(key) or {}
+        if not isinstance(wrapper,dict) or not wrapper.get("ok"):
+            continue
+        data=wrapper.get("data")
+        if isinstance(data,list):
+            items=data
+        elif isinstance(data,dict):
+            items=(
+                data.get("agents")
+                or data.get("servers")
+                or data.get("items")
+                or data.get("data")
+                or []
+            )
+        else:
+            items=[]
+        for raw in items:
+            if isinstance(raw,dict):
+                obj=raw.get("server",raw)
+                if isinstance(obj,dict):
+                    out.append(obj)
+    return out
+
+
+def registry_probe_term(candidate: dict) -> str:
+    url=str(candidate.get("url") or "")
+    host=canonical_host(url)
+    try:
+        p=urlparse(url)
+        parts=[x for x in p.path.split("/") if x]
+    except Exception:
+        parts=[]
+    if host=="github.com" and len(parts)>=2:
+        return parts[0]+"/"+parts[1]
+    if host and host not in COMMON_HOSTS:
+        return host
+    title_tokens=sorted(_tokens(str(candidate.get("title") or "")),key=lambda x:(-len(x),x))
+    return " ".join(title_tokens[:3]) or host or "agent runtime"
+
+
+def registry_match(candidate: dict, discovery: dict) -> bool:
+    items=_registry_items(discovery)
+    if not items:
+        return False
+    host=canonical_host(str(candidate.get("url") or ""))
+    probe=registry_probe_term(candidate).lower()
+    target_tokens=_tokens(str(candidate.get("title") or "")+" "+probe)
+    for item in items:
+        text=json.dumps(item,ensure_ascii=False,default=str).lower()
+        if probe and len(probe)>=5 and probe in text:
+            return True
+        if host and host not in COMMON_HOSTS and host in text:
+            return True
+        overlap=target_tokens & _tokens(text)
+        if len(overlap)>=3:
+            return True
+    return False
+
+
+async def deep_space_scan(
+    search_fn: Callable[[str,int], Awaitable[dict]],
+    discover_fn: Callable[[str,int], Awaitable[dict]],
+    limit: int = 16,
+    per_query: int = 5,
+    queries: list[str] | None = None,
+    registry_checks: int = 10,
+) -> dict:
+    """Passive SETI-style discovery.
+
+    Only public search indexes and official registries are queried. Candidate target URLs
+    are never fetched, probed, scanned, messaged or executed by this function.
+    """
+    queries=list(queries or DEFAULT_PASSIVE_QUERIES)[:12]
+    batches=await asyncio.gather(
+        *(search_fn(q,max(1,min(per_query,8))) for q in queries),
+        return_exceptions=True,
+    )
+
+    raw_results=[]
+    search_errors=[]
+    seen_urls=set()
+    for q,batch in zip(queries,batches):
+        if isinstance(batch,Exception):
+            search_errors.append({"query":q,"error":type(batch).__name__+": "+str(batch)[:180]})
+            continue
+        if not isinstance(batch,dict) or not batch.get("ok"):
+            search_errors.append({"query":q,"error":str((batch or {}).get("error") if isinstance(batch,dict) else "invalid_response")[:180]})
+            continue
+        for row in batch.get("results") or []:
+            if not isinstance(row,dict):
+                continue
+            url=str(row.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            copy=dict(row)
+            copy["_query"]=q
+            raw_results.append(copy)
+
+    scored=[score_public_result(row) for row in raw_results]
+    scored=[x for x in scored if x.get("classification")!="NOISE"]
+    scored.sort(key=lambda x:(int(x.get("agent_likelihood_score") or 0),len(x.get("signals") or [])),reverse=True)
+
+    check_targets=scored[:max(1,min(registry_checks,20))]
+
+    async def check(candidate: dict) -> tuple[dict,dict|None,Exception|None]:
+        term=registry_probe_term(candidate)
+        try:
+            data=await discover_fn(term,6)
+            return candidate,data,None
+        except Exception as e:
+            return candidate,None,e
+
+    checks=await asyncio.gather(*(check(x) for x in check_targets)) if check_targets else []
+    checked_by_fp={}
+    registry_errors=[]
+    known_space_filtered=0
+    for candidate,data,error in checks:
+        fp=str(candidate.get("fingerprint") or "")
+        if error is not None:
+            checked_by_fp[fp]="registry_check_error"
+            registry_errors.append({"fingerprint":fp,"error":type(error).__name__+": "+str(error)[:180]})
+            continue
+        if isinstance(data,dict) and registry_match(candidate,data):
+            checked_by_fp[fp]="registry_match"
+            known_space_filtered += 1
+        else:
+            checked_by_fp[fp]="not_found_in_checked_registries"
+
+    signals=[]
+    for candidate in scored:
+        fp=str(candidate.get("fingerprint") or "")
+        novelty=checked_by_fp.get(fp,"not_checked")
+        if novelty=="registry_match":
+            continue
+        candidate=dict(candidate)
+        candidate["registry_status"]=novelty
+        candidate["passive_only"]=True
+        candidate["target_contacted"]=False
+        candidate["external_agents_consulted"]=False
+        signals.append(candidate)
+        if len(signals)>=max(1,min(limit,40)):
+            break
+
+    return {
+        "ok":True,
+        "schema_v":SETI_SCHEMA_VERSION,
+        "mode":"passive",
+        "scanned_at_utc":_utcnow(),
+        "queries":queries,
+        "search_results_seen":len(raw_results),
+        "machine_like_results":len(scored),
+        "registry_checks":len(checks),
+        "known_space_filtered":known_space_filtered,
+        "signals":signals,
+        "search_errors":search_errors[:8],
+        "registry_errors":registry_errors[:8],
+        "safety":{
+            "target_http_requests":False,
+            "active_probe":False,
+            "messages_sent":False,
+            "port_scan":False,
+            "registry_and_public_index_only":True,
+        },
+    }
+
+
+def merge_signal_memory(memory: dict, scan: dict, max_entries: int = 80) -> tuple[dict,list[dict]]:
+    """Persist only non-reversible fingerprints/metadata, never target URLs or snippets."""
+    old=memory if isinstance(memory,dict) else {}
+    now=str(scan.get("scanned_at_utc") or _utcnow())
+    updated=dict(old)
+    enriched=[]
+    for row in scan.get("signals") or []:
+        if not isinstance(row,dict):
+            continue
+        fp=str(row.get("fingerprint") or "")
+        if not fp:
+            continue
+        prev=dict(updated.get(fp) or {})
+        seen=int(prev.get("seen_count") or 0)+1
+        first=str(prev.get("first_seen_utc") or now)
+        base=int(row.get("agent_likelihood_score") or 0)
+        persistence_bonus=0
+        if seen>=2:
+            persistence_bonus=8
+        if seen>=3:
+            persistence_bonus=14
+        adjusted=min(100,base+persistence_bonus)
+        updated[fp]={
+            "first_seen_utc":first,
+            "last_seen_utc":now,
+            "seen_count":seen,
+            "max_score":max(int(prev.get("max_score") or 0),adjusted),
+            "last_classification":_classification(adjusted),
+        }
+        copy=dict(row)
+        copy["seen_count"]=seen
+        copy["first_seen_utc"]=first
+        copy["last_seen_utc"]=now
+        copy["persistence_bonus"]=persistence_bonus
+        copy["agent_likelihood_score"]=adjusted
+        copy["classification"]=_classification(adjusted)
+        enriched.append(copy)
+
+    ranked=sorted(
+        updated.items(),
+        key=lambda kv:(int((kv[1] or {}).get("seen_count") or 0),int((kv[1] or {}).get("max_score") or 0),str((kv[1] or {}).get("last_seen_utc") or "")),
+        reverse=True,
+    )[:max(10,min(max_entries,120))]
+    return dict(ranked),enriched
