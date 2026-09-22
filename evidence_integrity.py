@@ -229,6 +229,30 @@ def make_problem_id(family: str, customer: str, job: str) -> str:
     return f"{safe_slug(family,32)}:{safe_slug(customer,40)}:{safe_slug(job,72)}"
 
 
+def thesis_attributed_problem_key(
+    observed_problem_key: str,
+    problem_id: str = "",
+    thesis_id: str = "",
+    relevance_score: int = 0,
+    overlap_count: int = 0,
+) -> str:
+    """Use thesis identity only for strongly relevant results from an internal thesis probe.
+
+    This changes attribution, not qualification thresholds: weak/ambiguous results stay
+    in their observed generic/problem-signature bucket.
+    """
+    observed=str(observed_problem_key or "").strip()
+    pid=str(problem_id or "").strip()
+    tid=str(thesis_id or "").strip()
+    if not pid or not tid:
+        return observed
+    if int(relevance_score or 0) < 55 or int(overlap_count or 0) < 2:
+        return observed
+    if pid.count(":") < 2:
+        return observed
+    return canonical_problem_key("",pid)
+
+
 def make_thesis_id(family: str, customer: str, job: str, pain: str) -> str:
     raw = "|".join([family or "", customer or "", job or "", pain or ""]).encode("utf-8", "ignore")
     return "th-" + hashlib.sha1(raw).hexdigest()[:12]

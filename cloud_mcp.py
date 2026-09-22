@@ -45,6 +45,7 @@ from evidence_integrity import (
     make_thesis_id,
     migrate_evidence_memory,
     structured_paid_source,
+    thesis_attributed_problem_key,
 )
 
 import httpx
@@ -56,7 +57,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.77.0"  # use real retrieval aliases and reject generic paid-market matches
+VERSION = "0.77.1"  # bind strongly relevant evidence to the active human thesis
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -4233,7 +4234,17 @@ def _commercial_evidence_quality(
             reject("no_demand_signal",url,title,query_role)
             return
 
-        problem_key=canonical_problem_key(family,_problem_signature(family,title,context))
+        observed_problem_key=canonical_problem_key(family,_problem_signature(family,title,context))
+        problem_key=thesis_attributed_problem_key(
+            observed_problem_key,
+            str(meta.get("problem_id") or ""),
+            str(meta.get("thesis_id") or ""),
+            int(relevance.get("score") or 0),
+            len(relevance.get("overlap") or []),
+        )
+        thesis_bound=problem_key!=observed_problem_key
+        if thesis_bound and str(meta.get("family") or ""):
+            family=str(meta.get("family"))
         positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(signal_types))
         strong=[t for t in buyer_strong_terms if contains_term(context,t)] if "PAID_DEMAND" in signal_types else []
         if structured_paid_source(source,query_role) and "PAID_DEMAND" in signal_types and not strong:
@@ -4257,8 +4268,9 @@ def _commercial_evidence_quality(
             "domain":host,
             "source":source,
             "family":family,
-            "problem_key_raw":problem_key,
+            "problem_key_raw":observed_problem_key,
             "problem_key":problem_key,
+            "thesis_bound":thesis_bound,
             "problem_id":str(meta.get("problem_id") or ""),
             "thesis_id":str(meta.get("thesis_id") or ""),
             "query":(query or "")[:700],
