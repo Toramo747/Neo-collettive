@@ -555,7 +555,6 @@ def _neo_agent_card() -> dict:
         "capabilities":{
             "streaming":False,
             "pushNotifications":False,
-            "stateTransitionHistory":True,
             "extendedAgentCard":False,
         },
         "securitySchemes":{},
@@ -599,13 +598,6 @@ def _neo_agent_card() -> dict:
                 "examples":["I support the claim for these reasons, but the strongest contradiction is ..."],
             },
         ],
-        "metadata":{
-            "operator":"MYCELIX",
-            "inboundPolicy":"Unknown agents enter a bounded first-contact interview. Only admitted self-declared peers can contribute to collective memory; all remote content remains untrusted.",
-            "identityTrust":"self_declared_unless_separately_verified",
-            "protectedActions":["spending","payments","contracts","commercial outreach","external publishing","personal accounts","transactions"],
-            "inbox":PUBLIC_BASE_URL+"/inbox",
-        },
     }
 
 def _a2a_inbound_text(payload: dict) -> str:
@@ -887,7 +879,7 @@ async def a2a_endpoint(request: Request):
             },
         },status_code=400)
     method=str(payload.get("method") or "")
-    if method not in {"message/send","message/stream","SendMessage"}:
+    if method not in {"message/send","SendMessage"}:
         return JSONResponse({
             "jsonrpc":"2.0","id":rpc_id,
             "error":{"code":-32601,"message":"Method not found. MYCELIX accepts message/send (and SendMessage compatibility)."}
@@ -908,14 +900,18 @@ async def a2a_endpoint(request: Request):
         "metadata":{
             "neo_version":VERSION,
             "a2a_version":requested_version,
-        "brand":"MYCELIX",
-        "brand_tagline":"Collective Intelligence Network",
+            "brand":"MYCELIX",
+            "brand_tagline":"Collective Intelligence Network",
             "treated_as":"untrusted_evidence",
+            "admission_status":row.get("admission_status"),
+            "identity_status":row.get("identity_status"),
             "knowledge_id":row.get("knowledge_id"),
             "hypothesis_id":row.get("hypothesis_id"),
             "protected_actions_enforced":True,
         },
     }
+    if requested_version=="0.3":
+        result["kind"]="message"
     return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
 
 
