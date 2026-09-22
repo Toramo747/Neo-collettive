@@ -61,6 +61,28 @@ class EvidenceIntegrityTests(unittest.TestCase):
         b=canonical_url("https://example.com/path?a=1")
         self.assertEqual(a,b)
 
+    def test_v2_gate_evidence_is_quarantined_after_v3_tagger_upgrade(self):
+        original=[{
+            "schema_v":2,
+            "tagger_v":2,
+            "migration_v":2,
+            "gate_eligible":True,
+            "domain":"remoteok.com",
+            "family":"ai_tools",
+            "problem_key_raw":"ecommerce_tools:general",
+            "problem_key":"ai_tools:small_businesses:produce_recurring_client_and_management_reports",
+            "thesis_bound":True,
+            "url":"https://remoteok.com/remote-jobs/unrelated-role",
+            "title":"Unrelated structured vacancy",
+            "last_seen_epoch":1,
+        }]
+        once,meta=migrate_evidence_memory(original)
+        self.assertFalse(once[0]["gate_eligible"])
+        self.assertEqual(once[0]["quarantine_reason"],"legacy_unverified_tagger_v1")
+        self.assertEqual(once[0]["schema_v"],3)
+        self.assertEqual(once[0]["tagger_v"],2)
+        self.assertEqual(meta["changed"],1)
+
     def test_migration_is_idempotent_and_quarantines_v1(self):
         original=[{
             "domain":"news.ycombinator.com",
