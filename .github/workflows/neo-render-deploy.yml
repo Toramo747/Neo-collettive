@@ -98,6 +98,32 @@ jobs:
           cat /tmp/health.json || true
           exit 5
 
+      - name: Capture Render diagnostics if version wait fails
+        if: failure()
+        run: |
+          set +e
+          echo "=== Render diagnostics for NEO ==="
+          curl --silent --show-error --max-time 45 \
+            "https://neo-collettive.onrender.com/api/render/diagnostics?target=neo" \
+            -o /tmp/render-diagnostics.json
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "Could not fetch Render diagnostics (curl rc=$rc)"
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/render-diagnostics.json",encoding="utf-8"))
+          print(json.dumps({
+              "ok": d.get("ok"),
+              "assessment": d.get("assessment"),
+              "service": d.get("service"),
+              "recent_deploys": d.get("recent_deploys"),
+              "categories": d.get("categories"),
+              "important": d.get("important"),
+          }, ensure_ascii=False, indent=2, default=str))
+          PY
+
       - name: Verify autopilot runtime
         run: |
           set -euo pipefail
