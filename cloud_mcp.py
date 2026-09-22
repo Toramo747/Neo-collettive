@@ -14,6 +14,8 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 
+from seti_radar import deep_space_scan, merge_signal_memory
+
 from evidence_integrity import (
     EVIDENCE_SCHEMA_VERSION,
     TAGGER_VERSION,
@@ -39,7 +41,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.69.1"  # retrieval hardening + compressed durable state
+VERSION = "0.70.0"  # passive SETI deep-space radar
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -62,6 +64,9 @@ HEARTBEAT_TOKEN = (os.getenv("NEO_HEARTBEAT_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
 AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
+SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
+SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
+SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))))
 AUTOPILOT_GOAL = os.getenv(
     "NEO_AUTOPILOT_GOAL",
     "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
@@ -143,6 +148,15 @@ AUTOPILOT_STATE: dict[str, Any] = {
         "audits_with_baseline": 0,
         "audits_with_error_baseline": 0,
     },
+    "seti": {
+        "enabled": SETI_ENABLED,
+        "mode": "passive",
+        "every_cycles": SETI_EVERY_CYCLES,
+        "last_scan_utc": None,
+        "last_error": None,
+        "last_summary": None,
+        "signal_memory": {},
+    },
 }
 
 
@@ -174,6 +188,7 @@ def _state_payload() -> dict:
         "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
         "jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
+        "seti": AUTOPILOT_STATE.get("seti") or {},
     }
 
 
@@ -243,6 +258,14 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["jarvis_runtime"] = payload.get("jarvis_runtime") or {}
     if isinstance(payload.get("venture_metrics"), dict):
         AUTOPILOT_STATE["venture_metrics"] = payload.get("venture_metrics") or {}
+    if isinstance(payload.get("seti"), dict):
+        restored=dict(payload.get("seti") or {})
+        current=dict(AUTOPILOT_STATE.get("seti") or {})
+        current.update(restored)
+        current["enabled"]=SETI_ENABLED
+        current["mode"]="passive"
+        current["every_cycles"]=SETI_EVERY_CYCLES
+        AUTOPILOT_STATE["seti"]=current
     return True
 
 
@@ -6587,6 +6610,52 @@ async def api_heartbeat(request: Request):
     })
 
 
+async def _seti_passive_cycle_if_due() -> dict | None:
+    state=dict(AUTOPILOT_STATE.get("seti") or {})
+    if not SETI_ENABLED:
+        return None
+    cycles=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    if cycles % SETI_EVERY_CYCLES != 0:
+        return None
+
+    try:
+        scan=await deep_space_scan(
+            search_fn=free_web_search,
+            discover_fn=discover_data,
+            limit=SETI_RESULT_LIMIT,
+            per_query=5,
+            registry_checks=min(10,SETI_RESULT_LIMIT),
+        )
+        memory,enriched=merge_signal_memory(state.get("signal_memory") or {},scan,max_entries=80)
+        interesting=[x for x in enriched if x.get("classification") in {"INTERESTING","HIGH_INTEREST"}]
+        high=[x for x in enriched if x.get("classification")=="HIGH_INTEREST"]
+        state.update({
+            "enabled":True,
+            "mode":"passive",
+            "every_cycles":SETI_EVERY_CYCLES,
+            "last_scan_utc":scan.get("scanned_at_utc"),
+            "last_error":None,
+            "signal_memory":memory,
+            "last_summary":{
+                "search_results_seen":scan.get("search_results_seen",0),
+                "machine_like_results":scan.get("machine_like_results",0),
+                "registry_checks":scan.get("registry_checks",0),
+                "known_space_filtered":scan.get("known_space_filtered",0),
+                "signals_returned":len(enriched),
+                "interesting":len(interesting),
+                "high_interest":len(high),
+                "safety":scan.get("safety") or {},
+            },
+        })
+        AUTOPILOT_STATE["seti"]=state
+        return state.get("last_summary")
+    except Exception as e:
+        state["last_error"]=type(e).__name__+": "+str(e)[:300]
+        state["last_scan_utc"]=datetime.now(timezone.utc).isoformat()
+        AUTOPILOT_STATE["seti"]=state
+        return {"ok":False,"error":state["last_error"]}
+
+
 async def _autopilot_cycle() -> None:
     if not AUTOPILOT_ENABLED:
         return
@@ -6600,6 +6669,7 @@ async def _autopilot_cycle() -> None:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
+            await _seti_passive_cycle_if_due()
             _save_local_state()
             AUTOPILOT_STATE["last_checkpoint"] = await _checkpoint_state_to_render()
         except Exception as e:
