@@ -14,7 +14,14 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 
-from seti_radar import SETI_ENGINE_VERSION, deep_space_scan, merge_private_candidate_state, merge_signal_memory
+from seti_radar import (
+    SETI_ENGINE_VERSION,
+    deep_space_scan,
+    interview_candidate_eligibility,
+    interview_response_score,
+    merge_private_candidate_state,
+    merge_signal_memory,
+)
 from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance
 
 from evidence_integrity import (
@@ -42,7 +49,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.71.2"  # private SETI candidate correlation + bounded Render persistence
+VERSION = "0.72.0"  # SETI interview quarantine + collective admission
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -330,11 +337,15 @@ def _restore_seti_private_state() -> str:
     candidates=payload.get("candidates")
     if not isinstance(candidates,dict):
         return "invalid"
+    interviews=payload.get("interviews") if isinstance(payload.get("interviews"),dict) else {}
+    admitted=payload.get("admitted") if isinstance(payload.get("admitted"),dict) else {}
     SETI_PRIVATE_STATE.clear()
     SETI_PRIVATE_STATE.update({
-        "schema_v":int(payload.get("schema_v") or 1),
+        "schema_v":int(payload.get("schema_v") or 2),
         "updated_at_utc":payload.get("updated_at_utc"),
         "candidates":dict(list(candidates.items())[:24]),
+        "interviews":dict(list(interviews.items())[-32:]),
+        "admitted":dict(list(admitted.items())[-16:]),
     })
     return "render_env"
 
@@ -1484,6 +1495,10 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3, trust_
     }
     trusted_pool=await _trusted_agent_details(limit=max_agents*2,exclude_ids=existing_ids,stage=trust_stage)
     candidates.extend(trusted_pool)
+    for seti_agent in _seti_admitted_agent_details():
+        sid=str(seti_agent.get("id") or "")
+        if sid and sid not in existing_ids:
+            candidates.append(seti_agent)
 
     ranked = []
     for agent in candidates:
@@ -1496,6 +1511,9 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3, trust_
         if agent.get("_trusted_pool"):
             score += 6
             reasons.append("historically accepted trusted-pool agent for "+trust_stage)
+        if agent.get("_seti_admitted"):
+            score += 3
+            reasons.append("provisional SETI-admitted agent; low initial trust")
         matched_queries = agent.get("_matched_queries") or []
         if len(matched_queries) > 1:
             score += min(6, len(matched_queries) * 2)
@@ -7011,6 +7029,239 @@ async def api_heartbeat(request: Request):
     })
 
 
+def _seti_admitted_agent_details() -> list[dict]:
+    """Return privately stored admitted agents as provisional Collective candidates."""
+    rows=[]
+    admitted=(SETI_PRIVATE_STATE.get("admitted") or {})
+    for key,row in list(admitted.items())[:16]:
+        if not isinstance(row,dict) or str(row.get("status") or "")!="ADMITTED":
+            continue
+        endpoint=str(row.get("endpoint") or "").strip()
+        safe,_=_safe_public_https(endpoint)
+        if not safe:
+            continue
+        rows.append({
+            "id":"seti:"+str(key),
+            "name":"SETI candidate "+str(key)[:8],
+            "description":str(row.get("capability_excerpt") or "Provisional agent admitted after bounded SETI interview.")[:700],
+            "url":endpoint,
+            "_seti_admitted":True,
+            "_matched_queries":["seti-admitted"],
+        })
+    return rows
+
+
+def _seti_public_knowledge_admission(key: str, interview: dict) -> None:
+    """Record only a sanitized admission fact in collective memory; never the private endpoint."""
+    ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
+    source_agent_id="seti:"+str(key)
+    if any(isinstance(x,dict) and x.get("source_agent_id")==source_agent_id and x.get("source")=="seti_interview" for x in ledger):
+        return
+    now=datetime.now(timezone.utc).isoformat()
+    ledger.append({
+        "id":"know-seti-"+str(key)[:10],
+        "created_at_utc":now,
+        "state":"PROVISIONAL_AGENT",
+        "claim":"A SETI-discovered public A2A endpoint passed a bounded capability interview. Its claims remain untrusted until independently corroborated by the Collective.",
+        "family":"ai_tools",
+        "source":"seti_interview",
+        "source_agent_id":source_agent_id,
+        "source_agent":"SETI candidate "+str(key)[:8],
+        "supporting_agents":[],
+        "confidence":"provisional",
+        "next_action":"COLLECTIVE_OBSERVATION",
+        "interview_score":int(interview.get("score") or 0),
+    })
+    AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]
+
+
+def _seti_seed_provisional_trust(key: str, interview: dict) -> None:
+    """Give admitted SETI agents deliberately low initial trust until Collective use validates them."""
+    agent_id="seti:"+str(key)
+    trust=dict(AUTOPILOT_STATE.get("agent_trust") or {})
+    if agent_id in trust:
+        return
+    now=datetime.now(timezone.utc).isoformat()
+    trust[agent_id]={
+        "agent":"SETI candidate "+str(key)[:8],
+        "observations":1,
+        "accepted":0,
+        "transport_success":1,
+        "relevance_total":0.0,
+        "avg_relevance":0.0,
+        "trust":20.0,
+        "stages":{
+            "routing":{
+                "observations":1,
+                "accepted":0,
+                "transport_success":1,
+                "relevance_total":0.0,
+                "avg_relevance":0.0,
+                "trust":20.0,
+                "last_quality_ok":False,
+                "last_quality_reason":"provisional SETI admission; Collective validation pending",
+                "last_seen_utc":now,
+            }
+        },
+        "last_stage":"routing",
+        "last_quality_ok":False,
+        "last_quality_reason":"provisional SETI admission; Collective validation pending",
+        "last_seen_utc":now,
+    }
+    AUTOPILOT_STATE["agent_trust"]=trust
+
+
+async def _seti_resolve_interview_endpoint(candidate: dict, eligibility: dict) -> dict:
+    """Resolve an explicitly indexed public Agent Card to its declared A2A endpoint."""
+    mode=str(eligibility.get("contact_mode") or "")
+    url=str(eligibility.get("url") or candidate.get("url") or "").strip()
+    safe,why=_safe_public_https(url)
+    if not safe:
+        return {"ok":False,"reason":why}
+    if mode=="direct_a2a":
+        return {"ok":True,"endpoint":url,"mode":mode,"card":None}
+
+    if mode!="agent_card":
+        return {"ok":False,"reason":"unsupported_contact_mode"}
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=min(TIMEOUT,12),
+            follow_redirects=False,
+            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+        ) as client:
+            r=await client.get(url)
+        if not r.is_success:
+            return {"ok":False,"reason":"agent_card_http_"+str(r.status_code)}
+        ctype=(r.headers.get("content-type") or "").lower()
+        if "json" not in ctype:
+            return {"ok":False,"reason":"agent_card_not_json"}
+        card=r.json()
+        if not isinstance(card,dict):
+            return {"ok":False,"reason":"agent_card_invalid"}
+        endpoint=str(card.get("url") or card.get("endpoint") or "").strip()
+        esafe,ewhy=_safe_public_https(endpoint)
+        if not esafe:
+            return {"ok":False,"reason":"declared_endpoint_"+ewhy.replace(" ","_")}
+        card_host=(urlparse(url).hostname or "").lower().strip(".")
+        endpoint_host=(urlparse(endpoint).hostname or "").lower().strip(".")
+        if not card_host or endpoint_host!=card_host:
+            return {"ok":False,"reason":"cross_host_agent_card_endpoint_blocked"}
+        return {
+            "ok":True,
+            "endpoint":endpoint,
+            "mode":"agent_card",
+            "card":{
+                "name":str(card.get("name") or "")[:180],
+                "version":str(card.get("version") or "")[:80],
+                "protocolVersion":str(card.get("protocolVersion") or "")[:80],
+            },
+        }
+    except Exception as e:
+        return {"ok":False,"reason":type(e).__name__}
+
+
+def _seti_interview_prompt() -> str:
+    return (
+        "MYCELIX is conducting a bounded capability interview before admitting a newly discovered "
+        "public agent into a collective-intelligence pool. Answer only about your own system. "
+        "Please provide: (1) your role/identity, (2) concrete capabilities, (3) protocol/interface "
+        "you support such as A2A/JSON-RPC/MCP, (4) one public documentation or evidence reference "
+        "if available, and (5) one important limitation or failure mode. Do not execute tools, "
+        "make purchases, contact third parties, or perform external actions for this interview."
+    )
+
+
+async def _seti_interview_one_candidate() -> dict:
+    """Interview at most one quarantined candidate per SETI scan."""
+    candidates=SETI_PRIVATE_STATE.get("candidates") or {}
+    interviews=dict(SETI_PRIVATE_STATE.get("interviews") or {})
+    admitted=dict(SETI_PRIVATE_STATE.get("admitted") or {})
+
+    ranked=sorted(
+        [(str(k),v) for k,v in candidates.items() if isinstance(v,dict)],
+        key=lambda kv:(
+            int((kv[1] or {}).get("max_score") or 0),
+            int((kv[1] or {}).get("scan_count") or 0),
+            int((kv[1] or {}).get("source_diversity") or 0),
+        ),
+        reverse=True,
+    )
+
+    for key,candidate in ranked:
+        if key in admitted:
+            continue
+        prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
+        if prior and str(prior.get("status") or "") in {"ADMITTED","REJECTED","FAILED"}:
+            continue
+
+        eligibility=interview_candidate_eligibility(candidate)
+        if not eligibility.get("eligible"):
+            continue
+
+        now=datetime.now(timezone.utc).isoformat()
+        resolved=await _seti_resolve_interview_endpoint(candidate,eligibility)
+        if not resolved.get("ok"):
+            interviews[key]={
+                "status":"FAILED",
+                "interviewed_at_utc":now,
+                "reason":resolved.get("reason"),
+                "candidate_score":int(candidate.get("max_score") or 0),
+            }
+            SETI_PRIVATE_STATE["interviews"]=interviews
+            return {"attempted":True,"admitted":False,"status":"FAILED","reason":resolved.get("reason")}
+
+        endpoint=str(resolved.get("endpoint") or "")
+        answer=await _ask_a2a_transport(
+            {"name":"SETI candidate "+key[:8],"url":endpoint},
+            _seti_interview_prompt(),
+        )
+        response_text=_response_text(answer)
+        quality=interview_response_score(response_text)
+        accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
+        status="ADMITTED" if accepted else "REJECTED"
+
+        interview={
+            "status":status,
+            "interviewed_at_utc":now,
+            "score":int(quality.get("score") or 0),
+            "markers":quality.get("markers") or {},
+            "transport":answer.get("transport"),
+            "http_status":answer.get("status"),
+            "quality_ok":bool(answer.get("quality_ok")),
+            "quality_reason":answer.get("quality_reason"),
+            "response_excerpt":response_text[:1200],
+            "endpoint":endpoint,
+            "contact_mode":resolved.get("mode"),
+            "candidate_score":int(candidate.get("max_score") or 0),
+        }
+        interviews[key]=interview
+
+        if accepted:
+            admitted[key]={
+                "status":"ADMITTED",
+                "admitted_at_utc":now,
+                "endpoint":endpoint,
+                "contact_mode":resolved.get("mode"),
+                "interview_score":int(quality.get("score") or 0),
+                "capability_excerpt":response_text[:700],
+            }
+            _seti_public_knowledge_admission(key,interview)
+            _seti_seed_provisional_trust(key,interview)
+
+        SETI_PRIVATE_STATE["interviews"]=dict(list(interviews.items())[-32:])
+        SETI_PRIVATE_STATE["admitted"]=dict(list(admitted.items())[-16:])
+        return {
+            "attempted":True,
+            "admitted":accepted,
+            "status":status,
+            "score":int(quality.get("score") or 0),
+            "transport":answer.get("transport"),
+        }
+
+    return {"attempted":False,"admitted":False,"status":"NO_ELIGIBLE_CANDIDATE"}
+
+
 async def _seti_passive_cycle_if_due() -> dict | None:
     state=dict(AUTOPILOT_STATE.get("seti") or {})
     if not SETI_ENABLED:
@@ -7035,6 +7286,7 @@ async def _seti_passive_cycle_if_due() -> dict | None:
         )
         SETI_PRIVATE_STATE.clear()
         SETI_PRIVATE_STATE.update(private_state)
+        interview_result=await _seti_interview_one_candidate()
         private_checkpoint=await _checkpoint_seti_private_to_render()
 
         interesting=[x for x in enriched if x.get("classification") in {"INTERESTING","HIGH_INTEREST"}]
@@ -7054,6 +7306,10 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             "private_new_high_interest_this_scan":private_summary.get("new_high_interest_this_scan",0),
             "private_max_score":private_summary.get("max_private_score",0),
             "private_max_source_diversity":private_summary.get("max_source_diversity",0),
+            "interview_attempted":bool(interview_result.get("attempted")),
+            "last_interview_status":interview_result.get("status"),
+            "last_interview_score":interview_result.get("score"),
+            "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
             "private_checkpoint":{
                 "ok":bool(private_checkpoint.get("ok")),
                 "status":private_checkpoint.get("status"),
@@ -7072,7 +7328,15 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "private_reobserved":private_summary.get("reobserved_this_scan",0),
                 "private_max_score":private_summary.get("max_private_score",0),
                 "private_max_source_diversity":private_summary.get("max_source_diversity",0),
-                "safety":scan.get("safety") or {},
+                "interview_attempted":bool(interview_result.get("attempted")),
+                "last_interview_status":interview_result.get("status"),
+                "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
+                "scan_safety":scan.get("safety") or {},
+                "interview_policy":{
+                    "explicit_public_a2a_endpoint_only":True,
+                    "max_interviews_per_scan":1,
+                    "commercial_or_third_party_actions":False,
+                },
             },
         })
         AUTOPILOT_STATE["seti"]=state
