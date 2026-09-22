@@ -41,7 +41,7 @@ MULTITENANT_SUFFIXES = (
 
 FAMILY_TERMS = [
     ("cybersecurity_tools", ("cybersecurity","security assessment","vulnerability management","phishing analysis","soc automation","security automation")),
-    ("developer_tools", ("developer tool","developer productivity","api debugging","code review tool","devops tool","software developer workflow")),
+    ("developer_tools", ("developer tool","developer productivity","api debugging","code review tool","devops tool","devops","software developer workflow")),
     ("integration_api", ("api integration","webhook","integration platform","connect saas","system integration")),
     ("ai_tools", ("ai assistant","ai tool","llm","generative ai","ai automation","agentic")),
     ("micro_saas", ("micro saas","niche saas","small saas","vertical saas")),
