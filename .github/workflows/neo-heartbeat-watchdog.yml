@@ -2,7 +2,7 @@ name: MYCELIX Heartbeat Watchdog
 
 on:
   schedule:
-    - cron: "15,45 * * * *"
+    - cron: "11,26,41,56 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -55,6 +55,31 @@ jobs:
               "runtime_stale": runtime_stale,
               "cycles_completed": ap.get("cycles_completed"),
           })
+          PY
+
+      - name: Capture NEO Render diagnostics
+        continue-on-error: true
+        run: |
+          set +e
+          curl --silent --show-error --max-time 45 \
+            "https://neo-collettive.onrender.com/api/render/diagnostics?target=neo" \
+            -o /tmp/render-diagnostics.json
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo "Render diagnostics unavailable (curl rc=$rc)"
+            exit 0
+          fi
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/render-diagnostics.json",encoding="utf-8"))
+          print(json.dumps({
+              "ok": d.get("ok"),
+              "assessment": d.get("assessment"),
+              "service": d.get("service"),
+              "recent_deploys": d.get("recent_deploys"),
+              "categories": d.get("categories"),
+              "important": d.get("important"),
+          }, ensure_ascii=False, indent=2, default=str))
           PY
 
       - name: Check published snapshot freshness
