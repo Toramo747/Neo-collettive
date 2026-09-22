@@ -4,6 +4,7 @@ import base64
 import html
 import json
 import os
+import re
 import secrets
 import time
 import zlib
@@ -38,6 +39,7 @@ from evidence_integrity import (
     make_problem_id,
     make_thesis_id,
     migrate_evidence_memory,
+    structured_paid_source,
 )
 
 import httpx
@@ -49,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.72.0"  # SETI interview quarantine + collective admission
+VERSION = "0.73.0"  # commercial-source routing for PAID_DEMAND
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -4208,6 +4210,8 @@ def _commercial_evidence_quality(
 
         weak=[t for t in weak_terms if contains_term(context,t)]
         signal_types=_demand_signal_type(title,context,query_role)
+        if structured_paid_source(source,query_role):
+            signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
         if not signal_types:
             reject("no_demand_signal",url,title,query_role)
             return
@@ -4215,6 +4219,8 @@ def _commercial_evidence_quality(
         problem_key=canonical_problem_key(family,_problem_signature(family,title,context))
         positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(signal_types))
         strong=[t for t in buyer_strong_terms if contains_term(context,t)] if "PAID_DEMAND" in signal_types else []
+        if structured_paid_source(source,query_role) and "PAID_DEMAND" in signal_types and not strong:
+            strong=["structured_job_market"]
         gate_eligible=bool(
             query_role!="disconfirm"
             and "DISCONFIRM" not in signal_types
@@ -4260,7 +4266,14 @@ def _commercial_evidence_quality(
         role=str(meta.get("role") or meta.get("class") or "web")
         for item in group.get("results") or []:
             if isinstance(item,dict):
-                ingest(item.get("url") or "",item.get("title") or "",item.get("snippet") or "","web",q,role)
+                ingest(
+                    item.get("url") or "",
+                    item.get("title") or "",
+                    item.get("snippet") or "",
+                    item.get("source") or "web",
+                    q,
+                    role,
+                )
 
     for item in scouts or []:
         if isinstance(item,dict):
@@ -4617,10 +4630,181 @@ async def seti_public_search(query: str, limit: int = 6) -> dict:
     }
 
 
+def _strip_html_text(value: str, limit: int = 5000) -> str:
+    text=re.sub(r"<[^>]+>"," ",str(value or ""))
+    text=html.unescape(text)
+    return " ".join(text.split())[:limit]
+
+
+async def _remotive_paid_search(query: str, meta: dict | None = None, limit: int = 5) -> list[dict]:
+    """Public Remotive jobs feed used only for paid-market discovery."""
+    seed=natural_search_seed(query,meta or {})
+    if not seed:
+        return []
+    try:
+        async with httpx.AsyncClient(
+            timeout=min(TIMEOUT,12),
+            follow_redirects=True,
+            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+        ) as client:
+            r=await client.get("https://remotive.com/api/remote-jobs",params={"search":seed,"limit":max(1,min(limit,10))})
+        if not r.is_success:
+            return []
+        data=r.json()
+        out=[]
+        for x in (data.get("jobs") or [])[:max(1,min(limit,10))]:
+            if not isinstance(x,dict):
+                continue
+            title=str(x.get("title") or "").strip()
+            url=str(x.get("url") or "").strip()
+            if not title or not url:
+                continue
+            description=_strip_html_text(x.get("description") or "",2600)
+            category=str(x.get("category") or "")
+            job_type=str(x.get("job_type") or "")
+            salary=str(x.get("salary") or "")
+            company=str(x.get("company_name") or "")
+            snippet=" ".join(v for v in [
+                "Hiring",title,
+                ("at "+company) if company else "",
+                ("Category: "+category) if category else "",
+                ("Job type: "+job_type) if job_type else "",
+                ("Compensation: "+salary) if salary else "",
+                description,
+            ] if v)
+            out.append({
+                "title":title,
+                "url":url,
+                "snippet":snippet[:3600],
+                "source":"remotive-api",
+                "commercial_source":True,
+                "published_at":x.get("publication_date"),
+            })
+        return out
+    except Exception:
+        return []
+
+
+async def _remoteok_paid_search(query: str, meta: dict | None = None, limit: int = 5) -> list[dict]:
+    """Public Remote OK JSON feed; locally relevance-filtered for the current thesis."""
+    seed=natural_search_seed(query,meta or {})
+    if not seed:
+        return []
+    try:
+        async with httpx.AsyncClient(
+            timeout=min(TIMEOUT,12),
+            follow_redirects=True,
+            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+        ) as client:
+            r=await client.get("https://remoteok.com/api")
+        if not r.is_success:
+            return []
+        data=r.json()
+        rows=data if isinstance(data,list) else []
+        out=[]
+        for x in rows:
+            if not isinstance(x,dict) or not x.get("position"):
+                continue
+            title=str(x.get("position") or "").strip()
+            company=str(x.get("company") or "").strip()
+            tags=" ".join(str(v) for v in (x.get("tags") or []) if str(v).strip())
+            description=_strip_html_text(x.get("description") or "",2200)
+            salary_min=x.get("salary_min")
+            salary_max=x.get("salary_max")
+            salary=""
+            if salary_min or salary_max:
+                salary="Compensation range: "+str(salary_min or "?")+"-"+str(salary_max or "?")
+            text=" ".join(v for v in [title,company,tags,description] if v)
+            rel=query_relevance(title,text,query,meta or {})
+            if not rel.get("relevant"):
+                continue
+            url=str(x.get("url") or x.get("apply_url") or "").strip()
+            if not url:
+                continue
+            snippet=" ".join(v for v in [
+                "Hiring",title,
+                ("at "+company) if company else "",
+                ("Skills: "+tags) if tags else "",
+                salary,
+                description,
+            ] if v)
+            out.append({
+                "title":title,
+                "url":url,
+                "snippet":snippet[:3600],
+                "source":"remoteok-api",
+                "commercial_source":True,
+                "published_at":x.get("date"),
+                "query_relevance":rel,
+            })
+            if len(out)>=max(1,min(limit,10)):
+                break
+        return out
+    except Exception:
+        return []
+
+
+async def paid_market_search(query: str, meta: dict | None = None, limit: int = 6) -> dict:
+    """Commercial-demand router. General web is fallback, not the primary source."""
+    meta=meta if isinstance(meta,dict) else {}
+    seed=natural_search_seed(query,meta) or query
+    batches=await asyncio.gather(
+        _remotive_paid_search(query,meta,max(2,min(limit,6))),
+        _remoteok_paid_search(query,meta,max(2,min(limit,6))),
+        free_web_search(seed,max(2,min(3,limit))),
+        return_exceptions=True,
+    )
+    results=[]
+    seen=set()
+    source_counts={}
+    for batch in batches:
+        if isinstance(batch,Exception):
+            continue
+        rows=batch.get("results") if isinstance(batch,dict) else batch
+        if not isinstance(rows,list):
+            continue
+        for row in rows:
+            if not isinstance(row,dict):
+                continue
+            url=str(row.get("url") or "").strip()
+            if not url or url in seen:
+                continue
+            rel=row.get("query_relevance") if isinstance(row.get("query_relevance"),dict) else query_relevance(
+                str(row.get("title") or ""),
+                str(row.get("snippet") or ""),
+                query,
+                meta,
+            )
+            if not rel.get("relevant"):
+                continue
+            seen.add(url)
+            item=dict(row)
+            item["query_relevance"]=rel
+            results.append(item)
+            src=str(item.get("source") or "unknown")
+            source_counts[src]=source_counts.get(src,0)+1
+            if len(results)>=max(1,min(limit,12)):
+                break
+        if len(results)>=max(1,min(limit,12)):
+            break
+    return {
+        "ok":True,
+        "query":query,
+        "search_seed":seed,
+        "role":"paid_market",
+        "results":results,
+        "count":len(results),
+        "source_counts":source_counts,
+        "commercial_router":True,
+    }
+
+
 async def routed_public_search(query: str, meta: dict | None = None, limit: int = 6) -> dict:
     """Route one probe across public sources, with Bing RSS only as fallback/supplement."""
     meta=meta if isinstance(meta,dict) else {}
     role=str(meta.get("role") or meta.get("class") or "web")
+    if role=="paid_market":
+        return await paid_market_search(query,meta,limit)
     seed=natural_search_seed(query,meta) or query
     tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
     if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
