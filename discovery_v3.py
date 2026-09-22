@@ -31,7 +31,21 @@ STOP = {
 }
 
 
-OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 2
+OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 3
+
+# Generic employment vacancies can contain words such as "hiring", "looking for"
+# and "compensation", which are not evidence of a buyer problem by themselves.
+JOB_POSTING_MARKERS = (
+    "job type","full_time","full time","part_time","part time","remote job",
+    "job description","responsibilities","requirements","apply now","salary",
+    "compensation","category:",
+)
+OPERATIONAL_PAIN_MARKERS = (
+    "manual","manually","repetitive","time consuming","time-consuming",
+    "frustrat","waste time","workaround","backlog","copy paste","copy/paste",
+    "rekey","struggle","struggling","pain point","bottleneck","error-prone",
+    "error prone","takes hours","hours per week","hours a week",
+)
 
 LAUNCH_TITLE_MARKERS = (
     "show hn:","launch hn:","introducing ","announcing ","we built ","i built ",
@@ -139,6 +153,24 @@ def _is_launch_title(title: str) -> bool:
 def _is_maker_self_report(body: str) -> bool:
     low=_clean_source_text(body).lower()
     return any(x in low for x in MAKER_SELF_REPORT_MARKERS)
+
+
+def _is_generic_job_listing(title: str, body: str) -> bool:
+    """Detect ordinary employment vacancies that can mimic commercial demand."""
+    text=(" "+_clean_source_text(title)+" "+_clean_source_text(body)+" ").lower()
+    marker_hits=sum(1 for marker in JOB_POSTING_MARKERS if marker in text)
+    role_title=bool(re.search(
+        r"\b(?:senior|junior|lead|staff|principal)?\s*"
+        r"(?:data scientist|software engineer|ai engineer|ml engineer|developer|"
+        r"devops engineer|product manager|designer|analyst|consultant)\b",
+        text,
+    ))
+    return marker_hits>=2 or (role_title and marker_hits>=1)
+
+
+def _has_explicit_operational_pain(title: str, body: str) -> bool:
+    text=(" "+_clean_source_text(title)+" "+_clean_source_text(body)+" ").lower()
+    return any(marker in text for marker in OPERATIONAL_PAIN_MARKERS)
 
 
 def _concise_seed(seed: str, family: str) -> str:
@@ -283,6 +315,12 @@ def observed_pain_candidates(
             buy=[m for m in BUY_MARKERS if m in low]
             paid=[m for m in PAID_MARKERS if m in low]
             if not pain and not buy:
+                continue
+            # Employment vacancies frequently contain "hiring", "looking for" and
+            # "compensation". Those phrases describe recruitment, not a source-backed
+            # operational problem. Keep a vacancy only when it explicitly states the
+            # workflow pain that is driving the hiring.
+            if _is_generic_job_listing(clean_title,clean_body) and not _has_explicit_operational_pain(clean_title,clean_body):
                 continue
             # Product-launch posts describing the maker's own build pain are useful
             # technical anecdotes, but not a source-backed customer problem.
