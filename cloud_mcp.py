@@ -58,7 +58,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.77.2"  # require structured job titles to match the active thesis
+VERSION = "0.77.3"  # invalidate stale evidence and keep disconfirm rows out of the gate
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -275,6 +275,26 @@ def _merge_state_payload(payload: dict | None) -> bool:
             AUTOPILOT_STATE["problem_cooldowns"] = {}
             AUTOPILOT_STATE["stagnation_cycles"] = 0
             AUTOPILOT_STATE["active_thesis"] = None
+
+            # A tagger upgrade can invalidate the evidence that authorized an earlier build.
+            # Keep the artifact for audit, but never present it as a currently valid MVP.
+            last_build=AUTOPILOT_STATE.get("last_build")
+            if isinstance(last_build,dict) and str(last_build.get("status") or "") not in {"","INVALIDATED_EVIDENCE"}:
+                invalid=dict(last_build)
+                invalid["status"]="INVALIDATED_EVIDENCE"
+                invalid["invalidated_reason"]="evidence_tagger_upgrade"
+                invalid["invalidated_tagger_version"]=TAGGER_VERSION
+                AUTOPILOT_STATE["last_build"]=invalid
+                history=list(AUTOPILOT_STATE.get("build_history") or [])
+                replaced=False
+                for idx in range(len(history)-1,-1,-1):
+                    if history[idx].get("build_id")==invalid.get("build_id"):
+                        history[idx]=dict(invalid)
+                        replaced=True
+                        break
+                if not replaced:
+                    history.append(dict(invalid))
+                AUTOPILOT_STATE["build_history"]=history[-20:]
     if not migration_changed and isinstance(payload.get("active_thesis"), dict):
         AUTOPILOT_STATE["active_thesis"] = payload.get("active_thesis")
     if isinstance(payload.get("thesis_history"), list):
@@ -4342,7 +4362,7 @@ def _commercial_evidence_quality(
             merged["last_seen_epoch"]=now_epoch
             merged["seen_count"]=int(old.get("seen_count") or 1)+1
             merged["signal_types"]=sorted(set(old.get("signal_types") or []) | set(row.get("signal_types") or []))
-            if row.get("query_role")=="disconfirm":
+            if row.get("query_role")=="disconfirm" or "DISCONFIRM" in set(merged.get("signal_types") or []):
                 merged["gate_eligible"]=False
                 merged["quarantine_reason"]="disconfirm"
             memory[index[key]]=merged
