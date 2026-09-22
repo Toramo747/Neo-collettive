@@ -1,6 +1,6 @@
 import unittest
 
-from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance, structured_job_relevance
+from discovery_v3 import build_evidence_contract, natural_search_seed, observed_pain_candidates, query_relevance, structured_job_relevance
 
 
 class DiscoveryV3Tests(unittest.TestCase):
@@ -143,7 +143,64 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertNotIn("Show HN",rows[0]["job"])
         self.assertIn("customer emails",rows[0]["job"].lower())
-        self.assertEqual(rows[0]["hypothesis_schema_v"],5)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],6)
+
+    def test_evidence_contract_separates_fact_from_inference(self):
+        contract=build_evidence_contract(
+            "Customer email management is taking hours",
+            "Our support team manually copies customer emails into the CRM every day and the process is error-prone.",
+            "customer email management need help manual workaround",
+            "customer_support",
+            "buyer",
+            "customer support teams",
+            "triage and respond to customer emails",
+        )
+        self.assertEqual(contract["schema_v"],1)
+        self.assertTrue(contract["skeptic"]["passed"])
+        self.assertTrue(contract["source_fact"])
+        self.assertNotEqual(contract["source_fact"],contract["inference"])
+        self.assertIn("every day",contract["frequency"])
+        self.assertIn("error-prone",contract["cost_or_impact"])
+
+    def test_evidence_contract_rejects_buyer_words_without_operational_pain(self):
+        contract=build_evidence_contract(
+            "Why Senior Engineers Fail Google SRE Interviews",
+            "Interviewers are looking for evidence. The outcome is still a No Hire.",
+            "Google Sheets reporting automation need help manual workaround",
+            "spreadsheet_process",
+            "buyer",
+            "development teams",
+            "operate Google Sheets reporting automation reliably",
+        )
+        self.assertFalse(contract["skeptic"]["passed"])
+        self.assertIn("no_explicit_operational_pain",contract["skeptic"]["reasons"])
+        self.assertEqual(contract["context_type"],"recruiting_interview")
+
+    def test_known_false_positive_benchmark_stays_blocked(self):
+        cases=[
+            (
+                "Frontend Web Application Developer",
+                "Hiring at KoboToolBox. Job type: full time. Compensation: $90k-$105k. Availability: 35-40 hours per week.",
+                "frontend web application developer freelance hiring budget",
+                "ai_tools","paid_market","customer support teams","operate AI-assisted business workflow reliably",
+            ),
+            (
+                "Junior Payroll Assistant",
+                "Hiring Junior Payroll Assistant. Excel, accounting, customer support and operations skills required.",
+                "spreadsheet process automation freelance hiring budget",
+                "ai_tools","paid_market","customer support teams","clean and automate recurring spreadsheet work",
+            ),
+            (
+                "Why Senior Engineers Fail Google SRE Interviews",
+                "Interviewers are looking for evidence. The outcome is still a No Hire.",
+                "Google Sheets reporting automation need help manual workaround",
+                "spreadsheet_process","buyer","development teams","operate Google Sheets reporting automation reliably",
+            ),
+        ]
+        for title,body,query,family,role,customer,job in cases:
+            with self.subTest(title=title):
+                contract=build_evidence_contract(title,body,query,family,role,customer,job)
+                self.assertFalse(contract["skeptic"]["passed"])
 
     def test_observed_pain_ignores_irrelevant_noise(self):
         q="customer email management need help manual workaround"
@@ -240,7 +297,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         rows=observed_pain_candidates(groups,meta,limit=5)
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["hypothesis_schema_v"],5)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],6)
 
 
 if __name__ == "__main__":
