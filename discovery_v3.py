@@ -149,6 +149,33 @@ def query_relevance(title: str, body: str, query: str, meta: dict | None = None)
     }
 
 
+def structured_job_relevance(title: str, body: str, query: str, meta: dict | None = None) -> dict:
+    """Require the job title itself to match a paid-market thesis, not only its description."""
+    rel=query_relevance(title,body,query,meta)
+    target=set(rel.get("target_tokens") or [])
+    title_tokens=_tokens(title)
+
+    def same_concept(a: str, b: str) -> bool:
+        if a==b:
+            return True
+        # Conservative morphology for job titles, e.g. report/reporting.
+        if min(len(a),len(b))>=5 and (a.startswith(b) or b.startswith(a)):
+            return True
+        return False
+
+    title_overlap=sorted({
+        target_token
+        for target_token in target
+        if any(same_concept(target_token,title_token) for title_token in title_tokens)
+    })
+    needed=1 if len(target)<=1 else 2
+    rel["title_overlap"]=title_overlap
+    rel["title_min_overlap"]=needed
+    rel["base_relevant"]=bool(rel.get("relevant"))
+    rel["relevant"]=bool(rel.get("relevant") and len(title_overlap)>=needed)
+    return rel
+
+
 def _sentence_with_marker(text: str) -> str:
     chunks=[x.strip(" \t\r\n-:;") for x in re.split(r"(?<=[.!?])\s+|\n+",str(text or "")) if x.strip()]
     for chunk in chunks:
