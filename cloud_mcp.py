@@ -24,6 +24,7 @@ from seti_radar import (
     merge_signal_memory,
 )
 from discovery_v3 import (
+    EVIDENCE_CONTRACT_SCHEMA_VERSION,
     OBSERVED_HYPOTHESIS_SCHEMA_VERSION,
     natural_search_seed,
     observed_pain_candidates,
@@ -58,7 +59,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.77.4"  # reject recruiting/interview noise as observed operational pain
+VERSION = "0.78.0"  # Evidence Contract v1 + deterministic skeptic before hypothesis promotion
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -5818,6 +5819,8 @@ def _compact_director_result(result: dict) -> dict:
         "thesis_history": list(AUTOPILOT_STATE.get("thesis_history") or [])[-8:],
         "problem_performance": AUTOPILOT_STATE.get("problem_performance") or {},
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
+        "evidence_contract_schema_v": EVIDENCE_CONTRACT_SCHEMA_VERSION,
+        "observed_pain_candidates": list(AUTOPILOT_STATE.get("observed_pain_candidates") or [])[:10],
         "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
         "product_candidate": result.get("product_candidate") or {},
         "build": result.get("build") or {},
@@ -6225,6 +6228,12 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_scout_count": len(demand_evidence),
         "observed_pain_candidates": list(AUTOPILOT_STATE.get("observed_pain_candidates") or [])[:10],
         "observed_pain_candidate_count": len(AUTOPILOT_STATE.get("observed_pain_candidates") or []),
+        "evidence_contract_schema_v": EVIDENCE_CONTRACT_SCHEMA_VERSION,
+        "evidence_contract_passed_count": len([
+            x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
+            if isinstance(x,dict)
+            and bool(((x.get("evidence_contract") or {}).get("skeptic") or {}).get("passed"))
+        ]),
         "valid_external_answers": len(valid),
         "status": final_status,
         "build_gate": {
