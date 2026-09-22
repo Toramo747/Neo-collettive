@@ -43,11 +43,22 @@ MAKER_SELF_REPORT_MARKERS = (
 )
 
 
+def _token_key(raw: str) -> str:
+    """Light normalization for retrieval only; never used as evidence identity."""
+    token=(raw or "").lower()
+    if len(token)>5 and token.endswith("ies"):
+        token=token[:-3]+"y"
+    elif len(token)>4 and token.endswith("s") and not token.endswith(("ss","us","is")):
+        token=token[:-1]
+    return token
+
+
 def _tokens(text: str) -> set[str]:
     out=set()
     for raw in re.split(r"[^a-zA-Z0-9]+",(text or "").lower()):
-        if len(raw) >= 3 and raw not in STOP:
-            out.add(raw)
+        key=_token_key(raw)
+        if len(key) >= 3 and key not in STOP:
+            out.add(key)
     return out
 
 
