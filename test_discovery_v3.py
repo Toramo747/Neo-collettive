@@ -143,7 +143,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertNotIn("Show HN",rows[0]["job"])
         self.assertIn("customer emails",rows[0]["job"].lower())
-        self.assertEqual(rows[0]["hypothesis_schema_v"],4)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],5)
 
     def test_observed_pain_ignores_irrelevant_noise(self):
         q="customer email management need help manual workaround"
@@ -202,6 +202,25 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
 
+    def test_interview_article_no_hire_is_not_observed_pain(self):
+        q="Google Sheets reporting automation need help manual workaround"
+        meta={
+            q.lower():{
+                "family":"spreadsheet_process",
+                "role":"buyer",
+                "search_alias_used":"Google Sheets reporting automation",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Why Senior Engineers Fail \"Google SRE\" Interviews (2026 Analysis)",
+                "url":"https://news.ycombinator.com/item?id=46314406",
+                "snippet":"Interviewers are looking for evidence of Google Sheets reporting automation reasoning. The outcome is still a No Hire.",
+            }],
+        }]
+        self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
+
     def test_job_listing_with_explicit_operational_pain_can_be_kept(self):
         q="DevOps workflow freelance hiring budget"
         meta={
@@ -221,7 +240,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         rows=observed_pain_candidates(groups,meta,limit=5)
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["hypothesis_schema_v"],4)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],5)
 
 
 if __name__ == "__main__":
