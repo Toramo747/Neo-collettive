@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 3
+SETI_ENGINE_VERSION = 4
 
 DEFAULT_PASSIVE_QUERIES = [
     '"message/send" "jsonrpc" agent -site:a2aregistry.org',
@@ -376,9 +376,12 @@ def merge_private_candidate_state(
     """
     state=dict(private_state) if isinstance(private_state,dict) else {}
     candidates=dict(state.get("candidates") or {})
+    interviews=dict(state.get("interviews") or {})
+    admitted=dict(state.get("admitted") or {})
     now=_utcnow()
     newly_high=0
     reobserved=0
+    rescanned=0
 
     for row in enriched or []:
         if not isinstance(row,dict):
@@ -391,6 +394,14 @@ def merge_private_candidate_state(
         observations=int(prev.get("observations") or 0)+1
         if observations>1:
             reobserved += 1
+        previous_scan=str(prev.get("last_scan_utc") or "")
+        scan_count=int(prev.get("scan_count") or (1 if prev else 0))
+        if previous_scan != now:
+            if prev:
+                scan_count += 1
+                rescanned += 1
+            elif scan_count < 1:
+                scan_count = 1
         if classification=="HIGH_INTEREST" and str(prev.get("classification") or "")!="HIGH_INTEREST":
             newly_high += 1
         sources=sorted(set(
@@ -416,6 +427,8 @@ def merge_private_candidate_state(
             "source_diversity":len(sources),
             "registry_statuses":registry_statuses,
             "observations":observations,
+            "scan_count":scan_count,
+            "last_scan_utc":now,
             "first_seen_utc":str(prev.get("first_seen_utc") or row.get("first_seen_utc") or now),
             "last_seen_utc":str(row.get("last_seen_utc") or now),
         }
@@ -432,15 +445,18 @@ def merge_private_candidate_state(
     )[:max(4,min(max_entries,24))]
 
     state={
-        "schema_v":1,
+        "schema_v":2,
         "updated_at_utc":now,
         "candidates":dict(ranked),
+        "interviews":dict(list(interviews.items())[-32:]),
+        "admitted":dict(list(admitted.items())[-16:]),
     }
     summary={
         "private_candidates":len(ranked),
         "private_high_interest":sum(1 for _,v in ranked if (v or {}).get("classification")=="HIGH_INTEREST"),
         "private_interesting":sum(1 for _,v in ranked if (v or {}).get("classification")=="INTERESTING"),
         "reobserved_this_scan":reobserved,
+        "rescanned_candidates":rescanned,
         "new_high_interest_this_scan":newly_high,
         "max_private_score":max([int((v or {}).get("max_score") or 0) for _,v in ranked] or [0]),
         "max_source_diversity":max([int((v or {}).get("source_diversity") or 0) for _,v in ranked] or [0]),
