@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.75.0"  # observed-pain human problem extraction + plural-normalized relevance
+VERSION = "0.75.1"  # invalidate stale observed-pain theses + plural-normalized relevance
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -3268,11 +3268,17 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
 
     active=AUTOPILOT_STATE.get("active_thesis")
     if isinstance(active,dict) and active.get("status")=="ACTIVE":
+        # Observed-pain hypotheses are persisted across deploys. Do not let a thesis
+        # created by the pre-humanization schema keep consuming convergence cycles.
+        stale_observed=(
+            str(active.get("origin") or "")=="observed_pain"
+            and int(active.get("hypothesis_schema_v") or 1)<2
+        )
         used=int(active.get("cycles_used") or 0)
         budget=max(1,int(active.get("budget_cycles") or 4))
-        if used>=budget:
+        if stale_observed or used>=budget:
             finished=dict(active)
-            finished["status"]="EXHAUSTED"
+            finished["status"]="STALE_SCHEMA" if stale_observed else "EXHAUSTED"
             finished["closed_at_cycle"]=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
             hist=list(AUTOPILOT_STATE.get("thesis_history") or [])
             hist.append(finished)
@@ -3309,8 +3315,10 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         thesis_origin="static_fallback"
         source_url=""
         source_title=""
+        hypothesis_schema_v=0
         if observed:
             cand=observed[0]
+            hypothesis_schema_v=int(cand.get("hypothesis_schema_v") or 1)
             h={
                 "customer":str(cand.get("customer") or "buyers"),
                 "job":str(cand.get("job") or cand.get("term") or "observed problem"),
@@ -3358,6 +3366,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             "missing":missing,
             "rank":score,
             "origin":thesis_origin,
+            "hypothesis_schema_v":hypothesis_schema_v,
             "source_url":source_url,
             "source_title":source_title,
         }
