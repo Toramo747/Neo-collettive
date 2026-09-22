@@ -76,7 +76,10 @@ jobs:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           set -euo pipefail
-          curl --fail --show-error --silent --max-time 60 "$RENDER_DEPLOY_HOOK" > /tmp/deploy.txt
+          sep='?'
+          case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          deploy_url="${RENDER_DEPLOY_HOOK}${sep}ref=${GITHUB_SHA}"
+          curl --fail --show-error --silent --max-time 60 "$deploy_url" > /tmp/deploy.txt
           cat /tmp/deploy.txt || true
 
       - name: Wait for expected NEO version
