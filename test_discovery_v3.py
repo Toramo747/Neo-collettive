@@ -53,6 +53,48 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(rows[0]["source_url"],"https://example.com/problem")
         self.assertGreaterEqual(rows[0]["priority"],50)
 
+    def test_launch_post_self_report_is_not_promoted_as_customer_problem(self):
+        q="AI assistant SaaS need help manual workaround"
+        meta={
+            q.lower():{
+                "family":"ai_tools",
+                "role":"buyer",
+                "search_alias_used":"AI assistant SaaS",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Show HN: Mwe-MCP – self-hosted memory for AI agents that knows who may know what",
+                "url":"https://github.com/Fr4nZ82/mwe-mcp",
+                "snippet":"The repo is mostly vibe-coded. I've been a developer since the last millennium and I would never have managed to finish it in a reasonable time; it is in production and I have been using it for months, fixing the problems as they come.",
+            }],
+        }]
+        self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
+
+    def test_observed_problem_uses_human_job_not_article_title(self):
+        q="customer email management need help manual workaround"
+        meta={
+            q.lower():{
+                "family":"ai_tools",
+                "role":"buyer",
+                "search_alias_used":"customer email management",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Show HN: Inbox helper for small support teams",
+                "url":"https://example.com/problem",
+                "snippet":"Our support team manually copies customer emails into the CRM and needs help because the process is repetitive and time consuming.",
+            }],
+        }]
+        rows=observed_pain_candidates(groups,meta,limit=5)
+        self.assertEqual(len(rows),1)
+        self.assertNotIn("Show HN",rows[0]["job"])
+        self.assertIn("customer emails",rows[0]["job"].lower())
+        self.assertEqual(rows[0]["hypothesis_schema_v"],2)
+
     def test_observed_pain_ignores_irrelevant_noise(self):
         q="customer email management need help manual workaround"
         meta={
