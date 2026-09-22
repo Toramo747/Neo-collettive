@@ -93,7 +93,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertNotIn("Show HN",rows[0]["job"])
         self.assertIn("customer emails",rows[0]["job"].lower())
-        self.assertEqual(rows[0]["hypothesis_schema_v"],3)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],4)
 
     def test_observed_pain_ignores_irrelevant_noise(self):
         q="customer email management need help manual workaround"
@@ -133,6 +133,25 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
 
+    def test_job_listing_availability_hours_is_not_observed_pain(self):
+        q="frontend web application developer freelance hiring budget"
+        meta={
+            q.lower():{
+                "family":"ai_tools",
+                "role":"paid_market",
+                "search_alias_used":"frontend web application developer",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Frontend Web Application Developer",
+                "url":"https://remotive.com/remote-jobs/design/frontend-web-application-developer-2091141",
+                "snippet":"Hiring Frontend Web Application Developer at KoboToolbox Category: Design Job type: full_time Compensation: $90k - $105k Location: Remote Availability: 35-40 hours per week Reporting to: Lead developer.",
+            }],
+        }]
+        self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
+
     def test_job_listing_with_explicit_operational_pain_can_be_kept(self):
         q="DevOps workflow freelance hiring budget"
         meta={
@@ -152,7 +171,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         rows=observed_pain_candidates(groups,meta,limit=5)
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["hypothesis_schema_v"],3)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],4)
 
 
 if __name__ == "__main__":
