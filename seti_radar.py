@@ -678,6 +678,67 @@ def interview_response_score(text: str) -> dict:
     }
 
 
+def inbound_admission_transition(sender_declared: bool, text: str, previous: dict | None = None) -> dict:
+    """Classify a public inbound contact before it may contribute to collective memory.
+
+    Identity remains self-declared unless separately verified. A first contact must
+    demonstrate both capabilities and an agent protocol. Weak contacts stay PARKED
+    and may retry up to three times. Already-admitted peers remain admitted.
+    """
+    previous=previous if isinstance(previous,dict) else {}
+    old_status=str(previous.get("status") or "").upper()
+    old_attempts=max(0,int(previous.get("interview_attempts") or 0))
+
+    if old_status=="ADMITTED":
+        return {
+            "status":"ADMITTED",
+            "interview_attempts":old_attempts,
+            "interview_score":int(previous.get("interview_score") or 0),
+            "markers":previous.get("markers") if isinstance(previous.get("markers"),dict) else {},
+            "identity_status":str(previous.get("identity_status") or "self_declared"),
+            "retry_allowed":False,
+            "newly_admitted":False,
+            "reason":"previously_admitted",
+        }
+
+    if not sender_declared:
+        return {
+            "status":"ANONYMOUS",
+            "interview_attempts":old_attempts,
+            "interview_score":0,
+            "markers":{},
+            "identity_status":"anonymous",
+            "retry_allowed":True,
+            "newly_admitted":False,
+            "reason":"declared_agent_identity_required",
+        }
+
+    attempts=old_attempts+1
+    scored=interview_response_score(text)
+    if scored.get("accepted"):
+        return {
+            "status":"ADMITTED",
+            "interview_attempts":attempts,
+            "interview_score":int(scored.get("score") or 0),
+            "markers":scored.get("markers") or {},
+            "identity_status":"self_declared",
+            "retry_allowed":False,
+            "newly_admitted":True,
+            "reason":"substantive_protocol_aware_introduction",
+        }
+
+    return {
+        "status":"PARKED",
+        "interview_attempts":attempts,
+        "interview_score":int(scored.get("score") or 0),
+        "markers":scored.get("markers") or {},
+        "identity_status":"self_declared",
+        "retry_allowed":bool(attempts<3),
+        "newly_admitted":False,
+        "reason":"introduction_not_yet_sufficient" if attempts<3 else "parked_after_three_weak_introductions",
+    }
+
+
 def merge_signal_memory(memory: dict, scan: dict, max_entries: int = 80) -> tuple[dict,list[dict]]:
     """Persist only non-reversible fingerprints/metadata, never target URLs or snippets."""
     old=memory if isinstance(memory,dict) else {}
