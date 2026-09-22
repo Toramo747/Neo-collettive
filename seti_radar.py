@@ -237,6 +237,10 @@ def score_public_result(row: dict) -> dict:
 
     score=max(0,min(100,score))
     source=str(row.get("source") or "public_search")
+    source_provenance=[
+        str(x) for x in (row.get("source_provenance") or [source])
+        if str(x).strip()
+    ][:8]
     source_kind=(
         "code_artifact" if source.startswith("github-")
         else "community_index" if source.startswith(("hn-","stackexchange"))
@@ -252,7 +256,10 @@ def score_public_result(row: dict) -> dict:
         "classification":_classification(score),
         "signals":signals,
         "source":source,
+        "source_provenance":source_provenance,
         "source_kind":source_kind,
+        "indexed_declared_endpoint":bool(row.get("indexed_declared_endpoint")),
+        "provenance_url":str(row.get("provenance_url") or "")[:1200],
     }
 
 
@@ -339,7 +346,7 @@ async def deep_space_scan(
 
     raw_results=[]
     search_errors=[]
-    seen_urls=set()
+    seen_pairs=set()
     source_counts={}
     for q,batch in zip(queries,batches):
         if isinstance(batch,Exception):
@@ -351,19 +358,45 @@ async def deep_space_scan(
         for row in batch.get("results") or []:
             if not isinstance(row,dict):
                 continue
-            url=str(row.get("url") or "").strip()
-            if not url or url in seen_urls:
-                continue
-            seen_urls.add(url)
-            copy=dict(row)
-            copy["_query"]=q
-            raw_results.append(copy)
-            src=str(copy.get("source") or "unknown")
-            source_counts[src]=source_counts.get(src,0)+1
+            expanded=[dict(row)]+indexed_endpoint_leads(row,limit=4)
+            for copy in expanded:
+                url=str(copy.get("url") or "").strip()
+                src=str(copy.get("source") or "unknown")
+                pair=(url,src)
+                if not url or pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                copy["_query"]=q
+                raw_results.append(copy)
+                source_counts[src]=source_counts.get(src,0)+1
 
-    scored=[score_public_result(row) for row in raw_results]
-    scored=[x for x in scored if x.get("classification")!="NOISE"]
-    scored.sort(key=lambda x:(int(x.get("agent_likelihood_score") or 0),len(x.get("signals") or [])),reverse=True)
+    scored_raw=[score_public_result(row) for row in raw_results]
+    scored_by_fp={}
+    for row in scored_raw:
+        if row.get("classification")=="NOISE":
+            continue
+        fp=str(row.get("fingerprint") or "")
+        prev=scored_by_fp.get(fp)
+        if prev is None:
+            scored_by_fp[fp]=dict(row)
+            continue
+        sources=sorted(set(
+            list(prev.get("source_provenance") or [prev.get("source")])
+            + list(row.get("source_provenance") or [row.get("source")])
+        ))
+        best=row if int(row.get("agent_likelihood_score") or 0)>int(prev.get("agent_likelihood_score") or 0) else prev
+        merged=dict(best)
+        merged["source_provenance"]=[str(x) for x in sources if str(x).strip()][:8]
+        merged["source_diversity"]=len(merged["source_provenance"])
+        scored_by_fp[fp]=merged
+    scored=list(scored_by_fp.values())
+    for row in scored:
+        row.setdefault("source_diversity",len(row.get("source_provenance") or []))
+    scored.sort(key=lambda x:(
+        int(x.get("agent_likelihood_score") or 0),
+        int(x.get("source_diversity") or 0),
+        len(x.get("signals") or []),
+    ),reverse=True)
 
     check_targets=scored[:max(1,min(registry_checks,20))]
 
@@ -487,9 +520,14 @@ def merge_private_candidate_state(
                 scan_count = 1
         if classification=="HIGH_INTEREST" and str(prev.get("classification") or "")!="HIGH_INTEREST":
             newly_high += 1
+        incoming_sources=[
+            str(x) for x in (row.get("source_provenance") or [])
+            if str(x).strip()
+        ]
+        if row.get("source"):
+            incoming_sources.append(str(row.get("source")))
         sources=sorted(set(
-            list(prev.get("sources") or [])
-            + ([str(row.get("source"))] if row.get("source") else [])
+            list(prev.get("sources") or []) + incoming_sources
         ))[:8]
         registry_statuses=sorted(set(
             list(prev.get("registry_statuses") or [])
