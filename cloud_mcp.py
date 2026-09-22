@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from seti_radar import deep_space_scan, merge_signal_memory
+from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance
 
 from evidence_integrity import (
     EVIDENCE_SCHEMA_VERSION,
@@ -41,7 +42,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.70.0"  # passive SETI deep-space radar
+VERSION = "0.71.0"  # problem-first discovery + routed public retrieval
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -111,6 +112,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "dialogue_history": [],
     "knowledge_ledger": [],
     "hypothesis_queue": [],
+    "observed_pain_candidates": [],
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
@@ -175,6 +177,7 @@ def _state_payload() -> dict:
         "dialogue_history": list(AUTOPILOT_STATE.get("dialogue_history") or [])[-30:],
         "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
         "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-40:],
+        "observed_pain_candidates": list(AUTOPILOT_STATE.get("observed_pain_candidates") or [])[-30:],
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
@@ -221,6 +224,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["knowledge_ledger"] = payload.get("knowledge_ledger")[-80:]
     if isinstance(payload.get("hypothesis_queue"), list):
         AUTOPILOT_STATE["hypothesis_queue"] = payload.get("hypothesis_queue")[-40:]
+    if isinstance(payload.get("observed_pain_candidates"), list):
+        AUTOPILOT_STATE["observed_pain_candidates"] = payload.get("observed_pain_candidates")[-30:]
     if isinstance(payload.get("exploration_history"), list):
         AUTOPILOT_STATE["exploration_history"] = payload.get("exploration_history")[-40:]
     if isinstance(payload.get("inbound_messages"), list):
@@ -3062,21 +3067,21 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
         patterns=[]
         if "independent_domains" in missing or "fresh_independent_domains" in missing:
             patterns += [
-                ('buyer','"{term}" "need help" OR "looking for" OR "pain point" {exclude}'),
-                ('buyer','site:reddit.com "{term}" ("need help" OR "looking for" OR manual) {exclude}'),
-                ('paid_market','site:upwork.com/freelance-jobs "{term}" (budget OR hiring OR freelance) {exclude}'),
-                ('paid_market','site:freelancer.com/jobs "{term}" (budget OR fixed OR hourly) {exclude}'),
+                ('buyer','{term} need help looking for pain point {exclude}'),
+                ('practitioner','{term} manual workaround frustrating {exclude}'),
+                ('paid_market','{term} freelance hiring budget contractor {exclude}'),
+                ('paid_market','{term} fixed price hourly job {exclude}'),
             ]
         if "commercial_source" in missing or "paid_demand" in missing:
             patterns += [
-                ('paid_market','"{term}" budget OR hiring OR contractor -site:github.com {exclude}'),
-                ('paid_market','"{term}" "will pay" OR "fixed-price" OR hourly -site:github.com {exclude}'),
+                ('paid_market','{term} budget hiring contractor {exclude}'),
+                ('paid_market','{term} will pay fixed price hourly {exclude}'),
             ]
         if "buyer_pain" in missing:
-            patterns += [('buyer','"{term}" "looking for" OR "need help" OR frustrating -site:github.com {exclude}')]
+            patterns += [('buyer','{term} looking for need help frustrating {exclude}')]
         patterns += [
-            ('buyer','site:reddit.com "{term}" "need help" OR "looking for" OR manual {exclude}'),
-            ('practitioner','site:news.ycombinator.com "{term}" customer OR problem OR workflow {exclude}'),
+            ('buyer','{term} need help manual problem {exclude}'),
+            ('practitioner','{term} customer problem workflow {exclude}'),
         ]
         quota=2 if pos==0 else 1
         added=0
@@ -3182,18 +3187,57 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         score,key,cl,missing=ranked[0]
         family=cl["family"]
         broad=not gate_eligible_problem_key(key)
-        hypotheses=_human_problem_hypotheses(family,key) if broad else []
-        if not hypotheses:
-            term=key.split(":",1)[-1].replace("_"," ")
-            hypotheses=[{
-                "customer":"buyers",
-                "job":term,
-                "pain":f"manual or costly work around {term}",
-                "term":term,
-            }]
         history=list(AUTOPILOT_STATE.get("thesis_history") or [])
-        prior_for_seed=sum(1 for x in history if isinstance(x,dict) and x.get("seed_problem_key")==key)
-        h=hypotheses[prior_for_seed % len(hypotheses)]
+
+        observed=[
+            x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
+            if isinstance(x,dict) and str(x.get("family") or "")==family
+        ]
+        used_sources={
+            str(x.get("source_url") or "")
+            for x in history if isinstance(x,dict) and str(x.get("source_url") or "")
+        }
+        observed=[
+            x for x in observed
+            if str(x.get("source_url") or "") not in used_sources
+        ]
+        observed.sort(
+            key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),
+            reverse=True,
+        )
+
+        h=None
+        thesis_origin="static_fallback"
+        source_url=""
+        source_title=""
+        if observed:
+            cand=observed[0]
+            h={
+                "customer":str(cand.get("customer") or "buyers"),
+                "job":str(cand.get("job") or cand.get("term") or "observed problem"),
+                "pain":str(cand.get("pain") or "observed manual/problem signal"),
+                "term":str(cand.get("term") or cand.get("job") or ""),
+                "search_aliases":list(cand.get("search_aliases") or []),
+            }
+            source_url=str(cand.get("source_url") or "")
+            source_title=str(cand.get("source_title") or "")
+            thesis_origin="observed_pain"
+            key=canonical_problem_key(family,family+":"+safe_problem_tail(h["term"] or h["job"]))
+            broad=False
+
+        if not h:
+            hypotheses=_human_problem_hypotheses(family,key) if broad else []
+            if not hypotheses:
+                term=key.split(":",1)[-1].replace("_"," ")
+                hypotheses=[{
+                    "customer":"buyers",
+                    "job":term,
+                    "pain":f"manual or costly work around {term}",
+                    "term":term,
+                }]
+            prior_for_seed=sum(1 for x in history if isinstance(x,dict) and x.get("seed_problem_key")==key)
+            h=hypotheses[prior_for_seed % len(hypotheses)]
+
         problem_id=make_problem_id(family,h["customer"],h["job"])
         thesis_id=make_thesis_id(family,h["customer"],h["job"],h["pain"])
         active={
@@ -3214,6 +3258,9 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             "broad_cluster_refinement":broad,
             "missing":missing,
             "rank":score,
+            "origin":thesis_origin,
+            "source_url":source_url,
+            "source_title":source_title,
         }
         AUTOPILOT_STATE["active_thesis"]=active
 
@@ -3237,12 +3284,12 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
     # The thesis remains human-readable and stable. Search vocabulary is deliberately
     # shorter and rotates across synonyms so Bing does not overfit one literal sentence.
     probes=[
-        ("buyer",f'site:reddit.com "{alias(0)}" ("small business" OR agency OR operations) (manual OR repetitive OR workaround)'),
-        ("paid_market",f'site:upwork.com/freelance-jobs "{alias(1)}" (freelancer OR contractor OR hourly OR fixed-price)'),
-        ("paid_market",f'site:freelancer.com/jobs "{alias(2)}" (budget OR freelancer OR hourly OR fixed)'),
-        ("practitioner",f'"{alias(3)}" (manual OR repetitive OR workflow OR workaround) -site:wikipedia.org -site:github.com'),
-        ("alternative",f'"{alias(4)}" (software OR pricing OR subscription OR "book a demo")'),
-        ("disconfirm",f'"{alias(5)}" ("already automated" OR solved OR "not worth" OR "no need")'),
+        ("buyer",f'{alias(0)} need help manual workaround'),
+        ("paid_market",f'{alias(1)} freelance hiring budget'),
+        ("paid_market",f'{alias(2)} fixed price hourly job'),
+        ("practitioner",f'{alias(3)} manual repetitive workflow problem'),
+        ("alternative",f'{alias(4)} software pricing subscription'),
+        ("disconfirm",f'{alias(5)} already automated solved no need'),
     ]
     out=[]
     for role,q in probes[:max(0,limit)]:
@@ -3434,10 +3481,10 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
         # source classes. Avoid generic trigger phrases that Bing often interprets
         # as names, dictionaries or unrelated media.
         templates=[
-            f'site:reddit.com "{term}" (manual OR repetitive OR workflow OR workaround)',
-            f'site:upwork.com/freelance-jobs "{term}" (contractor OR freelancer OR hourly OR fixed-price)',
-            f'"{term}" ("small business" OR operations OR team) (manual OR workflow OR repetitive) -site:wikipedia.org',
-            f'site:news.ycombinator.com "{term}" (customer OR workflow OR manual OR problem)',
+            f'{term} manual repetitive workflow workaround',
+            f'{term} freelance contractor hourly fixed price',
+            f'{term} small business operations problem',
+            f'{term} customer workflow need help',
         ]
         query=rng.choice(templates)
         return {
@@ -4045,6 +4092,12 @@ def _commercial_evidence_quality(
                 reject("github_no_buyer_problem_context",url,title,query_role)
                 return
 
+        meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
+        relevance=query_relevance(title,body,query,meta)
+        if query and not relevance.get("relevant"):
+            reject("query_irrelevant",url,title,query_role)
+            return
+
         text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
@@ -4073,7 +4126,6 @@ def _commercial_evidence_quality(
             and gate_eligible_problem_key(problem_key)
             and positive
         )
-        meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         row={
             "schema_v":EVIDENCE_SCHEMA_VERSION,
             "tagger_v":TAGGER_VERSION,
@@ -4300,6 +4352,150 @@ def _commercial_evidence_quality(
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
     }
 
+def safe_problem_tail(value: str, max_len: int = 72) -> str:
+    raw="".join(ch.lower() if ch.isalnum() else "_" for ch in str(value or ""))
+    while "__" in raw:
+        raw=raw.replace("__","_")
+    return (raw.strip("_") or "observed_problem")[:max_len]
+
+
+async def _hn_query_search(query: str, limit: int = 4) -> list[dict]:
+    seed=natural_search_seed(query,{})
+    if not seed:
+        return []
+    try:
+        data=await get_json(
+            "https://hn.algolia.com/api/v1/search_by_date",
+            {"query":seed,"tags":"story","hitsPerPage":max(1,min(limit,8))},
+        )
+        out=[]
+        for x in (data.get("hits") or [])[:limit]:
+            if not isinstance(x,dict):
+                continue
+            url=x.get("url") or ("https://news.ycombinator.com/item?id="+str(x.get("objectID") or ""))
+            out.append({
+                "title":x.get("title") or "",
+                "url":url,
+                "snippet":x.get("story_text") or x.get("title") or "",
+                "source":"hn-algolia-routed",
+            })
+        return out
+    except Exception:
+        return []
+
+
+async def _github_issue_query_search(query: str, limit: int = 4) -> list[dict]:
+    seed=natural_search_seed(query,{})
+    if not seed:
+        return []
+    try:
+        headers={"Accept":"application/vnd.github+json","User-Agent":"MYCELIX/"+VERSION}
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False,headers=headers) as client:
+            r=await client.get(
+                "https://api.github.com/search/issues",
+                params={"q":seed+" is:issue","sort":"updated","order":"desc","per_page":max(1,min(limit,8))},
+            )
+            if not r.is_success:
+                return []
+            data=r.json()
+        return [{
+            "title":x.get("title") or "",
+            "url":x.get("html_url") or "",
+            "snippet":x.get("body") or x.get("title") or "",
+            "source":"github-issues-routed",
+        } for x in (data.get("items") or [])[:limit] if isinstance(x,dict)]
+    except Exception:
+        return []
+
+
+async def _stackexchange_query_search(query: str, limit: int = 4) -> list[dict]:
+    seed=natural_search_seed(query,{})
+    if not seed:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=True) as client:
+            r=await client.get(
+                "https://api.stackexchange.com/2.3/search/advanced",
+                params={
+                    "order":"desc","sort":"activity","q":seed,
+                    "site":"stackoverflow","pagesize":max(1,min(limit,8)),
+                    "filter":"withbody",
+                },
+            )
+            if not r.is_success:
+                return []
+            data=r.json()
+        out=[]
+        for x in (data.get("items") or [])[:limit]:
+            if not isinstance(x,dict):
+                continue
+            out.append({
+                "title":html.unescape(str(x.get("title") or "")),
+                "url":x.get("link") or "",
+                "snippet":html.unescape(str(x.get("body") or "")),
+                "source":"stackexchange-routed",
+            })
+        return out
+    except Exception:
+        return []
+
+
+async def routed_public_search(query: str, meta: dict | None = None, limit: int = 6) -> dict:
+    """Route one probe across public sources, with Bing RSS only as fallback/supplement."""
+    meta=meta if isinstance(meta,dict) else {}
+    role=str(meta.get("role") or meta.get("class") or "web")
+    seed=natural_search_seed(query,meta) or query
+    tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
+    if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
+        tasks.append(_github_issue_query_search(seed,3))
+    if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
+        tasks.append(_stackexchange_query_search(seed,3))
+    batches=await asyncio.gather(*tasks,return_exceptions=True)
+
+    results=[]
+    seen=set()
+    source_counts={}
+    for batch in batches:
+        if isinstance(batch,Exception):
+            continue
+        rows=batch.get("results") if isinstance(batch,dict) else batch
+        if not isinstance(rows,list):
+            continue
+        for row in rows:
+            if not isinstance(row,dict):
+                continue
+            url=str(row.get("url") or "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            rel=query_relevance(
+                str(row.get("title") or ""),
+                str(row.get("snippet") or ""),
+                query,
+                meta,
+            )
+            if not rel.get("relevant"):
+                continue
+            item=dict(row)
+            item["query_relevance"]=rel
+            results.append(item)
+            src=str(item.get("source") or "unknown")
+            source_counts[src]=source_counts.get(src,0)+1
+            if len(results)>=max(1,min(limit,12)):
+                break
+        if len(results)>=max(1,min(limit,12)):
+            break
+    return {
+        "ok":True,
+        "query":query,
+        "search_seed":seed,
+        "role":role,
+        "results":results,
+        "count":len(results),
+        "source_counts":source_counts,
+    }
+
+
 async def free_web_search(query: str, limit: int = 6) -> dict:
     """Free public web discovery via Bing RSS. No API key and no paid provider."""
     q = " ".join((query or "").strip().split())
@@ -4354,15 +4550,27 @@ def _jarvis_next_queries(jarvis_result: dict) -> list[str]:
     return []
 
 
-async def _free_web_research(queries: list[str], per_query: int = 5) -> list[dict]:
+async def _free_web_research(
+    queries: list[str],
+    per_query: int = 5,
+    query_meta: dict[str,dict] | None = None,
+) -> list[dict]:
     clean = []
+    query_meta=query_meta or {}
     for q in queries:
         q = " ".join((q or "").strip().split())
         if q and q.lower() not in {x.lower() for x in clean}:
             clean.append(q)
     if not clean:
         return []
-    return await asyncio.gather(*(free_web_search(q, per_query) for q in clean[:10]))
+    return await asyncio.gather(*(
+        routed_public_search(
+            q,
+            query_meta.get(q.lower()) or {},
+            per_query,
+        )
+        for q in clean[:10]
+    ))
 
 
 async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
@@ -5358,9 +5566,21 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
     followup_queries = _jarvis_next_queries(jarvis_brief)
     web_queries = searches + followup_queries
+    async def ask_probe_agents(q: str) -> dict:
+        meta=query_meta.get(" ".join(q.split()).lower()) or {}
+        role=str(meta.get("role") or meta.get("class") or "research")
+        question=(
+            "Investigate this exact problem-discovery probe: "+q+"\n"
+            "Role: "+role+". Find concrete public evidence of a real human/business problem. "
+            "Prefer first-hand pain, workaround, hiring/budget or buyer-intent signals. "
+            "Return up to 3 public source URLs with a short explanation. Do not invent sources. "
+            "Your answer is only a lead: NEO will independently verify any source before it can affect a gate."
+        )
+        return await ask_agents_data(q,question,max_agents)
+
     scout_results, web_research = await asyncio.gather(
-        asyncio.gather(*(ask_agents_data(q, research_question, max_agents) for q in searches)),
-        _free_web_research(web_queries, per_query=5),
+        asyncio.gather(*(ask_probe_agents(q) for q in searches)),
+        _free_web_research(web_queries, per_query=6, query_meta=query_meta),
     )
     evidence = []
     seen_answers = set()
@@ -5407,6 +5627,26 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             for q in searches
         ],
     }
+    observed_now=observed_pain_candidates(web_research,query_meta,limit=12)
+    if observed_now:
+        existing=[
+            x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
+            if isinstance(x,dict)
+        ]
+        merged={}
+        for row in existing+observed_now:
+            key=str(row.get("source_url") or "")+"|"+str(row.get("source_title") or "")
+            if not key.strip("|"):
+                continue
+            prev=merged.get(key)
+            if not prev or int(row.get("priority") or 0)>int(prev.get("priority") or 0):
+                merged[key]=row
+        AUTOPILOT_STATE["observed_pain_candidates"]=sorted(
+            merged.values(),
+            key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),
+            reverse=True,
+        )[:30]
+
     evidence_quality = _commercial_evidence_quality(web_research, demand_evidence, query_meta)
     family_performance = _update_family_performance(evidence_quality)
     product_candidate = build_candidate(evidence_quality)
@@ -5560,6 +5800,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         },
         "evidence_scouts": demand_evidence,
         "evidence_scout_count": len(demand_evidence),
+        "observed_pain_candidates": list(AUTOPILOT_STATE.get("observed_pain_candidates") or [])[:10],
+        "observed_pain_candidate_count": len(AUTOPILOT_STATE.get("observed_pain_candidates") or []),
         "valid_external_answers": len(valid),
         "status": final_status,
         "build_gate": {
