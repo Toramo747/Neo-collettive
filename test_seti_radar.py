@@ -2,6 +2,7 @@ import unittest
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
+    merge_private_candidate_state,
     merge_signal_memory,
     registry_match,
     score_public_result,
@@ -56,6 +57,31 @@ class SetiRadarTests(unittest.TestCase):
             "mcp_registry":{"ok":True,"data":{"servers":[]}},
         }
         self.assertTrue(registry_match(candidate,discovery))
+
+    def test_private_candidate_state_correlates_without_affecting_public_memory(self):
+        rows=[{
+            "fingerprint":"fp1",
+            "title":"Agent Runtime",
+            "url":"https://agent.example.ai/.well-known/agent-card.json",
+            "domain":"agent.example.ai",
+            "snippet":"jsonrpc message/send",
+            "agent_likelihood_score":88,
+            "classification":"HIGH_INTEREST",
+            "signals":[{"type":"a2a_message_send","markers":["message/send"],"weight":24}],
+            "source":"github-code-index-grepapp",
+            "registry_status":"not_found_in_checked_registries",
+            "first_seen_utc":"2026-09-22T09:00:00+00:00",
+            "last_seen_utc":"2026-09-22T09:00:00+00:00",
+        }]
+        state,summary=merge_private_candidate_state({},rows,max_entries=16)
+        self.assertEqual(summary["private_candidates"],1)
+        self.assertEqual(summary["private_high_interest"],1)
+        candidate=next(iter(state["candidates"].values()))
+        self.assertEqual(candidate["url"],"https://agent.example.ai/.well-known/agent-card.json")
+        state2,summary2=merge_private_candidate_state(state,rows,max_entries=16)
+        candidate2=next(iter(state2["candidates"].values()))
+        self.assertEqual(candidate2["observations"],2)
+        self.assertEqual(summary2["reobserved_this_scan"],1)
 
     def test_persistence_bonus_without_storing_target(self):
         scan={
