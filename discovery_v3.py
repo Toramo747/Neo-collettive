@@ -5,6 +5,7 @@ without importing the web runtime.
 """
 from __future__ import annotations
 
+import html
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -28,6 +29,18 @@ STOP = {
     "problem","problems","software","pricing","subscription","already","automated",
     "solved","worth","query","market",
 }
+
+
+OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 2
+
+LAUNCH_TITLE_MARKERS = (
+    "show hn:","launch hn:","introducing ","announcing ","we built ","i built ",
+)
+MAKER_SELF_REPORT_MARKERS = (
+    "i built","i made","i created","my project","our project","our product",
+    "i've been a developer","i have been a developer","vibe-coded","vibe coded",
+    "i've been using it","i have been using it","fixing the problems as they come",
+)
 
 
 def _tokens(text: str) -> set[str]:
@@ -100,6 +113,90 @@ def _sentence_with_marker(text: str) -> str:
     return (chunks[0][:280] if chunks else "")
 
 
+def _clean_source_text(value: str) -> str:
+    text=html.unescape(str(value or ""))
+    text=re.sub(r"<[^>]+>"," ",text)
+    text=re.sub(r"\s+"," ",text)
+    return text.strip()
+
+
+def _is_launch_title(title: str) -> bool:
+    low=_clean_source_text(title).lower()
+    return any(low.startswith(x) for x in LAUNCH_TITLE_MARKERS)
+
+
+def _is_maker_self_report(body: str) -> bool:
+    low=_clean_source_text(body).lower()
+    return any(x in low for x in MAKER_SELF_REPORT_MARKERS)
+
+
+def _concise_seed(seed: str, family: str) -> str:
+    value=_clean_source_text(seed)
+    low=value.lower()
+    if not value or _is_launch_title(value) or len(value.split())>9:
+        defaults={
+            "ai_tools":"AI-assisted business workflow",
+            "developer_tools":"developer workflow",
+            "integration_api":"system integration",
+            "spreadsheet_process":"spreadsheet process",
+            "customer_support":"customer support workflow",
+            "crm_lead_ops":"lead follow-up workflow",
+            "marketing_seo":"marketing workflow",
+            "ecommerce_tools":"ecommerce operations",
+            "workflow_automation":"business workflow",
+            "document_processing":"document processing",
+            "data_cleanup":"data cleanup",
+            "website_audit":"website quality",
+            "cybersecurity_tools":"security operations",
+        }
+        return defaults.get(family,family.replace("_"," ") or "business process")
+    # Search operators or query tails are not a human problem label.
+    value=re.sub(r"\b(?:need help|manual workaround|freelance hiring budget|fixed price hourly job|software pricing subscription)\b"," ",value,flags=re.I)
+    value=re.sub(r"\s+"," ",value).strip(" -:;,")
+    return value[:120] or family.replace("_"," ")
+
+
+def _human_job_hint(title: str, body: str, seed: str, family: str) -> tuple[str,str,list[str]]:
+    text=(" "+_clean_source_text(title)+" "+_clean_source_text(body)+" ").lower()
+    rules=(
+        (("customer email","support email","shared inbox","email support"),"triage and respond to customer emails","customer email support"),
+        (("lead qualification","crm follow","inbound lead","lead routing"),"qualify and follow up on inbound leads","lead qualification and CRM follow-up"),
+        (("pdf extraction","document extraction","invoice data","document processing"),"extract structured data from business documents","document data extraction"),
+        (("spreadsheet","excel","csv cleanup","google sheets"),"clean and automate recurring spreadsheet work","spreadsheet process automation"),
+        (("devops","deployment","ci/cd","continuous integration"),"reduce manual deployment and DevOps maintenance work","DevOps workflow"),
+        (("broken link","website audit","accessibility audit","website qa"),"find and fix recurring website quality issues","website quality audit"),
+        (("duplicate data","deduplication","data cleanup"),"clean and deduplicate operational data","data cleanup"),
+        (("agent memory","memory for ai agents","mcp memory","persistent memory","context memory"),"maintain reliable memory and context for AI agents","AI agent memory"),
+        (("vulnerability","phishing","security assessment","alert fatigue"),"triage recurring security findings and remediation work","security operations"),
+        (("manual transfer","api integration","webhook","data sync","synchronization"),"keep data synchronized across business systems","system integration"),
+    )
+    for markers,job,term in rules:
+        if any(m in text for m in markers):
+            return job,term,[term,job]
+
+    concise=_concise_seed(seed,family)
+    pain_low=_clean_source_text(body).lower()
+    if any(x in pain_low for x in ("fixing","maintain","maintenance","production","breaks","failures","reliability")):
+        job=f"operate {concise} reliably"
+    elif any(x in pain_low for x in ("manual","manually","repetitive","copy paste","copy/paste","time consuming","time-consuming")):
+        job=f"reduce repetitive manual work around {concise}"
+    elif any(x in pain_low for x in ("backlog","frustrat","struggle","problem","need help")):
+        job=f"reduce recurring problems around {concise}"
+    else:
+        job=f"improve the recurring workflow around {concise}"
+    return job[:180],concise[:120],[concise[:120],job[:120]]
+
+
+def _customer_from_source(source_text: str, family: str, query_text: str = "") -> str:
+    # Source wording is evidence; query wording is only a fallback and must not
+    # overwrite a concrete actor named by the source.
+    source=_clean_source_text(source_text)
+    hinted=_customer_hint(source,family)
+    if hinted!="teams experiencing the observed problem":
+        return hinted
+    return _customer_hint(query_text,family)
+
+
 def _customer_hint(text: str, family: str) -> str:
     low=(text or "").lower()
     patterns=(
@@ -168,28 +265,38 @@ def observed_pain_candidates(
             rel=query_relevance(title,body,query,meta)
             if not rel["relevant"]:
                 continue
-            low=(title+" "+body).lower()
+            clean_title=_clean_source_text(title)
+            clean_body=_clean_source_text(body)
+            low=(clean_title+" "+clean_body).lower()
             pain=[m for m in PAIN_MARKERS if m in low]
             buy=[m for m in BUY_MARKERS if m in low]
             paid=[m for m in PAID_MARKERS if m in low]
             if not pain and not buy:
+                continue
+            # Product-launch posts describing the maker's own build pain are useful
+            # technical anecdotes, but not a source-backed customer problem.
+            if _is_launch_title(clean_title) and _is_maker_self_report(clean_body) and not buy and not paid:
                 continue
             host=(urlparse(url).hostname or "").lower()
             key=host+"|"+title.lower()
             if key in seen:
                 continue
             seen.add(key)
-            observed=_sentence_with_marker(body) or title[:280]
-            customer=_customer_hint(query+" "+title+" "+body,family)
-            term=rel["seed"] or title[:120]
+            observed=_sentence_with_marker(clean_body) or clean_body[:280] or clean_title[:280]
+            customer=_customer_from_source(clean_title+" "+clean_body,family,query)
+            seed=rel["seed"] or clean_title[:120]
+            job,term,aliases=_human_job_hint(clean_title,clean_body,seed,family)
             score=min(100,35+rel["score"]//3+min(20,len(pain)*5)+min(15,len(buy)*7)+min(15,len(paid)*7))
+            if _is_launch_title(clean_title):
+                score=max(0,score-12)
             out.append({
+                "hypothesis_schema_v":OBSERVED_HYPOTHESIS_SCHEMA_VERSION,
                 "family":family,
                 "customer":customer,
-                "job":title[:180],
+                "job":job[:180],
                 "pain":observed,
                 "term":term[:160],
-                "search_aliases":[x for x in [term[:120],title[:120]] if x],
+                "search_aliases":[x for x in aliases if x][:4],
                 "source_url":url,
                 "source_domain":host,
                 "source_title":title[:220],
