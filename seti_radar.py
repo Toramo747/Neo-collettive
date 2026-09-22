@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 5
+SETI_ENGINE_VERSION = 6
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
@@ -587,10 +587,12 @@ def merge_private_candidate_state(
 
 
 def interview_candidate_eligibility(candidate: dict) -> dict:
-    """Conservative gate before any active contact.
+    """Allow a bounded first-contact interview when a public agent endpoint is explicit.
 
-    Discovery stays passive. Contact is allowed only for a re-observed HIGH_INTEREST
-    candidate whose indexed URL itself looks like an explicit public A2A endpoint/card.
+    Discovery itself stays passive. Once a public A2A endpoint or Agent Card has already
+    been declared in an indexed source, an INTERESTING/HIGH_INTEREST candidate may be
+    interviewed immediately. Re-observation improves confidence but is no longer required
+    before saying hello; admission still requires a substantive protocol-aware answer.
     """
     if not isinstance(candidate,dict):
         return {"eligible":False,"reason":"invalid_candidate"}
@@ -607,12 +609,8 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
     except Exception:
         return {"eligible":False,"reason":"invalid_url"}
 
-    if classification!="HIGH_INTEREST" and score<75:
-        return {"eligible":False,"reason":"below_high_interest"}
-    if scans<2 and diversity<2:
-        return {"eligible":False,"reason":"needs_independent_reobservation"}
-    if observations<2 and diversity<2:
-        return {"eligible":False,"reason":"insufficient_persistence"}
+    if classification not in {"INTERESTING","HIGH_INTEREST"} and score<50:
+        return {"eligible":False,"reason":"below_interview_interest"}
     if not host or p.scheme!="https":
         return {"eligible":False,"reason":"https_public_endpoint_required"}
 
@@ -623,6 +621,13 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
     if host in artifact_hosts or host.endswith(".github.com"):
         return {"eligible":False,"reason":"indexed_artifact_not_agent_endpoint"}
 
+    confidence={
+        "scan_count":scans,
+        "observations":observations,
+        "source_diversity":diversity,
+        "first_contact":bool(scans<=1 and observations<=1),
+    }
+
     card_paths=("/.well-known/agent-card.json","/.well-known/agent.json")
     if any(path.endswith(x) for x in card_paths):
         return {
@@ -630,6 +635,7 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
             "reason":"public_agent_card",
             "contact_mode":"agent_card",
             "url":url,
+            "confidence":confidence,
         }
 
     explicit_markers=("/a2a","/message/send","/agent/a2a","/agents/a2a")
@@ -639,6 +645,7 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
             "reason":"explicit_public_a2a_endpoint",
             "contact_mode":"direct_a2a",
             "url":url,
+            "confidence":confidence,
         }
 
     return {"eligible":False,"reason":"no_explicit_agent_endpoint"}
