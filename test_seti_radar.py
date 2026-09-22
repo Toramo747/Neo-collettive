@@ -1,6 +1,7 @@
 import unittest
 
 from seti_radar import (
+    SETI_ENGINE_VERSION,
     merge_signal_memory,
     registry_match,
     score_public_result,
@@ -8,6 +9,9 @@ from seti_radar import (
 
 
 class SetiRadarTests(unittest.TestCase):
+    def test_engine_version_is_multisource_revision(self):
+        self.assertGreaterEqual(SETI_ENGINE_VERSION,2)
+
     def test_machine_signature_scores_high(self):
         row={
             "title":"Autonomous runtime JSON-RPC message/send",
@@ -17,6 +21,7 @@ class SetiRadarTests(unittest.TestCase):
         scored=score_public_result(row)
         self.assertGreaterEqual(scored["agent_likelihood_score"],75)
         self.assertEqual(scored["classification"],"HIGH_INTEREST")
+        self.assertEqual(scored["source_kind"],"web_index")
 
     def test_official_registry_is_filtered_as_noise(self):
         row={
@@ -26,6 +31,17 @@ class SetiRadarTests(unittest.TestCase):
         }
         scored=score_public_result(row)
         self.assertEqual(scored["classification"],"NOISE")
+
+    def test_code_index_is_marked_as_code_artifact(self):
+        row={
+            "title":"acme/agent / agent-card.json",
+            "url":"https://github.com/acme/agent/blob/main/agent-card.json",
+            "snippet":"jsonrpc message/send Agent2Agent",
+            "source":"github-code-index-grepapp",
+        }
+        scored=score_public_result(row)
+        self.assertEqual(scored["source_kind"],"code_artifact")
+        self.assertNotEqual(scored["classification"],"NOISE")
 
     def test_registry_match_detects_known_candidate(self):
         candidate={
