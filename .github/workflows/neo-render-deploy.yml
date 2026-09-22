@@ -86,7 +86,48 @@ jobs:
         run: |
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
+          deploy_id="$(python - <<'PY'
+          import json
+          try:
+              d=json.load(open("/tmp/deploy.txt",encoding="utf-8"))
+              print(((d.get("deploy") or {}).get("id")) or "")
+          except Exception:
+              print("")
+          PY
+          )"
           for i in $(seq 1 40); do
+            if [ -n "$deploy_id" ]; then
+              curl --silent --show-error --max-time 30 \
+                "https://neo-collettive.onrender.com/api/render/diagnostics?target=neo" \
+                > /tmp/render-diag.json || true
+              if DEPLOY_ID="$deploy_id" python - <<'PY'
+          import json,os,sys
+          try:
+              d=json.load(open("/tmp/render-diag.json",encoding="utf-8"))
+          except Exception:
+              sys.exit(1)
+          target=os.environ["DEPLOY_ID"]
+          rows=d.get("recent_deploys") or []
+          match=next((x for x in rows if str(x.get("id") or "")==target),None)
+          if not match:
+              sys.exit(1)
+          status=str(match.get("status") or "")
+          print("render_deploy_status="+status)
+          if status in {"build_failed","update_failed","canceled","cancelled"}:
+              print(json.dumps(match,ensure_ascii=False,default=str))
+              sys.exit(20)
+          sys.exit(0)
+          PY
+              then
+                :
+              else
+                rc=$?
+                if [ "$rc" -eq 20 ]; then
+                  echo "Render marked deploy $deploy_id as failed before health changed." >&2
+                  exit 7
+                fi
+              fi
+            fi
             if curl --fail --silent --show-error --max-time 30 \
               "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
               cat /tmp/health.json
