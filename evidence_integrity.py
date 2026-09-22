@@ -85,6 +85,21 @@ SUPPLY_TERMS = (
     "enterprise","free trial","one-time purchase","per month","per year",
 )
 
+STRUCTURED_PAID_SOURCES = {
+    "remotive-api",
+    "remoteok-api",
+    "arbeitnow-api",
+    "hn-jobs",
+}
+
+
+def structured_paid_source(source: str, query_role: str = "") -> bool:
+    """True only for explicit job-market feeds routed by a paid-market query."""
+    return (
+        (query_role or "").strip().lower() == "paid_market"
+        and (source or "").strip().lower() in STRUCTURED_PAID_SOURCES
+    )
+
 
 def _term_regex(term: str) -> re.Pattern[str]:
     value = re.escape((term or "").strip().lower())
