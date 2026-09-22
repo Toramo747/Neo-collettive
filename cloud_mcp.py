@@ -100,7 +100,7 @@ A2A_MAX_MESSAGE_CHARS = max(
     ),
 )
 SETI_PRIVATE_STATE: dict[str, Any] = {
-    "schema_v": 1,
+    "schema_v": 2,
     "updated_at_utc": None,
     "candidates": {},
 }
@@ -7331,6 +7331,7 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
+                "safety":scan.get("safety") or {},
                 "scan_safety":scan.get("safety") or {},
                 "interview_policy":{
                     "explicit_public_a2a_endpoint_only":True,
