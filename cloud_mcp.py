@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.73.0"  # commercial-source routing for PAID_DEMAND (Remotive + Remote OK)
+VERSION = "0.74.0"  # SETI indexed Agent Card discovery
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
