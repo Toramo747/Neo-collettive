@@ -464,6 +464,92 @@ def merge_private_candidate_state(
     return state,summary
 
 
+
+def interview_candidate_eligibility(candidate: dict) -> dict:
+    """Conservative gate before any active contact.
+
+    Discovery stays passive. Contact is allowed only for a re-observed HIGH_INTEREST
+    candidate whose indexed URL itself looks like an explicit public A2A endpoint/card.
+    """
+    if not isinstance(candidate,dict):
+        return {"eligible":False,"reason":"invalid_candidate"}
+    classification=str(candidate.get("classification") or "")
+    score=int(candidate.get("max_score") or 0)
+    scans=int(candidate.get("scan_count") or 0)
+    observations=int(candidate.get("observations") or 0)
+    diversity=int(candidate.get("source_diversity") or 0)
+    url=str(candidate.get("url") or "").strip()
+    try:
+        p=urlparse(url)
+        host=(p.hostname or "").lower().strip(".")
+        path=(p.path or "/").lower().rstrip("/") or "/"
+    except Exception:
+        return {"eligible":False,"reason":"invalid_url"}
+
+    if classification!="HIGH_INTEREST" and score<75:
+        return {"eligible":False,"reason":"below_high_interest"}
+    if scans<2 and diversity<2:
+        return {"eligible":False,"reason":"needs_independent_reobservation"}
+    if observations<2 and diversity<2:
+        return {"eligible":False,"reason":"insufficient_persistence"}
+    if not host or p.scheme!="https":
+        return {"eligible":False,"reason":"https_public_endpoint_required"}
+
+    artifact_hosts={
+        "github.com","www.github.com","news.ycombinator.com","stackoverflow.com",
+        "stackexchange.com","www.stackexchange.com","bing.com","www.bing.com",
+    }
+    if host in artifact_hosts or host.endswith(".github.com"):
+        return {"eligible":False,"reason":"indexed_artifact_not_agent_endpoint"}
+
+    card_paths=("/.well-known/agent-card.json","/.well-known/agent.json")
+    if any(path.endswith(x) for x in card_paths):
+        return {
+            "eligible":True,
+            "reason":"public_agent_card",
+            "contact_mode":"agent_card",
+            "url":url,
+        }
+
+    explicit_markers=("/a2a","/message/send","/agent/a2a","/agents/a2a")
+    if any(path==x or path.endswith(x) for x in explicit_markers):
+        return {
+            "eligible":True,
+            "reason":"explicit_public_a2a_endpoint",
+            "contact_mode":"direct_a2a",
+            "url":url,
+        }
+
+    return {"eligible":False,"reason":"no_explicit_agent_endpoint"}
+
+
+def interview_response_score(text: str) -> dict:
+    """Score a bounded interview response without treating it as evidence of truth."""
+    raw=" ".join(str(text or "").split())
+    low=raw.lower()
+    markers={
+        "identity":any(x in low for x in ("i am","agent","assistant","system","service")),
+        "capabilities":any(x in low for x in ("capabilit","can ","support","skill","tool")),
+        "protocol":any(x in low for x in ("a2a","agent2agent","json-rpc","jsonrpc","mcp","message/send")),
+        "limits":any(x in low for x in ("limit","cannot","can't","unable","restriction","failure")),
+        "evidence":any(x in low for x in ("source","evidence","documentation","docs","reference","url")),
+    }
+    score=0
+    if len(raw)>=120: score+=20
+    if len(raw)>=300: score+=10
+    score += 15 if markers["identity"] else 0
+    score += 20 if markers["capabilities"] else 0
+    score += 20 if markers["protocol"] else 0
+    score += 10 if markers["limits"] else 0
+    score += 5 if markers["evidence"] else 0
+    score=min(100,score)
+    return {
+        "score":score,
+        "markers":markers,
+        "accepted":bool(score>=65 and markers["capabilities"] and markers["protocol"]),
+    }
+
+
 def merge_signal_memory(memory: dict, scan: dict, max_entries: int = 80) -> tuple[dict,list[dict]]:
     """Persist only non-reversible fingerprints/metadata, never target URLs or snippets."""
     old=memory if isinstance(memory,dict) else {}
