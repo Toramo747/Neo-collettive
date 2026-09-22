@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 
-from seti_radar import SETI_ENGINE_VERSION, deep_space_scan, merge_signal_memory
+from seti_radar import SETI_ENGINE_VERSION, deep_space_scan, merge_private_candidate_state, merge_signal_memory
 from discovery_v3 import natural_search_seed, observed_pain_candidates, query_relevance
 
 from evidence_integrity import (
@@ -42,7 +42,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.71.1"  # SETI multi-source passive listening
+VERSION = "0.71.2"  # private SETI candidate correlation
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -56,8 +56,10 @@ JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
 STATE_SNAPSHOT_PATH = os.getenv("NEO_STATE_SNAPSHOT_PATH", "/tmp/neo-autopilot-state.json")
 STATE_ENV_KEY = "NEO_STATE_JSON"
+SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
+SETI_PRIVATE_ENV_MAX_BYTES = max(8192, min(32768, int(os.getenv("NEO_SETI_PRIVATE_ENV_MAX_BYTES", "16000"))))
 STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
 POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
@@ -90,6 +92,14 @@ A2A_MAX_MESSAGE_CHARS = max(
         int(os.getenv("MYCELIX_A2A_MAX_MESSAGE_CHARS") or os.getenv("NEO_A2A_MAX_MESSAGE_CHARS", "12000"))
     ),
 )
+SETI_PRIVATE_STATE: dict[str, Any] = {
+    "schema_v": 1,
+    "updated_at_utc": None,
+    "candidates": {},
+}
+SETI_PRIVATE_LAST_CHECKPOINT: dict[str, Any] | None = None
+
+
 AUTOPILOT_STATE: dict[str, Any] = {
     "enabled": AUTOPILOT_ENABLED,
     "interval_seconds": AUTOPILOT_INTERVAL_SECONDS,
@@ -300,6 +310,70 @@ def _encode_state_env(payload: dict) -> tuple[str, int, int]:
     return value, len(raw), encoded_bytes
 
 
+def _encode_small_private_env(payload: dict) -> tuple[str,int,int]:
+    raw=json.dumps(payload,ensure_ascii=False,separators=(",",":")).encode("utf-8")
+    packed=zlib.compress(raw,level=9)
+    value=STATE_ENV_COMPRESSED_PREFIX + base64.b64encode(packed).decode("ascii")
+    encoded_bytes=len(value.encode("utf-8"))
+    if encoded_bytes > SETI_PRIVATE_ENV_MAX_BYTES:
+        raise ValueError(f"compressed private SETI state exceeds safe env limit: {encoded_bytes}>{SETI_PRIVATE_ENV_MAX_BYTES}")
+    return value,len(raw),encoded_bytes
+
+
+def _restore_seti_private_state() -> str:
+    raw=(os.getenv(SETI_PRIVATE_ENV_KEY) or "").strip()
+    if not raw:
+        return "fresh"
+    payload=_decode_state_env(raw)
+    if not isinstance(payload,dict):
+        return "invalid"
+    candidates=payload.get("candidates")
+    if not isinstance(candidates,dict):
+        return "invalid"
+    SETI_PRIVATE_STATE.clear()
+    SETI_PRIVATE_STATE.update({
+        "schema_v":int(payload.get("schema_v") or 1),
+        "updated_at_utc":payload.get("updated_at_utc"),
+        "candidates":dict(list(candidates.items())[:24]),
+    })
+    return "render_env"
+
+
+async def _checkpoint_seti_private_to_render() -> dict:
+    global SETI_PRIVATE_LAST_CHECKPOINT
+    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":"render_api_not_configured"}
+        return SETI_PRIVATE_LAST_CHECKPOINT
+    try:
+        value,raw_bytes,encoded_bytes=_encode_small_private_env(SETI_PRIVATE_STATE)
+    except Exception as e:
+        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220]}
+        return SETI_PRIVATE_LAST_CHECKPOINT
+    headers={
+        "Authorization":f"Bearer {RENDER_API_KEY}",
+        "Accept":"application/json",
+        "Content-Type":"application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            r=await client.put(
+                f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{SETI_PRIVATE_ENV_KEY}",
+                headers=headers,
+                json={"value":value},
+            )
+        SETI_PRIVATE_LAST_CHECKPOINT={
+            "ok":r.is_success,
+            "status":r.status_code,
+            "encoding":"zlib64",
+            "raw_bytes":raw_bytes,
+            "stored_bytes":encoded_bytes,
+        }
+        return SETI_PRIVATE_LAST_CHECKPOINT
+    except Exception as e:
+        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220]}
+        return SETI_PRIVATE_LAST_CHECKPOINT
+
+
 def _restore_state() -> str:
     raw = (os.getenv(STATE_ENV_KEY) or "").strip()
     if raw:
@@ -367,6 +441,9 @@ async def _checkpoint_state_to_render() -> dict:
 
 AUTOPILOT_STATE["restore_source"] = _restore_state()
 AUTOPILOT_STATE["last_checkpoint"] = None
+AUTOPILOT_STATE["seti"]["private_restore_source"] = _restore_seti_private_state()
+AUTOPILOT_STATE["seti"]["private_candidate_count"] = len(SETI_PRIVATE_STATE.get("candidates") or {})
+AUTOPILOT_STATE["seti"]["private_checkpoint"] = None
 
 
 MANUAL_RUN_STATE: dict[str, Any] = {
@@ -6953,6 +7030,13 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             registry_checks=min(10,SETI_RESULT_LIMIT),
         )
         memory,enriched=merge_signal_memory(state.get("signal_memory") or {},scan,max_entries=80)
+        private_state,private_summary=merge_private_candidate_state(
+            SETI_PRIVATE_STATE,enriched,max_entries=16
+        )
+        SETI_PRIVATE_STATE.clear()
+        SETI_PRIVATE_STATE.update(private_state)
+        private_checkpoint=await _checkpoint_seti_private_to_render()
+
         interesting=[x for x in enriched if x.get("classification") in {"INTERESTING","HIGH_INTEREST"}]
         high=[x for x in enriched if x.get("classification")=="HIGH_INTEREST"]
         state.update({
@@ -6963,6 +7047,18 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             "last_scan_utc":scan.get("scanned_at_utc"),
             "last_error":None,
             "signal_memory":memory,
+            "private_candidate_count":private_summary.get("private_candidates",0),
+            "private_high_interest":private_summary.get("private_high_interest",0),
+            "private_interesting":private_summary.get("private_interesting",0),
+            "private_reobserved_this_scan":private_summary.get("reobserved_this_scan",0),
+            "private_new_high_interest_this_scan":private_summary.get("new_high_interest_this_scan",0),
+            "private_max_score":private_summary.get("max_private_score",0),
+            "private_max_source_diversity":private_summary.get("max_source_diversity",0),
+            "private_checkpoint":{
+                "ok":bool(private_checkpoint.get("ok")),
+                "status":private_checkpoint.get("status"),
+                "stored_bytes":private_checkpoint.get("stored_bytes"),
+            },
             "last_summary":{
                 "search_results_seen":scan.get("search_results_seen",0),
                 "source_counts":scan.get("source_counts") or {},
@@ -6972,6 +7068,10 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "signals_returned":len(enriched),
                 "interesting":len(interesting),
                 "high_interest":len(high),
+                "private_candidates":private_summary.get("private_candidates",0),
+                "private_reobserved":private_summary.get("reobserved_this_scan",0),
+                "private_max_score":private_summary.get("max_private_score",0),
+                "private_max_source_diversity":private_summary.get("max_source_diversity",0),
                 "safety":scan.get("safety") or {},
             },
         })
