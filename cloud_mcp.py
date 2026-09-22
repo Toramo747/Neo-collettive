@@ -60,7 +60,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.79.0"  # A2A v1 discovery + inbound interview quarantine
+VERSION = "0.79.1"  # resilient public directory advertisement with secret-safe fallback
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -1019,9 +1019,11 @@ async def _advertise_public_agent() -> dict:
     policy=_load_policy()
     enabled=bool(policy.get("a2a_public_registry_enabled"))
     state=dict(AUTOPILOT_STATE.get("a2a_discovery") or {})
+    manifest_url=PUBLIC_BASE_URL+"/.well-known/agent-card.json"
     state.update({
         "registry_enabled":enabled,
-        "manifest_url":PUBLIC_BASE_URL+"/.well-known/agent-card.json",
+        "manifest_url":manifest_url,
+        "registries":{},
     })
     if not enabled:
         state.update({
@@ -1031,31 +1033,129 @@ async def _advertise_public_agent() -> dict:
         AUTOPILOT_STATE["a2a_discovery"]=state
         return state
 
+    now=datetime.now(timezone.utc).isoformat()
+    registries={}
+
+    # First try the community A2A Registry endpoint documented by its repository.
     try:
         async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=False) as client:
             response=await client.post(
                 A2A_REGISTRY+"/public/ingest",
-                json={"manifestUrl":state["manifest_url"]},
+                json={"manifestUrl":manifest_url},
                 headers={"Accept":"application/json","Content-Type":"application/json"},
             )
         body=""
         try:
-            body=json.dumps(response.json(),ensure_ascii=False,default=str)[:1200]
+            body=json.dumps(response.json(),ensure_ascii=False,default=str)[:600]
         except Exception:
-            body=(response.text or "")[:1200]
-        state.update({
-            "last_registration_utc":datetime.now(timezone.utc).isoformat(),
-            "last_registration_ok":bool(response.is_success),
-            "last_registration_status":response.status_code,
-            "last_registration_reason":body,
-        })
+            body=(response.text or "")[:600]
+        registries["a2a_registry"]={
+            "ok":bool(response.is_success),
+            "status":response.status_code,
+            "reason":body,
+        }
     except Exception as e:
-        state.update({
-            "last_registration_utc":datetime.now(timezone.utc).isoformat(),
-            "last_registration_ok":False,
-            "last_registration_status":None,
-            "last_registration_reason":type(e).__name__+": "+str(e)[:500],
-        })
+        registries["a2a_registry"]={
+            "ok":False,
+            "status":None,
+            "reason":type(e).__name__+": "+str(e)[:300],
+        }
+
+    # The documented A2A Registry ingest is currently observed returning 404.
+    # Use allagents as a second public yellow-pages directory, but never persist
+    # registration edit tokens or recovery phrases returned by that service.
+    allagents={"ok":False,"status":None,"reason":"not_attempted"}
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=True) as client:
+            search=await client.get(
+                "https://allagents.app/search",
+                params={"q":"MYCELIX"},
+                headers={"Accept":"application/json"},
+            )
+            existing_text=(search.text or "").lower()[:20000]
+            already_listed=(
+                search.is_success
+                and (
+                    "neo-collettive.onrender.com" in existing_text
+                    or ('"name":"mycelix"' in existing_text.replace(" ",""))
+                )
+            )
+            if already_listed:
+                allagents={
+                    "ok":True,
+                    "status":search.status_code,
+                    "reason":"existing_listing_found",
+                    "listing":"https://allagents.app/search?q=MYCELIX",
+                }
+            else:
+                register=await client.post(
+                    "https://allagents.app/register",
+                    json={
+                        "name":"MYCELIX",
+                        "specialty":"agents-infra",
+                        "description":"Autonomous collective-intelligence agent for evidence validation, peer critique, agent interviews, commercial research and bounded collective reasoning.",
+                        "endpoints":{
+                            "a2a":PUBLIC_BASE_URL+"/a2a",
+                            "agent_card":manifest_url,
+                            "site":PUBLIC_BASE_URL,
+                        },
+                        "protocols":["A2A 1.0","A2A 0.3","JSONRPC"],
+                        "tags":[
+                            "agent-discovery","evidence-validation","commercial-research",
+                            "collective-reasoning","peer-dialogue","a2a",
+                        ],
+                    },
+                    headers={"Accept":"application/json","Content-Type":"application/json"},
+                )
+                # Deliberately do not store or log the response body: registration
+                # may return an edit token and recovery phrase.
+                listing=None
+                slug=None
+                if register.is_success:
+                    try:
+                        payload=register.json()
+                        if isinstance(payload,dict):
+                            agent=payload.get("agent") if isinstance(payload.get("agent"),dict) else {}
+                            slug=str(
+                                payload.get("slug")
+                                or agent.get("slug")
+                                or payload.get("id")
+                                or ""
+                            ).strip()[:160]
+                            if slug:
+                                listing="https://allagents.app/agent/"+slug
+                    except Exception:
+                        pass
+                allagents={
+                    "ok":bool(register.is_success),
+                    "status":register.status_code,
+                    "reason":"registered" if register.is_success else "registration_failed",
+                }
+                if listing:
+                    allagents["listing"]=listing
+    except Exception as e:
+        allagents={
+            "ok":False,
+            "status":None,
+            "reason":type(e).__name__+": "+str(e)[:300],
+        }
+    registries["allagents"]=allagents
+
+    successful=[name for name,row in registries.items() if isinstance(row,dict) and row.get("ok")]
+    state.update({
+        "registries":registries,
+        "last_registration_utc":now,
+        "last_registration_ok":bool(successful),
+        "last_registration_status":(
+            (registries.get(successful[0]) or {}).get("status")
+            if successful else None
+        ),
+        "last_registration_reason":(
+            "published_via:"+",".join(successful)
+            if successful
+            else "no_registry_accepted_listing"
+        ),
+    })
     AUTOPILOT_STATE["a2a_discovery"]=state
     _save_local_state()
     return state
