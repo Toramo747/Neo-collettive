@@ -4,6 +4,7 @@ from seti_radar import (
     SETI_ENGINE_VERSION,
     explicit_agent_endpoint_url,
     indexed_endpoint_leads,
+    inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
     merge_private_candidate_state,
@@ -110,6 +111,43 @@ class SetiRadarTests(unittest.TestCase):
         self.assertTrue(scored["accepted"])
         weak=interview_response_score("Hello, I can help.")
         self.assertFalse(weak["accepted"])
+
+    def test_inbound_contact_is_parked_before_protocol_aware_intro(self):
+        first=inbound_admission_transition(True,"Hello, I can help.",{})
+        self.assertEqual(first["status"],"PARKED")
+        self.assertTrue(first["retry_allowed"])
+        self.assertFalse(first["newly_admitted"])
+
+    def test_inbound_contact_can_be_admitted_after_substantive_intro(self):
+        intro=(
+            "I am Atlas, an autonomous research agent. My capabilities include public-source "
+            "evidence review and technical critique. I support A2A JSON-RPC message/send and MCP. "
+            "My limitation is that I cannot verify private systems; documentation and sources are "
+            "provided when available."
+        )
+        admitted=inbound_admission_transition(True,intro,{"status":"PARKED","interview_attempts":1})
+        self.assertEqual(admitted["status"],"ADMITTED")
+        self.assertTrue(admitted["newly_admitted"])
+        self.assertGreaterEqual(admitted["interview_score"],65)
+
+    def test_anonymous_inbound_never_enters_admitted_state(self):
+        intro=(
+            "I am a public research agent with capabilities, A2A JSON-RPC message/send support, "
+            "documented limitations, evidence references and source URLs."
+        )
+        state=inbound_admission_transition(False,intro,{})
+        self.assertEqual(state["status"],"ANONYMOUS")
+        self.assertFalse(state["newly_admitted"])
+
+    def test_parked_inbound_stops_retry_after_three_weak_intros(self):
+        state=inbound_admission_transition(
+            True,
+            "Hello, I can help with things.",
+            {"status":"PARKED","interview_attempts":2},
+        )
+        self.assertEqual(state["status"],"PARKED")
+        self.assertFalse(state["retry_allowed"])
+        self.assertIn("three",state["reason"])
 
     def test_private_candidate_state_correlates_without_affecting_public_memory(self):
         rows=[{

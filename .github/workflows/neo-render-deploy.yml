@@ -7,6 +7,9 @@ on:
     branches: [main]
     paths:
       - "cloud_mcp.py"
+      - "seti_radar.py"
+      - "test_seti_radar.py"
+      - "neo_policy.json"
       - "render.yaml"
       - "Dockerfile"
       - "requirements.txt"
@@ -222,6 +225,35 @@ jobs:
           if any(bool(guard.get(k)) for k in ("spending","payments","contracts","commercial_outreach","external_publishing","personal_accounts")):
               raise SystemExit("autonomy guardrails unsafe")
           print("memory, builder and autonomy smoke tests passed")
+          PY
+
+      - name: Smoke test A2A discovery surface
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --fail --silent --show-error --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
+          python - <<'PY'
+          import json
+          card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
+          inbound=json.load(open("/tmp/inbound.json",encoding="utf-8"))
+          interfaces=card.get("supportedInterfaces") or []
+          versions={str(x.get("protocolVersion") or "") for x in interfaces if isinstance(x,dict)}
+          bindings={str(x.get("protocolBinding") or "") for x in interfaces if isinstance(x,dict)}
+          if "1.0" not in versions or "0.3" not in versions:
+              raise SystemExit("A2A card does not advertise both 1.0 and 0.3")
+          if "JSONRPC" not in bindings:
+              raise SystemExit("A2A card missing JSONRPC binding")
+          if any(k in card for k in ("protocolVersion","preferredTransport","url")):
+              raise SystemExit("legacy top-level A2A fields leaked into v1 Agent Card")
+          skills={str(x.get("id") or "") for x in (card.get("skills") or []) if isinstance(x,dict)}
+          if "introduce-agent" not in skills or "evidence-validation" not in skills:
+              raise SystemExit("A2A discovery skills missing")
+          if not inbound.get("ok"):
+              raise SystemExit("inbound diagnostics unhealthy")
+          discovery=inbound.get("a2a_discovery") or {}
+          if discovery.get("registry_enabled") is not True:
+              raise SystemExit("public registry advertisement not enabled")
+          print("A2A v1 discovery surface smoke test passed")
           PY
 
       - name: Roll back failed application commit
