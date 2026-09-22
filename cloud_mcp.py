@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.75.2"  # reject generic job-listing false demand; deploy retry after schema-v3 test fix
+VERSION = "0.76.0"  # SETI first-contact interviews with PARKED retry state
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -7374,11 +7374,12 @@ def _seti_interview_prompt() -> str:
     )
 
 
-async def _seti_interview_one_candidate() -> dict:
-    """Interview at most one quarantined candidate per SETI scan."""
+async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
+    """Interview a small bounded batch of quarantined candidates per SETI scan."""
     candidates=SETI_PRIVATE_STATE.get("candidates") or {}
     interviews=dict(SETI_PRIVATE_STATE.get("interviews") or {})
     admitted=dict(SETI_PRIVATE_STATE.get("admitted") or {})
+    results=[]
 
     ranked=sorted(
         [(str(k),v) for k,v in candidates.items() if isinstance(v,dict)],
@@ -7394,7 +7395,13 @@ async def _seti_interview_one_candidate() -> dict:
         if key in admitted:
             continue
         prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
-        if prior and str(prior.get("status") or "") in {"ADMITTED","REJECTED","FAILED"}:
+        prior_status=str(prior.get("status") or "")
+        prior_attempts=int(prior.get("attempts") or (1 if prior else 0))
+        if prior_status=="ADMITTED":
+            continue
+        # PARKED candidates may be retried after a later scan. This treats silence or
+        # weak replies as inconclusive rather than permanent rejection.
+        if prior_status=="PARKED" and prior_attempts>=3:
             continue
 
         eligibility=interview_candidate_eligibility(candidate)
@@ -7405,13 +7412,25 @@ async def _seti_interview_one_candidate() -> dict:
         resolved=await _seti_resolve_interview_endpoint(candidate,eligibility)
         if not resolved.get("ok"):
             interviews[key]={
-                "status":"FAILED",
+                "status":"PARKED",
                 "interviewed_at_utc":now,
+                "last_attempt_utc":now,
+                "attempts":prior_attempts+1,
                 "reason":resolved.get("reason"),
                 "candidate_score":int(candidate.get("max_score") or 0),
             }
             SETI_PRIVATE_STATE["interviews"]=interviews
-            return {"attempted":True,"admitted":False,"status":"FAILED","reason":resolved.get("reason")}
+            results.append({
+                "attempted":True,
+                "candidate_key":key,
+                "admitted":False,
+                "status":"PARKED",
+                "score":0,
+                "reason":resolved.get("reason"),
+            })
+            if len(results)>=max(1,min(int(max_interviews or 1),3)):
+                break
+            continue
 
         endpoint=str(resolved.get("endpoint") or "")
         answer=await _ask_a2a_transport(
@@ -7421,11 +7440,13 @@ async def _seti_interview_one_candidate() -> dict:
         response_text=_response_text(answer)
         quality=interview_response_score(response_text)
         accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
-        status="ADMITTED" if accepted else "REJECTED"
+        status="ADMITTED" if accepted else "PARKED"
 
         interview={
             "status":status,
             "interviewed_at_utc":now,
+            "last_attempt_utc":now,
+            "attempts":prior_attempts+1,
             "score":int(quality.get("score") or 0),
             "markers":quality.get("markers") or {},
             "transport":answer.get("transport"),
@@ -7453,15 +7474,33 @@ async def _seti_interview_one_candidate() -> dict:
 
         SETI_PRIVATE_STATE["interviews"]=dict(list(interviews.items())[-32:])
         SETI_PRIVATE_STATE["admitted"]=dict(list(admitted.items())[-16:])
-        return {
+
+        results.append({
             "attempted":True,
+            "candidate_key":key,
             "admitted":accepted,
             "status":status,
             "score":int(quality.get("score") or 0),
             "transport":answer.get("transport"),
-        }
+        })
+        if len(results)>=max(1,min(int(max_interviews or 1),3)):
+            break
 
-    return {"attempted":False,"admitted":False,"status":"NO_ELIGIBLE_CANDIDATE"}
+    if not results:
+        return {"attempted":False,"attempted_count":0,"admitted":False,"admitted_count":0,"status":"NO_ELIGIBLE_CANDIDATE","results":[]}
+    admitted_count=sum(1 for x in results if x.get("admitted"))
+    parked_count=sum(1 for x in results if x.get("status")=="PARKED")
+    overall="ADMITTED" if admitted_count else ("PARKED" if parked_count else str(results[-1].get("status") or "COMPLETED"))
+    return {
+        "attempted":True,
+        "attempted_count":len(results),
+        "admitted":bool(admitted_count),
+        "admitted_count":admitted_count,
+        "parked_count":parked_count,
+        "status":overall,
+        "score":max([int(x.get("score") or 0) for x in results] or [0]),
+        "results":results,
+    }
 
 
 async def _seti_passive_cycle_if_due() -> dict | None:
@@ -7488,7 +7527,7 @@ async def _seti_passive_cycle_if_due() -> dict | None:
         )
         SETI_PRIVATE_STATE.clear()
         SETI_PRIVATE_STATE.update(private_state)
-        interview_result=await _seti_interview_one_candidate()
+        interview_result=await _seti_interview_one_candidate(max_interviews=3)
         private_checkpoint=await _checkpoint_seti_private_to_render()
 
         interesting=[x for x in enriched if x.get("classification") in {"INTERESTING","HIGH_INTEREST"}]
@@ -7511,6 +7550,9 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             "interview_attempted":bool(interview_result.get("attempted")),
             "last_interview_status":interview_result.get("status"),
             "last_interview_score":interview_result.get("score"),
+            "last_interview_attempted_count":interview_result.get("attempted_count",0),
+            "last_interview_admitted_count":interview_result.get("admitted_count",0),
+            "last_interview_parked_count":interview_result.get("parked_count",0),
             "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
             "private_checkpoint":{
                 "ok":bool(private_checkpoint.get("ok")),
@@ -7532,12 +7574,15 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "private_max_source_diversity":private_summary.get("max_source_diversity",0),
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
+                "interview_attempted_count":interview_result.get("attempted_count",0),
+                "interview_admitted_count":interview_result.get("admitted_count",0),
+                "interview_parked_count":interview_result.get("parked_count",0),
                 "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
                 "safety":scan.get("safety") or {},
                 "scan_safety":scan.get("safety") or {},
                 "interview_policy":{
                     "explicit_public_a2a_endpoint_only":True,
-                    "max_interviews_per_scan":1,
+                    "max_interviews_per_scan":3,
                     "commercial_or_third_party_actions":False,
                 },
             },
