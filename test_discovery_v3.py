@@ -30,6 +30,34 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertTrue(r["relevant"])
         self.assertIn("email",r["overlap"])
 
+    def test_paid_market_rejects_single_generic_alias_token(self):
+        meta={
+            "role":"paid_market",
+            "search_alias_used":"spreadsheet process automation",
+        }
+        r=query_relevance(
+            "Senior Shopify Developer",
+            "Hiring developer for ecommerce automation and storefront work.",
+            "spreadsheet process automation freelance hiring budget",
+            meta,
+        )
+        self.assertFalse(r["relevant"])
+        self.assertEqual(r["min_overlap"],2)
+
+    def test_paid_market_accepts_specific_alias_overlap(self):
+        meta={
+            "role":"paid_market",
+            "search_alias_used":"spreadsheet process automation",
+        }
+        r=query_relevance(
+            "Spreadsheet Automation Specialist",
+            "Hiring contractor to automate a recurring spreadsheet process.",
+            "spreadsheet process automation freelance hiring budget",
+            meta,
+        )
+        self.assertTrue(r["relevant"])
+        self.assertGreaterEqual(len(r["overlap"]),2)
+
     def test_observed_pain_candidate_requires_source_backed_signal(self):
         q="customer email management need help manual workaround"
         meta={
