@@ -93,7 +93,12 @@ class SetiRadarTests(unittest.TestCase):
         self.assertFalse(interview_candidate_eligibility(artifact)["eligible"])
 
         first_seen=dict(eligible,scan_count=1,observations=1)
-        self.assertFalse(interview_candidate_eligibility(first_seen)["eligible"])
+        first_result=interview_candidate_eligibility(first_seen)
+        self.assertTrue(first_result["eligible"])
+        self.assertTrue(first_result["confidence"]["first_contact"])
+
+        interesting=dict(first_seen,classification="INTERESTING",max_score=58)
+        self.assertTrue(interview_candidate_eligibility(interesting)["eligible"])
 
     def test_interview_response_requires_capability_and_protocol(self):
         good=(
