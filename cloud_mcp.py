@@ -51,7 +51,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.75.1"  # invalidate stale observed-pain theses + plural-normalized relevance
+VERSION = "0.75.2"  # reject generic job-listing false demand
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -3272,7 +3272,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         # created by the pre-humanization schema keep consuming convergence cycles.
         stale_observed=(
             str(active.get("origin") or "")=="observed_pain"
-            and int(active.get("hypothesis_schema_v") or 1)<2
+            and int(active.get("hypothesis_schema_v") or 1)<3
         )
         used=int(active.get("cycles_used") or 0)
         budget=max(1,int(active.get("budget_cycles") or 4))
@@ -3296,7 +3296,7 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
             if isinstance(x,dict)
             and str(x.get("family") or "")==family
-            and int(x.get("hypothesis_schema_v") or 1)>=2
+            and int(x.get("hypothesis_schema_v") or 1)>=3
         ]
         used_sources={
             str(x.get("source_url") or "")
