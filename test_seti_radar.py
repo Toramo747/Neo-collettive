@@ -2,6 +2,8 @@ import unittest
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
+    interview_candidate_eligibility,
+    interview_response_score,
     merge_private_candidate_state,
     merge_signal_memory,
     registry_match,
@@ -57,6 +59,34 @@ class SetiRadarTests(unittest.TestCase):
             "mcp_registry":{"ok":True,"data":{"servers":[]}},
         }
         self.assertTrue(registry_match(candidate,discovery))
+
+    def test_interview_gate_requires_repeat_and_explicit_endpoint(self):
+        base={
+            "classification":"HIGH_INTEREST",
+            "max_score":84,
+            "observations":2,
+            "scan_count":2,
+            "source_diversity":1,
+        }
+        eligible=dict(base,url="https://agent.example.ai/.well-known/agent-card.json")
+        self.assertTrue(interview_candidate_eligibility(eligible)["eligible"])
+
+        artifact=dict(base,url="https://github.com/example/agent/blob/main/agent-card.json")
+        self.assertFalse(interview_candidate_eligibility(artifact)["eligible"])
+
+        first_seen=dict(eligible,scan_count=1,observations=1)
+        self.assertFalse(interview_candidate_eligibility(first_seen)["eligible"])
+
+    def test_interview_response_requires_capability_and_protocol(self):
+        good=(
+            "I am a public research agent. My capabilities include evidence review and source analysis. "
+            "I support A2A JSON-RPC message/send. Documentation is available from my public reference page. "
+            "A limitation is that I cannot verify private data or guarantee source accuracy without corroboration."
+        )
+        scored=interview_response_score(good)
+        self.assertTrue(scored["accepted"])
+        weak=interview_response_score("Hello, I can help.")
+        self.assertFalse(weak["accepted"])
 
     def test_private_candidate_state_correlates_without_affecting_public_memory(self):
         rows=[{
