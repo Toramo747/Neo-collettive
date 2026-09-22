@@ -1,10 +1,12 @@
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
+import base64
 import html
 import json
 import os
 import secrets
 import time
+import zlib
 import ipaddress
 from datetime import datetime, timezone
 from urllib.parse import urlparse, quote_plus, parse_qs
@@ -37,7 +39,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.69.0"  # retrieval hardening
+VERSION = "0.69.1"  # retrieval hardening + compressed durable state
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -51,6 +53,8 @@ JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
 STATE_SNAPSHOT_PATH = os.getenv("NEO_STATE_SNAPSHOT_PATH", "/tmp/neo-autopilot-state.json")
 STATE_ENV_KEY = "NEO_STATE_JSON"
+STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
+STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
 STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
 POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
@@ -242,14 +246,42 @@ def _merge_state_payload(payload: dict | None) -> bool:
     return True
 
 
+def _decode_state_env(raw: str) -> dict | None:
+    raw=(raw or "").strip()
+    if not raw:
+        return None
+    try:
+        if raw.startswith(STATE_ENV_COMPRESSED_PREFIX):
+            packed=base64.b64decode(raw[len(STATE_ENV_COMPRESSED_PREFIX):].encode("ascii"), validate=True)
+            decoded=zlib.decompress(packed).decode("utf-8")
+            value=json.loads(decoded)
+        else:
+            value=json.loads(raw)
+        return value if isinstance(value,dict) else None
+    except Exception:
+        return None
+
+
+def _encode_state_env(payload: dict) -> tuple[str, int, int]:
+    raw=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    packed=zlib.compress(raw, level=9)
+    value=STATE_ENV_COMPRESSED_PREFIX + base64.b64encode(packed).decode("ascii")
+    encoded_bytes=len(value.encode("utf-8"))
+    if encoded_bytes > STATE_ENV_MAX_BYTES:
+        raise ValueError(f"compressed state exceeds safe env limit: {encoded_bytes}>{STATE_ENV_MAX_BYTES}")
+    return value, len(raw), encoded_bytes
+
+
 def _restore_state() -> str:
     raw = (os.getenv(STATE_ENV_KEY) or "").strip()
     if raw:
-        try:
-            if _merge_state_payload(json.loads(raw)):
-                return "render_env"
-        except Exception:
-            pass
+        payload=_decode_state_env(raw)
+        if payload is not None:
+            try:
+                if _merge_state_payload(payload):
+                    return "render_env"
+            except Exception:
+                pass
     try:
         with open(STATE_SNAPSHOT_PATH, "r", encoding="utf-8") as fh:
             if _merge_state_payload(json.load(fh)):
@@ -278,7 +310,10 @@ def _save_local_state() -> None:
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return {"ok": False, "reason": "render_api_not_configured"}
-    value = json.dumps(_state_payload(), ensure_ascii=False, separators=(",", ":"))
+    try:
+        value, raw_bytes, encoded_bytes = _encode_state_env(_state_payload())
+    except Exception as e:
+        return {"ok": False, "reason": type(e).__name__ + ": " + str(e)[:220]}
     headers = {
         "Authorization": f"Bearer {RENDER_API_KEY}",
         "Accept": "application/json",
@@ -291,7 +326,13 @@ async def _checkpoint_state_to_render() -> dict:
                 headers=headers,
                 json={"value": value},
             )
-            return {"ok": r.is_success, "status": r.status_code}
+            return {
+                "ok": r.is_success,
+                "status": r.status_code,
+                "encoding": "zlib64",
+                "raw_bytes": raw_bytes,
+                "stored_bytes": encoded_bytes,
+            }
     except Exception as e:
         return {"ok": False, "reason": type(e).__name__ + ": " + str(e)[:220]}
 
