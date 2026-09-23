@@ -485,6 +485,8 @@ def _restore_state() -> str:
             # Preserve snapshot time as a freshness signal if the projected payload
             # does not contain a closed-cycle timestamp itself.
             durable=dict(durable)
+            if isinstance(snap.get("runtime_profile"),dict):
+                durable.setdefault("runtime_profile",snap.get("runtime_profile"))
             durable.setdefault("state_saved_at_utc",snap.get("captured_at_utc"))
             candidates.append(("repo_snapshot",durable))
     except Exception:
