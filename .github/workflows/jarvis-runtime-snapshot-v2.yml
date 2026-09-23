@@ -1,0 +1,115 @@
+name: Jarvis runtime snapshot v2
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13,33,53 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/jarvis-runtime-snapshot-v2.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: jarvis-runtime-snapshot
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fallback wake MYCELIX
+        shell: bash
+        env:
+          HEARTBEAT_URL: https://neo-collettive.onrender.com/api/heartbeat
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${HEARTBEAT_TOKEN}" ]; then
+            curl --fail --silent --show-error --retry 2 --retry-delay 5 --max-time 45 \
+              -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
+              "${HEARTBEAT_URL}" > /tmp/neo-heartbeat-fallback.json
+          else
+            curl --fail --silent --show-error --retry 2 --retry-delay 5 --max-time 45 \
+              "${HEARTBEAT_URL}" > /tmp/neo-heartbeat-fallback.json
+          fi
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/neo-heartbeat-fallback.json",encoding="utf-8"))
+          if not d.get("ok"):
+              raise SystemExit("MYCELIX fallback heartbeat returned ok=false")
+          print({
+              "fallback_wake_started":d.get("started"),
+              "busy":d.get("busy"),
+              "cooldown":d.get("cooldown"),
+              "cycles_completed":d.get("cycles_completed"),
+              "neo_version":d.get("neo_version"),
+          })
+          PY
+
+      - name: Fetch sanitized diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+            "https://neo-collettive.onrender.com/api/render/diagnostics?target=jarvis" \
+            -o /tmp/jarvis-diagnostics.json
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          with open("/tmp/jarvis-diagnostics.json", "r", encoding="utf-8") as fh:
+              src = json.load(fh)
+
+          if not src.get("ok"):
+              raise SystemExit("NEO diagnostics endpoint returned ok=false")
+
+          safe = {
+              "snapshot_utc": datetime.now(timezone.utc).isoformat(),
+              "source": "neo-collettive:/api/render/diagnostics?target=jarvis",
+              "target": src.get("target"),
+              "resource": src.get("resource"),
+              "service": src.get("service"),
+              "assessment": src.get("assessment"),
+              "latest_log_utc": src.get("latest_log_utc"),
+              "latest_ask": src.get("latest_ask"),
+              "neo_jarvis_runtime": src.get("neo_jarvis_runtime"),
+              "last_dialogue": src.get("last_dialogue"),
+              "log_rows_scanned": src.get("log_rows_scanned"),
+              "categories": src.get("categories"),
+              "startup_events": (src.get("startup_events") or [])[:20],
+              "recent_deploys": (src.get("recent_deploys") or [])[:10],
+              "important": [],
+              "note": src.get("note"),
+              "privacy_note": "Raw Render log rows are intentionally omitted; counters and sanitized telemetry are retained.",
+          }
+
+          with open("/tmp/jarvis-runtime-snapshot.json", "w", encoding="utf-8") as fh:
+              json.dump(safe, fh, ensure_ascii=False, indent=2)
+              fh.write("\n")
+          PY
+
+      - name: Publish snapshot on runtime branch
+        uses: actions/checkout@v4
+        with:
+          ref: runtime-snapshots
+          fetch-depth: 1
+
+      - name: Commit snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          cp /tmp/jarvis-runtime-snapshot.json runtime/jarvis_diagnostics.json
+          git config user.name "neo-runtime-bot"
+          git config user.email "neo-runtime-bot@users.noreply.github.com"
+          git add runtime/jarvis_diagnostics.json
+          if git diff --cached --quiet; then
+            echo "No snapshot changes"
+            exit 0
+          fi
+          git commit -m "runtime: update Jarvis diagnostics"
+          git push origin HEAD:runtime-snapshots
