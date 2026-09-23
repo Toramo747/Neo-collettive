@@ -14,6 +14,7 @@ from urllib.parse import urlparse, quote_plus, parse_qs
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
+from state_recovery import select_freshest_state
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -60,7 +61,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.79.1"  # resilient public directory advertisement with secret-safe fallback
+VERSION = "0.79.2"  # monotonic durable-state restore and closed-cycle checkpointing
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -200,6 +201,9 @@ AUTOPILOT_STATE: dict[str, Any] = {
 
 def _state_payload() -> dict:
     return {
+        "state_saved_at_utc": datetime.now(timezone.utc).isoformat(),
+        "last_started_utc": AUTOPILOT_STATE.get("last_started_utc"),
+        "last_finished_utc": AUTOPILOT_STATE.get("last_finished_utc"),
         "family_performance": AUTOPILOT_STATE.get("family_performance") or {},
         "family_cooldowns": AUTOPILOT_STATE.get("family_cooldowns") or {},
         "recent_sectors": list(AUTOPILOT_STATE.get("recent_sectors") or [])[-12:],
@@ -244,7 +248,14 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(recent, list):
         AUTOPILOT_STATE["recent_sectors"] = [str(x) for x in recent][-12:]
     AUTOPILOT_STATE["stagnation_cycles"] = max(0, min(20, int(payload.get("stagnation_cycles") or 0)))
-    AUTOPILOT_STATE["cycles_completed"] = max(0, int(payload.get("cycles_completed") or 0))
+    AUTOPILOT_STATE["cycles_completed"] = max(
+        int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+        max(0, int(payload.get("cycles_completed") or 0)),
+    )
+    if payload.get("last_started_utc"):
+        AUTOPILOT_STATE["last_started_utc"] = payload.get("last_started_utc")
+    if payload.get("last_finished_utc"):
+        AUTOPILOT_STATE["last_finished_utc"] = payload.get("last_finished_utc")
     if isinstance(payload.get("agent_trust"), dict):
         AUTOPILOT_STATE["agent_trust"] = payload.get("agent_trust") or {}
     if isinstance(payload.get("build_history"), list):
@@ -431,29 +442,43 @@ async def _checkpoint_seti_private_to_render() -> dict:
 
 
 def _restore_state() -> str:
-    raw = (os.getenv(STATE_ENV_KEY) or "").strip()
+    candidates=[]
+
+    raw=(os.getenv(STATE_ENV_KEY) or "").strip()
     if raw:
         payload=_decode_state_env(raw)
-        if payload is not None:
-            try:
-                if _merge_state_payload(payload):
-                    return "render_env"
-            except Exception:
-                pass
+        if isinstance(payload,dict):
+            candidates.append(("render_env",payload))
+
     try:
-        with open(STATE_SNAPSHOT_PATH, "r", encoding="utf-8") as fh:
-            if _merge_state_payload(json.load(fh)):
-                return "local_snapshot"
+        with open(STATE_SNAPSHOT_PATH,"r",encoding="utf-8") as fh:
+            local=json.load(fh)
+        if isinstance(local,dict):
+            candidates.append(("local_snapshot",local))
     except Exception:
         pass
+
     try:
-        with open("neo_latest_result.json", "r", encoding="utf-8") as fh:
+        with open("neo_latest_result.json","r",encoding="utf-8") as fh:
             snap=json.load(fh)
         durable=(snap.get("autopilot") or {}) if isinstance(snap,dict) else {}
-        if _merge_state_payload(durable):
-            return "repo_snapshot"
+        if isinstance(durable,dict) and durable:
+            # Preserve snapshot time as a freshness signal if the projected payload
+            # does not contain a closed-cycle timestamp itself.
+            durable=dict(durable)
+            durable.setdefault("state_saved_at_utc",snap.get("captured_at_utc"))
+            candidates.append(("repo_snapshot",durable))
     except Exception:
         pass
+
+    source,payload,meta=select_freshest_state(candidates)
+    AUTOPILOT_STATE["restore_candidates"]=meta
+    if isinstance(payload,dict):
+        try:
+            if _merge_state_payload(payload):
+                return source
+        except Exception:
+            pass
     return "fresh"
 
 
@@ -8023,18 +8048,23 @@ async def _autopilot_cycle() -> None:
         AUTOPILOT_STATE["running"] = True
         AUTOPILOT_STATE["last_started_utc"] = datetime.now(timezone.utc).isoformat()
         AUTOPILOT_STATE["last_error"] = None
+        completed=False
         try:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
             await _seti_passive_cycle_if_due()
+            AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
+            completed=True
             _save_local_state()
             AUTOPILOT_STATE["last_checkpoint"] = await _checkpoint_state_to_render()
         except Exception as e:
             AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:500]
         finally:
             AUTOPILOT_STATE["running"] = False
-            AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
+            if not completed:
+                AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
+                _save_local_state()
 
 
 async def _autopilot_loop() -> None:
