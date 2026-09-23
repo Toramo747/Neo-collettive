@@ -3,11 +3,11 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 7
+SETI_ENGINE_VERSION = 8
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
@@ -125,6 +125,56 @@ def explicit_agent_endpoint_url(url: str) -> bool:
     return any(path==x or path.endswith(x) for x in EXPLICIT_A2A_PATHS)
 
 
+def _normalize_indexed_url_text(text: str) -> str:
+    value=str(text or "")
+    value=value.replace("\\/","/")
+    try:
+        value=unquote(value)
+    except Exception:
+        pass
+    return value
+
+
+def indexed_url_declared_as_agent_endpoint(text: str, url: str) -> bool:
+    """Accept a non-standard path only when the public indexed text explicitly labels it as an agent endpoint."""
+    raw_url=str(url or "").strip()
+    try:
+        p=urlparse(raw_url)
+        host=(p.hostname or "").lower().strip(".")
+    except Exception:
+        return False
+    if p.scheme!="https" or not host:
+        return False
+    if host in OFFICIAL_OR_LOW_VALUE_DOMAINS or host in COMMON_HOSTS:
+        return False
+    if host in {"localhost","localhost.localdomain"} or host.endswith(".local"):
+        return False
+
+    normalized=_normalize_indexed_url_text(text)
+    low=normalized.lower()
+    needle=raw_url.lower()
+    pos=low.find(needle)
+    if pos<0:
+        context=low
+    else:
+        context=low[max(0,pos-220):min(len(low),pos+len(needle)+220)]
+
+    explicit_label=bool(re.search(
+        r"\b(?:a2a|agent2agent|agent)\s+(?:public\s+)?(?:endpoint|url)\b",
+        context,
+    ))
+    rpc_label=(
+        "message/send" in context
+        and ("jsonrpc" in context or "json-rpc" in context)
+        and ("endpoint" in context or re.search(r"\burl\s*[:=]",context))
+    )
+    agent_card_url_field=(
+        ("agent card" in context or "protocolversion" in context or "protocol version" in context)
+        and bool(re.search(r'["\']?url["\']?\s*[:=]',context))
+    )
+    return bool(explicit_label or rpc_label or agent_card_url_field)
+
+
 def indexed_endpoint_leads(row: dict, limit: int = 4) -> list[dict]:
     """Extract explicitly declared public A2A endpoints from indexed text only.
 
@@ -133,10 +183,10 @@ def indexed_endpoint_leads(row: dict, limit: int = 4) -> list[dict]:
     """
     if not isinstance(row,dict):
         return []
-    text=" ".join([
+    text=_normalize_indexed_url_text(" ".join([
         str(row.get("title") or ""),
         str(row.get("snippet") or row.get("description") or ""),
-    ])
+    ]))
     urls=re.findall(r'https://[^\s<>"\]\[(){}]+',text,re.I)
     out=[]
     seen=set()
@@ -144,7 +194,11 @@ def indexed_endpoint_leads(row: dict, limit: int = 4) -> list[dict]:
     source=str(row.get("source") or "public_index")
     for raw in urls:
         url=raw.rstrip(".,;:!?")
-        if url in seen or not explicit_agent_endpoint_url(url):
+        if url in seen:
+            continue
+        strict_path=explicit_agent_endpoint_url(url)
+        contextual=indexed_url_declared_as_agent_endpoint(text,url)
+        if not strict_path and not contextual:
             continue
         seen.add(url)
         host=canonical_host(url)
@@ -156,6 +210,7 @@ def indexed_endpoint_leads(row: dict, limit: int = 4) -> list[dict]:
             "source_provenance":[source],
             "provenance_url":provenance,
             "indexed_declared_endpoint":True,
+            "endpoint_evidence":"explicit_path" if strict_path else "indexed_context_declaration",
         })
         if len(out)>=max(1,min(limit,8)):
             break
@@ -552,6 +607,9 @@ def merge_private_candidate_state(
             "last_scan_utc":now,
             "first_seen_utc":str(prev.get("first_seen_utc") or row.get("first_seen_utc") or now),
             "last_seen_utc":str(row.get("last_seen_utc") or now),
+            "indexed_declared_endpoint":bool(row.get("indexed_declared_endpoint") or prev.get("indexed_declared_endpoint")),
+            "endpoint_evidence":str(row.get("endpoint_evidence") or prev.get("endpoint_evidence") or "")[:120],
+            "provenance_url":str(row.get("provenance_url") or prev.get("provenance_url") or "")[:1200],
         }
 
     ranked=sorted(
@@ -638,6 +696,15 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
             "confidence":confidence,
         }
 
+    if bool(candidate.get("indexed_declared_endpoint")):
+        return {
+            "eligible":True,
+            "reason":"indexed_declared_public_agent_endpoint",
+            "contact_mode":"direct_a2a",
+            "url":url,
+            "confidence":dict(confidence,endpoint_evidence=str(candidate.get("endpoint_evidence") or "indexed_declaration")),
+        }
+
     explicit_markers=("/a2a","/message/send","/agent/a2a","/agents/a2a")
     if any(path==x or path.endswith(x) for x in explicit_markers):
         return {
@@ -649,6 +716,34 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
         }
 
     return {"eligible":False,"reason":"no_explicit_agent_endpoint"}
+
+
+def summarize_candidate_eligibility(candidates: dict) -> dict:
+    """Return non-sensitive eligibility telemetry for the public SETI summary."""
+    rows=[v for v in (candidates or {}).values() if isinstance(v,dict)]
+    reason_counts={}
+    high_reason_counts={}
+    eligible=0
+    high_eligible=0
+    for candidate in rows:
+        result=interview_candidate_eligibility(candidate)
+        reason=str(result.get("reason") or "unknown")
+        reason_counts[reason]=reason_counts.get(reason,0)+1
+        if result.get("eligible"):
+            eligible += 1
+        if str(candidate.get("classification") or "")=="HIGH_INTEREST":
+            high_reason_counts[reason]=high_reason_counts.get(reason,0)+1
+            if result.get("eligible"):
+                high_eligible += 1
+    return {
+        "candidates":len(rows),
+        "eligible":eligible,
+        "ineligible":max(0,len(rows)-eligible),
+        "high_interest":sum(1 for x in rows if str(x.get("classification") or "")=="HIGH_INTEREST"),
+        "high_interest_eligible":high_eligible,
+        "reason_counts":dict(sorted(reason_counts.items())),
+        "high_interest_reason_counts":dict(sorted(high_reason_counts.items())),
+    }
 
 
 INTERVIEW_MARKER_LABELS={

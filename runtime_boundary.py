@@ -65,6 +65,16 @@ def load_runtime_profile() -> dict:
             raise RuntimeError("agent_chat_monitor_push_boundary_unsafe")
         if chat_monitor.get("may_write_commercial_evidence") is not False:
             raise RuntimeError("agent_chat_monitor_boundary_unsafe")
+    endpoint_recognition=agent_network.get("seti_endpoint_recognition") if isinstance(agent_network.get("seti_endpoint_recognition"),dict) else {}
+    if endpoint_recognition:
+        if endpoint_recognition.get("allows_nonstandard_paths_only_when_publicly_indexed_as_agent_endpoint") is not True:
+            raise RuntimeError("seti_endpoint_recognition_public_boundary_unsafe")
+        if endpoint_recognition.get("passive_discovery_only") is not True:
+            raise RuntimeError("seti_endpoint_recognition_passive_boundary_unsafe")
+        if endpoint_recognition.get("may_contact_only_https_public_endpoints") is not True:
+            raise RuntimeError("seti_endpoint_recognition_https_boundary_unsafe")
+        if endpoint_recognition.get("may_write_commercial_evidence") is not False:
+            raise RuntimeError("seti_endpoint_recognition_commercial_boundary_unsafe")
     progressive=agent_network.get("seti_progressive_dialogue") if isinstance(agent_network.get("seti_progressive_dialogue"),dict) else {}
     if progressive:
         if int(progressive.get("max_attempts") or 0)!=3:

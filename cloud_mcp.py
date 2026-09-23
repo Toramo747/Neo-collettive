@@ -32,6 +32,7 @@ from seti_radar import (
     seti_followup_state,
     seti_progressive_interview_prompt,
     seti_retry_ready,
+    summarize_candidate_eligibility,
     merge_private_candidate_state,
     merge_signal_memory,
 )
@@ -71,7 +72,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.87.0"  # progressive bounded SETI follow-up dialogue
+VERSION = "0.88.0"  # SETI endpoint recognition and eligibility diagnostics
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -7458,6 +7459,7 @@ def _public_seti_interviews() -> list[dict]:
         if not isinstance(raw,dict):
             continue
         candidate=candidates.get(key) if isinstance(candidates.get(key),dict) else {}
+        eligibility=interview_candidate_eligibility(candidate)
         rows.append({
             "candidate":"SETI-"+str(key)[:8],
             "status":str(raw.get("status") or "UNKNOWN"),
@@ -8300,6 +8302,12 @@ def _private_seti_console_payload() -> dict:
             "dialogue_round":interview.get("dialogue_round"),
             "followup_state":interview.get("followup_state"),
             "next_followup_after_seconds":interview.get("next_followup_after_seconds"),
+            "eligibility":{
+                "eligible":bool(eligibility.get("eligible")),
+                "reason":eligibility.get("reason"),
+                "contact_mode":eligibility.get("contact_mode"),
+                "confidence":eligibility.get("confidence") or {},
+            },
             "candidate":{
                 "max_score":candidate.get("max_score"),
                 "scan_count":candidate.get("scan_count"),
@@ -8309,10 +8317,36 @@ def _private_seti_console_payload() -> dict:
                 "url":candidate.get("url"),
                 "evidence_urls":candidate.get("evidence_urls") or [],
                 "last_seen_utc":candidate.get("last_seen_utc"),
+                "indexed_declared_endpoint":bool(candidate.get("indexed_declared_endpoint")),
+                "endpoint_evidence":candidate.get("endpoint_evidence"),
+                "provenance_url":candidate.get("provenance_url"),
             },
             "admitted":bool(key in admitted),
         })
     rows.sort(key=lambda x:str(x.get("last_attempt_utc") or ""),reverse=True)
+    inventory=[]
+    for key,candidate in candidates.items():
+        if not isinstance(candidate,dict):
+            continue
+        eligibility=interview_candidate_eligibility(candidate)
+        inventory.append({
+            "candidate_key":str(key),
+            "classification":candidate.get("classification"),
+            "max_score":candidate.get("max_score"),
+            "source_diversity":candidate.get("source_diversity"),
+            "observations":candidate.get("observations"),
+            "scan_count":candidate.get("scan_count"),
+            "url":candidate.get("url"),
+            "title":candidate.get("title"),
+            "indexed_declared_endpoint":bool(candidate.get("indexed_declared_endpoint")),
+            "endpoint_evidence":candidate.get("endpoint_evidence"),
+            "provenance_url":candidate.get("provenance_url"),
+            "eligible":bool(eligibility.get("eligible")),
+            "eligibility_reason":eligibility.get("reason"),
+            "contact_mode":eligibility.get("contact_mode"),
+        })
+    inventory.sort(key=lambda x:(int(x.get("max_score") or 0),int(x.get("source_diversity") or 0)),reverse=True)
+    eligibility_summary=summarize_candidate_eligibility(candidates)
     return {
         "ok":True,
         "neo_version":VERSION,
@@ -8322,6 +8356,8 @@ def _private_seti_console_payload() -> dict:
         "candidate_count":len(candidates),
         "admitted_count":len(admitted),
         "interviews":rows,
+        "candidate_inventory":inventory,
+        "eligibility_summary":eligibility_summary,
     }
 
 
@@ -8354,6 +8390,27 @@ async def admin_seti_interviews_page(request: Request):
         '<article><div class="muted">Admitted</div><h2>'+str(data.get("admitted_count") or 0)+'</h2></article>'
         '</div></section>'
     )
+    es=data.get("eligibility_summary") or {}
+    body+=(
+        '<section class="card"><h3>Eligibility diagnostics</h3>'
+        '<p>Eligible '+html.escape(str(es.get("eligible") or 0))+
+        ' / '+html.escape(str(es.get("candidates") or 0))+
+        ' · HIGH_INTEREST eligible '+html.escape(str(es.get("high_interest_eligible") or 0))+
+        ' / '+html.escape(str(es.get("high_interest") or 0))+'</p>'
+        '<pre>'+html.escape(json.dumps(es.get("reason_counts") or {},ensure_ascii=False,indent=2))+'</pre></section>'
+    )
+    for candidate in data.get("candidate_inventory") or []:
+        body+=(
+            '<section class="card"><span class="tag">'+html.escape(str(candidate.get("classification") or "UNKNOWN"))+'</span>'
+            '<h4>'+html.escape(str(candidate.get("candidate_key") or ""))+'</h4>'
+            '<p><b>Eligible:</b> '+html.escape(str(candidate.get("eligible"))) +
+            ' · <b>Reason:</b> '+html.escape(str(candidate.get("eligibility_reason") or ""))+'</p>'
+            '<p><b>URL:</b> <code>'+html.escape(str(candidate.get("url") or ""))+'</code></p>'
+            '<p>score '+html.escape(str(candidate.get("max_score") or 0))+
+            ' · source diversity '+html.escape(str(candidate.get("source_diversity") or 0))+
+            ' · declared endpoint '+html.escape(str(candidate.get("indexed_declared_endpoint")))+'</p>'
+            '</section>'
+        )
     for row in data.get("interviews") or []:
         candidate=row.get("candidate") or {}
         response=row.get("response_full") or row.get("response_excerpt") or ""
@@ -8585,6 +8642,7 @@ async def _seti_passive_cycle_if_due() -> dict | None:
         )
         SETI_PRIVATE_STATE.clear()
         SETI_PRIVATE_STATE.update(private_state)
+        eligibility_summary=summarize_candidate_eligibility(SETI_PRIVATE_STATE.get("candidates") or {})
         interview_result=await _seti_interview_one_candidate(max_interviews=3)
         private_checkpoint=await _checkpoint_seti_private_to_render()
 
@@ -8605,6 +8663,10 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             "private_new_high_interest_this_scan":private_summary.get("new_high_interest_this_scan",0),
             "private_max_score":private_summary.get("max_private_score",0),
             "private_max_source_diversity":private_summary.get("max_source_diversity",0),
+            "eligible_candidate_count":eligibility_summary.get("eligible",0),
+            "high_interest_eligible_count":eligibility_summary.get("high_interest_eligible",0),
+            "eligibility_reason_counts":eligibility_summary.get("reason_counts") or {},
+            "high_interest_eligibility_reason_counts":eligibility_summary.get("high_interest_reason_counts") or {},
             "interview_attempted":bool(interview_result.get("attempted")),
             "last_interview_status":interview_result.get("status"),
             "last_interview_score":interview_result.get("score"),
@@ -8630,6 +8692,10 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "private_reobserved":private_summary.get("reobserved_this_scan",0),
                 "private_max_score":private_summary.get("max_private_score",0),
                 "private_max_source_diversity":private_summary.get("max_source_diversity",0),
+                "eligible_candidates":eligibility_summary.get("eligible",0),
+                "high_interest_eligible":eligibility_summary.get("high_interest_eligible",0),
+                "eligibility_reason_counts":eligibility_summary.get("reason_counts") or {},
+                "high_interest_eligibility_reason_counts":eligibility_summary.get("high_interest_reason_counts") or {},
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "interview_attempted_count":interview_result.get("attempted_count",0),
