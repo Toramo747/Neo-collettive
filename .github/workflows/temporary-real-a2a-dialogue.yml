@@ -21,7 +21,7 @@ jobs:
           print('protocol_version='+str(d.get('protocolVersion')))
           interfaces=d.get('supportedInterfaces') or []
           endpoint=(interfaces[0].get('url') if interfaces and isinstance(interfaces[0],dict) else None) or d.get('url')
-          if endpoint != 'https://app.agentmesh.link/':
+          if endpoint != 'https://app.agentmesh.link/a2a':
               raise SystemExit('unexpected endpoint: '+str(endpoint))
           open('/tmp/endpoint','w').write(endpoint)
           PY
