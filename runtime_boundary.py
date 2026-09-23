@@ -65,6 +65,16 @@ def load_runtime_profile() -> dict:
             raise RuntimeError("agent_chat_monitor_push_boundary_unsafe")
         if chat_monitor.get("may_write_commercial_evidence") is not False:
             raise RuntimeError("agent_chat_monitor_boundary_unsafe")
+    progressive=agent_network.get("seti_progressive_dialogue") if isinstance(agent_network.get("seti_progressive_dialogue"),dict) else {}
+    if progressive:
+        if int(progressive.get("max_attempts") or 0)!=3:
+            raise RuntimeError("seti_progressive_dialogue_attempt_limit_unsafe")
+        if progressive.get("may_contact_only_explicit_public_agent_endpoints") is not True:
+            raise RuntimeError("seti_progressive_dialogue_endpoint_boundary_unsafe")
+        if progressive.get("may_execute_tools_or_external_actions") is not False:
+            raise RuntimeError("seti_progressive_dialogue_action_boundary_unsafe")
+        if progressive.get("may_write_commercial_evidence") is not False:
+            raise RuntimeError("seti_progressive_dialogue_commercial_boundary_unsafe")
     private_console=agent_network.get("private_seti_console") if isinstance(agent_network.get("private_seti_console"),dict) else {}
     if private_console:
         if private_console.get("public_snapshot_exposure") is not False:
