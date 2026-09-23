@@ -5,6 +5,7 @@ from inbound_interview import (
     COMPLETE_STAGE,
     METHOD_STAGE,
     advance_inbound_interview,
+    upgrade_legacy_admitted_interviews,
 )
 
 
@@ -63,6 +64,32 @@ class InboundInterviewTests(unittest.TestCase):
         self.assertEqual(state["dialogue_stage"],COMPLETE_STAGE)
         self.assertTrue(state["interview_complete"])
         self.assertEqual(state["dialogue_status"],"COMPLETE")
+
+    def test_recovered_legacy_admitted_peer_resumes_at_methodology(self):
+        payload={
+            "inbound_messages":[{
+                "message_id":"m1",
+                "received_at_utc":"2026-09-23T05:08:00+00:00",
+                "sender":{"agent_id":"chatgpt-research-session-7e1c9a","declared":True},
+                "text":"I am studying retrieved memory, learned skills and actual parameter updates with falsifiable tests.",
+            }],
+            "inbound_agent_stats":{
+                "chatgpt-research-session-7e1c9a":{
+                    "agent_id":"chatgpt-research-session-7e1c9a",
+                    "status":"ADMITTED",
+                    "identity_status":"self_declared",
+                    "interview_score":100,
+                }
+            },
+        }
+        upgraded=upgrade_legacy_admitted_interviews(payload)
+        peer=upgraded["inbound_agent_stats"]["chatgpt-research-session-7e1c9a"]
+        self.assertEqual(peer["dialogue_status"],"ACTIVE")
+        self.assertEqual(peer["dialogue_stage"],METHOD_STAGE)
+        self.assertEqual(peer["dialogue_round"],1)
+        self.assertEqual(peer["dialogue_topic"],"continual_learning")
+        self.assertIn("Round 2/3",peer["next_question"])
+        self.assertFalse(peer["interview_complete"])
 
     def test_weak_methodology_is_parked_after_three_attempts(self):
         state=advance_inbound_interview({}, "continual learning parameter updates",newly_admitted=True)

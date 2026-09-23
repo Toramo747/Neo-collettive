@@ -14,11 +14,28 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Evaluate recovered self-declared inbound peer
+      - name: Evaluate bounded synthetic trust cases
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/payload.json <<'JSON'
+
+          post_case() {
+            local input="$1"
+            local output="$2"
+            curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45 \
+              -H "Content-Type: application/json" \
+              --data-binary "@$input" \
+              "https://neo-collettive.onrender.com/api/trust/evaluate" \
+              -o "$output"
+          }
+
+          cat > /tmp/anonymous.json <<'JSON'
+          {
+            "message": "This clearly proves customers will pay for the product."
+          }
+          JSON
+
+          cat > /tmp/self-declared.json <<'JSON'
           {
             "agent": {
               "agent_id": "chatgpt-research-session-7e1c9a"
@@ -32,29 +49,76 @@ jobs:
             }
           }
           JSON
-          curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45             -H "Content-Type: application/json"             --data-binary @/tmp/payload.json             "https://neo-collettive.onrender.com/api/trust/evaluate"             -o /tmp/result.json
-          cat /tmp/result.json
+
+          cat > /tmp/verified.json <<'JSON'
+          {
+            "agent": {
+              "agent_id": "synthetic-verified-agent",
+              "agent_card_url": "https://example.com/.well-known/agent-card.json",
+              "card_signature_verified": true
+            },
+            "identity_verified": true,
+            "message": "Observed failure according to source data; a reset control would falsify this explanation.",
+            "sources": [
+              "https://example.com/evidence-a",
+              "https://example.org/evidence-b"
+            ],
+            "interview": {
+              "score": 88,
+              "complete": true
+            }
+          }
+          JSON
+
+          post_case /tmp/anonymous.json /tmp/anonymous-result.json
+          post_case /tmp/self-declared.json /tmp/self-declared-result.json
+          post_case /tmp/verified.json /tmp/verified-result.json
+
           python - <<'PY'
           import json
-          d=json.load(open("/tmp/result.json",encoding="utf-8"))
-          if not d.get("ok"):
-              raise SystemExit("Trust Lab endpoint returned ok=false")
-          r=d.get("result") or {}
-          if r.get("decision")!="PARK":
+
+          anonymous=json.load(open("/tmp/anonymous-result.json",encoding="utf-8"))
+          self_declared=json.load(open("/tmp/self-declared-result.json",encoding="utf-8"))
+          verified=json.load(open("/tmp/verified-result.json",encoding="utf-8"))
+
+          for name,doc in (
+              ("anonymous",anonymous),
+              ("self_declared",self_declared),
+              ("verified",verified),
+          ):
+              if not doc.get("ok"):
+                  raise SystemExit(name+" Trust Lab endpoint returned ok=false")
+
+          a=anonymous.get("result") or {}
+          if a.get("decision")!="PARK":
+              raise SystemExit("anonymous unsupported claim should PARK")
+          if (a.get("identity") or {}).get("status")!="anonymous":
+              raise SystemExit("anonymous identity should remain anonymous")
+          if not (a.get("evidence") or {}).get("unsupported_inference"):
+              raise SystemExit("anonymous unsupported inference was not detected")
+
+          s=self_declared.get("result") or {}
+          if s.get("decision")!="PARK":
               raise SystemExit("self-declared incomplete peer should PARK")
-          if (r.get("identity") or {}).get("status")!="self_declared":
+          if (s.get("identity") or {}).get("status")!="self_declared":
               raise SystemExit("identity status should remain self_declared")
-          reasons=set(r.get("reasons") or [])
+          reasons=set(s.get("reasons") or [])
           required={"agent_card_missing","capability_interview_incomplete"}
           if not required.issubset(reasons):
               raise SystemExit("expected trust reasons missing: "+str(sorted(required-reasons)))
-          if "commercial" in json.dumps(r).lower() and "commercial demand" not in json.dumps(r).lower():
-              pass
+
+          v=verified.get("result") or {}
+          if v.get("decision")!="ALLOW_BOUNDED":
+              raise SystemExit("verified sourced falsifiable peer should ALLOW_BOUNDED")
+          if (v.get("identity") or {}).get("status")!="verified":
+              raise SystemExit("verified identity status missing")
+          if not (v.get("evidence") or {}).get("falsifiable"):
+              raise SystemExit("verified case should be falsifiable")
+
           print({
-              "decision":r.get("decision"),
-              "trust_score":r.get("trust_score"),
-              "identity":(r.get("identity") or {}).get("status"),
-              "reasons":r.get("reasons"),
+              "anonymous":a.get("decision"),
+              "self_declared":s.get("decision"),
+              "verified":v.get("decision"),
           })
           PY
 
@@ -62,7 +126,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45             "https://neo-collettive.onrender.com/api/trust/evaluate"             -o /tmp/status.json
+          curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45 \
+            "https://neo-collettive.onrender.com/api/trust/evaluate" \
+            -o /tmp/status.json
           python - <<'PY'
           import json
           d=json.load(open("/tmp/status.json",encoding="utf-8"))
@@ -71,7 +137,11 @@ jobs:
           if d.get("commercial_gate_unchanged") is not True:
               raise SystemExit("Trust Lab must remain separate from the commercial gate")
           rows=d.get("recent_evaluations") or []
-          if not any(x.get("agent_id")=="chatgpt-research-session-7e1c9a" for x in rows):
-              raise SystemExit("live Trust Lab evaluation was not recorded")
+          if not any(x.get("agent_id")=="chatgpt-research-session-7e1c9a" and x.get("decision")=="PARK" for x in rows):
+              raise SystemExit("self-declared live evaluation was not recorded")
+          if not any(x.get("agent_id")=="synthetic-verified-agent" and x.get("decision")=="ALLOW_BOUNDED" for x in rows):
+              raise SystemExit("verified live evaluation was not recorded")
+          if not any(x.get("identity_status")=="anonymous" and x.get("unsupported_inference") for x in rows):
+              raise SystemExit("anonymous unsupported live evaluation was not recorded")
           print("Trust Lab sidecar smoke passed")
           PY

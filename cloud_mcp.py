@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
-from inbound_interview import advance_inbound_interview
+from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -63,7 +63,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.81.0"  # Trust Lab sidecar experiment + append-only inbound audit recovery
+VERSION = "0.81.1"  # recover legacy admitted peers at the correct interview round
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -487,6 +487,7 @@ def _restore_state() -> str:
 
     source,payload,meta=select_freshest_state(candidates)
     payload=merge_supplementary_state(payload,candidates)
+    payload=upgrade_legacy_admitted_interviews(payload)
     AUTOPILOT_STATE["restore_candidates"]=meta
     if isinstance(payload,dict):
         try:
