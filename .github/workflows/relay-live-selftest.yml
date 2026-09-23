@@ -1,0 +1,36 @@
+name: Relay live self-test probe
+on:
+  push:
+    branches: ["feat/relay-isolated-pilot"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe relay health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /tmp/health.json -w "%{http_code}" --max-time 10 https://mycelix-relay-pilot.onrender.com/health || true)
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              python - <<'PY'
+          import json
+          with open('/tmp/health.json') as fh:
+              data=json.load(fh)
+          assert data.get('service') == 'mycelix-relay'
+          print('version=',data.get('version'))
+          print('mode=',data.get('mode'))
+          print('storage_ready=',data.get('storage_ready'))
+          print('selftest=',json.dumps(data.get('selftest'),sort_keys=True))
+          PY
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "health probe did not return 200" >&2
+          cat /tmp/health.json 2>/dev/null || true
+          exit 1
