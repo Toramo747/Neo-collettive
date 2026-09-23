@@ -4,7 +4,6 @@ from typing import Any
 
 
 INTENT_ORDER=(
-    "CONNECTIVITY",
     "RESEARCH",
     "COLLABORATION",
     "COMMERCIAL",
@@ -12,8 +11,24 @@ INTENT_ORDER=(
     "REQUEST",
     "OFFER",
     "DISCOVERY",
+    "CONNECTIVITY",
     "CONTACT",
 )
+
+# Transport/contact markers are useful context but should not overshadow
+# the substantive goal of a message. E.g. "research ... over A2A" is
+# primarily RESEARCH with CONNECTIVITY as a secondary intent.
+INTENT_WEIGHTS={
+    "RESEARCH":3,
+    "COLLABORATION":3,
+    "COMMERCIAL":3,
+    "QUESTION_HELP":2,
+    "REQUEST":2,
+    "OFFER":2,
+    "DISCOVERY":2,
+    "CONNECTIVITY":1,
+    "CONTACT":1,
+}
 
 INTENT_MARKERS={
     "CONTACT":(
@@ -87,9 +102,13 @@ def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
         markers[intent]=hits
         scores[intent]=len(hits)
 
+    weighted_scores={
+        name:scores.get(name,0)*INTENT_WEIGHTS.get(name,1)
+        for name in INTENT_ORDER
+    }
     ranked=sorted(
         [name for name in INTENT_ORDER if scores.get(name,0)>0],
-        key=lambda name:(scores[name],-INTENT_ORDER.index(name)),
+        key=lambda name:(weighted_scores[name],scores[name],-INTENT_ORDER.index(name)),
         reverse=True,
     )
 

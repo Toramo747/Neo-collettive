@@ -65,7 +65,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.83.0"  # intent-aware Trust Lab and conversational inbound intent discovery
+VERSION = "0.83.1"  # fix intent priority and deploy/smoke validation semantics
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"

@@ -129,6 +129,8 @@ def evaluate_agent_trust(payload: dict) -> dict:
         decision="PARK"
     elif score>=70 and interview_complete and explicit_support:
         decision="ALLOW_BOUNDED"
+    elif identity_status in {"self_declared","signed_card"} and not interview_complete:
+        decision="PARK"
     elif score>=35:
         decision="PARK"
     else:
