@@ -1,0 +1,35 @@
+name: Relay cleanup verification
+on:
+  push:
+    branches: ["feat/relay-isolated-pilot"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify live relay
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /tmp/health.json -w "%{http_code}" --max-time 10 https://mycelix-relay-pilot.onrender.com/health || true)
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              python - <<'PY'
+          import json
+          with open('/tmp/health.json') as fh:
+              data=json.load(fh)
+          assert data.get('service') == 'mycelix-relay'
+          assert data.get('mode') == 'ready'
+          assert data.get('enabled') is True
+          assert data.get('storage_ready') is True
+          assert 'selftest' not in data
+          print('PASS_CLEAN_RELAY')
+          print('version=',data.get('version'))
+          PY
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
