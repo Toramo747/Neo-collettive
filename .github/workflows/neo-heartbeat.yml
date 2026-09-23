@@ -156,7 +156,7 @@ jobs:
 
           snapshot={
               "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-              "snapshot_schema": 5,
+              "snapshot_schema": 6,
               "brand": raw.get("brand") or "MYCELIX",
               "brand_tagline": raw.get("brand_tagline") or "Collective Intelligence Network",
               "neo_version": raw.get("neo_version"),
@@ -191,6 +191,7 @@ jobs:
                   "exploration_history": ap.get("exploration_history") or [],
                   "inbound_messages": ap.get("inbound_messages") or [],
                   "inbound_agent_stats": ap.get("inbound_agent_stats") or {},
+                  "trust_lab_evaluations": ap.get("trust_lab_evaluations") or [],
                   "a2a_discovery": ap.get("a2a_discovery") or {},
                   "jarvis_dialogue_history": ap.get("jarvis_dialogue_history") or [],
                   "jarvis_runtime": ap.get("jarvis_runtime") or {},
