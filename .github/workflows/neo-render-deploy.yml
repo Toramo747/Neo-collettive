@@ -19,6 +19,8 @@ on:
       - "trust_lab.py"
       - "test_intent_discovery.py"
       - "intent_discovery.py"
+      - "test_agent_demand.py"
+      - "agent_demand.py"
       - "test_trust_lab.py"
       - "inbound_recovery_seed.json"
       - "seti_radar.py"
@@ -67,7 +69,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_runtime_boundary.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_runtime_boundary.py
 
       - name: Build Docker image in GitHub CI
         run: |

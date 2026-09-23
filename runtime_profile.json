@@ -35,6 +35,20 @@
         "may_change_trust_decision": false,
         "may_write_commercial_evidence": false,
         "commercial_intent_is_not_demand_evidence": true
+      },
+      "agent_demand_observatory": {
+        "enabled": true,
+        "purpose": "Measure repeated needs across independent inbound agents without treating agent demand as human commercial demand.",
+        "independence_unit": "declared_agent_id",
+        "anonymous_counts_as_independent": false,
+        "thresholds": {
+          "anecdote": 1,
+          "repeated_signal": 2,
+          "emerging_agent_need": 3,
+          "strong_pattern": 5
+        },
+        "may_write_commercial_evidence": false,
+        "may_change_commercial_gate": false
       }
     }
   },

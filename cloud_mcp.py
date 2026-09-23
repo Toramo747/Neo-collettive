@@ -17,6 +17,7 @@ from typing import Any
 from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
+from agent_demand import summarize_agent_demand
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 
@@ -65,7 +66,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.83.1"  # fix intent priority and deploy/smoke validation semantics
+VERSION = "0.84.0"  # Agent Demand Observatory with independent-agent signal thresholds
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -153,6 +154,23 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "trust_lab_evaluations": [],
+    "agent_demand_observatory": {
+        "schema_v":1,
+        "mode":"observational",
+        "declared_independent_agents":0,
+        "anonymous_observations":0,
+        "messages_observed":0,
+        "strongest_signal":"NONE",
+        "patterns":[],
+        "agents":[],
+        "thresholds":{"ANECDOTE":1,"REPEATED_SIGNAL":2,"EMERGING_AGENT_NEED":3,"STRONG_PATTERN":5},
+        "boundary":{
+            "commercial_evidence":False,
+            "commercial_gate_influence":"NONE",
+            "anonymous_counts_as_independent":False,
+            "trust_promotion":False,
+        },
+    },
     "boundary_events": [],
     "a2a_discovery": {
         "registry_enabled": False,
@@ -232,6 +250,7 @@ def _state_payload() -> dict:
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
+        "agent_demand_observatory": AUTOPILOT_STATE.get("agent_demand_observatory") or {},
         "boundary_events": list(AUTOPILOT_STATE.get("boundary_events") or [])[-40:],
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
@@ -294,6 +313,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
     if isinstance(payload.get("trust_lab_evaluations"), list):
         AUTOPILOT_STATE["trust_lab_evaluations"] = payload.get("trust_lab_evaluations")[-80:]
+    if isinstance(payload.get("agent_demand_observatory"), dict):
+        AUTOPILOT_STATE["agent_demand_observatory"] = payload.get("agent_demand_observatory") or {}
     if isinstance(payload.get("boundary_events"), list):
         AUTOPILOT_STATE["boundary_events"] = payload.get("boundary_events")[-40:]
     if isinstance(payload.get("a2a_discovery"), dict):
@@ -518,6 +539,12 @@ def _restore_state() -> str:
     payload=merge_supplementary_state(payload,compatible_candidates)
     payload=upgrade_legacy_admitted_interviews(payload)
     payload=upgrade_legacy_intent_state(payload)
+    if isinstance(payload,dict):
+        payload=dict(payload)
+        payload["agent_demand_observatory"]=summarize_agent_demand(
+            payload.get("inbound_messages") or [],
+            payload.get("inbound_agent_stats") or {},
+        )
     payload,boundary_event=sanitize_commercial_state(payload)
     meta["runtime_profile"]=dict(RUNTIME_IDENTITY)
     meta["rejected_profile_candidates"]=rejected_profiles
@@ -895,6 +922,10 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         ),
     }
     AUTOPILOT_STATE["inbound_agent_stats"]=stats
+    AUTOPILOT_STATE["agent_demand_observatory"]=summarize_agent_demand(
+        AUTOPILOT_STATE.get("inbound_messages") or [],
+        AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+    )
 
     # First-contact material is quarantine/interview data, not collective knowledge.
     # Only a peer that was already admitted before this message may contribute.
@@ -1141,6 +1172,52 @@ async def trust_lab_page(request: Request):
     return layout("Trust Lab",body)
 
 
+async def api_agent_demand(request: Request):
+    summary=summarize_agent_demand(
+        AUTOPILOT_STATE.get("inbound_messages") or [],
+        AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+    )
+    AUTOPILOT_STATE["agent_demand_observatory"]=summary
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "observatory":summary,
+        "commercial_gate_unchanged":True,
+    })
+
+
+async def agent_demand_page(request: Request):
+    summary=summarize_agent_demand(
+        AUTOPILOT_STATE.get("inbound_messages") or [],
+        AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+    )
+    AUTOPILOT_STATE["agent_demand_observatory"]=summary
+    body=(
+        '<section class="card"><span class="tag">OBSERVATIONAL</span><h2>Agent Demand Observatory</h2>'
+        '<p>What independent inbound agents appear to be seeking from MYCELIX or the wider agent ecosystem. '
+        'This telemetry never counts as human commercial demand.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Declared independent agents</div><h2>'+str(summary.get("declared_independent_agents") or 0)+'</h2></article>'
+        '<article><div class="muted">Anonymous observations</div><h2>'+str(summary.get("anonymous_observations") or 0)+'</h2></article>'
+        '<article><div class="muted">Strongest signal</div><h3>'+html.escape(str(summary.get("strongest_signal") or "NONE"))+'</h3></article>'
+        '</div></section>'
+    )
+    body+='<section class="card"><h2>Observed needs</h2><div class="grid">'
+    patterns=summary.get("patterns") or []
+    if not patterns:
+        body+='<article><p class="muted">No agent needs observed yet.</p></article>'
+    for row in patterns:
+        body+=(
+            '<article><span class="tag">'+html.escape(str(row.get("signal_level") or "NONE"))+'</span>'
+            '<h3>'+html.escape(str(row.get("need") or ""))+'</h3>'
+            '<p>'+str(int(row.get("independent_agents") or 0))+' independent agents · '
+            +str(int(row.get("observations") or 0))+' observations · '
+            +str(int(row.get("anonymous_observations") or 0))+' anonymous</p></article>'
+        )
+    body+='</div><p class="muted">Boundary: agent demand is ecosystem telemetry only; commercial gate influence = NONE.</p></section>'
+    return layout("Agent Demand",body)
+
+
 async def api_inbound_agents(request: Request):
     stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
     declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
@@ -1161,6 +1238,7 @@ async def api_inbound_agents(request: Request):
             key:sum(1 for x in stats.values() if isinstance(x,dict) and str(x.get("intent_primary") or "")==key)
             for key in ("CONTACT","DISCOVERY","CONNECTIVITY","QUESTION_HELP","COLLABORATION","OFFER","REQUEST","COMMERCIAL","RESEARCH","UNKNOWN")
         },
+        "agent_demand_observatory":summarize_agent_demand(messages,stats),
         "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
         "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
         "recent_messages":messages[-20:],
@@ -8540,6 +8618,8 @@ app = Starlette(
         Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),
         Route("/a2a", a2a_endpoint, methods=["POST"]),
         Route("/inbox", inbound_page, methods=["GET"]),
+        Route("/agent-demand", agent_demand_page, methods=["GET"]),
+        Route("/api/agent-demand", api_agent_demand, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/trust", trust_lab_page, methods=["GET"]),
         Route("/api/trust/evaluate", api_trust_evaluate, methods=["GET","POST"]),

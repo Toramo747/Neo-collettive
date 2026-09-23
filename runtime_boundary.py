@@ -63,6 +63,14 @@ def load_runtime_profile() -> dict:
         raise RuntimeError("runtime_profile_trust_boundary_unsafe")
     if trust_lab.get("may_change_commercial_gate") is not False:
         raise RuntimeError("runtime_profile_gate_boundary_unsafe")
+    observatory=trust_lab.get("agent_demand_observatory") if isinstance(trust_lab.get("agent_demand_observatory"),dict) else {}
+    if observatory:
+        if observatory.get("may_write_commercial_evidence") is not False:
+            raise RuntimeError("agent_demand_observatory_boundary_unsafe")
+        if observatory.get("may_change_commercial_gate") is not False:
+            raise RuntimeError("agent_demand_observatory_gate_boundary_unsafe")
+        if observatory.get("anonymous_counts_as_independent") is not False:
+            raise RuntimeError("agent_demand_observatory_independence_unsafe")
     if (data.get("commercial_gate") or {}).get("unchanged") is not True:
         raise RuntimeError("runtime_profile_gate_not_locked")
 

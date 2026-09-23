@@ -21,6 +21,14 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(profile["tracks"]["trust_lab"]["may_change_commercial_gate"])
         self.assertTrue(profile["config_fingerprint"])
 
+    def test_agent_demand_observatory_is_noncommercial(self):
+        profile=load_runtime_profile()
+        observatory=profile["tracks"]["trust_lab"]["agent_demand_observatory"]
+        self.assertTrue(observatory["enabled"])
+        self.assertFalse(observatory["anonymous_counts_as_independent"])
+        self.assertFalse(observatory["may_write_commercial_evidence"])
+        self.assertFalse(observatory["may_change_commercial_gate"])
+
     def test_explicit_foreign_state_profile_is_rejected(self):
         status=state_profile_status({"runtime_profile":{"profile_id":"mycelix-dev"}})
         self.assertFalse(status["compatible"])
