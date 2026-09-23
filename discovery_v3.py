@@ -79,6 +79,25 @@ RECRUITING_INTERVIEW_MARKERS = (
     "candidate interview","no hire",
 )
 
+FAMILY_PROCESS_MARKERS = {
+    "spreadsheet_process":("spreadsheet","spreadsheets","excel","google sheets","csv"),
+    "integration_api":("api","apis","webhook","webhooks","sync","synchronization","integration","integrations"),
+    "customer_support":("customer email","support email","shared inbox","customer support","support ticket","support tickets"),
+    "crm_lead_ops":("lead","leads","crm","sales follow-up","lead routing","lead qualification"),
+    "document_processing":("pdf","document","documents","invoice","invoices","form","forms"),
+    "data_cleanup":("duplicate data","deduplication","data cleanup","csv"),
+    "website_audit":("broken link","accessibility","website qa","website audit"),
+    "developer_tools":("devops","deployment","ci/cd","developer","build","release"),
+    "cybersecurity_tools":("vulnerability","phishing","security","alert","remediation"),
+}
+
+def _family_process_grounded(source_fact: str, family: str) -> bool | None:
+    markers=FAMILY_PROCESS_MARKERS.get(str(family or ""))
+    if not markers:
+        return None
+    low=(" "+_clean_source_text(source_fact).lower()+" ")
+    return any(marker in low for marker in markers)
+
 
 def _token_key(raw: str) -> str:
     """Light normalization for retrieval only; never used as evidence identity."""
@@ -284,6 +303,7 @@ def build_evidence_contract(
     job_tokens=_tokens(job)
     source_process_tokens=_tokens(clean_title+" "+source_fact)
     process_overlap=sorted(job_tokens & source_process_tokens)
+    family_process_grounded=_family_process_grounded(source_fact,family)
     fact_low=source_fact.lower()
     strong_pain=any(
         marker in fact_low
@@ -302,7 +322,9 @@ def build_evidence_contract(
         reasons.append("actor_missing")
     if not str(job or "").strip():
         reasons.append("process_missing")
-    if source_fact and job_tokens and not process_overlap:
+    if source_fact and family_process_grounded is False:
+        reasons.append("process_not_grounded_in_source_fact")
+    elif source_fact and family_process_grounded is None and job_tokens and not process_overlap:
         reasons.append("process_not_grounded_in_source_fact")
     if context_type=="product_launch" and _is_maker_self_report(clean_body) and not buyer_signals:
         reasons.append("maker_self_report_without_buyer_signal")
@@ -340,7 +362,11 @@ def build_evidence_contract(
                 "source_fact_present":bool(source_fact),
                 "fact_inference_separated":bool(source_fact and inference and source_fact!=inference),
                 "operational_pain_supported":bool(source_fact),
-                "process_grounded_in_source_fact":bool(not job_tokens or process_overlap),
+                "process_grounded_in_source_fact":bool(
+                    family_process_grounded
+                    if family_process_grounded is not None
+                    else (not job_tokens or process_overlap)
+                ),
                 "launch_customer_pain_supported":bool(context_type!="product_launch" or launch_customer_pain),
             },
         },
