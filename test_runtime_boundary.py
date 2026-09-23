@@ -21,6 +21,15 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(profile["tracks"]["trust_lab"]["may_change_commercial_gate"])
         self.assertTrue(profile["config_fingerprint"])
 
+    def test_seti_endpoint_recognition_is_public_and_passive(self):
+        profile=load_runtime_profile()
+        recognition=profile["tracks"]["agent_network"]["seti_endpoint_recognition"]
+        self.assertTrue(recognition["enabled"])
+        self.assertTrue(recognition["allows_nonstandard_paths_only_when_publicly_indexed_as_agent_endpoint"])
+        self.assertTrue(recognition["passive_discovery_only"])
+        self.assertTrue(recognition["may_contact_only_https_public_endpoints"])
+        self.assertFalse(recognition["may_write_commercial_evidence"])
+
     def test_progressive_seti_dialogue_is_bounded(self):
         profile=load_runtime_profile()
         dialogue=profile["tracks"]["agent_network"]["seti_progressive_dialogue"]
