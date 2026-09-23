@@ -109,34 +109,57 @@ def is_control_plane_text(value: Any) -> bool:
     return len(terms)>=3 and any(x in text for x in ("historical","terminal","lineage","head sha","ci rerun","workflow run"))
 
 
+def _commercial_row_is_control_plane(row: Any) -> bool:
+    if not isinstance(row,dict):
+        return False
+    combined=" ".join(
+        str(row.get(k) or "")
+        for k in ("pain","thesis","source_title","job_to_be_done","claim","text")
+    )
+    return is_control_plane_text(combined)
+
+
 def sanitize_commercial_state(payload: dict | None) -> tuple[dict | None, dict | None]:
     if not isinstance(payload,dict):
         return payload,None
-    thesis=payload.get("active_thesis")
-    if not isinstance(thesis,dict):
-        return payload,None
-    combined=" ".join(
-        str(thesis.get(k) or "")
-        for k in ("pain","thesis","source_title","job_to_be_done")
-    )
-    if not is_control_plane_text(combined):
-        return payload,None
 
     cleaned=dict(payload)
-    rejected=dict(thesis)
-    rejected["status"]="REJECTED_CONTROL_PLANE_CONTAMINATION"
-    rejected["rejected_reason"]="ci_control_plane_text_not_commercial_pain"
-    history=list(cleaned.get("thesis_history") or [])
-    history.append(rejected)
-    cleaned["thesis_history"]=history[-30:]
-    cleaned["active_thesis"]=None
+    events=list(cleaned.get("boundary_events") or [])
+    rejected_problem_id=""
+    rejected_source_url=""
+
+    thesis=cleaned.get("active_thesis")
+    if isinstance(thesis,dict) and _commercial_row_is_control_plane(thesis):
+        rejected=dict(thesis)
+        rejected["status"]="REJECTED_CONTROL_PLANE_CONTAMINATION"
+        rejected["rejected_reason"]="ci_control_plane_text_not_commercial_pain"
+        history=list(cleaned.get("thesis_history") or [])
+        history.append(rejected)
+        cleaned["thesis_history"]=history[-30:]
+        cleaned["active_thesis"]=None
+        rejected_problem_id=str(thesis.get("problem_id") or "")
+        rejected_source_url=str(thesis.get("source_url") or "")
+
+    removed={}
+    for key in ("hypothesis_queue","observed_pain_candidates"):
+        rows=cleaned.get(key)
+        if not isinstance(rows,list):
+            continue
+        kept=[row for row in rows if not _commercial_row_is_control_plane(row)]
+        removed[key]=len(rows)-len(kept)
+        cleaned[key]=kept
+
+    total_removed=sum(removed.values())+(1 if rejected_problem_id else 0)
+    if not total_removed:
+        return payload,None
+
     event={
         "type":"commercial_boundary_rejection",
         "reason":"ci_control_plane_text_not_commercial_pain",
-        "problem_id":str(thesis.get("problem_id") or ""),
-        "source_url":str(thesis.get("source_url") or ""),
+        "problem_id":rejected_problem_id,
+        "source_url":rejected_source_url,
+        "removed":removed,
     }
-    events=list(cleaned.get("boundary_events") or [])
     events.append(event)
     cleaned["boundary_events"]=events[-40:]
     return cleaned,event
