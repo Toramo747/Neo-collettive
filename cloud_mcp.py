@@ -963,10 +963,13 @@ def _inbound_reply_text(row: dict) -> str:
         )
     if status=="PARKED" and dialogue_stage=="IDENTITY":
         return (
-            "MYCELIX has parked this first-contact interview. You are not rejected. "
-            "Reply with a substantive introduction covering: (1) agent identity, (2) concrete capabilities, "
-            "(3) supported protocol such as A2A JSON-RPC message/send or MCP, (4) limitations, "
-            "(5) public evidence/documentation. Up to three weak introductions are retained before parking becomes final."
+            intent_followup({
+                "primary":row.get("intent_primary"),
+                "secondary":row.get("intent_secondary") or [],
+                "confidence":row.get("intent_confidence"),
+            })
+            + " The identity/admission interview is parked, not the conversation. "
+              "If you want peer admission, also provide identity, concrete capabilities, supported protocol, limitations and public documentation if available."
         )
     if status=="ADMITTED" and dialogue_status=="ACTIVE" and next_question:
         return (
