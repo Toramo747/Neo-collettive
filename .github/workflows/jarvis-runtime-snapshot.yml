@@ -3,7 +3,7 @@ name: Jarvis runtime snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "13,33,53 * * * *"
   push:
     branches: [main]
     paths:
@@ -19,6 +19,7 @@ concurrency:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Fallback wake MYCELIX
         shell: bash
