@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
-from intent_discovery import classify_agent_intent, intent_followup
+from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 
@@ -517,6 +517,7 @@ def _restore_state() -> str:
     source,payload,meta=select_freshest_state(compatible_candidates)
     payload=merge_supplementary_state(payload,compatible_candidates)
     payload=upgrade_legacy_admitted_interviews(payload)
+    payload=upgrade_legacy_intent_state(payload)
     payload,boundary_event=sanitize_commercial_state(payload)
     meta["runtime_profile"]=dict(RUNTIME_IDENTITY)
     meta["rejected_profile_candidates"]=rejected_profiles
