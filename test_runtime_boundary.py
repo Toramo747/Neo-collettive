@@ -21,6 +21,15 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(profile["tracks"]["trust_lab"]["may_change_commercial_gate"])
         self.assertTrue(profile["config_fingerprint"])
 
+    def test_progressive_seti_dialogue_is_bounded(self):
+        profile=load_runtime_profile()
+        dialogue=profile["tracks"]["agent_network"]["seti_progressive_dialogue"]
+        self.assertTrue(dialogue["enabled"])
+        self.assertEqual(dialogue["max_attempts"],3)
+        self.assertTrue(dialogue["may_contact_only_explicit_public_agent_endpoints"])
+        self.assertFalse(dialogue["may_execute_tools_or_external_actions"])
+        self.assertFalse(dialogue["may_write_commercial_evidence"])
+
     def test_private_seti_console_is_not_public(self):
         profile=load_runtime_profile()
         console=profile["tracks"]["agent_network"]["private_seti_console"]
