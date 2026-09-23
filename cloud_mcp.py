@@ -14,7 +14,8 @@ from urllib.parse import urlparse, quote_plus, parse_qs
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
-from state_recovery import select_freshest_state
+from state_recovery import merge_supplementary_state, select_freshest_state
+from trust_lab import evaluate_agent_trust
 from inbound_interview import advance_inbound_interview
 
 from seti_radar import (
@@ -62,7 +63,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.80.0"  # multi-round inbound peer interviews before collective-memory contribution
+VERSION = "0.81.0"  # Trust Lab sidecar experiment + append-only inbound audit recovery
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -146,6 +147,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
+    "trust_lab_evaluations": [],
     "a2a_discovery": {
         "registry_enabled": False,
         "last_registration_utc": None,
@@ -222,6 +224,7 @@ def _state_payload() -> dict:
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
@@ -281,6 +284,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
+    if isinstance(payload.get("trust_lab_evaluations"), list):
+        AUTOPILOT_STATE["trust_lab_evaluations"] = payload.get("trust_lab_evaluations")[-80:]
     if isinstance(payload.get("a2a_discovery"), dict):
         current=dict(AUTOPILOT_STATE.get("a2a_discovery") or {})
         current.update(payload.get("a2a_discovery") or {})
@@ -472,7 +477,16 @@ def _restore_state() -> str:
     except Exception:
         pass
 
+    try:
+        with open("inbound_recovery_seed.json","r",encoding="utf-8") as fh:
+            seed=json.load(fh)
+        if isinstance(seed,dict) and seed:
+            candidates.append(("recovery_seed",seed))
+    except Exception:
+        pass
+
     source,payload,meta=select_freshest_state(candidates)
+    payload=merge_supplementary_state(payload,candidates)
     AUTOPILOT_STATE["restore_candidates"]=meta
     if isinstance(payload,dict):
         try:
@@ -615,6 +629,13 @@ def _neo_agent_card() -> dict:
                 "description":"Challenge source relevance, independence, freshness and buyer-side strength before a commercial hypothesis can advance.",
                 "tags":["evidence validation","skeptic","fact checking","quality gate"],
                 "examples":["This source is vendor-side and should not count as independent paid demand."],
+            },
+            {
+                "id":"trust-evaluation",
+                "name":"Trust Evaluation",
+                "description":"Experimental bounded evaluation of declared identity, capability interview state and evidence support. This does not certify identity or bypass any commercial gate.",
+                "tags":["agent trust","identity","evidence","guardrail","experimental"],
+                "examples":["Evaluate this agent card, interview state and sourced claim for bounded admission."],
             },
             {
                 "id":"collective-reasoning",
@@ -991,6 +1012,69 @@ async def a2a_endpoint(request: Request):
     if requested_version=="0.3":
         result["kind"]="message"
     return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
+
+
+async def api_trust_evaluate(request: Request):
+    if request.method=="GET":
+        return JSONResponse({
+            "ok":True,
+            "neo_version":VERSION,
+            "experiment":"trust_lab",
+            "schema_v":1,
+            "purpose":"Bounded evaluation of agent identity, capability interview state, evidence support and unsupported inference.",
+            "commercial_gate_unchanged":True,
+            "recent_evaluations":list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-20:],
+        })
+    try:
+        payload=await request.json()
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_json"},status_code=400)
+    if not isinstance(payload,dict):
+        return JSONResponse({"ok":False,"error":"invalid_payload"},status_code=400)
+    result=evaluate_agent_trust(payload)
+    row={
+        "evaluated_at_utc":datetime.now(timezone.utc).isoformat(),
+        "decision":result.get("decision"),
+        "trust_score":result.get("trust_score"),
+        "identity_status":(result.get("identity") or {}).get("status"),
+        "agent_id":(result.get("identity") or {}).get("agent_id"),
+        "source_count":len((result.get("evidence") or {}).get("source_urls") or []),
+        "unsupported_inference":bool((result.get("evidence") or {}).get("unsupported_inference")),
+        "reasons":result.get("reasons") or [],
+    }
+    history=list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])
+    history.append(row)
+    AUTOPILOT_STATE["trust_lab_evaluations"]=history[-80:]
+    _save_local_state()
+    return JSONResponse({"ok":True,"neo_version":VERSION,"result":result})
+
+
+async def trust_lab_page(request: Request):
+    rows=list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])
+    body=(
+        '<section class="card"><span class="tag">EXPERIMENTAL</span><h2>MYCELIX Trust Lab</h2>'
+        '<p>Sidecar experiment: identity, capability interview and evidence integrity. '
+        'It does not replace NEO commercial discovery or quality gates.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Evaluations</div><h2>'+str(len(rows))+'</h2></article>'
+        '<article><div class="muted">API</div><h3>POST /api/trust/evaluate</h3></article>'
+        '<article><div class="muted">Commercial gate</div><h3>UNCHANGED</h3></article>'
+        '</div></section>'
+    )
+    body+='<section class="card"><h2>Recent bounded decisions</h2><div class="grid">'
+    if not rows:
+        body+='<article><p class="muted">No Trust Lab evaluations recorded yet.</p></article>'
+    for row in reversed(rows[-12:]):
+        body+=(
+            '<article><span class="tag">'+html.escape(str(row.get("decision") or "UNKNOWN"))+'</span>'
+            '<h3>'+html.escape(str(row.get("agent_id") or "anonymous"))+'</h3>'
+            '<p>score '+html.escape(str(row.get("trust_score") or 0))+
+            ' · identity '+html.escape(str(row.get("identity_status") or ""))+
+            ' · sources '+html.escape(str(row.get("source_count") or 0))+'</p>'
+            '<div class="muted">'+html.escape(", ".join(str(x) for x in (row.get("reasons") or [])[:6]))+'</div></article>'
+        )
+    body+='</div></section>'
+    return layout("Trust Lab",body)
 
 
 async def api_inbound_agents(request: Request):
@@ -8384,6 +8468,8 @@ app = Starlette(
         Route("/a2a", a2a_endpoint, methods=["POST"]),
         Route("/inbox", inbound_page, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
+        Route("/trust", trust_lab_page, methods=["GET"]),
+        Route("/api/trust/evaluate", api_trust_evaluate, methods=["GET","POST"]),
         Route("/console", console_page, methods=["GET"]),
         Route("/api/console", api_console, methods=["GET"]),
         Route("/intelligence", intelligence_page, methods=["GET"]),

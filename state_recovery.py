@@ -67,3 +67,59 @@ def select_freshest_state(
             },
         },
     )
+
+
+
+def merge_supplementary_state(
+    selected: dict | None,
+    candidates: Iterable[tuple[str,dict | None]],
+) -> dict | None:
+    """Union append-only/event-like state across durable candidates.
+
+    The freshest checkpoint remains authoritative for mutable planning state, but
+    append-only A2A events must not disappear just because a newer checkpoint was
+    written before those events were incorporated.
+    """
+    if not isinstance(selected,dict):
+        return selected
+    merged=dict(selected)
+
+    messages={}
+    stats={}
+    for _source,payload in candidates:
+        if not isinstance(payload,dict):
+            continue
+        for row in payload.get("inbound_messages") or []:
+            if not isinstance(row,dict):
+                continue
+            key=str(row.get("message_id") or "").strip()
+            if not key:
+                key=str(row.get("received_at_utc") or "")+"|"+str(row.get("thread_id") or "")+"|"+str((row.get("sender") or {}).get("agent_id") or "")
+            if key:
+                current=messages.get(key)
+                if not current or str(row.get("received_at_utc") or "") >= str(current.get("received_at_utc") or ""):
+                    messages[key]=row
+        for key,row in (payload.get("inbound_agent_stats") or {}).items():
+            if not isinstance(row,dict):
+                continue
+            current=stats.get(str(key))
+            if not current or str(row.get("last_seen_utc") or "") >= str(current.get("last_seen_utc") or ""):
+                stats[str(key)]=row
+
+    for row in merged.get("inbound_messages") or []:
+        if isinstance(row,dict):
+            key=str(row.get("message_id") or "").strip()
+            if key:
+                messages[key]=row
+    for key,row in (merged.get("inbound_agent_stats") or {}).items():
+        if isinstance(row,dict):
+            current=stats.get(str(key))
+            if not current or str(row.get("last_seen_utc") or "") >= str(current.get("last_seen_utc") or ""):
+                stats[str(key)]=row
+
+    if messages:
+        ordered=sorted(messages.values(),key=lambda row:str(row.get("received_at_utc") or ""))
+        merged["inbound_messages"]=ordered[-80:]
+    if stats:
+        merged["inbound_agent_stats"]=stats
+    return merged
