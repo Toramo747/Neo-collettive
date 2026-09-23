@@ -15,6 +15,8 @@ from seti_radar import (
     merge_private_candidate_state,
     merge_signal_memory,
     summarize_candidate_eligibility,
+    summarize_interview_readiness,
+    seti_candidate_attempt_state,
     registry_match,
     score_public_result,
 )
@@ -188,6 +190,27 @@ class SetiRadarTests(unittest.TestCase):
         }
         self.assertEqual(seti_dialogue_round(prior),1)
         self.assertEqual(seti_followup_state(prior),"RETRY_TRANSPORT")
+
+    def test_interview_readiness_distinguishes_rate_limit_and_exhaustion(self):
+        candidate={"classification":"INTERESTING","max_score":70,"url":"https://agent.example.ai/a2a"}
+        now="2026-09-23T12:00:00+00:00"
+        self.assertEqual(seti_candidate_attempt_state(candidate,{},now)["reason"],"ready")
+        parked={"status":"PARKED","attempts":1,"last_attempt_utc":"2026-09-23T11:30:00+00:00"}
+        self.assertEqual(seti_candidate_attempt_state(candidate,parked,now,3600)["reason"],"rate_limited")
+        exhausted={"status":"PARKED","attempts":3,"last_attempt_utc":"2026-09-23T10:00:00+00:00"}
+        self.assertEqual(seti_candidate_attempt_state(candidate,exhausted,now,3600)["reason"],"attempts_exhausted")
+
+    def test_readiness_summary_counts_ready_candidates(self):
+        candidates={
+            "a":{"classification":"INTERESTING","max_score":70,"url":"https://agent-a.example.ai/a2a"},
+            "b":{"classification":"INTERESTING","max_score":70,"url":"https://agent-b.example.ai/a2a"},
+        }
+        interviews={"b":{"status":"PARKED","attempts":1,"last_attempt_utc":"2026-09-23T11:30:00+00:00"}}
+        summary=summarize_interview_readiness(candidates,interviews,{},"2026-09-23T12:00:00+00:00",3600)
+        self.assertEqual(summary["eligible"],2)
+        self.assertEqual(summary["ready_now"],1)
+        self.assertEqual(summary["reason_counts"]["rate_limited"],1)
+        self.assertEqual(summary["reason_counts"]["ready"],1)
 
     def test_followup_is_rate_limited_and_stops_after_three_attempts(self):
         prior={
