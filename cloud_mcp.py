@@ -17,6 +17,7 @@ from typing import Any
 from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
+from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -63,7 +64,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.81.1"  # recover legacy admitted peers at the correct interview round
+VERSION = "0.82.0"  # enforce runtime profile isolation and commercial evidence firewall
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -101,6 +102,8 @@ AUTOPILOT_GOAL = os.getenv(
 AUTOPILOT_LOCK = asyncio.Lock()
 BRAND_NAME = "MYCELIX"
 BRAND_TAGLINE = "Collective Intelligence Network"
+RUNTIME_PROFILE = load_runtime_profile()
+RUNTIME_IDENTITY = runtime_identity()
 PUBLIC_BASE_URL = (
     os.getenv("MYCELIX_PUBLIC_BASE_URL")
     or os.getenv("NEO_PUBLIC_BASE_URL")
@@ -204,6 +207,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
 
 def _state_payload() -> dict:
     return {
+        "runtime_profile": dict(RUNTIME_IDENTITY),
         "state_saved_at_utc": datetime.now(timezone.utc).isoformat(),
         "last_started_utc": AUTOPILOT_STATE.get("last_started_utc"),
         "last_finished_utc": AUTOPILOT_STATE.get("last_finished_utc"),
@@ -485,9 +489,27 @@ def _restore_state() -> str:
     except Exception:
         pass
 
-    source,payload,meta=select_freshest_state(candidates)
-    payload=merge_supplementary_state(payload,candidates)
+    compatible_candidates=[]
+    rejected_profiles=[]
+    for candidate_source,candidate_payload in candidates:
+        profile_status=state_profile_status(candidate_payload)
+        if profile_status.get("compatible"):
+            compatible_candidates.append((candidate_source,candidate_payload))
+        else:
+            rejected_profiles.append({
+                "source":candidate_source,
+                "status":profile_status.get("status"),
+                "profile_id":profile_status.get("profile_id"),
+            })
+
+    source,payload,meta=select_freshest_state(compatible_candidates)
+    payload=merge_supplementary_state(payload,compatible_candidates)
     payload=upgrade_legacy_admitted_interviews(payload)
+    payload,boundary_event=sanitize_commercial_state(payload)
+    meta["runtime_profile"]=dict(RUNTIME_IDENTITY)
+    meta["rejected_profile_candidates"]=rejected_profiles
+    if boundary_event:
+        meta["commercial_boundary_event"]=boundary_event
     AUTOPILOT_STATE["restore_candidates"]=meta
     if isinstance(payload,dict):
         try:
@@ -8217,7 +8239,7 @@ async def api_autopilot_status(request: Request):
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
-    return JSONResponse({"ok": True, "neo_version": VERSION, "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
+    return JSONResponse({"ok": True, "neo_version": VERSION, "runtime_profile": dict(RUNTIME_IDENTITY), "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
 
 async def _venture_payload(request: Request) -> dict:
@@ -8417,7 +8439,12 @@ async def system(request: Request):
 
 
 async def health(request: Request):
-    return JSONResponse({"status": "ok", "service": "neo-collective", "version": VERSION})
+    return JSONResponse({
+        "status":"ok",
+        "service":"neo-collective",
+        "version":VERSION,
+        "runtime_profile":dict(RUNTIME_IDENTITY),
+    })
 
 
 async def api_discover(request: Request):
