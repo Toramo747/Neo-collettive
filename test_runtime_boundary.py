@@ -21,6 +21,14 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(profile["tracks"]["trust_lab"]["may_change_commercial_gate"])
         self.assertTrue(profile["config_fingerprint"])
 
+    def test_agent_chat_monitor_is_bounded(self):
+        profile=load_runtime_profile()
+        monitor=profile["tracks"]["agent_network"]["chat_monitor"]
+        self.assertTrue(monitor["enabled"])
+        self.assertTrue(monitor["records_actual_inbound_and_outbound"])
+        self.assertFalse(monitor["may_push_without_verified_callback"])
+        self.assertFalse(monitor["may_write_commercial_evidence"])
+
     def test_agent_demand_observatory_is_noncommercial(self):
         profile=load_runtime_profile()
         observatory=profile["tracks"]["trust_lab"]["agent_demand_observatory"]
