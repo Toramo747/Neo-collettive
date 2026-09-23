@@ -7,7 +7,7 @@ from urllib.parse import urlparse, unquote
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 8
+SETI_ENGINE_VERSION = 9
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
