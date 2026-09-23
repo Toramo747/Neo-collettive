@@ -28,8 +28,18 @@ jobs:
         with:
           python-version: "3.12"
       - name: Assert existing production configuration unchanged
+        env:
+          PILOT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          git diff --exit-code 1752e1cf7d0c8050d29aa035b117a5984d799ccf -- cloud_mcp.py discovery_v3.py state_recovery.py inbound_interview.py intent_discovery.py seti_radar.py agent_chat.py agent_demand.py runtime_boundary.py runtime_profile.json neo_policy.json neo_latest_result.json neo_cycle_floor.json requirements.txt Dockerfile render.yaml .github/workflows/mycelix-heartbeat-v2.yml .github/workflows/mycelix-heartbeat-v3.yml .github/workflows/mycelix-heartbeat-watchdog-v2.yml .github/workflows/neo-render-deploy.yml
+          set -euo pipefail
+          protected=(cloud_mcp.py discovery_v3.py state_recovery.py inbound_interview.py intent_discovery.py seti_radar.py agent_chat.py agent_demand.py runtime_boundary.py runtime_profile.json neo_policy.json neo_latest_result.json neo_cycle_floor.json requirements.txt Dockerfile render.yaml .github/workflows/mycelix-heartbeat-v2.yml .github/workflows/mycelix-heartbeat-v3.yml .github/workflows/mycelix-heartbeat-watchdog-v2.yml .github/workflows/neo-render-deploy.yml)
+          # Compare our branch, not main's later runtime snapshots, with its original baseline.
+          git diff --exit-code --name-only 1752e1cf7d0c8050d29aa035b117a5984d799ccf "$PILOT_HEAD" -- "${protected[@]}"
+          # On PRs also prove the synthetic merge preserves the exact current base files.
+          if [ -n "$PR_BASE" ]; then
+            git diff --exit-code --name-only "$PR_BASE" HEAD -- "${protected[@]}"
+          fi
       - name: Install standalone dependencies and validation tooling
         run: python -m pip install -r requirements-relay-render.txt PyYAML jsonschema
       - name: Compile and run Render isolation and storage tests

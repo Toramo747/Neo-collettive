@@ -4,6 +4,7 @@ import os
 import secrets
 import sys
 import time
+from http.client import HTTPException
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -36,7 +37,9 @@ for _ in range(60):
         code, health = call('/health')
         if code == 200 and health.get('mode') == 'ready':
             break
-    except (URLError, TimeoutError):
+    except (URLError, TimeoutError, ConnectionError, HTTPException):
+        # Docker may accept then reset a socket before Uvicorn starts listening.
+        # Retry only this bounded startup probe, never hide failed interview assertions.
         pass
     time.sleep(0.5)
 else:
