@@ -4,6 +4,7 @@ from seti_radar import (
     SETI_ENGINE_VERSION,
     explicit_agent_endpoint_url,
     indexed_endpoint_leads,
+    indexed_url_declared_as_agent_endpoint,
     inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
@@ -13,6 +14,7 @@ from seti_radar import (
     seti_retry_ready,
     merge_private_candidate_state,
     merge_signal_memory,
+    summarize_candidate_eligibility,
     registry_match,
     score_public_result,
 )
@@ -78,6 +80,33 @@ class SetiRadarTests(unittest.TestCase):
         self.assertEqual(len(leads),1)
         self.assertEqual(leads[0]["url"],"https://runtime.acme.ai/.well-known/agent-card.json")
         self.assertTrue(leads[0]["indexed_declared_endpoint"])
+
+    def test_context_declared_nonstandard_endpoint_is_extracted(self):
+        row={
+            "title":"Public research agent",
+            "url":"https://github.com/acme/agent/blob/main/README.md",
+            "snippet":"A2A endpoint: https://runtime.acme.ai/rpc/v1 supports JSON-RPC message/send.",
+            "source":"github-code-index-grepapp",
+        }
+        leads=indexed_endpoint_leads(row)
+        self.assertEqual(len(leads),1)
+        self.assertEqual(leads[0]["url"],"https://runtime.acme.ai/rpc/v1")
+        self.assertEqual(leads[0]["endpoint_evidence"],"indexed_context_declaration")
+
+    def test_escaped_indexed_endpoint_is_normalized(self):
+        row={
+            "title":"Agent card sample",
+            "url":"https://github.com/acme/agent/blob/main/card.json",
+            "snippet":r'Agent Card {"url":"https:\/\/runtime.acme.ai\/custom","protocolVersion":"0.3.0"}',
+            "source":"github-code-index-grepapp",
+        }
+        leads=indexed_endpoint_leads(row)
+        self.assertEqual(len(leads),1)
+        self.assertEqual(leads[0]["url"],"https://runtime.acme.ai/custom")
+
+    def test_nearby_documentation_url_is_not_mistaken_for_endpoint(self):
+        text="A2A JSON-RPC message/send is supported. Documentation: https://docs.acme.ai/guide"
+        self.assertFalse(indexed_url_declared_as_agent_endpoint(text,"https://docs.acme.ai/guide"))
 
     def test_explicit_endpoint_rejects_artifact_host(self):
         self.assertTrue(explicit_agent_endpoint_url("https://agent.example.ai/a2a"))
@@ -234,6 +263,39 @@ class SetiRadarTests(unittest.TestCase):
         candidate2=next(iter(state2["candidates"].values()))
         self.assertEqual(candidate2["observations"],2)
         self.assertEqual(summary2["reobserved_this_scan"],1)
+
+    def test_declared_endpoint_flag_survives_private_correlation(self):
+        rows=[{
+            "fingerprint":"fp2",
+            "title":"Agent Runtime",
+            "url":"https://runtime.example.ai/custom-rpc",
+            "domain":"runtime.example.ai",
+            "snippet":"A2A endpoint",
+            "agent_likelihood_score":90,
+            "classification":"HIGH_INTEREST",
+            "signals":[],
+            "source":"github-code-index-grepapp-declared-endpoint",
+            "indexed_declared_endpoint":True,
+            "endpoint_evidence":"indexed_context_declaration",
+        }]
+        state,_=merge_private_candidate_state({},rows,max_entries=16)
+        candidate=next(iter(state["candidates"].values()))
+        self.assertTrue(candidate["indexed_declared_endpoint"])
+        eligibility=interview_candidate_eligibility(candidate)
+        self.assertTrue(eligibility["eligible"])
+        self.assertEqual(eligibility["reason"],"indexed_declared_public_agent_endpoint")
+
+    def test_eligibility_summary_explains_high_interest_bottleneck(self):
+        candidates={
+            "a":{"classification":"HIGH_INTEREST","max_score":90,"url":"https://runtime.example.ai/custom","indexed_declared_endpoint":True},
+            "b":{"classification":"HIGH_INTEREST","max_score":95,"url":"https://example.ai/blog"},
+            "c":{"classification":"INTERESTING","max_score":60,"url":"https://github.com/acme/repo"},
+        }
+        summary=summarize_candidate_eligibility(candidates)
+        self.assertEqual(summary["high_interest"],2)
+        self.assertEqual(summary["high_interest_eligible"],1)
+        self.assertEqual(summary["high_interest_reason_counts"]["indexed_declared_public_agent_endpoint"],1)
+        self.assertEqual(summary["high_interest_reason_counts"]["no_explicit_agent_endpoint"],1)
 
     def test_persistence_bonus_without_storing_target(self):
         scan={
