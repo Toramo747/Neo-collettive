@@ -21,6 +21,16 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(profile["tracks"]["trust_lab"]["may_change_commercial_gate"])
         self.assertTrue(profile["config_fingerprint"])
 
+    def test_seti_selection_diagnostics_do_not_relax_limits(self):
+        profile=load_runtime_profile()
+        diag=profile["tracks"]["agent_network"]["seti_selection_diagnostics"]
+        self.assertTrue(diag["enabled"])
+        self.assertTrue(diag["selector_and_telemetry_share_same_readiness_function"])
+        self.assertTrue(diag["does_not_relax_endpoint_eligibility"])
+        self.assertTrue(diag["does_not_relax_attempt_limit"])
+        self.assertTrue(diag["does_not_relax_rate_limit"])
+        self.assertFalse(diag["may_write_commercial_evidence"])
+
     def test_seti_endpoint_recognition_is_public_and_passive(self):
         profile=load_runtime_profile()
         recognition=profile["tracks"]["agent_network"]["seti_endpoint_recognition"]
