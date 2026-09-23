@@ -298,6 +298,24 @@ class DiscoveryV3Tests(unittest.TestCase):
         rows=observed_pain_candidates(groups,meta,limit=5)
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["hypothesis_schema_v"],6)
+    def test_control_plane_text_is_not_observed_commercial_pain(self):
+        q="DevOps workflow need help manual workaround"
+        meta={
+            q.lower():{
+                "family":"spreadsheet_process",
+                "role":"buyer",
+                "search_alias_used":"DevOps workflow",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Complete Google Form automation",
+                "url":"https://github.com/x-boundaries/automation/issues/155",
+                "snippet":"Historical terminal vocabulary retained for chronology only: G4_PASS G4_AMEND manual CI rerun or duplicate dispatch while exact-head CI is already in flight.",
+            }],
+        }]
+        self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
 
 
 if __name__ == "__main__":
