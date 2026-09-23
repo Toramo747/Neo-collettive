@@ -117,7 +117,8 @@ A2A_MAX_MESSAGE_CHARS = max(
     ),
 )
 SETI_PRIVATE_STATE: dict[str, Any] = {
-    "schema_v": 2,
+    "schema_v": 3,
+    "runtime_profile": dict(RUNTIME_IDENTITY),
     "updated_at_utc": None,
     "candidates": {},
 }
@@ -151,6 +152,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "trust_lab_evaluations": [],
+    "boundary_events": [],
     "a2a_discovery": {
         "registry_enabled": False,
         "last_registration_utc": None,
@@ -229,6 +231,7 @@ def _state_payload() -> dict:
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
+        "boundary_events": list(AUTOPILOT_STATE.get("boundary_events") or [])[-40:],
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
@@ -290,6 +293,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
     if isinstance(payload.get("trust_lab_evaluations"), list):
         AUTOPILOT_STATE["trust_lab_evaluations"] = payload.get("trust_lab_evaluations")[-80:]
+    if isinstance(payload.get("boundary_events"), list):
+        AUTOPILOT_STATE["boundary_events"] = payload.get("boundary_events")[-40:]
     if isinstance(payload.get("a2a_discovery"), dict):
         current=dict(AUTOPILOT_STATE.get("a2a_discovery") or {})
         current.update(payload.get("a2a_discovery") or {})
@@ -400,6 +405,9 @@ def _restore_seti_private_state() -> str:
     payload=_decode_state_env(raw)
     if not isinstance(payload,dict):
         return "invalid"
+    profile_status=state_profile_status(payload)
+    if not profile_status.get("compatible"):
+        return "profile_mismatch"
     candidates=payload.get("candidates")
     if not isinstance(candidates,dict):
         return "invalid"
@@ -407,7 +415,8 @@ def _restore_seti_private_state() -> str:
     admitted=payload.get("admitted") if isinstance(payload.get("admitted"),dict) else {}
     SETI_PRIVATE_STATE.clear()
     SETI_PRIVATE_STATE.update({
-        "schema_v":int(payload.get("schema_v") or 2),
+        "schema_v":3,
+        "runtime_profile":dict(RUNTIME_IDENTITY),
         "updated_at_utc":payload.get("updated_at_utc"),
         "candidates":dict(list(candidates.items())[:24]),
         "interviews":dict(list(interviews.items())[-32:]),
