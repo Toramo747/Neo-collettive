@@ -26,6 +26,9 @@ class SetiRadarTests(unittest.TestCase):
     def test_engine_version_is_multisource_revision(self):
         self.assertGreaterEqual(SETI_ENGINE_VERSION,2)
 
+    def test_engine_version_covers_readiness_bootstrap(self):
+        self.assertGreaterEqual(SETI_ENGINE_VERSION,9)
+
     def test_machine_signature_scores_high(self):
         row={
             "title":"Autonomous runtime JSON-RPC message/send",
