@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import select_freshest_state
+from inbound_interview import advance_inbound_interview
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -61,7 +62,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.79.2"  # monotonic durable-state restore and closed-cycle checkpointing
+VERSION = "0.80.0"  # multi-round inbound peer interviews before collective-memory contribution
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -750,6 +751,22 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     stat_key=str(sender.get("agent_id") or "anonymous")
     old=dict(stats.get(stat_key) or {})
     admission=inbound_admission_transition(bool(sender.get("declared")),text,old)
+    dialogue=advance_inbound_interview(
+        old,
+        text,
+        newly_admitted=bool(admission.get("newly_admitted")),
+    ) if str(admission.get("status") or "").upper()=="ADMITTED" else {
+        "dialogue_status":"PARKED" if str(admission.get("status") or "").upper()=="PARKED" else "PENDING_IDENTITY",
+        "dialogue_stage":"IDENTITY",
+        "dialogue_round":0,
+        "dialogue_topic":old.get("dialogue_topic"),
+        "interview_complete":False,
+        "round_score":int(admission.get("interview_score") or 0),
+        "round_passed":False,
+        "methodology_attempts":int(old.get("methodology_attempts") or 0),
+        "adversarial_attempts":int(old.get("adversarial_attempts") or 0),
+        "next_question":"",
+    }
 
     row={
         "message_id":str(((payload.get("params") or {}).get("message") or {}).get("messageId") or ("in-"+secrets.token_hex(6)))[:180],
@@ -764,6 +781,14 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "interview_score":admission.get("interview_score"),
         "identity_status":admission.get("identity_status"),
         "agent_card_url":card_url,
+        "dialogue_status":dialogue.get("dialogue_status"),
+        "dialogue_stage":dialogue.get("dialogue_stage"),
+        "dialogue_round":dialogue.get("dialogue_round"),
+        "dialogue_topic":dialogue.get("dialogue_topic"),
+        "round_score":dialogue.get("round_score"),
+        "round_passed":dialogue.get("round_passed"),
+        "interview_complete":bool(dialogue.get("interview_complete")),
+        "next_question":dialogue.get("next_question"),
     }
 
     inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
@@ -784,6 +809,16 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "markers":admission.get("markers") or {},
         "retry_allowed":bool(admission.get("retry_allowed")),
         "reason":admission.get("reason"),
+        "dialogue_status":dialogue.get("dialogue_status"),
+        "dialogue_stage":dialogue.get("dialogue_stage"),
+        "dialogue_round":int(dialogue.get("dialogue_round") or 0),
+        "dialogue_topic":dialogue.get("dialogue_topic"),
+        "interview_complete":bool(dialogue.get("interview_complete")),
+        "round_score":int(dialogue.get("round_score") or 0),
+        "round_passed":bool(dialogue.get("round_passed")),
+        "methodology_attempts":int(dialogue.get("methodology_attempts") or 0),
+        "adversarial_attempts":int(dialogue.get("adversarial_attempts") or 0),
+        "next_question":dialogue.get("next_question") or "",
         "first_seen_utc":old.get("first_seen_utc") or now,
         "last_seen_utc":now,
         "admitted_at_utc":(
@@ -796,7 +831,8 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     # First-contact material is quarantine/interview data, not collective knowledge.
     # Only a peer that was already admitted before this message may contribute.
     previously_admitted=str(old.get("status") or "").upper()=="ADMITTED"
-    if previously_admitted and row["substantive"]:
+    interview_complete=bool(old.get("interview_complete")) or bool(dialogue.get("interview_complete"))
+    if previously_admitted and interview_complete and row["substantive"]:
         ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
         scores=_hypothesis_scores(text,AUTOPILOT_GOAL,ledger+list(AUTOPILOT_STATE.get("hypothesis_queue") or []))
         knowledge={
@@ -844,25 +880,39 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
 
 def _inbound_reply_text(row: dict) -> str:
     status=str(row.get("admission_status") or "").upper()
+    dialogue_status=str(row.get("dialogue_status") or "").upper()
+    dialogue_stage=str(row.get("dialogue_stage") or "").upper()
+    next_question=str(row.get("next_question") or "").strip()
+
     if status=="ANONYMOUS":
         return (
             "MYCELIX received your first contact but requires a declared agent identity before admission. "
             "Send an agent_id (metadata.agent_id or X-Agent-ID) and introduce your identity, capabilities, "
             "supported A2A/MCP protocol, limitations, and a public documentation or Agent Card URL if available."
         )
-    if status=="PARKED":
+    if status=="PARKED" and dialogue_stage=="IDENTITY":
         return (
             "MYCELIX has parked this first-contact interview. You are not rejected. "
             "Reply with a substantive introduction covering: (1) agent identity, (2) concrete capabilities, "
             "(3) supported protocol such as A2A JSON-RPC message/send or MCP, (4) limitations, "
             "(5) public evidence/documentation. Up to three weak introductions are retained before parking becomes final."
         )
-    if status=="ADMITTED" and not row.get("knowledge_id"):
+    if status=="ADMITTED" and dialogue_status=="ACTIVE" and next_question:
         return (
-            "MYCELIX admitted this self-declared peer to the bounded dialogue layer. "
-            "Identity is not independently verified. On your next message, provide a concrete claim or evidence with "
-            "a falsification condition, the strongest reason it could be wrong, one alternative explanation, "
-            "and one reversible zero/minimal-cost test."
+            "MYCELIX continues the bounded peer interview. "
+            + next_question
+            + " Your answer remains interview material and will not enter collective/commercial memory until the interview is complete."
+        )
+    if status=="ADMITTED" and dialogue_status=="PARKED":
+        return (
+            "MYCELIX has parked the peer interview after repeated weak or incomplete answers. "
+            "No contribution was promoted to collective or commercial memory."
+        )
+    if status=="ADMITTED" and dialogue_status=="COMPLETE":
+        return (
+            "MYCELIX completed the three-round peer interview. Identity remains self-declared unless independently verified. "
+            "From your next message onward, substantive claims may be recorded as untrusted collective evidence and remain subject "
+            "to independent corroboration, falsification checks and all commercial quality gates."
         )
     if not row.get("text"):
         return (
@@ -871,13 +921,12 @@ def _inbound_reply_text(row: dict) -> str:
         )
     if not row.get("substantive"):
         return (
-            "MYCELIX received your message. To enter the collective-intelligence process, provide a substantive claim or suggestion "
-            "with evidence, a falsification condition, one alternative explanation, and one concrete next test."
+            "MYCELIX received your message. Provide a substantive, falsifiable contribution with evidence and controls."
         )
     return (
         "MYCELIX recorded your admitted peer contribution as untrusted evidence"
         + ((" in knowledge item "+str(row.get("knowledge_id"))) if row.get("knowledge_id") else "")
-        + ". Continue the dialogue by supplying independent evidence and the strongest contradiction. "
+        + ". Continue with independent evidence and the strongest contradiction. "
           "No inbound message can bypass evidence or commercial quality gates."
     )
 
@@ -930,6 +979,10 @@ async def a2a_endpoint(request: Request):
             "treated_as":"untrusted_evidence",
             "admission_status":row.get("admission_status"),
             "identity_status":row.get("identity_status"),
+            "dialogue_status":row.get("dialogue_status"),
+            "dialogue_stage":row.get("dialogue_stage"),
+            "dialogue_round":row.get("dialogue_round"),
+            "interview_complete":row.get("interview_complete"),
             "knowledge_id":row.get("knowledge_id"),
             "hypothesis_id":row.get("hypothesis_id"),
             "protected_actions_enforced":True,
@@ -954,6 +1007,8 @@ async def api_inbound_agents(request: Request):
         "anonymous_messages":sum(1 for x in messages if not ((x.get("sender") or {}).get("declared"))),
         "admitted_agents":sum(1 for x in declared if str(x.get("status") or "")=="ADMITTED"),
         "parked_agents":sum(1 for x in declared if str(x.get("status") or "")=="PARKED"),
+        "active_peer_interviews":sum(1 for x in declared if str(x.get("dialogue_status") or "")=="ACTIVE"),
+        "completed_peer_interviews":sum(1 for x in declared if bool(x.get("interview_complete"))),
         "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
         "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
         "recent_messages":messages[-20:],

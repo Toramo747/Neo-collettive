@@ -9,6 +9,8 @@ on:
       - "cloud_mcp.py"
       - "state_recovery.py"
       - "test_state_recovery.py"
+      - "inbound_interview.py"
+      - "test_inbound_interview.py"
       - "seti_radar.py"
       - "test_seti_radar.py"
       - "neo_policy.json"
@@ -49,7 +51,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_discovery_v3.py test_state_recovery.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py
 
       - name: Build Docker image in GitHub CI
         run: |
