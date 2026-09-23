@@ -1,4 +1,4 @@
-name: MYCELIX Heartbeat Watchdog
+name: MYCELIX Heartbeat Watchdog v2
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/neo-heartbeat-watchdog.yml"
+      - ".github/workflows/mycelix-heartbeat-watchdog-v2.yml"
 
 permissions:
   actions: write
@@ -135,7 +135,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$REPO/actions/workflows/neo-heartbeat.yml/dispatches" \
+            "https://api.github.com/repos/$REPO/actions/workflows/mycelix-heartbeat-v2.yml/dispatches" \
             -d '{"ref":"main"}'
 
           echo "Primary MYCELIX heartbeat dispatched. runtime_stale=$runtime_stale snapshot_stale=$snapshot_stale"
