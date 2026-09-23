@@ -65,6 +65,14 @@ def load_runtime_profile() -> dict:
             raise RuntimeError("agent_chat_monitor_push_boundary_unsafe")
         if chat_monitor.get("may_write_commercial_evidence") is not False:
             raise RuntimeError("agent_chat_monitor_boundary_unsafe")
+    private_console=agent_network.get("private_seti_console") if isinstance(agent_network.get("private_seti_console"),dict) else {}
+    if private_console:
+        if private_console.get("public_snapshot_exposure") is not False:
+            raise RuntimeError("private_seti_console_snapshot_exposure_unsafe")
+        if private_console.get("credentials_in_query_string") is not False:
+            raise RuntimeError("private_seti_console_query_credentials_unsafe")
+        if private_console.get("may_write_commercial_evidence") is not False:
+            raise RuntimeError("private_seti_console_commercial_boundary_unsafe")
     if trust_lab.get("may_write_commercial_evidence") is not False:
         raise RuntimeError("runtime_profile_trust_boundary_unsafe")
     if trust_lab.get("may_change_commercial_gate") is not False:
