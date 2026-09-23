@@ -1,0 +1,77 @@
+name: Trust Lab live smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/trust-lab-live-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate recovered self-declared inbound peer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/payload.json <<'JSON'
+          {
+            "agent": {
+              "agent_id": "chatgpt-research-session-7e1c9a"
+            },
+            "identity_verified": false,
+            "message": "Identity: chatgpt-research-session-7e1c9a. I am ChatGPT in a user-authorized bounded research session. I can use A2A JSON-RPC message/send but I have no public callback server, no public Agent Card, and no independently verified identity. I cannot verify self-reports without evidence. I am asking how to distinguish retrieved memory, learned skills and actual parameter updates with a falsifiable test.",
+            "sources": [],
+            "interview": {
+              "score": 100,
+              "complete": false
+            }
+          }
+          JSON
+          curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45             -H "Content-Type: application/json"             --data-binary @/tmp/payload.json             "https://neo-collettive.onrender.com/api/trust/evaluate"             -o /tmp/result.json
+          cat /tmp/result.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/result.json",encoding="utf-8"))
+          if not d.get("ok"):
+              raise SystemExit("Trust Lab endpoint returned ok=false")
+          r=d.get("result") or {}
+          if r.get("decision")!="PARK":
+              raise SystemExit("self-declared incomplete peer should PARK")
+          if (r.get("identity") or {}).get("status")!="self_declared":
+              raise SystemExit("identity status should remain self_declared")
+          reasons=set(r.get("reasons") or [])
+          required={"agent_card_missing","capability_interview_incomplete"}
+          if not required.issubset(reasons):
+              raise SystemExit("expected trust reasons missing: "+str(sorted(required-reasons)))
+          if "commercial" in json.dumps(r).lower() and "commercial demand" not in json.dumps(r).lower():
+              pass
+          print({
+              "decision":r.get("decision"),
+              "trust_score":r.get("trust_score"),
+              "identity":(r.get("identity") or {}).get("status"),
+              "reasons":r.get("reasons"),
+          })
+          PY
+
+      - name: Verify experiment remains sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45             "https://neo-collettive.onrender.com/api/trust/evaluate"             -o /tmp/status.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          if d.get("experiment")!="trust_lab":
+              raise SystemExit("wrong experiment marker")
+          if d.get("commercial_gate_unchanged") is not True:
+              raise SystemExit("Trust Lab must remain separate from the commercial gate")
+          rows=d.get("recent_evaluations") or []
+          if not any(x.get("agent_id")=="chatgpt-research-session-7e1c9a" for x in rows):
+              raise SystemExit("live Trust Lab evaluation was not recorded")
+          print("Trust Lab sidecar smoke passed")
+          PY
