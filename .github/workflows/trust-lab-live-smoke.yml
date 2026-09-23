@@ -2,18 +2,59 @@ name: Trust Lab live smoke
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: ["NEO Render Deploy"]
+    types: [completed]
     branches: [main]
-    paths:
-      - ".github/workflows/trust-lab-live-smoke.yml"
 
 permissions:
   contents: read
 
 jobs:
   smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for deployed repository version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(python - <<'PY'
+          import re
+          s=open("cloud_mcp.py",encoding="utf-8").read()
+          m=re.search(r'^VERSION = "([^"]+)"',s,re.M)
+          if not m:
+              raise SystemExit("VERSION not found")
+          print(m.group(1))
+          PY
+          )"
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 30               "https://neo-collettive.onrender.com/health" -o /tmp/health.json; then
+              if EXPECTED="$expected" python - <<'PY'
+          import json,os,sys
+          d=json.load(open("/tmp/health.json",encoding="utf-8"))
+          profile=d.get("runtime_profile") or {}
+          ok=(
+              str(d.get("version") or "")==os.environ["EXPECTED"]
+              and profile.get("profile_id")=="mycelix-prod-main"
+              and profile.get("deployment_role")=="production"
+          )
+          sys.exit(0 if ok else 1)
+          PY
+              then
+                echo "Trust Lab smoke targeting deployed NEO v$expected"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Deployed runtime never matched repository version $expected" >&2
+          cat /tmp/health.json || true
+          exit 5
+
+      - name: Evaluate bounded synthetic trust cases
       - name: Evaluate bounded synthetic trust cases
         shell: bash
         run: |
