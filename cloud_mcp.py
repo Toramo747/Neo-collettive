@@ -28,6 +28,7 @@ from seti_radar import (
     inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
+    seti_dialogue_round,
     seti_followup_state,
     seti_progressive_interview_prompt,
     seti_retry_ready,
@@ -87,7 +88,7 @@ STATE_ENV_KEY = "NEO_STATE_JSON"
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
-SETI_PRIVATE_ENV_MAX_BYTES = max(8192, min(32768, int(os.getenv("NEO_SETI_PRIVATE_ENV_MAX_BYTES", "16000"))))
+SETI_PRIVATE_ENV_MAX_BYTES = max(8192, min(32768, int(os.getenv("NEO_SETI_PRIVATE_ENV_MAX_BYTES", "30000"))))
 STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
 POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
@@ -472,15 +473,63 @@ def _restore_seti_private_state() -> str:
     return "render_env"
 
 
+def _compact_seti_private_checkpoint(payload: dict) -> dict:
+    """Keep private SETI persistence bounded while preserving newest full transcripts."""
+    source=payload if isinstance(payload,dict) else {}
+    out=dict(source)
+    candidates=dict(source.get("candidates") or {})
+    interviews=dict(source.get("interviews") or {})
+    ordered=sorted(
+        interviews.items(),
+        key=lambda kv:str((kv[1] or {}).get("last_attempt_utc") or ""),
+        reverse=True,
+    )
+    compact_interviews={}
+    for idx,(key,raw) in enumerate(ordered[:20]):
+        row=dict(raw) if isinstance(raw,dict) else {}
+        history=list(row.get("attempt_history") or [])
+        if idx>=4:
+            row["response_full"]=str(row.get("response_full") or "")[:1200]
+            compact_history=[]
+            for attempt in history[-3:]:
+                if not isinstance(attempt,dict):
+                    continue
+                copy=dict(attempt)
+                copy["prompt"]=str(copy.get("prompt") or "")[:800]
+                copy["response"]=str(copy.get("response") or "")[:800]
+                compact_history.append(copy)
+            row["attempt_history"]=compact_history
+        compact_interviews[str(key)]=row
+    compact_candidates={}
+    for key,raw in list(candidates.items())[:20]:
+        row=dict(raw) if isinstance(raw,dict) else {}
+        row["snippet"]=str(row.get("snippet") or "")[:240]
+        row["signals"]=list(row.get("signals") or [])[:6]
+        row["sources"]=list(row.get("sources") or [])[:6]
+        compact_candidates[str(key)]=row
+    out["candidates"]=compact_candidates
+    out["interviews"]=compact_interviews
+    return out
+
+
 async def _checkpoint_seti_private_to_render() -> dict:
     global SETI_PRIVATE_LAST_CHECKPOINT
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":"render_api_not_configured"}
         return SETI_PRIVATE_LAST_CHECKPOINT
+    compacted=False
     try:
         value,raw_bytes,encoded_bytes=_encode_small_private_env(SETI_PRIVATE_STATE)
+    except ValueError:
+        compacted=True
+        compact=_compact_seti_private_checkpoint(SETI_PRIVATE_STATE)
+        try:
+            value,raw_bytes,encoded_bytes=_encode_small_private_env(compact)
+        except Exception as e:
+            SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220],"compacted":True}
+            return SETI_PRIVATE_LAST_CHECKPOINT
     except Exception as e:
-        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220]}
+        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220],"compacted":False}
         return SETI_PRIVATE_LAST_CHECKPOINT
     headers={
         "Authorization":f"Bearer {RENDER_API_KEY}",
@@ -500,6 +549,7 @@ async def _checkpoint_seti_private_to_render() -> dict:
             "encoding":"zlib64",
             "raw_bytes":raw_bytes,
             "stored_bytes":encoded_bytes,
+            "compacted":compacted,
         }
         return SETI_PRIVATE_LAST_CHECKPOINT
     except Exception as e:
@@ -8422,10 +8472,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
         status="ADMITTED" if accepted else "PARKED"
 
-        dialogue_round=min(3,max(1,sum(
-            1 for row in (prior.get("attempt_history") or [])
-            if isinstance(row,dict) and str(row.get("response") or "").strip()
-        )+1))
+        dialogue_round=seti_dialogue_round(prior)
         attempt_entry={
             "attempt":prior_attempts+1,
             "dialogue_round":dialogue_round,
