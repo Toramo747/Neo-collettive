@@ -65,6 +65,18 @@ def load_runtime_profile() -> dict:
             raise RuntimeError("agent_chat_monitor_push_boundary_unsafe")
         if chat_monitor.get("may_write_commercial_evidence") is not False:
             raise RuntimeError("agent_chat_monitor_boundary_unsafe")
+    selection_diag=agent_network.get("seti_selection_diagnostics") if isinstance(agent_network.get("seti_selection_diagnostics"),dict) else {}
+    if selection_diag:
+        if selection_diag.get("selector_and_telemetry_share_same_readiness_function") is not True:
+            raise RuntimeError("seti_selection_diagnostics_consistency_unsafe")
+        if selection_diag.get("does_not_relax_endpoint_eligibility") is not True:
+            raise RuntimeError("seti_selection_diagnostics_endpoint_boundary_unsafe")
+        if selection_diag.get("does_not_relax_attempt_limit") is not True:
+            raise RuntimeError("seti_selection_diagnostics_attempt_boundary_unsafe")
+        if selection_diag.get("does_not_relax_rate_limit") is not True:
+            raise RuntimeError("seti_selection_diagnostics_rate_boundary_unsafe")
+        if selection_diag.get("may_write_commercial_evidence") is not False:
+            raise RuntimeError("seti_selection_diagnostics_commercial_boundary_unsafe")
     endpoint_recognition=agent_network.get("seti_endpoint_recognition") if isinstance(agent_network.get("seti_endpoint_recognition"),dict) else {}
     if endpoint_recognition:
         if endpoint_recognition.get("allows_nonstandard_paths_only_when_publicly_indexed_as_agent_endpoint") is not True:
