@@ -14,7 +14,7 @@ from urllib.parse import urlparse, quote_plus, parse_qs
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
-from state_recovery import merge_supplementary_state, select_freshest_state
+from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -74,7 +74,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.89.1"  # force one post-upgrade SETI readiness scan
+VERSION = "0.90.0"  # monotonic cycle-floor recovery guardrail
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -87,6 +87,9 @@ JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
 RESULTS_LOG_PATH = os.getenv("NEO_RESULTS_LOG_PATH", "/tmp/neo-director-results.jsonl")
 STATE_SNAPSHOT_PATH = os.getenv("NEO_STATE_SNAPSHOT_PATH", "/tmp/neo-autopilot-state.json")
+CYCLE_FLOOR_PATH = os.getenv("NEO_CYCLE_FLOOR_PATH", "neo_cycle_floor.json")
+CYCLE_FLOOR_URL = (os.getenv("NEO_CYCLE_FLOOR_URL") or "https://raw.githubusercontent.com/Toramo747/Neo-collettive/main/neo_cycle_floor.json").strip()
+CYCLE_FLOOR_TIMEOUT_SECONDS = max(1.0, min(8.0, float(os.getenv("NEO_CYCLE_FLOOR_TIMEOUT_SECONDS", "4"))))
 STATE_ENV_KEY = "NEO_STATE_JSON"
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
@@ -560,6 +563,53 @@ async def _checkpoint_seti_private_to_render() -> dict:
         return SETI_PRIVATE_LAST_CHECKPOINT
 
 
+def _load_cycle_floor() -> tuple[dict | None, dict]:
+    candidates=[]
+    meta={"source":None,"candidates":{},"remote_error":None,"local_error":None}
+
+    if CYCLE_FLOOR_URL:
+        try:
+            with httpx.Client(timeout=CYCLE_FLOOR_TIMEOUT_SECONDS,follow_redirects=True) as client:
+                r=client.get(CYCLE_FLOOR_URL,headers={"Accept":"application/json"})
+                r.raise_for_status()
+                remote=r.json()
+            if isinstance(remote,dict):
+                candidates.append(("github_raw",remote))
+            else:
+                meta["remote_error"]="invalid_payload"
+        except Exception as e:
+            meta["remote_error"]=type(e).__name__+": "+str(e)[:180]
+
+    try:
+        with open(CYCLE_FLOOR_PATH,"r",encoding="utf-8") as fh:
+            local=json.load(fh)
+        if isinstance(local,dict):
+            candidates.append(("repo_file",local))
+        else:
+            meta["local_error"]="invalid_payload"
+    except Exception as e:
+        meta["local_error"]=type(e).__name__+": "+str(e)[:180]
+
+    ranked=[]
+    for source,payload in candidates:
+        try:
+            cycles=max(0,int(payload.get("cycles_completed") or 0))
+        except Exception:
+            cycles=0
+        observed=str(payload.get("observed_at_utc") or "")
+        meta["candidates"][source]={"cycles_completed":cycles,"observed_at_utc":observed or None}
+        ranked.append((cycles,observed,source,payload))
+
+    if not ranked:
+        return None,meta
+
+    cycles,observed,source,payload=max(ranked,key=lambda row:(row[0],row[1],1 if row[2]=="github_raw" else 0))
+    meta["source"]=source
+    meta["selected_cycles"]=cycles
+    meta["selected_observed_at_utc"]=observed or None
+    return payload,meta
+
+
 def _restore_state() -> str:
     candidates=[]
 
@@ -615,6 +665,9 @@ def _restore_state() -> str:
 
     source,payload,meta=select_freshest_state(compatible_candidates)
     payload=merge_supplementary_state(payload,compatible_candidates)
+    cycle_floor,cycle_floor_load=_load_cycle_floor()
+    payload,cycle_floor_meta=apply_monotonic_cycle_floor(payload,cycle_floor)
+    cycle_floor_meta["load"]=cycle_floor_load
     payload=upgrade_legacy_admitted_interviews(payload)
     payload=upgrade_legacy_intent_state(payload)
     if isinstance(payload,dict):
@@ -634,6 +687,7 @@ def _restore_state() -> str:
     payload,boundary_event=sanitize_commercial_state(payload)
     meta["runtime_profile"]=dict(RUNTIME_IDENTITY)
     meta["rejected_profile_candidates"]=rejected_profiles
+    meta["cycle_floor"]=cycle_floor_meta
     if boundary_event:
         meta["commercial_boundary_event"]=boundary_event
     AUTOPILOT_STATE["restore_candidates"]=meta

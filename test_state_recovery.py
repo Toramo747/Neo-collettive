@@ -1,6 +1,6 @@
 import unittest
 
-from state_recovery import merge_supplementary_state, select_freshest_state, state_freshness
+from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, select_freshest_state, state_freshness
 
 
 class StateRecoveryTests(unittest.TestCase):
@@ -71,6 +71,48 @@ class StateRecoveryTests(unittest.TestCase):
         merged=merge_supplementary_state(selected,[("repo_snapshot",older)])
         self.assertEqual(len(merged["inbound_messages"]),1)
         self.assertIn("a",merged["inbound_agent_stats"])
+
+
+    def test_cycle_floor_raises_only_counter(self):
+        selected={
+            "cycles_completed":179,
+            "family_performance":{"support":{"observations":7}},
+            "active_thesis":{"id":"th-1"},
+        }
+        restored,meta=apply_monotonic_cycle_floor(
+            selected,
+            {
+                "cycles_completed":181,
+                "observed_at_utc":"2026-09-23T12:22:53.006851+00:00",
+            },
+        )
+        self.assertEqual(restored["cycles_completed"],181)
+        self.assertEqual(restored["family_performance"],selected["family_performance"])
+        self.assertEqual(restored["active_thesis"],selected["active_thesis"])
+        self.assertTrue(meta["applied"])
+        self.assertEqual(meta["payload_cycles"],179)
+        self.assertEqual(meta["floor_cycles"],181)
+
+    def test_cycle_floor_never_regresses_newer_payload(self):
+        restored,meta=apply_monotonic_cycle_floor(
+            {"cycles_completed":184,"recent_sectors":["security"]},
+            {
+                "cycles_completed":181,
+                "observed_at_utc":"2026-09-23T12:22:53.006851+00:00",
+            },
+        )
+        self.assertEqual(restored["cycles_completed"],184)
+        self.assertEqual(restored["recent_sectors"],["security"])
+        self.assertFalse(meta["applied"])
+
+    def test_cycle_floor_requires_auditable_timestamp(self):
+        restored,meta=apply_monotonic_cycle_floor(
+            {"cycles_completed":179},
+            {"cycles_completed":999},
+        )
+        self.assertEqual(restored["cycles_completed"],179)
+        self.assertFalse(meta["available"])
+        self.assertFalse(meta["applied"])
 
 
 if __name__=="__main__":

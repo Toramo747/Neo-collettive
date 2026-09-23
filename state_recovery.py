@@ -32,6 +32,53 @@ def state_freshness(payload: dict | None) -> tuple[int,float]:
     return (cycles,timestamp)
 
 
+def apply_monotonic_cycle_floor(
+    payload: dict | None,
+    floor: dict | None,
+) -> tuple[dict | None,dict]:
+    """Raise only cycles_completed to a separately verified monotonic floor.
+
+    The floor never replaces the selected durable payload and never reconstructs
+    mutable state. A valid UTC timestamp is required so the floor remains auditable.
+    """
+    meta={
+        "available":False,
+        "applied":False,
+        "payload_cycles":0,
+        "floor_cycles":0,
+        "floor_observed_at_utc":None,
+    }
+    if not isinstance(payload,dict):
+        return payload,meta
+
+    out=dict(payload)
+    try:
+        payload_cycles=max(0,int(out.get("cycles_completed") or 0))
+    except Exception:
+        payload_cycles=0
+    meta["payload_cycles"]=payload_cycles
+
+    if not isinstance(floor,dict):
+        return out,meta
+    try:
+        floor_cycles=max(0,int(floor.get("cycles_completed") or 0))
+    except Exception:
+        return out,meta
+
+    observed_at=str(floor.get("observed_at_utc") or "").strip()
+    observed_epoch=_as_epoch(observed_at)
+    meta["floor_cycles"]=floor_cycles
+    meta["floor_observed_at_utc"]=observed_at or None
+    meta["available"]=bool(floor_cycles>0 and observed_epoch>0)
+    if not meta["available"]:
+        return out,meta
+
+    if floor_cycles>payload_cycles:
+        out["cycles_completed"]=floor_cycles
+        meta["applied"]=True
+    return out,meta
+
+
 def select_freshest_state(
     candidates: Iterable[tuple[str,dict | None]],
 ) -> tuple[str,dict | None,dict]:

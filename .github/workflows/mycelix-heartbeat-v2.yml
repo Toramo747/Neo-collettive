@@ -267,16 +267,88 @@ jobs:
           with open("neo_latest_result.json","w",encoding="utf-8") as f:
               json.dump(snapshot,f,indent=2,ensure_ascii=False,default=str)
               f.write("\n")
+
+          existing_floor=load("neo_cycle_floor.json",{})
+          try:
+              previous_cycles=max(0,int(existing_floor.get("cycles_completed") or 0))
+          except Exception:
+              previous_cycles=0
+          try:
+              observed_cycles=max(0,int(ap.get("cycles_completed") or 0))
+          except Exception:
+              observed_cycles=0
+
+          floor_cycles=max(previous_cycles,observed_cycles)
+          floor_observed_at=str(existing_floor.get("observed_at_utc") or "")
+          if observed_cycles>previous_cycles:
+              floor_observed_at=str(ap.get("last_finished_utc") or snapshot["captured_at_utc"])
+          elif floor_cycles>0 and not floor_observed_at and observed_cycles==floor_cycles:
+              floor_observed_at=str(ap.get("last_finished_utc") or snapshot["captured_at_utc"])
+
+          with open("neo_cycle_floor.json","w",encoding="utf-8") as f:
+              json.dump(
+                  {
+                      "cycles_completed":floor_cycles,
+                      "observed_at_utc":floor_observed_at or snapshot["captured_at_utc"],
+                  },
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+              f.write("\n")
           PY
 
       - name: Publish runtime snapshot
         run: |
           set -euo pipefail
           cp neo_latest_result.json /tmp/neo_latest_result.json
+          cp neo_cycle_floor.json /tmp/neo_cycle_floor.json
           git fetch origin main
           git reset --hard origin/main
           cp /tmp/neo_latest_result.json neo_latest_result.json
-          git add neo_latest_result.json
+          python - <<'PY'
+          import json
+
+          def load(path):
+              try:
+                  return json.load(open(path,encoding="utf-8"))
+              except Exception:
+                  return {}
+
+          current=load("neo_cycle_floor.json")
+          candidate=load("/tmp/neo_cycle_floor.json")
+
+          def cycles(row):
+              try:
+                  return max(0,int(row.get("cycles_completed") or 0))
+              except Exception:
+                  return 0
+
+          current_cycles=cycles(current)
+          candidate_cycles=cycles(candidate)
+          if candidate_cycles>current_cycles:
+              best=candidate
+          elif current_cycles>candidate_cycles:
+              best=current
+          else:
+              best=max(
+                  (current,candidate),
+                  key=lambda row:str(row.get("observed_at_utc") or ""),
+              )
+
+          with open("neo_cycle_floor.json","w",encoding="utf-8") as f:
+              json.dump(
+                  {
+                      "cycles_completed":cycles(best),
+                      "observed_at_utc":str(best.get("observed_at_utc") or ""),
+                  },
+                  f,
+                  indent=2,
+                  ensure_ascii=False,
+              )
+              f.write("\n")
+          PY
+          git add neo_latest_result.json neo_cycle_floor.json
           git diff --cached --quiet && exit 0
           git config user.name "MYCELIX Runtime Snapshot"
           git config user.email "actions@users.noreply.github.com"
