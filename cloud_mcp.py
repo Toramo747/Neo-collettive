@@ -14,7 +14,7 @@ from urllib.parse import urlparse, quote_plus, parse_qs
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
-from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, select_freshest_state
+from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -74,7 +74,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.90.0"  # monotonic cycle-floor recovery guardrail
+VERSION = "0.90.1"  # reconcile thesis budget against durable cycle count
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -4086,6 +4086,15 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
 
     active=AUTOPILOT_STATE.get("active_thesis")
     if isinstance(active,dict) and active.get("status")=="ACTIVE":
+        # A restored checkpoint can carry an older thesis counter than the durable
+        # global cycle count. Reconcile from created_at_cycle so a thesis cannot
+        # silently receive extra convergence cycles after restart/recovery.
+        active,thesis_cycle_meta=reconcile_thesis_cycles(
+            active,
+            int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+        )
+        AUTOPILOT_STATE["active_thesis"]=active
+
         # Observed-pain hypotheses are persisted across deploys. Do not let a thesis
         # created by the pre-humanization schema keep consuming convergence cycles.
         stale_observed=(

@@ -1,6 +1,6 @@
 import unittest
 
-from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, select_freshest_state, state_freshness
+from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state, state_freshness
 
 
 class StateRecoveryTests(unittest.TestCase):
@@ -113,6 +113,47 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertEqual(restored["cycles_completed"],179)
         self.assertFalse(meta["available"])
         self.assertFalse(meta["applied"])
+
+
+    def test_thesis_cycles_reconcile_lagging_checkpoint(self):
+        restored,meta=reconcile_thesis_cycles(
+            {
+                "status":"ACTIVE",
+                "created_at_cycle":180,
+                "cycles_used":3,
+                "budget_cycles":4,
+            },
+            184,
+        )
+        self.assertEqual(restored["cycles_used"],4)
+        self.assertTrue(meta["reconciled"])
+        self.assertEqual(meta["derived_cycles_used"],4)
+
+    def test_thesis_cycles_never_regress_stored_counter(self):
+        restored,meta=reconcile_thesis_cycles(
+            {
+                "status":"ACTIVE",
+                "created_at_cycle":180,
+                "cycles_used":5,
+            },
+            184,
+        )
+        self.assertEqual(restored["cycles_used"],5)
+        self.assertFalse(meta["reconciled"])
+        self.assertEqual(meta["effective_cycles_used"],5)
+
+    def test_thesis_cycles_match_completed_age_before_final_budget_cycle(self):
+        restored,meta=reconcile_thesis_cycles(
+            {
+                "status":"ACTIVE",
+                "created_at_cycle":180,
+                "cycles_used":3,
+            },
+            183,
+        )
+        self.assertEqual(restored["cycles_used"],3)
+        self.assertFalse(meta["reconciled"])
+        self.assertEqual(meta["derived_cycles_used"],3)
 
 
 if __name__=="__main__":

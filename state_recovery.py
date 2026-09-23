@@ -32,6 +32,56 @@ def state_freshness(payload: dict | None) -> tuple[int,float]:
     return (cycles,timestamp)
 
 
+def reconcile_thesis_cycles(
+    active: dict | None,
+    current_cycles: int,
+) -> tuple[dict | None,dict]:
+    """Reconcile a persisted thesis counter with monotonic completed cycles.
+
+    created_at_cycle is recorded before the cycle that first uses the thesis.
+    Therefore completed cycles consumed by that thesis are at least
+    current_cycles - created_at_cycle. The stored counter may be higher, but is
+    never allowed to regress.
+    """
+    meta={
+        "available":False,
+        "reconciled":False,
+        "stored_cycles_used":0,
+        "derived_cycles_used":0,
+        "effective_cycles_used":0,
+        "created_at_cycle":None,
+        "current_cycles":max(0,int(current_cycles or 0)),
+    }
+    if not isinstance(active,dict):
+        return active,meta
+
+    out=dict(active)
+    try:
+        stored=max(0,int(out.get("cycles_used") or 0))
+    except Exception:
+        stored=0
+    meta["stored_cycles_used"]=stored
+
+    try:
+        created=int(out.get("created_at_cycle"))
+    except Exception:
+        created=None
+    meta["created_at_cycle"]=created
+
+    derived=0
+    if created is not None and created>=0 and meta["current_cycles"]>=created:
+        derived=max(0,meta["current_cycles"]-created)
+        meta["available"]=True
+
+    effective=max(stored,derived)
+    meta["derived_cycles_used"]=derived
+    meta["effective_cycles_used"]=effective
+    if effective>stored:
+        out["cycles_used"]=effective
+        meta["reconciled"]=True
+    return out,meta
+
+
 def apply_monotonic_cycle_floor(
     payload: dict | None,
     floor: dict | None,
