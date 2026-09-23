@@ -8,8 +8,18 @@
   "tracks": {
     "commercial_discovery": {
       "purpose": "Find independently evidenced human buyer problems and qualify them through the unchanged commercial quality gate.",
-      "may_consume": ["commercial_web_evidence", "commercial_evidence_memory"],
-      "must_not_consume_as_commercial_evidence": ["trust_lab_evaluations", "inbound_messages", "inbound_agent_stats", "seti.signal_memory", "runtime_telemetry", "ci_control_plane_text"]
+      "may_consume": [
+        "commercial_web_evidence",
+        "commercial_evidence_memory"
+      ],
+      "must_not_consume_as_commercial_evidence": [
+        "trust_lab_evaluations",
+        "inbound_messages",
+        "inbound_agent_stats",
+        "seti.signal_memory",
+        "runtime_telemetry",
+        "ci_control_plane_text"
+      ]
     },
     "agent_network": {
       "purpose": "SETI/A2A discovery, inbound interviews and peer coordination.",
@@ -18,7 +28,14 @@
     "trust_lab": {
       "purpose": "Experimental bounded identity/capability/evidence policy evaluation.",
       "may_write_commercial_evidence": false,
-      "may_change_commercial_gate": false
+      "may_change_commercial_gate": false,
+      "intent_discovery": {
+        "enabled": true,
+        "purpose": "Classify apparent conversational purpose before trust promotion.",
+        "may_change_trust_decision": false,
+        "may_write_commercial_evidence": false,
+        "commercial_intent_is_not_demand_evidence": true
+      }
     }
   },
   "commercial_gate": {
