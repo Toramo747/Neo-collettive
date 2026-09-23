@@ -52,6 +52,22 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertIsNone(cleaned["active_thesis"])
         self.assertEqual(cleaned["thesis_history"][-1]["status"],"REJECTED_CONTROL_PLANE_CONTAMINATION")
         self.assertEqual(event["reason"],"ci_control_plane_text_not_commercial_pain")
+    def test_contaminated_persisted_candidates_are_removed(self):
+        payload={
+            "active_thesis":None,
+            "hypothesis_queue":[
+                {"claim":"Historical terminal vocabulary G4_PASS G4_AMEND exact-head CI workflow."},
+                {"claim":"Support teams manually copy customer emails into CRM every day."},
+            ],
+            "observed_pain_candidates":[
+                {"pain":"runtime snapshot and GitHub Actions workflow deploy rollback"},
+                {"pain":"Invoices are manually rekeyed and take hours each week."},
+            ],
+        }
+        cleaned,event=sanitize_commercial_state(payload)
+        self.assertEqual(len(cleaned["hypothesis_queue"]),1)
+        self.assertEqual(len(cleaned["observed_pain_candidates"]),1)
+        self.assertIsNotNone(event)
 
 
 if __name__=="__main__":
