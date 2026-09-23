@@ -7,6 +7,10 @@ from seti_radar import (
     inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
+    seti_dialogue_round,
+    seti_followup_state,
+    seti_progressive_interview_prompt,
+    seti_retry_ready,
     merge_private_candidate_state,
     merge_signal_memory,
     registry_match,
@@ -111,6 +115,63 @@ class SetiRadarTests(unittest.TestCase):
         self.assertTrue(scored["accepted"])
         weak=interview_response_score("Hello, I can help.")
         self.assertFalse(weak["accepted"])
+
+    def test_progressive_interview_rounds_target_missing_fields(self):
+        base="Round 1 base prompt"
+        prior={
+            "status":"PARKED",
+            "attempts":1,
+            "markers":{"identity":True,"capabilities":True,"protocol":False,"limits":False,"evidence":False},
+            "response_full":"I am an agent and I can analyze text.",
+            "attempt_history":[{
+                "attempt":1,
+                "response":"I am an agent and I can analyze text.",
+            }],
+        }
+        self.assertEqual(seti_dialogue_round(prior),2)
+        prompt=seti_progressive_interview_prompt(prior,base)
+        self.assertIn("Round 2/3",prompt)
+        self.assertIn("protocol/interface",prompt)
+        self.assertIn("falsifiable test",prompt)
+        self.assertEqual(seti_followup_state(prior),"FOLLOWUP_DUE")
+
+    def test_third_round_is_final_and_falsifiable(self):
+        prior={
+            "status":"PARKED",
+            "attempts":2,
+            "markers":{"identity":True,"capabilities":True,"protocol":True,"limits":False,"evidence":False},
+            "attempt_history":[
+                {"attempt":1,"response":"first substantive answer"},
+                {"attempt":2,"response":"second substantive answer"},
+            ],
+        }
+        self.assertEqual(seti_dialogue_round(prior),3)
+        prompt=seti_progressive_interview_prompt(prior,"base")
+        self.assertIn("Round 3/3",prompt)
+        self.assertIn("falsification condition",prompt)
+
+    def test_transport_failures_do_not_advance_dialogue_round(self):
+        prior={
+            "status":"PARKED",
+            "attempts":1,
+            "reason":"ReadTimeout",
+            "attempt_history":[{"attempt":1,"response":"","reason":"ReadTimeout"}],
+        }
+        self.assertEqual(seti_dialogue_round(prior),1)
+        self.assertEqual(seti_followup_state(prior),"RETRY_TRANSPORT")
+
+    def test_followup_is_rate_limited_and_stops_after_three_attempts(self):
+        prior={
+            "status":"PARKED",
+            "attempts":1,
+            "last_attempt_utc":"2026-09-23T09:00:00+00:00",
+            "response_full":"substantive reply",
+        }
+        self.assertFalse(seti_retry_ready(prior,"2026-09-23T09:30:00+00:00",3600))
+        self.assertTrue(seti_retry_ready(prior,"2026-09-23T10:00:01+00:00",3600))
+        exhausted=dict(prior,attempts=3)
+        self.assertEqual(seti_followup_state(exhausted),"EXHAUSTED")
+        self.assertFalse(seti_retry_ready(exhausted,"2026-09-24T10:00:01+00:00",3600))
 
     def test_inbound_contact_is_parked_before_protocol_aware_intro(self):
         first=inbound_admission_transition(True,"Hello, I can help.",{})
