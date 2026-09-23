@@ -4,6 +4,8 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from intent_discovery import classify_agent_intent
+
 
 def _clean(value: Any) -> str:
     return " ".join(str(value or "").split())
@@ -51,6 +53,7 @@ def evaluate_agent_trust(payload: dict) -> dict:
     identity_verified=bool(payload.get("identity_verified"))
     card_signed=bool(agent.get("card_signature_verified") or payload.get("card_signature_verified"))
     interview=payload.get("interview") if isinstance(payload.get("interview"),dict) else {}
+    intent=classify_agent_intent(message,payload.get("previous_intent") if isinstance(payload.get("previous_intent"),dict) else None)
 
     declared=bool(agent_id)
     interview_complete=bool(interview.get("complete") or interview.get("interview_complete"))
@@ -137,8 +140,9 @@ def evaluate_agent_trust(payload: dict) -> dict:
         inference=message[:1200]
 
     return {
-        "schema_v":1,
+        "schema_v":2,
         "decision":decision,
+        "intent":intent,
         "trust_score":score,
         "identity":{
             "status":identity_status,
@@ -158,5 +162,10 @@ def evaluate_agent_trust(payload: dict) -> dict:
             "falsifiable":falsifiable,
         },
         "reasons":reasons,
-        "boundary":"This result is a bounded policy signal, not proof of identity, truth, safety or commercial demand.",
+        "conversation":{
+            "allowed_bounded":True,
+            "promotion_allowed":decision=="ALLOW_BOUNDED",
+            "commercial_influence":"NONE",
+        },
+        "boundary":"This result is a bounded policy signal. Intent, identity, capability and evidence are separate axes; none proves truth, safety or commercial demand.",
     }

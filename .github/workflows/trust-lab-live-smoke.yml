@@ -31,7 +31,7 @@ jobs:
 
           cat > /tmp/anonymous.json <<'JSON'
           {
-            "message": "This clearly proves customers will pay for the product."
+            "message": "Hello, can you receive this and can we communicate over A2A message/send? This clearly proves customers will pay for the product."
           }
           JSON
 
@@ -96,6 +96,10 @@ jobs:
               raise SystemExit("anonymous identity should remain anonymous")
           if not (a.get("evidence") or {}).get("unsupported_inference"):
               raise SystemExit("anonymous unsupported inference was not detected")
+          if (a.get("intent") or {}).get("primary")!="CONNECTIVITY":
+              raise SystemExit("anonymous connectivity intent missing")
+          if not (a.get("conversation") or {}).get("allowed_bounded"):
+              raise SystemExit("bounded conversation should remain allowed while trust is parked")
 
           s=self_declared.get("result") or {}
           if s.get("decision")!="PARK":

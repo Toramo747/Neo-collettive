@@ -49,6 +49,25 @@ class TrustLabTests(unittest.TestCase):
             "interview":{"score":80,"complete":True},
         })
         self.assertEqual(result["evidence"]["source_urls"],[])
+    def test_intent_is_separate_from_trust_decision(self):
+        result=evaluate_agent_trust({
+            "message":"Hello, I am testing whether we can communicate over A2A message/send."
+        })
+        self.assertEqual(result["decision"],"PARK")
+        self.assertEqual(result["intent"]["primary"],"CONNECTIVITY")
+        self.assertTrue(result["conversation"]["allowed_bounded"])
+        self.assertFalse(result["conversation"]["promotion_allowed"])
+        self.assertEqual(result["conversation"]["commercial_influence"],"NONE")
+
+    def test_commercial_intent_is_not_commercial_demand(self):
+        result=evaluate_agent_trust({
+            "agent":{"agent_id":"seller-1"},
+            "message":"We offer this service for 20 EUR and can provide pricing.",
+            "interview":{"score":90,"complete":False},
+        })
+        self.assertTrue(result["intent"]["commercial_intent"])
+        self.assertEqual(result["conversation"]["commercial_influence"],"NONE")
+        self.assertEqual(result["decision"],"PARK")
 
 
 if __name__=="__main__":
