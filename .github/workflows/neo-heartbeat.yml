@@ -134,6 +134,45 @@ jobs:
             fi
           fi
 
+      - name: Enforce repository/runtime contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import re
+
+          source=open("cloud_mcp.py",encoding="utf-8").read()
+          match=re.search(r'^VERSION = "([^"]+)"',source,re.M)
+          if not match:
+              raise SystemExit("repository VERSION not found")
+          expected_version=match.group(1)
+
+          profile=json.load(open("runtime_profile.json",encoding="utf-8"))
+          expected_profile=str(profile.get("profile_id") or "")
+          expected_role=str(profile.get("deployment_role") or "")
+          if expected_profile!="mycelix-prod-main" or expected_role!="production":
+              raise SystemExit("repository runtime profile is not canonical production")
+
+          runtime=json.load(open("/tmp/status.json",encoding="utf-8"))
+          runtime_profile=runtime.get("runtime_profile") or {}
+          actual_version=str(runtime.get("neo_version") or "")
+          actual_profile=str(runtime_profile.get("profile_id") or "")
+          actual_role=str(runtime_profile.get("deployment_role") or "")
+
+          if actual_version!=expected_version:
+              raise SystemExit(f"runtime/repository version mismatch: runtime={actual_version} repo={expected_version}")
+          if actual_profile!=expected_profile:
+              raise SystemExit(f"runtime/repository profile mismatch: runtime={actual_profile} repo={expected_profile}")
+          if actual_role!=expected_role:
+              raise SystemExit(f"runtime/repository role mismatch: runtime={actual_role} repo={expected_role}")
+
+          print("runtime contract matched", {
+              "version":actual_version,
+              "profile_id":actual_profile,
+              "deployment_role":actual_role,
+          })
+          PY
+
       - name: Build runtime snapshot
         run: |
           set -euo pipefail
@@ -169,7 +208,9 @@ jobs:
                   "status_endpoint_reached": bool(raw),
                   "poll_errors": err,
                   "github_run_id": os.getenv("GITHUB_RUN_ID"),
-                  "github_run_attempt": os.getenv("GITHUB_RUN_ATTEMPT")
+                  "github_run_attempt": os.getenv("GITHUB_RUN_ATTEMPT"),
+                  "source_commit": os.getenv("GITHUB_SHA"),
+                  "runtime_contract_verified": True
               },
               "autopilot": {
                   "enabled": ap.get("enabled"),
