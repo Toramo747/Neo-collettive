@@ -74,7 +74,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.90.1"  # reconcile thesis budget against durable cycle count
+VERSION = "0.90.2"  # tighten source-grounded observed-pain hypothesis quality
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"

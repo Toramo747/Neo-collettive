@@ -33,7 +33,7 @@ STOP = {
 }
 
 
-OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 6
+OBSERVED_HYPOTHESIS_SCHEMA_VERSION = 7
 
 # Generic employment vacancies can contain words such as "hiring", "looking for"
 # and "compensation", which are not evidence of a buyer problem by themselves.
@@ -220,12 +220,30 @@ def _sentence_chunks(value: str) -> list[str]:
 
 
 def _first_operational_pain_sentence(value: str) -> str:
+    """Return a compact source-backed pain window with the pain marker preserved.
+
+    Search snippets can collapse many bullets into one long sentence. Returning the
+    first 280 characters of that blob could drop the actual pain marker while keeping
+    unrelated product copy. Center the excerpt on the observed burden instead.
+    """
     for chunk in _sentence_chunks(value):
         low=chunk.lower()
-        if any(marker in low for marker in OPERATIONAL_PAIN_MARKERS):
-            return chunk[:280]
-        if OPERATIONAL_TIME_BURDEN_RE.search(low):
-            return chunk[:280]
+        hits=[
+            (low.find(marker),marker)
+            for marker in OPERATIONAL_PAIN_MARKERS
+            if marker in low
+        ]
+        time_match=OPERATIONAL_TIME_BURDEN_RE.search(low)
+        if time_match:
+            hits.append((time_match.start(),"time_burden"))
+        hits=[x for x in hits if x[0]>=0]
+        if not hits:
+            continue
+        pos,_=min(hits,key=lambda x:x[0])
+        start=max(0,pos-110)
+        end=min(len(chunk),pos+170)
+        window=chunk[start:end].strip(" \t\r\n-:;,")
+        return window[:280]
     return ""
 
 
@@ -263,6 +281,20 @@ def build_evidence_contract(
     else:
         context_type="operational"
 
+    job_tokens=_tokens(job)
+    source_process_tokens=_tokens(clean_title+" "+source_fact)
+    process_overlap=sorted(job_tokens & source_process_tokens)
+    fact_low=source_fact.lower()
+    strong_pain=any(
+        marker in fact_low
+        for marker in OPERATIONAL_PAIN_MARKERS
+        if marker not in {"manual","manually"}
+    ) or bool(OPERATIONAL_TIME_BURDEN_RE.search(fact_low))
+    launch_customer_pain=bool(
+        strong_pain
+        or (buyer_signals and (frequency or impact))
+    )
+
     reasons=[]
     if not source_fact:
         reasons.append("no_explicit_operational_pain")
@@ -270,8 +302,12 @@ def build_evidence_contract(
         reasons.append("actor_missing")
     if not str(job or "").strip():
         reasons.append("process_missing")
+    if source_fact and job_tokens and not process_overlap:
+        reasons.append("process_not_grounded_in_source_fact")
     if context_type=="product_launch" and _is_maker_self_report(clean_body) and not buyer_signals:
         reasons.append("maker_self_report_without_buyer_signal")
+    if context_type=="product_launch" and source_fact and not launch_customer_pain:
+        reasons.append("product_feature_without_customer_pain")
 
     passed=not reasons
     confidence=(
@@ -304,6 +340,8 @@ def build_evidence_contract(
                 "source_fact_present":bool(source_fact),
                 "fact_inference_separated":bool(source_fact and inference and source_fact!=inference),
                 "operational_pain_supported":bool(source_fact),
+                "process_grounded_in_source_fact":bool(not job_tokens or process_overlap),
+                "launch_customer_pain_supported":bool(context_type!="product_launch" or launch_customer_pain),
             },
         },
     }
@@ -512,9 +550,14 @@ def observed_pain_candidates(
             if key in seen:
                 continue
             seen.add(key)
-            customer=_customer_from_source(clean_title+" "+clean_body,family,query)
+            source_fact=_first_operational_pain_sentence(clean_body)
+            if not source_fact:
+                continue
+            # Ground actor and process in the local pain context, not unrelated words
+            # elsewhere in a long search snippet or in the query that found it.
+            customer=_customer_from_source(source_fact+" "+clean_title,family,"")
             seed=rel["seed"] or clean_title[:120]
-            job,term,aliases=_human_job_hint(clean_title,clean_body,seed,family)
+            job,term,aliases=_human_job_hint(clean_title,source_fact,seed,family)
             contract=build_evidence_contract(
                 clean_title,clean_body,query,family,role,customer,job
             )

@@ -143,7 +143,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertNotIn("Show HN",rows[0]["job"])
         self.assertIn("customer emails",rows[0]["job"].lower())
-        self.assertEqual(rows[0]["hypothesis_schema_v"],6)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],7)
 
     def test_evidence_contract_separates_fact_from_inference(self):
         contract=build_evidence_contract(
@@ -297,7 +297,7 @@ class DiscoveryV3Tests(unittest.TestCase):
         }]
         rows=observed_pain_candidates(groups,meta,limit=5)
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["hypothesis_schema_v"],6)
+        self.assertEqual(rows[0]["hypothesis_schema_v"],7)
     def test_control_plane_text_is_not_observed_commercial_pain(self):
         q="DevOps workflow need help manual workaround"
         meta={
@@ -316,6 +316,61 @@ class DiscoveryV3Tests(unittest.TestCase):
             }],
         }]
         self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
+
+
+    def test_product_launch_feature_copy_is_not_observed_customer_pain(self):
+        q="spreadsheet process automation need help manual workaround"
+        meta={
+            q.lower():{
+                "family":"spreadsheet_process",
+                "role":"buyer",
+                "search_alias_used":"spreadsheet process automation",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Show HN: Analyst Agent by Fabi.ai – Build and share specialized AI data agents",
+                "url":"https://www.fabi.ai/product/analyst-agent",
+                "snippet":"Universal data connectivity connects spreadsheets to warehouses. Built-in validation lets agents check their own work. Our product automates manual spreadsheet workflows for marketing teams.",
+            }],
+        }]
+        self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
+
+    def test_customer_hint_is_grounded_in_pain_context_not_unrelated_copy(self):
+        q="spreadsheet process automation need help manual workaround"
+        meta={
+            q.lower():{
+                "family":"spreadsheet_process",
+                "role":"buyer",
+                "search_alias_used":"spreadsheet process automation",
+            }
+        }
+        groups=[{
+            "query":q,
+            "results":[{
+                "title":"Analytics workflow notes",
+                "url":"https://example.com/ops-pain",
+                "snippet":"Marketing teams can view the dashboards. Our operations team manually copies spreadsheet rows every week and the process is error-prone.",
+            }],
+        }]
+        rows=observed_pain_candidates(groups,meta,limit=5)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["customer"],"operations teams")
+        self.assertIn("spreadsheet",rows[0]["job"].lower())
+
+    def test_evidence_contract_rejects_process_inferred_outside_pain_fact(self):
+        contract=build_evidence_contract(
+            "Customer support workflow",
+            "Our support team manually triages customer emails every day and the process is error-prone.",
+            "spreadsheet process automation need help manual workaround",
+            "spreadsheet_process",
+            "buyer",
+            "customer support teams",
+            "clean and automate recurring spreadsheet work",
+        )
+        self.assertFalse(contract["skeptic"]["passed"])
+        self.assertIn("process_not_grounded_in_source_fact",contract["skeptic"]["reasons"])
 
 
 if __name__ == "__main__":
