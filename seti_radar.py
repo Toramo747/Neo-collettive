@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 6
+SETI_ENGINE_VERSION = 7
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
@@ -649,6 +649,100 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
         }
 
     return {"eligible":False,"reason":"no_explicit_agent_endpoint"}
+
+
+INTERVIEW_MARKER_LABELS={
+    "identity":"role/identity",
+    "capabilities":"concrete capabilities",
+    "protocol":"protocol/interface details",
+    "limits":"one important limitation or failure mode",
+    "evidence":"one public documentation/evidence reference (or explicitly say none exists)",
+}
+
+
+def seti_dialogue_round(previous: dict | None) -> int:
+    """Return the next substantive dialogue round (1..3), ignoring pure transport failures."""
+    previous=previous if isinstance(previous,dict) else {}
+    history=previous.get("attempt_history") if isinstance(previous.get("attempt_history"),list) else []
+    substantive=sum(
+        1 for row in history
+        if isinstance(row,dict) and str(row.get("response") or "").strip()
+    )
+    if not history and str(previous.get("response_full") or previous.get("response_excerpt") or "").strip():
+        substantive=1
+    return max(1,min(3,substantive+1))
+
+
+def seti_progressive_interview_prompt(previous: dict | None, base_prompt: str) -> str:
+    """Build the next bounded prompt without treating prior self-reports as verified facts."""
+    previous=previous if isinstance(previous,dict) else {}
+    round_no=seti_dialogue_round(previous)
+    if round_no<=1:
+        return str(base_prompt or "").strip()
+
+    markers=previous.get("markers") if isinstance(previous.get("markers"),dict) else {}
+    missing=[label for key,label in INTERVIEW_MARKER_LABELS.items() if not markers.get(key)]
+    missing_text=", ".join(missing) if missing else "specificity and falsifiable evidence"
+
+    if round_no==2:
+        return (
+            "MYCELIX bounded capability interview — Round 2/3. Your prior answer remains PARKED; "
+            "this does not imply rejection or verified identity. Do not simply repeat the introduction. "
+            "Clarify the following missing or weak areas: "+missing_text+". "
+            "Then propose one small falsifiable test of one capability you claim: state the input, "
+            "expected observable output, a control or negative case, and what result would show the claim is false. "
+            "If you have a public documentation/evidence URL, provide it; otherwise explicitly say that none is available. "
+            "Do not execute tools, contact third parties, make purchases, or perform external actions."
+        )
+
+    return (
+        "MYCELIX bounded capability interview — Round 3/3 (final automatic follow-up). "
+        "Your prior replies remain unverified self-reports. Resolve any remaining weak areas: "+missing_text+". "
+        "Give: (1) exact protocol/interface and relevant method or message shape you support, "
+        "(2) one concrete task you can perform, (3) one limitation or known failure condition, "
+        "(4) one public documentation/evidence URL or an explicit statement that none exists, and "
+        "(5) one falsification condition that would cause MYCELIX to reject your capability claim. "
+        "Be concise and testable. Do not execute tools, contact third parties, make purchases, "
+        "or perform external actions."
+    )
+
+
+def seti_followup_state(previous: dict | None, max_attempts: int = 3) -> str:
+    previous=previous if isinstance(previous,dict) else {}
+    status=str(previous.get("status") or "").upper()
+    attempts=max(0,int(previous.get("attempts") or 0))
+    if status=="ADMITTED":
+        return "COMPLETE"
+    if attempts>=max(1,int(max_attempts or 3)):
+        return "EXHAUSTED"
+    if not previous:
+        return "FIRST_CONTACT"
+    has_response=bool(str(previous.get("response_full") or previous.get("response_excerpt") or "").strip())
+    if not has_response:
+        history=previous.get("attempt_history") if isinstance(previous.get("attempt_history"),list) else []
+        has_response=any(
+            isinstance(row,dict) and str(row.get("response") or "").strip()
+            for row in history
+        )
+    return "FOLLOWUP_DUE" if has_response else "RETRY_TRANSPORT"
+
+
+def seti_retry_ready(previous: dict | None, now_utc: str, min_seconds: int = 3600) -> bool:
+    """Rate-limit automatic follow-ups so repeated scans do not spam a public endpoint."""
+    previous=previous if isinstance(previous,dict) else {}
+    if not previous:
+        return True
+    if seti_followup_state(previous) in {"COMPLETE","EXHAUSTED"}:
+        return False
+    last=str(previous.get("last_attempt_utc") or previous.get("interviewed_at_utc") or "").strip()
+    if not last:
+        return True
+    try:
+        now=datetime.fromisoformat(str(now_utc).replace("Z","+00:00")).astimezone(timezone.utc)
+        then=datetime.fromisoformat(last.replace("Z","+00:00")).astimezone(timezone.utc)
+        return (now-then).total_seconds()>=max(0,int(min_seconds or 0))
+    except Exception:
+        return True
 
 
 def interview_response_score(text: str) -> dict:

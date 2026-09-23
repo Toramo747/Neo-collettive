@@ -28,6 +28,10 @@ from seti_radar import (
     inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
+    seti_dialogue_round,
+    seti_followup_state,
+    seti_progressive_interview_prompt,
+    seti_retry_ready,
     merge_private_candidate_state,
     merge_signal_memory,
 )
@@ -67,7 +71,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.86.0"  # authenticated private SETI interview console
+VERSION = "0.87.0"  # progressive bounded SETI follow-up dialogue
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -84,7 +88,7 @@ STATE_ENV_KEY = "NEO_STATE_JSON"
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
-SETI_PRIVATE_ENV_MAX_BYTES = max(8192, min(32768, int(os.getenv("NEO_SETI_PRIVATE_ENV_MAX_BYTES", "16000"))))
+SETI_PRIVATE_ENV_MAX_BYTES = max(8192, min(32768, int(os.getenv("NEO_SETI_PRIVATE_ENV_MAX_BYTES", "30000"))))
 STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")))
 POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
@@ -96,6 +100,7 @@ AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() 
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
 SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))))
+SETI_FOLLOWUP_MIN_SECONDS = max(900, min(86400, int(os.getenv("NEO_SETI_FOLLOWUP_MIN_SECONDS", "3600"))))
 AUTOPILOT_GOAL = os.getenv(
     "NEO_AUTOPILOT_GOAL",
     "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
@@ -468,15 +473,63 @@ def _restore_seti_private_state() -> str:
     return "render_env"
 
 
+def _compact_seti_private_checkpoint(payload: dict) -> dict:
+    """Keep private SETI persistence bounded while preserving newest full transcripts."""
+    source=payload if isinstance(payload,dict) else {}
+    out=dict(source)
+    candidates=dict(source.get("candidates") or {})
+    interviews=dict(source.get("interviews") or {})
+    ordered=sorted(
+        interviews.items(),
+        key=lambda kv:str((kv[1] or {}).get("last_attempt_utc") or ""),
+        reverse=True,
+    )
+    compact_interviews={}
+    for idx,(key,raw) in enumerate(ordered[:20]):
+        row=dict(raw) if isinstance(raw,dict) else {}
+        history=list(row.get("attempt_history") or [])
+        if idx>=4:
+            row["response_full"]=str(row.get("response_full") or "")[:1200]
+            compact_history=[]
+            for attempt in history[-3:]:
+                if not isinstance(attempt,dict):
+                    continue
+                copy=dict(attempt)
+                copy["prompt"]=str(copy.get("prompt") or "")[:800]
+                copy["response"]=str(copy.get("response") or "")[:800]
+                compact_history.append(copy)
+            row["attempt_history"]=compact_history
+        compact_interviews[str(key)]=row
+    compact_candidates={}
+    for key,raw in list(candidates.items())[:20]:
+        row=dict(raw) if isinstance(raw,dict) else {}
+        row["snippet"]=str(row.get("snippet") or "")[:240]
+        row["signals"]=list(row.get("signals") or [])[:6]
+        row["sources"]=list(row.get("sources") or [])[:6]
+        compact_candidates[str(key)]=row
+    out["candidates"]=compact_candidates
+    out["interviews"]=compact_interviews
+    return out
+
+
 async def _checkpoint_seti_private_to_render() -> dict:
     global SETI_PRIVATE_LAST_CHECKPOINT
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":"render_api_not_configured"}
         return SETI_PRIVATE_LAST_CHECKPOINT
+    compacted=False
     try:
         value,raw_bytes,encoded_bytes=_encode_small_private_env(SETI_PRIVATE_STATE)
+    except ValueError:
+        compacted=True
+        compact=_compact_seti_private_checkpoint(SETI_PRIVATE_STATE)
+        try:
+            value,raw_bytes,encoded_bytes=_encode_small_private_env(compact)
+        except Exception as e:
+            SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220],"compacted":True}
+            return SETI_PRIVATE_LAST_CHECKPOINT
     except Exception as e:
-        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220]}
+        SETI_PRIVATE_LAST_CHECKPOINT={"ok":False,"reason":type(e).__name__+": "+str(e)[:220],"compacted":False}
         return SETI_PRIVATE_LAST_CHECKPOINT
     headers={
         "Authorization":f"Bearer {RENDER_API_KEY}",
@@ -496,6 +549,7 @@ async def _checkpoint_seti_private_to_render() -> dict:
             "encoding":"zlib64",
             "raw_bytes":raw_bytes,
             "stored_bytes":encoded_bytes,
+            "compacted":compacted,
         }
         return SETI_PRIVATE_LAST_CHECKPOINT
     except Exception as e:
@@ -8243,6 +8297,9 @@ def _private_seti_console_payload() -> dict:
             "response_excerpt":interview.get("response_excerpt"),
             "response_full":interview.get("response_full"),
             "attempt_history":interview.get("attempt_history") or [],
+            "dialogue_round":interview.get("dialogue_round"),
+            "followup_state":interview.get("followup_state"),
+            "next_followup_after_seconds":interview.get("next_followup_after_seconds"),
             "candidate":{
                 "max_score":candidate.get("max_score"),
                 "scan_count":candidate.get("scan_count"),
@@ -8307,7 +8364,9 @@ async def admin_seti_interviews_page(request: Request):
             '<p>score '+html.escape(str(row.get("score") or 0))+
             ' · attempts '+html.escape(str(row.get("attempts") or 0))+
             ' · transport '+html.escape(str(row.get("transport") or ""))+
-            ' · HTTP '+html.escape(str(row.get("http_status") or ""))+'</p>'
+            ' · HTTP '+html.escape(str(row.get("http_status") or ""))+
+            ' · round '+html.escape(str(row.get("dialogue_round") or ""))+
+            ' · follow-up '+html.escape(str(row.get("followup_state") or ""))+'</p>'
             '<p><b>Reason:</b> '+html.escape(str(row.get("quality_reason") or row.get("reason") or ""))+'</p>'
             '<h4>Agent response</h4><pre>'+html.escape(str(response))+'</pre>'
             '<h4>Attempt history</h4><pre>'+html.escape(json.dumps(row.get("attempt_history") or [],ensure_ascii=False,indent=2,default=str))+'</pre>'
@@ -8337,6 +8396,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     ranked=sorted(
         [(str(k),v) for k,v in candidates.items() if isinstance(v,dict)],
         key=lambda kv:(
+            1 if str((interviews.get(str(kv[0])) or {}).get("status") or "")=="PARKED" else 0,
             int((kv[1] or {}).get("max_score") or 0),
             int((kv[1] or {}).get("scan_count") or 0),
             int((kv[1] or {}).get("source_diversity") or 0),
@@ -8356,12 +8416,14 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         # weak replies as inconclusive rather than permanent rejection.
         if prior_status=="PARKED" and prior_attempts>=3:
             continue
+        now=datetime.now(timezone.utc).isoformat()
+        if prior_status=="PARKED" and not seti_retry_ready(prior,now,SETI_FOLLOWUP_MIN_SECONDS):
+            continue
 
         eligibility=interview_candidate_eligibility(candidate)
         if not eligibility.get("eligible"):
             continue
 
-        now=datetime.now(timezone.utc).isoformat()
         resolved=await _seti_resolve_interview_endpoint(candidate,eligibility)
         if not resolved.get("ok"):
             prior_history=list(prior.get("attempt_history") or [])
@@ -8382,6 +8444,9 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
                 "reason":resolved.get("reason"),
                 "attempt_history":prior_history[-3:],
                 "candidate_score":int(candidate.get("max_score") or 0),
+                "dialogue_round":1,
+                "followup_state":"EXHAUSTED" if prior_attempts+1>=3 else "RETRY_TRANSPORT",
+                "next_followup_after_seconds":0 if prior_attempts+1>=3 else SETI_FOLLOWUP_MIN_SECONDS,
             }
             SETI_PRIVATE_STATE["interviews"]=interviews
             results.append({
@@ -8397,17 +8462,21 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             continue
 
         endpoint=str(resolved.get("endpoint") or "")
+        interview_prompt=seti_progressive_interview_prompt(prior,_seti_interview_prompt())
         answer=await _ask_a2a_transport(
             {"name":"SETI candidate "+key[:8],"url":endpoint},
-            _seti_interview_prompt(),
+            interview_prompt,
         )
         response_text=_response_text(answer)
         quality=interview_response_score(response_text)
         accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
         status="ADMITTED" if accepted else "PARKED"
 
+        dialogue_round=seti_dialogue_round(prior)
         attempt_entry={
             "attempt":prior_attempts+1,
+            "dialogue_round":dialogue_round,
+            "prompt":interview_prompt[:3000],
             "timestamp_utc":now,
             "status":status,
             "score":int(quality.get("score") or 0),
@@ -8438,6 +8507,14 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "endpoint":endpoint,
             "contact_mode":resolved.get("mode"),
             "candidate_score":int(candidate.get("max_score") or 0),
+            "dialogue_round":dialogue_round,
+            "followup_state":"COMPLETE" if accepted else seti_followup_state({
+                "status":status,
+                "attempts":prior_attempts+1,
+                "response_full":response_text[:3000],
+                "attempt_history":attempt_history[-3:],
+            }),
+            "next_followup_after_seconds":0 if accepted or prior_attempts+1>=3 else SETI_FOLLOWUP_MIN_SECONDS,
         }
         interviews[key]=interview
 
