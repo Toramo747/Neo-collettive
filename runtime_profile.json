@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "profile_id": "mycelix-prod-main",
+  "deployment_role": "production",
+  "repository": "Toramo747/Neo-collettive",
+  "branch": "main",
+  "state_namespace": "mycelix-prod-main",
+  "tracks": {
+    "commercial_discovery": {
+      "purpose": "Find independently evidenced human buyer problems and qualify them through the unchanged commercial quality gate.",
+      "may_consume": ["commercial_web_evidence", "commercial_evidence_memory"],
+      "must_not_consume_as_commercial_evidence": ["trust_lab_evaluations", "inbound_messages", "inbound_agent_stats", "seti.signal_memory", "runtime_telemetry", "ci_control_plane_text"]
+    },
+    "agent_network": {
+      "purpose": "SETI/A2A discovery, inbound interviews and peer coordination.",
+      "may_write_commercial_evidence": false
+    },
+    "trust_lab": {
+      "purpose": "Experimental bounded identity/capability/evidence policy evaluation.",
+      "may_write_commercial_evidence": false,
+      "may_change_commercial_gate": false
+    }
+  },
+  "commercial_gate": {
+    "unchanged": true,
+    "requirements": [
+      "same_concrete_problem",
+      "at_least_3_independent_domains_in_21_days",
+      "at_least_2_fresh_sources_in_7_days",
+      "at_least_1_commercially_strong_buyer_source",
+      "PAID_DEMAND_and_BUY_INTENT_or_PAIN"
+    ]
+  },
+  "protected_actions": {
+    "spending": false,
+    "payments": false,
+    "contracts": false,
+    "commercial_outreach": false,
+    "external_publishing": false,
+    "personal_accounts": false
+  }
+}

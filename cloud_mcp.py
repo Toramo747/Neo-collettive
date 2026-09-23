@@ -17,6 +17,7 @@ from typing import Any
 from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
+from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -63,7 +64,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.81.1"  # recover legacy admitted peers at the correct interview round
+VERSION = "0.82.0"  # enforce runtime profile isolation and commercial evidence firewall
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -101,6 +102,8 @@ AUTOPILOT_GOAL = os.getenv(
 AUTOPILOT_LOCK = asyncio.Lock()
 BRAND_NAME = "MYCELIX"
 BRAND_TAGLINE = "Collective Intelligence Network"
+RUNTIME_PROFILE = load_runtime_profile()
+RUNTIME_IDENTITY = runtime_identity()
 PUBLIC_BASE_URL = (
     os.getenv("MYCELIX_PUBLIC_BASE_URL")
     or os.getenv("NEO_PUBLIC_BASE_URL")
@@ -114,7 +117,8 @@ A2A_MAX_MESSAGE_CHARS = max(
     ),
 )
 SETI_PRIVATE_STATE: dict[str, Any] = {
-    "schema_v": 2,
+    "schema_v": 3,
+    "runtime_profile": dict(RUNTIME_IDENTITY),
     "updated_at_utc": None,
     "candidates": {},
 }
@@ -148,6 +152,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "trust_lab_evaluations": [],
+    "boundary_events": [],
     "a2a_discovery": {
         "registry_enabled": False,
         "last_registration_utc": None,
@@ -204,6 +209,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
 
 def _state_payload() -> dict:
     return {
+        "runtime_profile": dict(RUNTIME_IDENTITY),
         "state_saved_at_utc": datetime.now(timezone.utc).isoformat(),
         "last_started_utc": AUTOPILOT_STATE.get("last_started_utc"),
         "last_finished_utc": AUTOPILOT_STATE.get("last_finished_utc"),
@@ -225,6 +231,7 @@ def _state_payload() -> dict:
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
+        "boundary_events": list(AUTOPILOT_STATE.get("boundary_events") or [])[-40:],
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
@@ -286,6 +293,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
     if isinstance(payload.get("trust_lab_evaluations"), list):
         AUTOPILOT_STATE["trust_lab_evaluations"] = payload.get("trust_lab_evaluations")[-80:]
+    if isinstance(payload.get("boundary_events"), list):
+        AUTOPILOT_STATE["boundary_events"] = payload.get("boundary_events")[-40:]
     if isinstance(payload.get("a2a_discovery"), dict):
         current=dict(AUTOPILOT_STATE.get("a2a_discovery") or {})
         current.update(payload.get("a2a_discovery") or {})
@@ -396,6 +405,9 @@ def _restore_seti_private_state() -> str:
     payload=_decode_state_env(raw)
     if not isinstance(payload,dict):
         return "invalid"
+    profile_status=state_profile_status(payload)
+    if not profile_status.get("compatible"):
+        return "profile_mismatch"
     candidates=payload.get("candidates")
     if not isinstance(candidates,dict):
         return "invalid"
@@ -403,7 +415,8 @@ def _restore_seti_private_state() -> str:
     admitted=payload.get("admitted") if isinstance(payload.get("admitted"),dict) else {}
     SETI_PRIVATE_STATE.clear()
     SETI_PRIVATE_STATE.update({
-        "schema_v":int(payload.get("schema_v") or 2),
+        "schema_v":3,
+        "runtime_profile":dict(RUNTIME_IDENTITY),
         "updated_at_utc":payload.get("updated_at_utc"),
         "candidates":dict(list(candidates.items())[:24]),
         "interviews":dict(list(interviews.items())[-32:]),
@@ -472,6 +485,8 @@ def _restore_state() -> str:
             # Preserve snapshot time as a freshness signal if the projected payload
             # does not contain a closed-cycle timestamp itself.
             durable=dict(durable)
+            if isinstance(snap.get("runtime_profile"),dict):
+                durable.setdefault("runtime_profile",snap.get("runtime_profile"))
             durable.setdefault("state_saved_at_utc",snap.get("captured_at_utc"))
             candidates.append(("repo_snapshot",durable))
     except Exception:
@@ -485,9 +500,27 @@ def _restore_state() -> str:
     except Exception:
         pass
 
-    source,payload,meta=select_freshest_state(candidates)
-    payload=merge_supplementary_state(payload,candidates)
+    compatible_candidates=[]
+    rejected_profiles=[]
+    for candidate_source,candidate_payload in candidates:
+        profile_status=state_profile_status(candidate_payload)
+        if profile_status.get("compatible"):
+            compatible_candidates.append((candidate_source,candidate_payload))
+        else:
+            rejected_profiles.append({
+                "source":candidate_source,
+                "status":profile_status.get("status"),
+                "profile_id":profile_status.get("profile_id"),
+            })
+
+    source,payload,meta=select_freshest_state(compatible_candidates)
+    payload=merge_supplementary_state(payload,compatible_candidates)
     payload=upgrade_legacy_admitted_interviews(payload)
+    payload,boundary_event=sanitize_commercial_state(payload)
+    meta["runtime_profile"]=dict(RUNTIME_IDENTITY)
+    meta["rejected_profile_candidates"]=rejected_profiles
+    if boundary_event:
+        meta["commercial_boundary_event"]=boundary_event
     AUTOPILOT_STATE["restore_candidates"]=meta
     if isinstance(payload,dict):
         try:
@@ -8217,7 +8250,7 @@ async def api_autopilot_status(request: Request):
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
-    return JSONResponse({"ok": True, "neo_version": VERSION, "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
+    return JSONResponse({"ok": True, "neo_version": VERSION, "runtime_profile": dict(RUNTIME_IDENTITY), "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
 
 async def _venture_payload(request: Request) -> dict:
@@ -8417,7 +8450,12 @@ async def system(request: Request):
 
 
 async def health(request: Request):
-    return JSONResponse({"status": "ok", "service": "neo-collective", "version": VERSION})
+    return JSONResponse({
+        "status":"ok",
+        "service":"neo-collective",
+        "version":VERSION,
+        "runtime_profile":dict(RUNTIME_IDENTITY),
+    })
 
 
 async def api_discover(request: Request):

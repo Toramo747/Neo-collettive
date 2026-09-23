@@ -7,6 +7,11 @@ on:
     branches: [main]
     paths:
       - "cloud_mcp.py"
+      - "test_discovery_v3.py"
+      - "discovery_v3.py"
+      - "test_runtime_boundary.py"
+      - "runtime_boundary.py"
+      - "runtime_profile.json"
       - "state_recovery.py"
       - "test_state_recovery.py"
       - "inbound_interview.py"
@@ -41,6 +46,12 @@ jobs:
           set -euo pipefail
           python -m py_compile cloud_mcp.py jarvis_service/app.py
           python -m json.tool neo_policy.json >/dev/null
+          python -m json.tool runtime_profile.json >/dev/null
+          python - <<'PY'
+          from runtime_boundary import load_runtime_profile
+          p=load_runtime_profile()
+          print("runtime_profile="+p["profile_id"]+" fingerprint="+p["config_fingerprint"])
+          PY
           python - <<'PY'
           import ast
           for path in ("cloud_mcp.py","jarvis_service/app.py"):
@@ -54,7 +65,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_runtime_boundary.py
 
       - name: Build Docker image in GitHub CI
         run: |
@@ -144,7 +155,13 @@ jobs:
               if EXPECTED="$expected" python - <<'PY'
           import json,os,sys
           d=json.load(open("/tmp/health.json",encoding="utf-8"))
-          sys.exit(0 if str(d.get("version") or "") == os.environ["EXPECTED"] else 1)
+          profile=d.get("runtime_profile") or {}
+          ok=(
+              str(d.get("version") or "") == os.environ["EXPECTED"]
+              and str(profile.get("profile_id") or "") == "mycelix-prod-main"
+              and str(profile.get("deployment_role") or "") == "production"
+          )
+          sys.exit(0 if ok else 1)
           PY
               then
                 echo "NEO v$expected is live"
