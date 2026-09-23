@@ -28,6 +28,7 @@ from seti_radar import (
     inbound_admission_transition,
     interview_candidate_eligibility,
     interview_response_score,
+    registry_agent_candidate,
     seti_dialogue_round,
     seti_followup_state,
     seti_progressive_interview_prompt,
@@ -74,9 +75,10 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.90.3"  # require family-specific grounding for observed-pain hypotheses
+VERSION = "0.91.0"  # bounded-active SETI with corrected dual A2A registries
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
-A2A_REGISTRY = "https://api.a2a-registry.org"
+GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
+COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
 TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
@@ -1510,7 +1512,7 @@ async def discover_data(query: str, limit: int = 10) -> dict:
     async def find_a2a():
         try:
             data = await get_json(
-                A2A_REGISTRY + "/public/agents",
+                GLOBAL_A2A_REGISTRY + "/public/agents",
                 {"q": query, "limit": limit},
             )
             return {"ok": True, "data": data}
@@ -1552,7 +1554,7 @@ async def _advertise_public_agent() -> dict:
     try:
         async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=False) as client:
             response=await client.post(
-                A2A_REGISTRY+"/public/ingest",
+                GLOBAL_A2A_REGISTRY+"/public/ingest",
                 json={"manifestUrl":manifest_url},
                 headers={"Accept":"application/json","Content-Type":"application/json"},
             )
@@ -1573,7 +1575,51 @@ async def _advertise_public_agent() -> dict:
             "reason":type(e).__name__+": "+str(e)[:300],
         }
 
-    # The documented A2A Registry ingest is currently observed returning 404.
+
+    # Also advertise in the live community registry whose documented API exposes
+    # /api/agents, /health and /chat. Treat duplicate registration as success.
+    community={"ok":False,"status":None,"reason":"not_attempted"}
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=True) as client:
+            search=await client.get(
+                COMMUNITY_A2A_REGISTRY+"/api/agents",
+                params={"search":"MYCELIX","limit":10},
+                headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+            )
+            search_text=(search.text or "").lower()[:30000]
+            already_listed=(
+                search.is_success
+                and (
+                    "neo-collettive.onrender.com" in search_text
+                    or '"name":"mycelix"' in search_text.replace(" ","")
+                )
+            )
+            if already_listed:
+                community={
+                    "ok":True,
+                    "status":search.status_code,
+                    "reason":"existing_listing_found",
+                }
+            else:
+                register=await client.post(
+                    COMMUNITY_A2A_REGISTRY+"/api/agents/register",
+                    json={"wellKnownURI":manifest_url},
+                    headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":"MYCELIX/"+VERSION},
+                )
+                community={
+                    "ok":bool(register.is_success or register.status_code==409),
+                    "status":register.status_code,
+                    "reason":"registered" if register.is_success else ("already_registered" if register.status_code==409 else "registration_failed"),
+                }
+    except Exception as e:
+        community={
+            "ok":False,
+            "status":None,
+            "reason":type(e).__name__+": "+str(e)[:300],
+        }
+    registries["community_a2a_registry"]=community
+
+    # The documented Global A2A Registry ingest is currently observed returning 404.
     # Use allagents as a second public yellow-pages directory, but never persist
     # registration edit tokens or recovery phrases returned by that service.
     allagents={"ok":False,"status":None,"reason":"not_attempted"}
@@ -1827,7 +1873,7 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
         last_error=None
         for params in attempts:
             try:
-                data=await get_json(A2A_REGISTRY + "/api/agents",params)
+                data=await get_json(COMMUNITY_A2A_REGISTRY + "/api/agents",params)
                 if isinstance(data,dict):
                     items=data.get("agents") or data.get("items") or data.get("data") or []
                 elif isinstance(data,list):
@@ -1845,7 +1891,7 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
         rows=[]
         for q in fallback_queries:
             try:
-                data=await get_json(A2A_REGISTRY + "/api/agents",{
+                data=await get_json(COMMUNITY_A2A_REGISTRY + "/api/agents",{
                     "search":q,"limit":min(per_query,8),
                     "conformance":"standard","task_verified":"true"
                 })
@@ -2063,7 +2109,7 @@ async def _trusted_agent_details(limit: int = 8, exclude_ids: set[str] | None = 
 
     async def fetch_one(agent_id: str, row: dict) -> dict | None:
         try:
-            detail=await get_json(f"{A2A_REGISTRY}/api/agents/{agent_id}")
+            detail=await get_json(f"{COMMUNITY_A2A_REGISTRY}/api/agents/{agent_id}")
             if isinstance(detail,dict):
                 detail=dict(detail)
                 detail["_trusted_pool"]=True
@@ -2201,7 +2247,7 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     if agent_id:
         attempts.append((
             "registry_chat",
-            f"{A2A_REGISTRY}/api/agents/{agent_id}/chat",
+            f"{COMMUNITY_A2A_REGISTRY}/api/agents/{agent_id}/chat",
             {"message":question},
         ))
 
@@ -2594,7 +2640,7 @@ async def inspect_mcp_candidates(entries: list[dict], limit: int = 4) -> list[di
 
 async def a2a_health(agent_id: str) -> dict:
     try:
-        data = await get_json(f"{A2A_REGISTRY}/api/agents/{agent_id}/health")
+        data = await get_json(f"{COMMUNITY_A2A_REGISTRY}/api/agents/{agent_id}/health")
         return {"ok": True, "data": data}
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
@@ -2602,7 +2648,7 @@ async def a2a_health(agent_id: str) -> dict:
 
 async def ask_agent_by_id(agent_id: str, question: str) -> dict:
     try:
-        detail=await get_json(f"{A2A_REGISTRY}/api/agents/{agent_id}")
+        detail=await get_json(f"{COMMUNITY_A2A_REGISTRY}/api/agents/{agent_id}")
         if not isinstance(detail,dict):
             detail={"id":agent_id,"name":agent_id}
     except Exception:
@@ -5480,6 +5526,84 @@ async def seti_public_search(query: str, limit: int = 6) -> dict:
     }
 
 
+
+async def _seti_registry_candidate_batch(limit: int = 12) -> dict:
+    """Collect explicit public A2A endpoints from public registries for bounded research contact."""
+    limit=max(3,min(int(limit or 12),24))
+    queries=["research analysis","LLM orchestration","critical review","business analysis","agent interoperability"]
+    errors=[]
+    rows=[]
+    source_counts={}
+
+    async def fetch_community(query: str):
+        attempts=[
+            {"search":query,"limit":min(limit,8),"conformance":"standard","task_verified":"true"},
+            {"search":query,"limit":min(limit,8),"conformance":"standard"},
+            {"search":query,"limit":min(limit,8)},
+        ]
+        last=None
+        for params in attempts:
+            try:
+                data=await get_json(COMMUNITY_A2A_REGISTRY+"/api/agents",params)
+                items=(data.get("agents") or data.get("items") or data.get("data") or []) if isinstance(data,dict) else (data if isinstance(data,list) else [])
+                if items:
+                    return items,None
+            except Exception as e:
+                last=type(e).__name__+": "+str(e)[:220]
+        return [],last or "no_results"
+
+    async def fetch_global(query: str):
+        try:
+            data=await get_json(GLOBAL_A2A_REGISTRY+"/public/agents",{"q":query})
+            items=(data.get("agents") or data.get("items") or data.get("data") or data.get("results") or []) if isinstance(data,dict) else (data if isinstance(data,list) else [])
+            return items,None
+        except Exception as e:
+            return [],type(e).__name__+": "+str(e)[:220]
+
+    tasks=[]
+    labels=[]
+    for query in queries:
+        tasks.extend([fetch_community(query),fetch_global(query)])
+        labels.extend([("community_a2a_registry",query),("global_a2a_registry",query)])
+    results=await asyncio.gather(*tasks,return_exceptions=True)
+
+    own_host=(urlparse(PUBLIC_BASE_URL).hostname or "").lower().strip(".")
+    seen=set()
+    for (source,query),result in zip(labels,results):
+        if isinstance(result,Exception):
+            errors.append({"source":source,"query":query,"error":type(result).__name__+": "+str(result)[:220]})
+            continue
+        items,error=result
+        if error and error!="no_results":
+            errors.append({"source":source,"query":query,"error":error})
+        for raw in items or []:
+            candidate=registry_agent_candidate(raw,source)
+            if not candidate:
+                continue
+            host=(urlparse(str(candidate.get("url") or "")).hostname or "").lower().strip(".")
+            if not host or host==own_host:
+                continue
+            fp=str(candidate.get("fingerprint") or "")
+            if not fp or fp in seen:
+                continue
+            seen.add(fp)
+            candidate["registry_query"]=query
+            rows.append(candidate)
+            source_counts[source]=source_counts.get(source,0)+1
+            if len(rows)>=limit:
+                break
+        if len(rows)>=limit:
+            break
+
+    rows.sort(key=lambda x:int(x.get("agent_likelihood_score") or 0),reverse=True)
+    return {
+        "candidates":rows[:limit],
+        "candidate_count":len(rows[:limit]),
+        "source_counts":source_counts,
+        "errors":errors[:8],
+    }
+
+
 def _strip_html_text(value: str, limit: int = 5000) -> str:
     text=re.sub(r"<[^>]+>"," ",str(value or ""))
     text=html.unescape(text)
@@ -7688,7 +7812,7 @@ async def agent_chat(request: Request):
         return layout("Agent", '<section class="card"><p class="err">agent_id mancante.</p></section>')
 
     try:
-        detail = await get_json(f"{A2A_REGISTRY}/api/agents/{agent_id}")
+        detail = await get_json(f"{COMMUNITY_A2A_REGISTRY}/api/agents/{agent_id}")
     except Exception as e:
         detail = {"id": agent_id, "name": agent_id, "description": "", "detail_error": str(e)[:300]}
 
@@ -8683,7 +8807,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     }
 
 
-async def _seti_passive_cycle_if_due() -> dict | None:
+async def _seti_cycle_if_due() -> dict | None:
     state=dict(AUTOPILOT_STATE.get("seti") or {})
     if not SETI_ENABLED:
         return None
@@ -8701,9 +8825,11 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             per_query=5,
             registry_checks=min(10,SETI_RESULT_LIMIT),
         )
+        registry_batch=await _seti_registry_candidate_batch(limit=max(8,SETI_RESULT_LIMIT))
         memory,enriched=merge_signal_memory(state.get("signal_memory") or {},scan,max_entries=80)
+        private_inputs=list(enriched)+list(registry_batch.get("candidates") or [])
         private_state,private_summary=merge_private_candidate_state(
-            SETI_PRIVATE_STATE,enriched,max_entries=16
+            SETI_PRIVATE_STATE,private_inputs,max_entries=24
         )
         SETI_PRIVATE_STATE.clear()
         SETI_PRIVATE_STATE.update(private_state)
@@ -8715,14 +8841,30 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             datetime.now(timezone.utc).isoformat(),
             SETI_FOLLOWUP_MIN_SECONDS,
         )
-        interview_result=await _seti_interview_one_candidate(max_interviews=3)
+        policy=_load_policy()
+        bounded_active=bool(policy.get("seti_bounded_active_enabled",False))
+        max_interviews=max(1,min(3,int(policy.get("seti_max_interviews_per_scan") or 1)))
+        interview_result=(
+            await _seti_interview_one_candidate(max_interviews=max_interviews)
+            if bounded_active
+            else {"attempted":False,"attempted_count":0,"admitted":False,"admitted_count":0,"parked_count":0,"status":"PASSIVE_POLICY","results":[]}
+        )
         private_checkpoint=await _checkpoint_seti_private_to_render()
+        full_safety={
+            "target_http_requests":bool(interview_result.get("attempted")),
+            "active_probe":bool(interview_result.get("attempted")),
+            "messages_sent":bool(interview_result.get("attempted")),
+            "port_scan":False,
+            "bounded_research_only":True,
+            "commercial_actions":False,
+            "tool_execution_requested":False,
+        }
 
         interesting=[x for x in enriched if x.get("classification") in {"INTERESTING","HIGH_INTEREST"}]
         high=[x for x in enriched if x.get("classification")=="HIGH_INTEREST"]
         state.update({
             "enabled":True,
-            "mode":"passive",
+            "mode":"bounded_active" if bounded_active else "passive",
             "engine_version":SETI_ENGINE_VERSION,
             "every_cycles":SETI_EVERY_CYCLES,
             "last_scan_utc":scan.get("scanned_at_utc"),
@@ -8760,6 +8902,9 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "registry_checks":scan.get("registry_checks",0),
                 "known_space_filtered":scan.get("known_space_filtered",0),
                 "signals_returned":len(enriched),
+                "registry_candidates":registry_batch.get("candidate_count",0),
+                "registry_candidate_sources":registry_batch.get("source_counts") or {},
+                "registry_candidate_errors":len(registry_batch.get("errors") or []),
                 "interesting":len(interesting),
                 "high_interest":len(high),
                 "private_candidates":private_summary.get("private_candidates",0),
@@ -8778,11 +8923,12 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "interview_admitted_count":interview_result.get("admitted_count",0),
                 "interview_parked_count":interview_result.get("parked_count",0),
                 "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
-                "safety":scan.get("safety") or {},
+                "safety":full_safety,
                 "scan_safety":scan.get("safety") or {},
                 "interview_policy":{
+                    "mode":"bounded_active" if bounded_active else "passive",
                     "explicit_public_a2a_endpoint_only":True,
-                    "max_interviews_per_scan":3,
+                    "max_interviews_per_scan":max_interviews,
                     "commercial_or_third_party_actions":False,
                 },
             },
@@ -8810,7 +8956,7 @@ async def _autopilot_cycle() -> None:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
-            await _seti_passive_cycle_if_due()
+            await _seti_cycle_if_due()
             AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
             completed=True
             _save_local_state()

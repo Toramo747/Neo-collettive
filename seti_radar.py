@@ -7,7 +7,7 @@ from urllib.parse import urlparse, unquote
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 9
+SETI_ENGINE_VERSION = 10
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
@@ -215,6 +215,119 @@ def indexed_endpoint_leads(row: dict, limit: int = 4) -> list[dict]:
         if len(out)>=max(1,min(limit,8)):
             break
     return out
+
+
+
+def registry_agent_candidate(agent: dict, source: str = "a2a_public_registry") -> dict | None:
+    """Normalize a public registry row into a bounded SETI interview candidate.
+
+    Registry membership is discovery evidence only. It does not imply trust, quality,
+    commercial demand or permission to execute tools. Only HTTPS Agent Cards or
+    explicitly declared HTTPS A2A endpoints are accepted.
+    """
+    if not isinstance(agent,dict):
+        return None
+
+    card=agent.get("agentCard") if isinstance(agent.get("agentCard"),dict) else {}
+    if not card and isinstance(agent.get("card"),dict):
+        card=agent.get("card") or {}
+
+    def first_text(*values: Any) -> str:
+        for value in values:
+            text=str(value or "").strip()
+            if text:
+                return text
+        return ""
+
+    endpoint=first_text(
+        agent.get("url"),
+        agent.get("endpoint"),
+        agent.get("endpoint_url"),
+        card.get("url"),
+        card.get("endpoint"),
+    )
+    card_url=first_text(
+        agent.get("wellKnownURI"),
+        agent.get("well_known_uri"),
+        agent.get("agent_card_url"),
+        agent.get("agentCardUrl"),
+        agent.get("manifest_url"),
+        agent.get("manifestUrl"),
+    )
+
+    chosen=endpoint or card_url
+    if not chosen:
+        return None
+    try:
+        parsed=urlparse(chosen)
+        host=(parsed.hostname or "").lower().strip(".")
+    except Exception:
+        return None
+    if parsed.scheme!="https" or not host:
+        return None
+    if host in OFFICIAL_OR_LOW_VALUE_DOMAINS or host in COMMON_HOSTS:
+        return None
+    if host in {"localhost","localhost.localdomain"} or host.endswith(".local"):
+        return None
+
+    direct=bool(endpoint)
+    if not direct and not explicit_agent_endpoint_url(card_url):
+        return None
+
+    name=first_text(
+        agent.get("name"),
+        agent.get("displayName"),
+        agent.get("display_name"),
+        agent.get("package_name"),
+        card.get("name"),
+        host,
+    )
+    description=first_text(
+        agent.get("description"),
+        agent.get("summary"),
+        card.get("description"),
+    )
+
+    conformance=str(agent.get("conformance") or agent.get("conformance_status") or "").lower()
+    task_verified=bool(agent.get("task_verified") or agent.get("taskVerified"))
+    healthy=bool(agent.get("is_healthy") or agent.get("healthy") or agent.get("reachable"))
+    verified=bool(agent.get("verified") or agent.get("is_verified") or agent.get("dns_verified"))
+
+    score=70
+    signals=["public_registry_listing"]
+    if conformance in {"standard","true","verified","conformant"}:
+        score += 8
+        signals.append("standard_conformance")
+    if task_verified:
+        score += 8
+        signals.append("task_verified")
+    if healthy:
+        score += 6
+        signals.append("healthy")
+    if verified:
+        score += 4
+        signals.append("identity_or_domain_verified")
+    score=min(96,score)
+
+    row={
+        "title":name[:300],
+        "url":chosen[:1200],
+        "domain":host[:180],
+        "snippet":description[:1400],
+        "source":str(source or "a2a_public_registry")[:120],
+        "source_provenance":[str(source or "a2a_public_registry")[:120]],
+        "agent_likelihood_score":score,
+        "classification":"HIGH_INTEREST" if score>=82 else "INTERESTING",
+        "signals":signals,
+        "registry_status":"registry_listed",
+        "indexed_declared_endpoint":True,
+        "endpoint_evidence":"public_registry_direct_endpoint" if direct else "public_registry_agent_card",
+        "provenance_url":card_url[:1200],
+        "first_seen_utc":_utcnow(),
+        "last_seen_utc":_utcnow(),
+    }
+    row["fingerprint"]=signal_fingerprint(row)
+    return row
 
 
 def _tokens(text: str) -> set[str]:

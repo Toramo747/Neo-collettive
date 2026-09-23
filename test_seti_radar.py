@@ -18,6 +18,7 @@ from seti_radar import (
     summarize_interview_readiness,
     seti_candidate_attempt_state,
     registry_match,
+    registry_agent_candidate,
     score_public_result,
 )
 
@@ -116,6 +117,34 @@ class SetiRadarTests(unittest.TestCase):
     def test_explicit_endpoint_rejects_artifact_host(self):
         self.assertTrue(explicit_agent_endpoint_url("https://agent.example.ai/a2a"))
         self.assertFalse(explicit_agent_endpoint_url("https://github.com/acme/agent/a2a"))
+
+
+    def test_public_registry_direct_endpoint_becomes_bounded_candidate(self):
+        candidate=registry_agent_candidate({
+            "id":"research-1",
+            "name":"Research Agent",
+            "description":"Evidence review and technical critique.",
+            "url":"https://research.example.ai/a2a",
+            "conformance":"standard",
+            "task_verified":True,
+            "is_healthy":True,
+        },"community_a2a_registry")
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate["classification"],"HIGH_INTEREST")
+        self.assertTrue(candidate["indexed_declared_endpoint"])
+        eligibility=interview_candidate_eligibility(candidate)
+        self.assertTrue(eligibility["eligible"])
+        self.assertEqual(eligibility["contact_mode"],"direct_a2a")
+
+    def test_public_registry_artifact_or_non_https_is_rejected(self):
+        self.assertIsNone(registry_agent_candidate({
+            "name":"Repo only",
+            "url":"https://github.com/acme/agent",
+        }))
+        self.assertIsNone(registry_agent_candidate({
+            "name":"Unsafe",
+            "url":"http://agent.example.ai/a2a",
+        }))
 
     def test_interview_gate_requires_repeat_and_explicit_endpoint(self):
         base={
