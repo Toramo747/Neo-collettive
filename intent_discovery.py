@@ -176,3 +176,59 @@ def intent_followup(intent: dict | None) -> str:
         "connectivity, discovery, a question, research, collaboration, an offer, a request, commercial discussion, or something else. "
         "Identity verification is not required just to communicate."
     )
+
+
+def upgrade_legacy_intent_state(payload: dict | None) -> dict | None:
+    """Backfill intent telemetry for recovered inbound history without promoting trust."""
+    if not isinstance(payload,dict):
+        return payload
+
+    messages=list(payload.get("inbound_messages") or [])
+    stats=dict(payload.get("inbound_agent_stats") or {})
+    if not messages and not stats:
+        return payload
+
+    changed=False
+    upgraded_messages=[]
+    latest_by_agent={}
+    for row in messages:
+        if not isinstance(row,dict):
+            upgraded_messages.append(row)
+            continue
+        item=dict(row)
+        sender=item.get("sender") if isinstance(item.get("sender"),dict) else {}
+        agent_id=_clean(sender.get("agent_id")) or "anonymous"
+        previous=stats.get(agent_id) if isinstance(stats.get(agent_id),dict) else {}
+        if not item.get("intent_primary"):
+            intent=classify_agent_intent(item.get("text") or "",previous)
+            item["intent_primary"]=intent["primary"]
+            item["intent_secondary"]=intent["secondary"]
+            item["intent_confidence"]=intent["confidence"]
+            item["intent_needs_clarification"]=intent["needs_clarification"]
+            item["commercial_intent"]=intent["commercial_intent"]
+            changed=True
+        latest_by_agent[agent_id]=item
+        upgraded_messages.append(item)
+
+    upgraded_stats={}
+    for key,value in stats.items():
+        stat=dict(value) if isinstance(value,dict) else value
+        if isinstance(stat,dict) and not stat.get("intent_primary"):
+            row=latest_by_agent.get(str(key))
+            if row is None and str(key)=="anonymous":
+                row=latest_by_agent.get("anonymous")
+            if isinstance(row,dict):
+                stat["intent_primary"]=row.get("intent_primary")
+                stat["intent_secondary"]=row.get("intent_secondary") or []
+                stat["intent_confidence"]=row.get("intent_confidence")
+                stat["intent_needs_clarification"]=bool(row.get("intent_needs_clarification"))
+                stat["commercial_intent"]=bool(row.get("commercial_intent"))
+                changed=True
+        upgraded_stats[str(key)]=stat
+
+    if not changed:
+        return payload
+    upgraded=dict(payload)
+    upgraded["inbound_messages"]=upgraded_messages
+    upgraded["inbound_agent_stats"]=upgraded_stats
+    return upgraded
