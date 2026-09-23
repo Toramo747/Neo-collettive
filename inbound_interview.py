@@ -225,3 +225,55 @@ def advance_inbound_interview(previous: dict | None, text: str, *, newly_admitte
         "adversarial_attempts":0,
         "next_question":methodology_question(topic),
     }
+
+def upgrade_legacy_admitted_interviews(payload: dict | None) -> dict | None:
+    """Upgrade recovered pre-dialogue ADMITTED peers to the methodology stage.
+
+    Historical v0.79.x audit snapshots can contain an admitted inbound peer without
+    the dialogue fields introduced in v0.80. Preserve the audit rows unchanged,
+    but reconstruct the peer's next interview state from its latest inbound text.
+    """
+    if not isinstance(payload,dict):
+        return payload
+
+    stats=payload.get("inbound_agent_stats")
+    if not isinstance(stats,dict) or not stats:
+        return payload
+
+    latest_text: dict[str,str]={}
+    latest_time: dict[str,str]={}
+    for row in payload.get("inbound_messages") or []:
+        if not isinstance(row,dict):
+            continue
+        sender=row.get("sender") if isinstance(row.get("sender"),dict) else {}
+        agent_id=_clean(sender.get("agent_id"))
+        if not agent_id:
+            continue
+        received=_clean(row.get("received_at_utc"))
+        if agent_id not in latest_time or received >= latest_time[agent_id]:
+            latest_time[agent_id]=received
+            latest_text[agent_id]=_clean(row.get("text"))
+
+    changed=False
+    upgraded_stats={}
+    for key,value in stats.items():
+        stat=dict(value) if isinstance(value,dict) else value
+        if isinstance(stat,dict):
+            status=_clean(stat.get("status")).upper()
+            if status=="ADMITTED" and not _clean(stat.get("dialogue_stage")):
+                agent_id=_clean(stat.get("agent_id") or key)
+                dialogue=advance_inbound_interview(
+                    stat,
+                    latest_text.get(agent_id,""),
+                    newly_admitted=True,
+                )
+                stat.update(dialogue)
+                changed=True
+        upgraded_stats[str(key)]=stat
+
+    if not changed:
+        return payload
+    upgraded=dict(payload)
+    upgraded["inbound_agent_stats"]=upgraded_stats
+    return upgraded
+
