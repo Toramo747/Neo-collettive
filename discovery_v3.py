@@ -10,6 +10,8 @@ import re
 from typing import Any
 from urllib.parse import urlparse
 
+from runtime_boundary import is_control_plane_text
+
 PAIN_MARKERS = (
     "manual","manually","repetitive","time consuming","time-consuming","frustrat",
     "waste time","workaround","backlog","copy paste","copy/paste","rekey",
@@ -483,6 +485,8 @@ def observed_pain_candidates(
                 continue
             clean_title=_clean_source_text(title)
             clean_body=_clean_source_text(body)
+            if is_control_plane_text(clean_title+" "+clean_body):
+                continue
             low=(clean_title+" "+clean_body).lower()
             pain=[m for m in PAIN_MARKERS if m in low]
             buy=[m for m in BUY_MARKERS if m in low]
