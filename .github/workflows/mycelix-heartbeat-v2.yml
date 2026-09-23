@@ -1,0 +1,284 @@
+name: MYCELIX Heartbeat v2
+
+on:
+  schedule:
+    - cron: "8,18,28,38,48,58 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "cloud_mcp.py"
+      - "runtime_boundary.py"
+      - "runtime_profile.json"
+      - "neo_policy.json"
+      - "render.yaml"
+      - ".github/workflows/mycelix-heartbeat-v2.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mycelix-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  wake-neo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wake MYCELIX
+        id: wake
+        continue-on-error: true
+        env:
+          HEARTBEAT_URL: https://neo-collettive.onrender.com/api/heartbeat
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ -n "${HEARTBEAT_TOKEN}" ]; then
+            curl --fail --show-error --silent \
+              --retry 2 --retry-delay 5 --max-time 90 \
+              -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
+              "${HEARTBEAT_URL}" > /tmp/heartbeat.json
+          else
+            curl --fail --show-error --silent \
+              --retry 2 --retry-delay 5 --max-time 90 \
+              "${HEARTBEAT_URL}" > /tmp/heartbeat.json
+          fi
+          cat /tmp/heartbeat.json || true
+
+      - name: Poll MYCELIX runtime
+        id: poll
+        run: |
+          set -euo pipefail
+          : > /tmp/status-errors.txt
+
+          initial_cycles="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(int(hb.get("cycles_completed") or 0))')"
+          initial_version="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(str(hb.get("neo_version") or ""))')"
+          initial_finished="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(str(hb.get("last_finished_utc") or ""))')"
+          require_new_cycle="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print("1" if (hb.get("started") or hb.get("busy")) else "0")')"
+
+          cat > /tmp/check_neo_complete.py <<'PY'
+          import json
+          import os
+          import sys
+
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          cycles=int(ap.get("cycles_completed") or 0)
+          initial=int(os.environ["INITIAL"])
+          initial_version=os.environ.get("INITIAL_VERSION","")
+          initial_finished=os.environ.get("INITIAL_FINISHED","")
+          require_new=os.environ["REQUIRE_NEW"]=="1"
+          latest=ap.get("latest_result")
+          version=str(d.get("neo_version") or "")
+          current_finished=str(ap.get("last_finished_utc") or "")
+          version_changed=bool(initial_version and version and version!=initial_version)
+          completed_after_wake=bool(current_finished and current_finished!=initial_finished)
+          if require_new:
+              progress_ok=(cycles >= initial + 1) or version_changed or completed_after_wake
+          else:
+              progress_ok=(cycles >= initial) or version_changed or completed_after_wake
+          finished=(
+              bool(ap.get("enabled"))
+              and not bool(ap.get("running"))
+              and bool(current_finished)
+              and isinstance(latest,dict)
+              and bool(latest)
+              and not ap.get("last_error")
+              and progress_ok
+          )
+          print("poll", {
+              "version":d.get("neo_version"),
+              "enabled":ap.get("enabled"),
+              "running":ap.get("running"),
+              "cycles":cycles,
+              "initial_cycles":initial,
+              "initial_version":initial_version,
+              "version_changed":version_changed,
+              "completed_after_wake":completed_after_wake,
+              "require_new_cycle":require_new,
+              "status":ap.get("last_status"),
+              "last_finished_utc":ap.get("last_finished_utc"),
+              "latest_result":bool(latest),
+              "error":ap.get("last_error"),
+              "completed":finished,
+          })
+          sys.exit(0 if finished else 1)
+          PY
+
+          completed=0
+          for i in $(seq 1 45); do
+            if curl --fail --show-error --silent --max-time 30 \
+              "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
+              if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
+                completed=1
+                break
+              fi
+            else
+              echo "poll $i failed" >> /tmp/status-errors.txt
+            fi
+            sleep 20
+          done
+
+          if [ "$completed" != "1" ]; then
+            if python -c 'import json,sys; d=json.load(open("/tmp/status.json",encoding="utf-8")); ap=d.get("autopilot") or {}; sys.exit(0 if (ap.get("enabled") and ap.get("running") and not ap.get("last_error")) else 1)'; then
+              echo "MYCELIX cycle is still running without errors after the observation window; treating as healthy in-progress."
+              completed=2
+            else
+              echo "MYCELIX cycle did not reach a completed or healthy-running runtime state before timeout" >&2
+              cat /tmp/status-errors.txt >&2 || true
+              cat /tmp/status.json >&2 || true
+              exit 6
+            fi
+          fi
+
+      - name: Enforce repository/runtime contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import re
+
+          source=open("cloud_mcp.py",encoding="utf-8").read()
+          match=re.search(r'^VERSION = "([^"]+)"',source,re.M)
+          if not match:
+              raise SystemExit("repository VERSION not found")
+          expected_version=match.group(1)
+
+          profile=json.load(open("runtime_profile.json",encoding="utf-8"))
+          expected_profile=str(profile.get("profile_id") or "")
+          expected_role=str(profile.get("deployment_role") or "")
+          if expected_profile!="mycelix-prod-main" or expected_role!="production":
+              raise SystemExit("repository runtime profile is not canonical production")
+
+          runtime=json.load(open("/tmp/status.json",encoding="utf-8"))
+          runtime_profile=runtime.get("runtime_profile") or {}
+          actual_version=str(runtime.get("neo_version") or "")
+          actual_profile=str(runtime_profile.get("profile_id") or "")
+          actual_role=str(runtime_profile.get("deployment_role") or "")
+
+          if actual_version!=expected_version:
+              raise SystemExit(f"runtime/repository version mismatch: runtime={actual_version} repo={expected_version}")
+          if actual_profile!=expected_profile:
+              raise SystemExit(f"runtime/repository profile mismatch: runtime={actual_profile} repo={expected_profile}")
+          if actual_role!=expected_role:
+              raise SystemExit(f"runtime/repository role mismatch: runtime={actual_role} repo={expected_role}")
+
+          print("runtime contract matched", {
+              "version":actual_version,
+              "profile_id":actual_profile,
+              "deployment_role":actual_role,
+          })
+          PY
+
+      - name: Build runtime snapshot
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+
+          def load(path, default):
+              try:
+                  return json.load(open(path,encoding="utf-8"))
+              except Exception:
+                  return default
+
+          raw=load("/tmp/status.json",{})
+          hb=load("/tmp/heartbeat.json",{})
+          ap=raw.get("autopilot") or {}
+          err=""
+          try:
+              err=open("/tmp/status-errors.txt",encoding="utf-8").read().strip()
+          except Exception:
+              pass
+
+          snapshot={
+              "captured_at_utc": datetime.now(timezone.utc).isoformat(),
+              "snapshot_schema": 6,
+              "brand": raw.get("brand") or "MYCELIX",
+              "brand_tagline": raw.get("brand_tagline") or "Collective Intelligence Network",
+              "neo_version": raw.get("neo_version"),
+              "runtime_profile": raw.get("runtime_profile") or {},
+              "policy": raw.get("policy") or {},
+              "heartbeat": hb,
+              "diagnostics": {
+                  "status_endpoint_reached": bool(raw),
+                  "poll_errors": err,
+                  "github_run_id": os.getenv("GITHUB_RUN_ID"),
+                  "github_run_attempt": os.getenv("GITHUB_RUN_ATTEMPT"),
+                  "source_commit": os.getenv("GITHUB_SHA"),
+                  "runtime_contract_verified": True
+              },
+              "autopilot": {
+                  "enabled": ap.get("enabled"),
+                  "running": ap.get("running"),
+                  "cycles_completed": ap.get("cycles_completed"),
+                  "last_started_utc": ap.get("last_started_utc"),
+                  "last_finished_utc": ap.get("last_finished_utc"),
+                  "last_status": ap.get("last_status"),
+                  "last_error": ap.get("last_error"),
+                  "stagnation_cycles": ap.get("stagnation_cycles"),
+                  "recent_sectors": ap.get("recent_sectors") or [],
+                  "family_performance": ap.get("family_performance") or {},
+                  "last_search_strategy": ap.get("last_search_strategy"),
+                  "agent_trust": ap.get("agent_trust") or {},
+                  "build_history": ap.get("build_history") or [],
+                  "last_build": ap.get("last_build"),
+                  "measurement_history": ap.get("measurement_history") or [],
+                  "last_measurement": ap.get("last_measurement"),
+                  "dialogue_history": ap.get("dialogue_history") or [],
+                  "knowledge_ledger": ap.get("knowledge_ledger") or [],
+                  "hypothesis_queue": ap.get("hypothesis_queue") or [],
+                  "exploration_history": ap.get("exploration_history") or [],
+                  "inbound_messages": ap.get("inbound_messages") or [],
+                  "inbound_agent_stats": ap.get("inbound_agent_stats") or {},
+                  "trust_lab_evaluations": ap.get("trust_lab_evaluations") or [],
+                  "agent_demand_observatory": ap.get("agent_demand_observatory") or {},
+                  "agent_chat_events": ap.get("agent_chat_events") or [],
+                  "agent_chat_monitor": ap.get("agent_chat_monitor") or {},
+                  "boundary_events": ap.get("boundary_events") or [],
+                  "a2a_discovery": ap.get("a2a_discovery") or {},
+                  "jarvis_dialogue_history": ap.get("jarvis_dialogue_history") or [],
+                  "jarvis_runtime": ap.get("jarvis_runtime") or {},
+                  "commercial_evidence_memory": ap.get("commercial_evidence_memory") or [],
+                  "evidence_integrity": ap.get("evidence_integrity") or {},
+                  "active_thesis": ap.get("active_thesis"),
+                  "thesis_history": ap.get("thesis_history") or [],
+                  "problem_performance": ap.get("problem_performance") or {},
+                  "problem_cooldowns": ap.get("problem_cooldowns") or {},
+                  "query_execution": ap.get("query_execution") or {},
+                  "venture_metrics": ap.get("venture_metrics") or {},
+                  "seti": {
+                      "enabled": (ap.get("seti") or {}).get("enabled"),
+                      "mode": (ap.get("seti") or {}).get("mode"),
+                      "every_cycles": (ap.get("seti") or {}).get("every_cycles"),
+                      "last_scan_utc": (ap.get("seti") or {}).get("last_scan_utc"),
+                      "last_error": (ap.get("seti") or {}).get("last_error"),
+                      "last_summary": (ap.get("seti") or {}).get("last_summary"),
+                      "signal_memory_count": len((ap.get("seti") or {}).get("signal_memory") or {}),
+                  }
+              },
+              "manual_run": raw.get("manual_run") or {},
+              "latest_result": ap.get("latest_result")
+          }
+          with open("neo_latest_result.json","w",encoding="utf-8") as f:
+              json.dump(snapshot,f,indent=2,ensure_ascii=False,default=str)
+              f.write("\n")
+          PY
+
+      - name: Publish runtime snapshot
+        run: |
+          set -euo pipefail
+          cp neo_latest_result.json /tmp/neo_latest_result.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/neo_latest_result.json neo_latest_result.json
+          git add neo_latest_result.json
+          git diff --cached --quiet && exit 0
+          git config user.name "MYCELIX Runtime Snapshot"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "MYCELIX runtime snapshot [skip render]"
+          git push origin HEAD:main
