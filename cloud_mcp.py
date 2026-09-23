@@ -33,6 +33,8 @@ from seti_radar import (
     seti_progressive_interview_prompt,
     seti_retry_ready,
     summarize_candidate_eligibility,
+    summarize_interview_readiness,
+    seti_candidate_attempt_state,
     merge_private_candidate_state,
     merge_signal_memory,
 )
@@ -72,7 +74,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.88.0"  # SETI endpoint recognition and eligibility diagnostics
+VERSION = "0.89.0"  # SETI interview readiness diagnostics
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -8329,6 +8331,10 @@ def _private_seti_console_payload() -> dict:
         if not isinstance(candidate,dict):
             continue
         eligibility=interview_candidate_eligibility(candidate)
+        prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
+        readiness=seti_candidate_attempt_state(
+            candidate,prior,datetime.now(timezone.utc).isoformat(),SETI_FOLLOWUP_MIN_SECONDS
+        )
         inventory.append({
             "candidate_key":str(key),
             "classification":candidate.get("classification"),
@@ -8344,6 +8350,9 @@ def _private_seti_console_payload() -> dict:
             "eligible":bool(eligibility.get("eligible")),
             "eligibility_reason":eligibility.get("reason"),
             "contact_mode":eligibility.get("contact_mode"),
+            "ready_now":bool(readiness.get("ready")),
+            "readiness_reason":readiness.get("reason"),
+            "attempts":readiness.get("attempts"),
         })
     inventory.sort(key=lambda x:(int(x.get("max_score") or 0),int(x.get("source_diversity") or 0)),reverse=True)
     eligibility_summary=summarize_candidate_eligibility(candidates)
@@ -8404,7 +8413,9 @@ async def admin_seti_interviews_page(request: Request):
             '<section class="card"><span class="tag">'+html.escape(str(candidate.get("classification") or "UNKNOWN"))+'</span>'
             '<h4>'+html.escape(str(candidate.get("candidate_key") or ""))+'</h4>'
             '<p><b>Eligible:</b> '+html.escape(str(candidate.get("eligible"))) +
-            ' · <b>Reason:</b> '+html.escape(str(candidate.get("eligibility_reason") or ""))+'</p>'
+            ' · <b>Reason:</b> '+html.escape(str(candidate.get("eligibility_reason") or ""))+
+            ' · <b>Ready:</b> '+html.escape(str(candidate.get("ready_now"))) +
+            ' · <b>Readiness:</b> '+html.escape(str(candidate.get("readiness_reason") or ""))+'</p>'
             '<p><b>URL:</b> <code>'+html.escape(str(candidate.get("url") or ""))+'</code></p>'
             '<p>score '+html.escape(str(candidate.get("max_score") or 0))+
             ' · source diversity '+html.escape(str(candidate.get("source_diversity") or 0))+
@@ -8462,24 +8473,15 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     )
 
     for key,candidate in ranked:
-        if key in admitted:
-            continue
         prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
         prior_status=str(prior.get("status") or "")
         prior_attempts=int(prior.get("attempts") or (1 if prior else 0))
-        if prior_status=="ADMITTED":
-            continue
-        # PARKED candidates may be retried after a later scan. This treats silence or
-        # weak replies as inconclusive rather than permanent rejection.
-        if prior_status=="PARKED" and prior_attempts>=3:
-            continue
         now=datetime.now(timezone.utc).isoformat()
-        if prior_status=="PARKED" and not seti_retry_ready(prior,now,SETI_FOLLOWUP_MIN_SECONDS):
+        readiness=seti_candidate_attempt_state(candidate,prior,now,SETI_FOLLOWUP_MIN_SECONDS)
+        if not readiness.get("ready"):
             continue
 
         eligibility=interview_candidate_eligibility(candidate)
-        if not eligibility.get("eligible"):
-            continue
 
         resolved=await _seti_resolve_interview_endpoint(candidate,eligibility)
         if not resolved.get("ok"):
@@ -8643,6 +8645,13 @@ async def _seti_passive_cycle_if_due() -> dict | None:
         SETI_PRIVATE_STATE.clear()
         SETI_PRIVATE_STATE.update(private_state)
         eligibility_summary=summarize_candidate_eligibility(SETI_PRIVATE_STATE.get("candidates") or {})
+        readiness_summary=summarize_interview_readiness(
+            SETI_PRIVATE_STATE.get("candidates") or {},
+            SETI_PRIVATE_STATE.get("interviews") or {},
+            SETI_PRIVATE_STATE.get("admitted") or {},
+            datetime.now(timezone.utc).isoformat(),
+            SETI_FOLLOWUP_MIN_SECONDS,
+        )
         interview_result=await _seti_interview_one_candidate(max_interviews=3)
         private_checkpoint=await _checkpoint_seti_private_to_render()
 
@@ -8667,6 +8676,8 @@ async def _seti_passive_cycle_if_due() -> dict | None:
             "high_interest_eligible_count":eligibility_summary.get("high_interest_eligible",0),
             "eligibility_reason_counts":eligibility_summary.get("reason_counts") or {},
             "high_interest_eligibility_reason_counts":eligibility_summary.get("high_interest_reason_counts") or {},
+            "interview_ready_now_count":readiness_summary.get("ready_now",0),
+            "interview_readiness_reason_counts":readiness_summary.get("reason_counts") or {},
             "interview_attempted":bool(interview_result.get("attempted")),
             "last_interview_status":interview_result.get("status"),
             "last_interview_score":interview_result.get("score"),
@@ -8696,6 +8707,8 @@ async def _seti_passive_cycle_if_due() -> dict | None:
                 "high_interest_eligible":eligibility_summary.get("high_interest_eligible",0),
                 "eligibility_reason_counts":eligibility_summary.get("reason_counts") or {},
                 "high_interest_eligibility_reason_counts":eligibility_summary.get("high_interest_reason_counts") or {},
+                "interview_ready_now":readiness_summary.get("ready_now",0),
+                "interview_readiness_reason_counts":readiness_summary.get("reason_counts") or {},
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "interview_attempted_count":interview_result.get("attempted_count",0),
