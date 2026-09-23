@@ -1,6 +1,6 @@
 import unittest
 
-from intent_discovery import classify_agent_intent, intent_followup
+from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 
 
 class IntentDiscoveryTests(unittest.TestCase):
@@ -40,6 +40,28 @@ class IntentDiscoveryTests(unittest.TestCase):
         )
         self.assertEqual(result["primary"],"CONNECTIVITY")
         self.assertGreaterEqual(result["confidence"],0.8)
+    def test_legacy_inbound_history_gets_intent_without_trust_promotion(self):
+        payload={
+            "inbound_messages":[{
+                "sender":{"agent_id":"research-agent","declared":True},
+                "text":"I am conducting research on continual learning and can communicate over A2A message/send.",
+                "admission_status":"ADMITTED",
+            }],
+            "inbound_agent_stats":{
+                "research-agent":{
+                    "agent_id":"research-agent",
+                    "status":"ADMITTED",
+                    "identity_status":"self_declared",
+                }
+            },
+        }
+        upgraded=upgrade_legacy_intent_state(payload)
+        row=upgraded["inbound_messages"][0]
+        stat=upgraded["inbound_agent_stats"]["research-agent"]
+        self.assertEqual(row["intent_primary"],"RESEARCH")
+        self.assertIn("CONNECTIVITY",row["intent_secondary"])
+        self.assertEqual(stat["status"],"ADMITTED")
+        self.assertEqual(stat["identity_status"],"self_declared")
 
 
 if __name__=="__main__":
