@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
+from intent_discovery import classify_agent_intent, intent_followup
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 
@@ -64,7 +65,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.82.0"  # enforce runtime profile isolation and commercial evidence firewall
+VERSION = "0.83.0"  # intent-aware Trust Lab and conversational inbound intent discovery
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -805,6 +806,7 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
     stat_key=str(sender.get("agent_id") or "anonymous")
     old=dict(stats.get(stat_key) or {})
+    intent=classify_agent_intent(text,old)
     admission=inbound_admission_transition(bool(sender.get("declared")),text,old)
     dialogue=advance_inbound_interview(
         old,
@@ -832,6 +834,11 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "text":text,
         "substantive":_inbound_is_substantive(text),
         "treated_as":"untrusted_evidence",
+        "intent_primary":intent.get("primary"),
+        "intent_secondary":intent.get("secondary") or [],
+        "intent_confidence":intent.get("confidence"),
+        "intent_needs_clarification":bool(intent.get("needs_clarification")),
+        "commercial_intent":bool(intent.get("commercial_intent")),
         "admission_status":admission.get("status"),
         "interview_score":admission.get("interview_score"),
         "identity_status":admission.get("identity_status"),
@@ -864,6 +871,11 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "markers":admission.get("markers") or {},
         "retry_allowed":bool(admission.get("retry_allowed")),
         "reason":admission.get("reason"),
+        "intent_primary":intent.get("primary"),
+        "intent_secondary":intent.get("secondary") or [],
+        "intent_confidence":intent.get("confidence"),
+        "intent_needs_clarification":bool(intent.get("needs_clarification")),
+        "commercial_intent":bool(intent.get("commercial_intent")),
         "dialogue_status":dialogue.get("dialogue_status"),
         "dialogue_stage":dialogue.get("dialogue_stage"),
         "dialogue_round":int(dialogue.get("dialogue_round") or 0),
@@ -941,9 +953,12 @@ def _inbound_reply_text(row: dict) -> str:
 
     if status=="ANONYMOUS":
         return (
-            "MYCELIX received your first contact but requires a declared agent identity before admission. "
-            "Send an agent_id (metadata.agent_id or X-Agent-ID) and introduce your identity, capabilities, "
-            "supported A2A/MCP protocol, limitations, and a public documentation or Agent Card URL if available."
+            intent_followup({
+                "primary":row.get("intent_primary"),
+                "secondary":row.get("intent_secondary") or [],
+                "confidence":row.get("intent_confidence"),
+            })
+            + " If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available."
         )
     if status=="PARKED" and dialogue_stage=="IDENTITY":
         return (
@@ -1034,6 +1049,12 @@ async def a2a_endpoint(request: Request):
             "treated_as":"untrusted_evidence",
             "admission_status":row.get("admission_status"),
             "identity_status":row.get("identity_status"),
+            "intent_primary":row.get("intent_primary"),
+            "intent_secondary":row.get("intent_secondary") or [],
+            "intent_confidence":row.get("intent_confidence"),
+            "commercial_intent":row.get("commercial_intent"),
+            "conversation_allowed_bounded":True,
+            "commercial_influence":"NONE",
             "dialogue_status":row.get("dialogue_status"),
             "dialogue_stage":row.get("dialogue_stage"),
             "dialogue_round":row.get("dialogue_round"),
@@ -1054,8 +1075,8 @@ async def api_trust_evaluate(request: Request):
             "ok":True,
             "neo_version":VERSION,
             "experiment":"trust_lab",
-            "schema_v":1,
-            "purpose":"Bounded evaluation of agent identity, capability interview state, evidence support and unsupported inference.",
+            "schema_v":2,
+            "purpose":"Bounded evaluation of agent intent, identity, capability interview state, evidence support and unsupported inference.",
             "commercial_gate_unchanged":True,
             "recent_evaluations":list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-20:],
         })
@@ -1074,6 +1095,10 @@ async def api_trust_evaluate(request: Request):
         "agent_id":(result.get("identity") or {}).get("agent_id"),
         "source_count":len((result.get("evidence") or {}).get("source_urls") or []),
         "unsupported_inference":bool((result.get("evidence") or {}).get("unsupported_inference")),
+        "intent_primary":(result.get("intent") or {}).get("primary"),
+        "intent_secondary":(result.get("intent") or {}).get("secondary") or [],
+        "intent_confidence":(result.get("intent") or {}).get("confidence"),
+        "commercial_intent":bool((result.get("intent") or {}).get("commercial_intent")),
         "reasons":result.get("reasons") or [],
     }
     history=list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])
@@ -1087,7 +1112,7 @@ async def trust_lab_page(request: Request):
     rows=list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])
     body=(
         '<section class="card"><span class="tag">EXPERIMENTAL</span><h2>MYCELIX Trust Lab</h2>'
-        '<p>Sidecar experiment: identity, capability interview and evidence integrity. '
+        '<p>Sidecar experiment: conversational intent, identity, capability interview and evidence integrity. '
         'It does not replace NEO commercial discovery or quality gates.</p>'
         '<div class="grid">'
         '<article><div class="muted">Evaluations</div><h2>'+str(len(rows))+'</h2></article>'
@@ -1104,6 +1129,7 @@ async def trust_lab_page(request: Request):
             '<h3>'+html.escape(str(row.get("agent_id") or "anonymous"))+'</h3>'
             '<p>score '+html.escape(str(row.get("trust_score") or 0))+
             ' · identity '+html.escape(str(row.get("identity_status") or ""))+
+            ' · intent '+html.escape(str(row.get("intent_primary") or "UNKNOWN"))+
             ' · sources '+html.escape(str(row.get("source_count") or 0))+'</p>'
             '<div class="muted">'+html.escape(", ".join(str(x) for x in (row.get("reasons") or [])[:6]))+'</div></article>'
         )
@@ -1127,6 +1153,10 @@ async def api_inbound_agents(request: Request):
         "parked_agents":sum(1 for x in declared if str(x.get("status") or "")=="PARKED"),
         "active_peer_interviews":sum(1 for x in declared if str(x.get("dialogue_status") or "")=="ACTIVE"),
         "completed_peer_interviews":sum(1 for x in declared if bool(x.get("interview_complete"))),
+        "intent_counts":{
+            key:sum(1 for x in stats.values() if isinstance(x,dict) and str(x.get("intent_primary") or "")==key)
+            for key in ("CONTACT","DISCOVERY","CONNECTIVITY","QUESTION_HELP","COLLABORATION","OFFER","REQUEST","COMMERCIAL","RESEARCH","UNKNOWN")
+        },
         "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
         "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
         "recent_messages":messages[-20:],
