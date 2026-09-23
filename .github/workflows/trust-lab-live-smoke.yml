@@ -131,12 +131,13 @@ jobs:
             -o /tmp/status.json
           python - <<'PY'
           import json
+          import urllib.request
           d=json.load(open("/tmp/status.json",encoding="utf-8"))
           if d.get("experiment")!="trust_lab":
               raise SystemExit("wrong experiment marker")
           if d.get("commercial_gate_unchanged") is not True:
               raise SystemExit("Trust Lab must remain separate from the commercial gate")
-          health=json.load(__import__("urllib.request").request.urlopen("https://neo-collettive.onrender.com/health",timeout=30))
+          health=json.load(urllib.request.urlopen("https://neo-collettive.onrender.com/health",timeout=30))
           profile=health.get("runtime_profile") or {}
           if profile.get("profile_id")!="mycelix-prod-main":
               raise SystemExit("wrong runtime profile")
