@@ -718,6 +718,49 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
     return {"eligible":False,"reason":"no_explicit_agent_endpoint"}
 
 
+def seti_candidate_attempt_state(candidate: dict, prior: dict | None, now_utc: str, min_seconds: int = 3600) -> dict:
+    """Explain whether an eligible candidate is ready for interview right now."""
+    eligibility=interview_candidate_eligibility(candidate)
+    if not eligibility.get("eligible"):
+        return {"ready":False,"reason":"ineligible","eligibility_reason":eligibility.get("reason")}
+    prior=prior if isinstance(prior,dict) else {}
+    status=str(prior.get("status") or "")
+    attempts=max(0,int(prior.get("attempts") or (1 if prior else 0)))
+    if status=="ADMITTED":
+        return {"ready":False,"reason":"already_admitted","attempts":attempts}
+    if status=="PARKED" and attempts>=3:
+        return {"ready":False,"reason":"attempts_exhausted","attempts":attempts}
+    if status=="PARKED" and not seti_retry_ready(prior,now_utc,min_seconds):
+        return {"ready":False,"reason":"rate_limited","attempts":attempts}
+    return {
+        "ready":True,
+        "reason":"ready",
+        "attempts":attempts,
+        "eligibility_reason":eligibility.get("reason"),
+        "contact_mode":eligibility.get("contact_mode"),
+    }
+
+
+def summarize_interview_readiness(candidates: dict, interviews: dict, admitted: dict, now_utc: str, min_seconds: int = 3600) -> dict:
+    """Non-sensitive readiness summary for public runtime telemetry."""
+    counts={}
+    ready=0
+    eligible=0
+    for key,candidate in (candidates or {}).items():
+        if not isinstance(candidate,dict):
+            continue
+        prior=(interviews or {}).get(key) if isinstance((interviews or {}).get(key),dict) else {}
+        state=seti_candidate_attempt_state(candidate,prior,now_utc,min_seconds)
+        if state.get("eligibility_reason") or state.get("reason")!="ineligible":
+            if interview_candidate_eligibility(candidate).get("eligible"):
+                eligible += 1
+        reason=str(state.get("reason") or "unknown")
+        counts[reason]=counts.get(reason,0)+1
+        if state.get("ready"):
+            ready += 1
+    return {"eligible":eligible,"ready_now":ready,"reason_counts":dict(sorted(counts.items()))}
+
+
 def summarize_candidate_eligibility(candidates: dict) -> dict:
     """Return non-sensitive eligibility telemetry for the public SETI summary."""
     rows=[v for v in (candidates or {}).values() if isinstance(v,dict)]
