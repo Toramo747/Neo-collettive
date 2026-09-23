@@ -59,6 +59,12 @@ def load_runtime_profile() -> dict:
         raise RuntimeError("runtime_profile_commercial_boundary_incomplete")
     if agent_network.get("may_write_commercial_evidence") is not False:
         raise RuntimeError("runtime_profile_agent_network_boundary_unsafe")
+    chat_monitor=agent_network.get("chat_monitor") if isinstance(agent_network.get("chat_monitor"),dict) else {}
+    if chat_monitor:
+        if chat_monitor.get("may_push_without_verified_callback") is not False:
+            raise RuntimeError("agent_chat_monitor_push_boundary_unsafe")
+        if chat_monitor.get("may_write_commercial_evidence") is not False:
+            raise RuntimeError("agent_chat_monitor_boundary_unsafe")
     if trust_lab.get("may_write_commercial_evidence") is not False:
         raise RuntimeError("runtime_profile_trust_boundary_unsafe")
     if trust_lab.get("may_change_commercial_gate") is not False:

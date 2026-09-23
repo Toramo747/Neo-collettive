@@ -18,6 +18,7 @@ from state_recovery import merge_supplementary_state, select_freshest_state
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
+from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 
@@ -66,7 +67,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.84.0"  # Agent Demand Observatory with independent-agent signal thresholds
+VERSION = "0.85.0"  # bounded reciprocal A2A chat monitoring and thread continuity
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -154,6 +155,19 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "trust_lab_evaluations": [],
+    "agent_chat_events": [],
+    "agent_chat_monitor": {
+        "schema_v":1,
+        "threads":[],
+        "thread_count":0,
+        "waiting_peer":0,
+        "reply_due":0,
+        "boundary":{
+            "outbound_requires_peer_request_or_verified_callback":True,
+            "unverified_claims_remain_untrusted":True,
+            "commercial_gate_influence":"NONE",
+        },
+    },
     "agent_demand_observatory": {
         "schema_v":1,
         "mode":"observational",
@@ -249,6 +263,8 @@ def _state_payload() -> dict:
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "agent_chat_events": list(AUTOPILOT_STATE.get("agent_chat_events") or [])[-240:],
+        "agent_chat_monitor": AUTOPILOT_STATE.get("agent_chat_monitor") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
         "agent_demand_observatory": AUTOPILOT_STATE.get("agent_demand_observatory") or {},
         "boundary_events": list(AUTOPILOT_STATE.get("boundary_events") or [])[-40:],
@@ -311,6 +327,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
+    if isinstance(payload.get("agent_chat_events"), list):
+        AUTOPILOT_STATE["agent_chat_events"] = payload.get("agent_chat_events")[-240:]
+    if isinstance(payload.get("agent_chat_monitor"), dict):
+        AUTOPILOT_STATE["agent_chat_monitor"] = payload.get("agent_chat_monitor") or {}
     if isinstance(payload.get("trust_lab_evaluations"), list):
         AUTOPILOT_STATE["trust_lab_evaluations"] = payload.get("trust_lab_evaluations")[-80:]
     if isinstance(payload.get("agent_demand_observatory"), dict):
@@ -543,6 +563,14 @@ def _restore_state() -> str:
         payload=dict(payload)
         payload["agent_demand_observatory"]=summarize_agent_demand(
             payload.get("inbound_messages") or [],
+            payload.get("inbound_agent_stats") or {},
+        )
+        payload["agent_chat_events"]=backfill_inbound_chat_events(
+            payload.get("inbound_messages") or [],
+            payload.get("agent_chat_events") or [],
+        )
+        payload["agent_chat_monitor"]=summarize_chat_threads(
+            payload.get("agent_chat_events") or [],
             payload.get("inbound_agent_stats") or {},
         )
     payload,boundary_event=sanitize_commercial_state(payload)
@@ -1067,6 +1095,19 @@ async def a2a_endpoint(request: Request):
     row=_record_inbound_agent_message(payload,request)
     reply=_inbound_reply_text(row)
     message_id="neo-reply-"+secrets.token_hex(8)
+    sent_at=datetime.now(timezone.utc).isoformat()
+    AUTOPILOT_STATE["agent_chat_events"]=append_exchange(
+        AUTOPILOT_STATE.get("agent_chat_events") or [],
+        row,
+        reply,
+        message_id,
+        sent_at,
+    )
+    AUTOPILOT_STATE["agent_chat_monitor"]=summarize_chat_threads(
+        AUTOPILOT_STATE.get("agent_chat_events") or [],
+        AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+    )
+    _save_local_state()
     result={
         "role":"agent",
         "messageId":message_id,
@@ -1170,6 +1211,55 @@ async def trust_lab_page(request: Request):
         )
     body+='</div></section>'
     return layout("Trust Lab",body)
+
+
+async def api_agent_chats(request: Request):
+    events=backfill_inbound_chat_events(
+        AUTOPILOT_STATE.get("inbound_messages") or [],
+        AUTOPILOT_STATE.get("agent_chat_events") or [],
+    )
+    AUTOPILOT_STATE["agent_chat_events"]=events
+    monitor=summarize_chat_threads(events,AUTOPILOT_STATE.get("inbound_agent_stats") or {})
+    AUTOPILOT_STATE["agent_chat_monitor"]=monitor
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "monitor":monitor,
+        "recent_events":events[-80:],
+        "push_note":"Peers without a verified callback can only continue when they call MYCELIX again.",
+        "commercial_gate_unchanged":True,
+    })
+
+
+async def agent_chats_page(request: Request):
+    events=backfill_inbound_chat_events(
+        AUTOPILOT_STATE.get("inbound_messages") or [],
+        AUTOPILOT_STATE.get("agent_chat_events") or [],
+    )
+    monitor=summarize_chat_threads(events,AUTOPILOT_STATE.get("inbound_agent_stats") or {})
+    body=(
+        '<section class="card"><span class="tag">A2A CHAT</span><h2>Agent Conversations</h2>'
+        '<p>Reciprocal transcript of messages actually received and replies actually returned by MYCELIX. '
+        'No outbound message is invented for peers without a verified callback endpoint.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Threads</div><h2>'+str(monitor.get("thread_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Waiting peer</div><h2>'+str(monitor.get("waiting_peer") or 0)+'</h2></article>'
+        '<article><div class="muted">Reply due</div><h2>'+str(monitor.get("reply_due") or 0)+'</h2></article>'
+        '</div></section>'
+    )
+    body+='<section class="card"><h2>Threads</h2><div class="grid">'
+    for thread in monitor.get("threads") or []:
+        body+=(
+            '<article><span class="tag">'+html.escape(str(thread.get("engagement_status") or "ACTIVE"))+'</span>'
+            '<h3>'+html.escape(str(thread.get("agent") or thread.get("agent_id") or "anonymous-agent"))+'</h3>'
+            '<p>intent '+html.escape(str(thread.get("intent_primary") or "UNKNOWN"))+
+            ' · inbound '+str(int(thread.get("inbound_messages") or 0))+
+            ' · outbound '+str(int(thread.get("outbound_messages") or 0))+'</p>'
+            '<p>'+html.escape(str(thread.get("last_text") or ""))+'</p>'
+            '<div class="muted">'+html.escape(str(thread.get("thread_id") or ""))+'</div></article>'
+        )
+    body+='</div></section>'
+    return layout("Agent Conversations",body)
 
 
 async def api_agent_demand(request: Request):
@@ -8620,6 +8710,8 @@ app = Starlette(
         Route("/inbox", inbound_page, methods=["GET"]),
         Route("/agent-demand", agent_demand_page, methods=["GET"]),
         Route("/api/agent-demand", api_agent_demand, methods=["GET"]),
+        Route("/agent-chats", agent_chats_page, methods=["GET"]),
+        Route("/api/agent-chats", api_agent_chats, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/trust", trust_lab_page, methods=["GET"]),
         Route("/api/trust/evaluate", api_trust_evaluate, methods=["GET","POST"]),
