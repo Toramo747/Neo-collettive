@@ -67,7 +67,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.85.0"  # bounded reciprocal A2A chat monitoring and thread continuity
+VERSION = "0.86.0"  # authenticated private SETI interview console
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 A2A_REGISTRY = "https://api.a2a-registry.org"
 RENDER_API_BASE = "https://api.render.com/v1"
@@ -89,6 +89,7 @@ STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")
 POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
 HEARTBEAT_TOKEN = (os.getenv("NEO_HEARTBEAT_TOKEN") or "").strip()
+NEO_ADMIN_TOKEN = (os.getenv("NEO_ADMIN_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
 AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
@@ -8181,6 +8182,140 @@ async def _seti_resolve_interview_endpoint(candidate: dict, eligibility: dict) -
         return {"ok":False,"reason":type(e).__name__}
 
 
+def _admin_authorized(request: Request) -> bool:
+    """Private admin auth. Credentials are never accepted from query strings."""
+    if not NEO_ADMIN_TOKEN:
+        return False
+    auth=str(request.headers.get("authorization") or "").strip()
+    if not auth:
+        return False
+    if auth.lower().startswith("bearer "):
+        supplied=auth[7:].strip()
+        return bool(supplied) and secrets.compare_digest(supplied,NEO_ADMIN_TOKEN)
+    if auth.lower().startswith("basic "):
+        try:
+            raw=base64.b64decode(auth.split(None,1)[1],validate=True).decode("utf-8","strict")
+            _username,supplied=raw.split(":",1)
+            return bool(supplied) and secrets.compare_digest(supplied,NEO_ADMIN_TOKEN)
+        except Exception:
+            return False
+    return False
+
+
+def _admin_auth_failure() -> JSONResponse:
+    if not NEO_ADMIN_TOKEN:
+        return JSONResponse({
+            "ok":False,
+            "error":"admin_token_not_configured",
+            "hint":"Configure NEO_ADMIN_TOKEN in the private Render environment.",
+        },status_code=503)
+    return JSONResponse(
+        {"ok":False,"error":"unauthorized"},
+        status_code=401,
+        headers={"WWW-Authenticate":'Basic realm="MYCELIX Private SETI", charset="UTF-8"'},
+    )
+
+
+def _private_seti_console_payload() -> dict:
+    candidates=SETI_PRIVATE_STATE.get("candidates") or {}
+    interviews=SETI_PRIVATE_STATE.get("interviews") or {}
+    admitted=SETI_PRIVATE_STATE.get("admitted") or {}
+    rows=[]
+    for key,interview in interviews.items():
+        if not isinstance(interview,dict):
+            continue
+        candidate=candidates.get(key) if isinstance(candidates.get(key),dict) else {}
+        rows.append({
+            "candidate_key":str(key),
+            "status":interview.get("status"),
+            "interviewed_at_utc":interview.get("interviewed_at_utc"),
+            "last_attempt_utc":interview.get("last_attempt_utc"),
+            "attempts":interview.get("attempts"),
+            "score":interview.get("score"),
+            "markers":interview.get("markers") or {},
+            "transport":interview.get("transport"),
+            "http_status":interview.get("http_status"),
+            "quality_ok":interview.get("quality_ok"),
+            "quality_reason":interview.get("quality_reason"),
+            "reason":interview.get("reason"),
+            "endpoint":interview.get("endpoint"),
+            "contact_mode":interview.get("contact_mode"),
+            "response_excerpt":interview.get("response_excerpt"),
+            "response_full":interview.get("response_full"),
+            "attempt_history":interview.get("attempt_history") or [],
+            "candidate":{
+                "max_score":candidate.get("max_score"),
+                "scan_count":candidate.get("scan_count"),
+                "source_diversity":candidate.get("source_diversity"),
+                "classification":candidate.get("classification"),
+                "title":candidate.get("title"),
+                "url":candidate.get("url"),
+                "evidence_urls":candidate.get("evidence_urls") or [],
+                "last_seen_utc":candidate.get("last_seen_utc"),
+            },
+            "admitted":bool(key in admitted),
+        })
+    rows.sort(key=lambda x:str(x.get("last_attempt_utc") or ""),reverse=True)
+    return {
+        "ok":True,
+        "neo_version":VERSION,
+        "private":True,
+        "snapshot_exposure":False,
+        "interview_count":len(rows),
+        "candidate_count":len(candidates),
+        "admitted_count":len(admitted),
+        "interviews":rows,
+    }
+
+
+async def api_admin_seti_interviews(request: Request):
+    if not _admin_authorized(request):
+        return _admin_auth_failure()
+    return JSONResponse(_private_seti_console_payload())
+
+
+async def admin_seti_interviews_page(request: Request):
+    if not _admin_authorized(request):
+        if not NEO_ADMIN_TOKEN:
+            return HTMLResponse(
+                "<h1>MYCELIX Private SETI</h1><p>NEO_ADMIN_TOKEN is not configured.</p>",
+                status_code=503,
+            )
+        return HTMLResponse(
+            "<h1>Authentication required</h1>",
+            status_code=401,
+            headers={"WWW-Authenticate":'Basic realm="MYCELIX Private SETI", charset="UTF-8"'},
+        )
+    data=_private_seti_console_payload()
+    body=(
+        '<section class="card"><span class="tag">PRIVATE ADMIN</span><h2>SETI Interviews</h2>'
+        '<p>Private candidate endpoints, interview responses and attempt history. '
+        'These values are intentionally excluded from public runtime snapshots.</p>'
+        '<div class="grid">'
+        '<article><div class="muted">Candidates</div><h2>'+str(data.get("candidate_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Interviews</div><h2>'+str(data.get("interview_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Admitted</div><h2>'+str(data.get("admitted_count") or 0)+'</h2></article>'
+        '</div></section>'
+    )
+    for row in data.get("interviews") or []:
+        candidate=row.get("candidate") or {}
+        response=row.get("response_full") or row.get("response_excerpt") or ""
+        body+=(
+            '<section class="card"><span class="tag">'+html.escape(str(row.get("status") or "UNKNOWN"))+'</span>'
+            '<h3>'+html.escape(str(row.get("candidate_key") or ""))+'</h3>'
+            '<p><b>Endpoint:</b> <code>'+html.escape(str(row.get("endpoint") or candidate.get("url") or ""))+'</code></p>'
+            '<p>score '+html.escape(str(row.get("score") or 0))+
+            ' · attempts '+html.escape(str(row.get("attempts") or 0))+
+            ' · transport '+html.escape(str(row.get("transport") or ""))+
+            ' · HTTP '+html.escape(str(row.get("http_status") or ""))+'</p>'
+            '<p><b>Reason:</b> '+html.escape(str(row.get("quality_reason") or row.get("reason") or ""))+'</p>'
+            '<h4>Agent response</h4><pre>'+html.escape(str(response))+'</pre>'
+            '<h4>Attempt history</h4><pre>'+html.escape(json.dumps(row.get("attempt_history") or [],ensure_ascii=False,indent=2,default=str))+'</pre>'
+            '</section>'
+        )
+    return layout("Private SETI Interviews",body)
+
+
 def _seti_interview_prompt() -> str:
     return (
         "MYCELIX is conducting a bounded capability interview before admitting a newly discovered "
@@ -8229,12 +8364,23 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         now=datetime.now(timezone.utc).isoformat()
         resolved=await _seti_resolve_interview_endpoint(candidate,eligibility)
         if not resolved.get("ok"):
+            prior_history=list(prior.get("attempt_history") or [])
+            prior_history.append({
+                "attempt":prior_attempts+1,
+                "timestamp_utc":now,
+                "status":"PARKED",
+                "score":0,
+                "reason":resolved.get("reason"),
+                "response":"",
+                "endpoint":str(resolved.get("endpoint") or ""),
+            })
             interviews[key]={
                 "status":"PARKED",
                 "interviewed_at_utc":now,
                 "last_attempt_utc":now,
                 "attempts":prior_attempts+1,
                 "reason":resolved.get("reason"),
+                "attempt_history":prior_history[-3:],
                 "candidate_score":int(candidate.get("max_score") or 0),
             }
             SETI_PRIVATE_STATE["interviews"]=interviews
@@ -8260,6 +8406,21 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
         status="ADMITTED" if accepted else "PARKED"
 
+        attempt_entry={
+            "attempt":prior_attempts+1,
+            "timestamp_utc":now,
+            "status":status,
+            "score":int(quality.get("score") or 0),
+            "transport":answer.get("transport"),
+            "http_status":answer.get("status"),
+            "quality_ok":bool(answer.get("quality_ok")),
+            "quality_reason":answer.get("quality_reason"),
+            "response":response_text[:3000],
+            "endpoint":endpoint,
+            "contact_mode":resolved.get("mode"),
+        }
+        attempt_history=list(prior.get("attempt_history") or [])
+        attempt_history.append(attempt_entry)
         interview={
             "status":status,
             "interviewed_at_utc":now,
@@ -8272,6 +8433,8 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "quality_ok":bool(answer.get("quality_ok")),
             "quality_reason":answer.get("quality_reason"),
             "response_excerpt":response_text[:1200],
+            "response_full":response_text[:3000],
+            "attempt_history":attempt_history[-3:],
             "endpoint":endpoint,
             "contact_mode":resolved.get("mode"),
             "candidate_score":int(candidate.get("max_score") or 0),
@@ -8712,6 +8875,8 @@ app = Starlette(
         Route("/api/agent-demand", api_agent_demand, methods=["GET"]),
         Route("/agent-chats", agent_chats_page, methods=["GET"]),
         Route("/api/agent-chats", api_agent_chats, methods=["GET"]),
+        Route("/admin/seti-interviews", admin_seti_interviews_page, methods=["GET"]),
+        Route("/api/admin/seti-interviews", api_admin_seti_interviews, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/trust", trust_lab_page, methods=["GET"]),
         Route("/api/trust/evaluate", api_trust_evaluate, methods=["GET","POST"]),

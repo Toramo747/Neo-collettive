@@ -21,6 +21,17 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(profile["tracks"]["trust_lab"]["may_change_commercial_gate"])
         self.assertTrue(profile["config_fingerprint"])
 
+    def test_private_seti_console_is_not_public(self):
+        profile=load_runtime_profile()
+        console=profile["tracks"]["agent_network"]["private_seti_console"]
+        self.assertTrue(console["enabled"])
+        self.assertEqual(console["authentication"],"NEO_ADMIN_TOKEN")
+        self.assertFalse(console["credentials_in_query_string"])
+        self.assertFalse(console["public_snapshot_exposure"])
+        self.assertTrue(console["exposes_private_endpoints"])
+        self.assertTrue(console["exposes_private_interview_responses"])
+        self.assertFalse(console["may_write_commercial_evidence"])
+
     def test_agent_chat_monitor_is_bounded(self):
         profile=load_runtime_profile()
         monitor=profile["tracks"]["agent_network"]["chat_monitor"]
