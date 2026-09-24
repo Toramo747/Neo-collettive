@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse, unquote
 from typing import Any, Awaitable, Callable
 
+from peer_quality import BLOCKED_PEER_CLASSES
+
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 11
+SETI_ENGINE_VERSION = 12
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
@@ -725,16 +727,27 @@ def merge_private_candidate_state(
             "provenance_url":str(row.get("provenance_url") or prev.get("provenance_url") or "")[:1200],
         }
 
-    ranked=sorted(
-        candidates.items(),
-        key=lambda kv:(
-            int((kv[1] or {}).get("max_score") or 0),
-            int((kv[1] or {}).get("source_diversity") or 0),
-            int((kv[1] or {}).get("observations") or 0),
-            str((kv[1] or {}).get("last_seen_utc") or ""),
-        ),
-        reverse=True,
-    )[:max(4,min(max_entries,24))]
+    def inventory_priority(item):
+        key,candidate=item
+        prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
+        peer_class=str(prior.get("peer_class") or "").upper()
+        followup=str(prior.get("followup_state") or "").upper()
+        attempts=max(0,int(prior.get("attempts") or 0))
+        blocked=peer_class in BLOCKED_PEER_CLASSES or followup in {
+            "AUTH_BLOCKED","PAYMENT_BLOCKED","COMMERCIAL_ONLY","LOW_VALUE_PARKED","EXHAUSTED"
+        } or attempts>=3
+        collaborative=peer_class=="COLLABORATIVE"
+        fresh=not bool(prior)
+        tier=3 if collaborative else (2 if fresh else (0 if blocked else 1))
+        return (
+            tier,
+            int((candidate or {}).get("max_score") or 0),
+            int((candidate or {}).get("source_diversity") or 0),
+            int((candidate or {}).get("observations") or 0),
+            str((candidate or {}).get("last_seen_utc") or ""),
+        )
+
+    ranked=sorted(candidates.items(),key=inventory_priority,reverse=True)[:max(4,min(max_entries,24))]
 
     state={
         "schema_v":2,
@@ -843,7 +856,18 @@ def seti_candidate_attempt_state(candidate: dict, prior: dict | None, now_utc: s
     followup_state=str(prior.get("followup_state") or "").upper()
     if status=="ADMITTED":
         return {"ready":False,"reason":"already_admitted","attempts":attempts}
-    if block_reason=="AUTH_REQUIRED" or followup_state=="AUTH_BLOCKED":
+    peer_class=str(prior.get("peer_class") or "").upper()
+    blocked_states={
+        "AUTH_BLOCKED":"auth_required",
+        "PAYMENT_BLOCKED":"payment_required",
+        "COMMERCIAL_ONLY":"commercial_service",
+        "LOW_VALUE_PARKED":"low_value",
+    }
+    if followup_state in blocked_states:
+        return {"ready":False,"reason":blocked_states[followup_state],"attempts":attempts}
+    if peer_class in BLOCKED_PEER_CLASSES:
+        return {"ready":False,"reason":peer_class.lower(),"attempts":attempts}
+    if block_reason=="AUTH_REQUIRED":
         return {"ready":False,"reason":"auth_required","attempts":attempts}
     if status=="PARKED" and attempts>=3:
         return {"ready":False,"reason":"attempts_exhausted","attempts":attempts}
@@ -968,6 +992,13 @@ def seti_followup_state(previous: dict | None, max_attempts: int = 3) -> str:
     attempts=max(0,int(previous.get("attempts") or 0))
     if status=="ADMITTED":
         return "COMPLETE"
+    peer_class=str(previous.get("peer_class") or "").upper()
+    if peer_class=="PAYMENT_REQUIRED":
+        return "PAYMENT_BLOCKED"
+    if peer_class=="COMMERCIAL_SERVICE":
+        return "COMMERCIAL_ONLY"
+    if peer_class=="LOW_VALUE":
+        return "LOW_VALUE_PARKED"
     reason=str(previous.get("reason") or previous.get("peer_state") or "").upper()
     if reason=="AUTH_REQUIRED" or str(previous.get("followup_state") or "").upper()=="AUTH_BLOCKED":
         return "AUTH_BLOCKED"
@@ -990,7 +1021,7 @@ def seti_retry_ready(previous: dict | None, now_utc: str, min_seconds: int = 360
     previous=previous if isinstance(previous,dict) else {}
     if not previous:
         return True
-    if seti_followup_state(previous) in {"COMPLETE","EXHAUSTED","AUTH_BLOCKED"}:
+    if seti_followup_state(previous) in {"COMPLETE","EXHAUSTED","AUTH_BLOCKED","PAYMENT_BLOCKED","COMMERCIAL_ONLY","LOW_VALUE_PARKED"}:
         return False
     last=str(previous.get("last_attempt_utc") or previous.get("interviewed_at_utc") or "").strip()
     if not last:

@@ -24,6 +24,7 @@ from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
+from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -78,7 +79,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.96.0"  # SETI slots count real A2A attempts; auth excluded, timeouts cooled down
+VERSION = "0.97.0"  # peer quality lanes, collaborative multi-turn admission, inventory rotation
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -7804,6 +7805,9 @@ def _public_seti_interviews() -> list[dict]:
             "quality_ok":bool(raw.get("quality_ok")),
             "quality_reason":str(raw.get("quality_reason") or ""),
             "reason":str(raw.get("reason") or ""),
+            "peer_class":str(raw.get("peer_class") or ""),
+            "falsifiable_test":bool(raw.get("falsifiable_test")),
+            "collaborative_rounds":int(raw.get("collaborative_rounds") or 0),
             "markers":raw.get("markers") if isinstance(raw.get("markers"),dict) else {},
             "response_excerpt":str(raw.get("response_excerpt") or "")[:1200],
         })
@@ -8840,7 +8844,24 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             conversation_slots += 1
         response_text=_response_text(answer)
         quality=interview_response_score(response_text)
-        accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
+        peer_quality=classify_peer_response(
+            response_text,
+            peer_state=answer.get("peer_state"),
+            protocol_ok=bool(answer.get("protocol_ok")),
+            quality_ok=bool(answer.get("quality_ok")),
+            markers=quality.get("markers") or {},
+        )
+        provisional_entry={"peer_class":peer_quality.get("peer_class")}
+        previous_history=list(prior.get("attempt_history") or [])
+        collaborative_rounds=collaborative_round_count(previous_history+[provisional_entry])
+        accepted=bool(
+            answer.get("ok")
+            and answer.get("quality_ok")
+            and quality.get("accepted")
+            and peer_quality.get("peer_class")=="COLLABORATIVE"
+            and collaborative_rounds>=2
+            and peer_quality.get("falsifiable_test")
+        )
         status="ADMITTED" if accepted else "PARKED"
 
         dialogue_round=seti_dialogue_round(prior)
@@ -8860,6 +8881,9 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "endpoint":endpoint,
             "contact_mode":resolved.get("mode"),
             "conversation_slot_used":slot_used,
+            "peer_class":peer_quality.get("peer_class"),
+            "falsifiable_test":bool(peer_quality.get("falsifiable_test")),
+            "falsifiable_score":int(peer_quality.get("falsifiable_score") or 0),
         }
         for field in ("protocol_version","protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method"):
             attempt_entry[field]=answer.get(field)
@@ -8884,13 +8908,21 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "candidate_score":int(candidate.get("max_score") or 0),
             "dialogue_round":dialogue_round,
             "conversation_slot_used":slot_used,
-            "followup_state":"COMPLETE" if accepted else seti_followup_state({
-                "status":status,
-                "attempts":prior_attempts+1,
-                "response_full":response_text[:3000],
-                "attempt_history":attempt_history[-3:],
-            }),
-            "next_followup_after_seconds":0 if accepted or prior_attempts+1>=3 else SETI_FOLLOWUP_MIN_SECONDS,
+            "peer_class":peer_quality.get("peer_class"),
+            "falsifiable_test":bool(peer_quality.get("falsifiable_test")),
+            "falsifiable_score":int(peer_quality.get("falsifiable_score") or 0),
+            "collaborative_rounds":collaborative_rounds,
+            "followup_state":"COMPLETE" if accepted else (
+                peer_quality.get("blocked_followup_state")
+                or seti_followup_state({
+                    "status":status,
+                    "attempts":prior_attempts+1,
+                    "response_full":response_text[:3000],
+                    "attempt_history":attempt_history[-3:],
+                    "peer_class":peer_quality.get("peer_class"),
+                })
+            ),
+            "next_followup_after_seconds":0 if accepted or peer_quality.get("blocked_followup_state") or prior_attempts+1>=3 else SETI_FOLLOWUP_MIN_SECONDS,
         }
         interview.update({
             "peer_interface":resolved["interface"],
@@ -8924,6 +8956,9 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "score":int(quality.get("score") or 0),
             "transport":answer.get("transport"),
             "conversation_slot_used":slot_used,
+            "peer_class":peer_quality.get("peer_class"),
+            "falsifiable_test":bool(peer_quality.get("falsifiable_test")),
+            "collaborative_rounds":collaborative_rounds,
             **{field:answer.get(field) for field in ("protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method")},
         })
         if conversation_slots>=max(1,min(int(max_interviews or 1),3)):
@@ -8936,7 +8971,11 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     admitted_count=sum(1 for x in results if x.get("admitted"))
     parked_count=sum(1 for x in results if x.get("status")=="PARKED")
     failure_reasons={}
+    peer_class_counts={}
     for row in results:
+        peer_class=str(row.get("peer_class") or "")
+        if peer_class:
+            peer_class_counts[peer_class]=int(peer_class_counts.get(peer_class) or 0)+1
         if row.get("admitted"):
             continue
         reason=str(row.get("reason") or row.get("peer_state") or row.get("quality_reason") or "unknown")
@@ -8953,6 +8992,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         "protocol_response_count":sum(1 for x in results if x.get("protocol_ok")),
         "delivery_unknown_count":sum(1 for x in results if x.get("delivery_unknown")),
         "failure_reason_counts":failure_reasons,
+        "peer_class_counts":peer_class_counts,
         "target_request_attempts":peer_budget.used,
         "request_budget_limit":peer_budget.limit,
         "admitted":bool(admitted_count),
@@ -8988,6 +9028,8 @@ async def _seti_cycle_if_due() -> dict | None:
         private_state,private_summary=merge_private_candidate_state(
             SETI_PRIVATE_STATE,private_inputs,max_entries=24
         )
+        migrated_interviews,peer_class_migration=classify_stored_interviews(private_state.get("interviews") or {})
+        private_state["interviews"]=migrated_interviews
         SETI_PRIVATE_STATE.clear()
         SETI_PRIVATE_STATE.update(private_state)
         eligibility_summary=summarize_candidate_eligibility(SETI_PRIVATE_STATE.get("candidates") or {})
@@ -9086,6 +9128,8 @@ async def _seti_cycle_if_due() -> dict | None:
                 "interview_protocol_response_count":interview_result.get("protocol_response_count",0),
                 "interview_delivery_unknown_count":interview_result.get("delivery_unknown_count",0),
                 "interview_failure_reason_counts":interview_result.get("failure_reason_counts") or {},
+                "interview_peer_class_counts":interview_result.get("peer_class_counts") or {},
+                "interview_peer_class_migration":peer_class_migration,
                 "interview_request_budget":interview_result.get("request_budget_limit",9),
                 "interview_admitted_count":interview_result.get("admitted_count",0),
                 "interview_parked_count":interview_result.get("parked_count",0),

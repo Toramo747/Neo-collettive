@@ -241,3 +241,11 @@ class IntegratedRoutingTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+class PeerQualityIntegrationTests(unittest.TestCase):
+    def test_cloud_requires_multiturn_collaboration_before_admission(self):
+        source=IntegratedRoutingTests().function('_seti_interview_one_candidate')
+        self.assertIn('collaborative_rounds >= 2',source)
+        self.assertIn("peer_quality.get('falsifiable_test')",source)
+        self.assertIn("peer_quality.get('peer_class') == 'COLLABORATIVE'",source)

@@ -385,3 +385,27 @@ class SetiRadarTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SetiPeerQualityReadinessTests(unittest.TestCase):
+    def test_commercial_and_payment_peers_do_not_get_collaborative_followups(self):
+        candidate={"classification":"INTERESTING","max_score":70,"url":"https://agent.example.ai/a2a"}
+        now="2026-09-24T15:30:00+00:00"
+        for peer_class,expected in (
+            ("PAYMENT_REQUIRED","payment_required"),
+            ("COMMERCIAL_SERVICE","commercial_service"),
+            ("LOW_VALUE","low_value"),
+        ):
+            with self.subTest(peer_class=peer_class):
+                prior={"status":"PARKED","attempts":1,"peer_class":peer_class,"last_attempt_utc":"2026-09-24T12:00:00+00:00"}
+                self.assertEqual(seti_candidate_attempt_state(candidate,prior,now,3600)["reason"],expected)
+
+    def test_collaborative_peer_remains_followup_eligible(self):
+        candidate={"classification":"INTERESTING","max_score":70,"url":"https://agent.example.ai/a2a"}
+        prior={
+            "status":"PARKED","attempts":1,"peer_class":"COLLABORATIVE",
+            "last_attempt_utc":"2026-09-24T12:00:00+00:00",
+            "response_full":"I am an agent with capabilities and A2A protocol support."
+        }
+        state=seti_candidate_attempt_state(candidate,prior,"2026-09-24T15:30:00+00:00",3600)
+        self.assertTrue(state["ready"])
