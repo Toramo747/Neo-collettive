@@ -27,6 +27,7 @@ from inbound_security import classify_inbound_security, quarantine_legacy_inboun
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
+from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -89,7 +90,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.6"  # canonical problem snapshot lookup
+VERSION = "0.99.7"  # ingestion diagnostics only
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -120,6 +121,7 @@ NEO_ADMIN_TOKEN = (os.getenv("NEO_ADMIN_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
 AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
+INGESTION_DIAGNOSTICS_ENABLED = (os.getenv("NEO_INGESTION_DIAGNOSTICS", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
 SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))))
@@ -5258,19 +5260,25 @@ def _commercial_evidence_quality(
     query_meta=query_meta or {}
     current_rows=[]
     rejected=[]
+    diagnostics=IngestionDiagnostics(INGESTION_DIAGNOSTICS_ENABLED)
+    diagnostics.merge_web_research(web_research)
+    diagnostics.add_raw_rows(scouts or [])
     now_epoch=time.time()
     retention_seconds=21*24*3600
     fresh_seconds=7*24*3600
 
-    def reject(reason: str, url: str, title: str, role: str = ""):
+    def reject(reason: str, url: str, title: str, role: str = "", source: str = "", query_class: str = ""):
+        diagnostics.record_rejection(reason,source,query_class or role)
         if len(rejected)<40:
             rejected.append({"reason":reason,"url":(url or "")[:500],"title":(title or "")[:180],"query_role":role})
 
     def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = ""):
+        meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
+        query_class=diagnostic_query_class(meta,query_role)
         raw_host=(urlparse(url or "").hostname or "").lower()
         host=canonical_domain(raw_host)
         if not host or any(host==n or host.endswith("."+n) for n in noise):
-            reject("noise_domain",url,title,query_role)
+            reject("noise_domain",url,title,query_role,source,query_class)
             return
         title_low=(title or "").lower()
         body_low=(body or "").lower()
@@ -5281,33 +5289,32 @@ def _commercial_evidence_quality(
                 "master roadmap","roadmap maître","roadmap master",
             )
             if any(x in title_low or x in body_low for x in github_noise):
-                reject("github_noise",url,title,query_role)
+                reject("github_noise",url,title,query_role,source,query_class)
                 return
             github_demand=(
                 "need help","looking for","seeking","hiring","budget","paid","manual",
                 "repetitive","problem","pain","customer","client","freelance","contractor",
             )
             if not any(contains_term(title_low+" "+body_low,x) for x in github_demand):
-                reject("github_no_buyer_problem_context",url,title,query_role)
+                reject("github_no_buyer_problem_context",url,title,query_role,source,query_class)
                 return
 
-        meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         relevance=query_relevance(title,body,query,meta)
         if query and not relevance.get("relevant"):
-            reject("query_irrelevant",url,title,query_role)
+            reject("query_irrelevant",url,title,query_role,source,query_class)
             return
 
         text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
-            reject("no_family",url,title,query_role)
+            reject("no_family",url,title,query_role,source,query_class)
             return
         context,title_hits,body_hits=_evidence_context(title,body,family)
         if title_hits<1 and body_hits<2:
-            reject("weak_family_relevance",url,title,query_role)
+            reject("weak_family_relevance",url,title,query_role,source,query_class)
             return
         if len(context)<40:
-            reject("context_too_short",url,title,query_role)
+            reject("context_too_short",url,title,query_role,source,query_class)
             return
 
         weak=[t for t in weak_terms if contains_term(context,t)]
@@ -5315,7 +5322,7 @@ def _commercial_evidence_quality(
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
         if not signal_types:
-            reject("no_demand_signal",url,title,query_role)
+            reject("no_demand_signal",url,title,query_role,source,query_class)
             return
 
         observed_problem_key=canonical_problem_key(family,_problem_signature(family,title,context))
@@ -5568,6 +5575,7 @@ def _commercial_evidence_quality(
         "persistent_evidence_items":len(memory),
         "quarantined_evidence_items":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
         "rejected_current_results":rejected,
+        "ingestion_diagnostics":diagnostics.snapshot(),
         "memory_retention_days":21,
         "freshness_window_days":7,
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
@@ -6129,6 +6137,10 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
         free_web_search(seed,max(2,min(3,limit))),
         return_exceptions=True,
     )
+    ingestion_diagnostics=(
+        routed_search_diagnostics(batches,query,meta,query_relevance)
+        if INGESTION_DIAGNOSTICS_ENABLED else {}
+    )
     results=[]
     seen=set()
     source_counts={}
@@ -6170,6 +6182,7 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
         "results":results,
         "count":len(results),
         "source_counts":source_counts,
+        "ingestion_diagnostics":ingestion_diagnostics,
         "commercial_router":True,
     }
 
@@ -6187,6 +6200,10 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
         tasks.append(_stackexchange_query_search(seed,3))
     batches=await asyncio.gather(*tasks,return_exceptions=True)
+    ingestion_diagnostics=(
+        routed_search_diagnostics(batches,query,meta,query_relevance)
+        if INGESTION_DIAGNOSTICS_ENABLED else {}
+    )
 
     results=[]
     seen=set()
@@ -6229,6 +6246,7 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
         "results":results,
         "count":len(results),
         "source_counts":source_counts,
+        "ingestion_diagnostics":ingestion_diagnostics,
     }
 
 
@@ -7138,6 +7156,7 @@ def _compact_director_result(result: dict) -> dict:
         "tagger_v": quality.get("tagger_v"),
         "quarantined_evidence_items": quality.get("quarantined_evidence_items"),
         "rejected_current_results": quality.get("rejected_current_results") or [],
+        "ingestion_diagnostics": quality.get("ingestion_diagnostics") or {},
         "problem_clusters": {
             key: {
                 "family": data.get("family"),
@@ -7568,6 +7587,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "web_research": web_research,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
+        "ingestion_diagnostics": evidence_quality.get("ingestion_diagnostics") or {},
         "family_performance": family_performance,
         "product_candidate": product_candidate,
         "collective_review": collective_review,

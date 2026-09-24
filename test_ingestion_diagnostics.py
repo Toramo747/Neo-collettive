@@ -1,0 +1,64 @@
+import unittest
+
+from ingestion_diagnostics import (
+    IngestionDiagnostics,
+    canonical_source,
+    diagnostic_query_class,
+    routed_search_diagnostics,
+)
+
+
+class IngestionDiagnosticsTests(unittest.TestCase):
+    def test_source_aliases_are_stable(self):
+        self.assertEqual(canonical_source("bing-rss-free"), "bing-rss")
+        self.assertEqual(canonical_source("hn-algolia-routed"), "hn")
+        self.assertEqual(canonical_source("github-issues-routed"), "github")
+        self.assertEqual(canonical_source("stackexchange-routed"), "stackexchange")
+
+    def test_query_class_prefers_planner_class(self):
+        self.assertEqual(diagnostic_query_class({"class": "thesis", "role": "buyer"}), "thesis")
+        self.assertEqual(diagnostic_query_class({"class": "thesis", "role": "disconfirm"}), "disconfirm")
+
+    def test_routed_diagnostics_count_raw_and_relevance_passes(self):
+        batches = [
+            {"results": [{"title": "A", "url": "https://a.test/1", "snippet": "pain", "source": "bing-rss-free"}]},
+            [{"title": "B", "url": "https://b.test/1", "snippet": "noise", "source": "hn-algolia-routed"}],
+            [{"title": "C", "url": "https://c.test/1", "snippet": "pain", "source": "github-issues-routed"}],
+            [{"title": "D", "url": "https://d.test/1", "snippet": "pain", "source": "stackexchange-routed"}],
+        ]
+
+        def relevance(_title, snippet, _query, _meta):
+            return {"relevant": snippet == "pain"}
+
+        result = routed_search_diagnostics(batches, "q", {"class": "explore"}, relevance)
+        self.assertEqual(result["raw_by_source"], {"bing-rss": 1, "hn": 1, "github": 1, "stackexchange": 1})
+        self.assertEqual(result["query_relevance_pass_by_source"], {"bing-rss": 1, "github": 1, "stackexchange": 1})
+        self.assertEqual(result["query_relevance_pass_by_source_and_class"]["github"], {"explore": 1})
+
+    def test_cycle_snapshot_merges_search_scout_and_rejections(self):
+        diag = IngestionDiagnostics(True)
+        diag.merge_web_research([{
+            "ingestion_diagnostics": {
+                "raw_by_source": {"bing-rss": 2, "github": 1},
+                "query_relevance_pass_by_source": {"bing-rss": 1},
+                "query_relevance_pass_by_source_and_class": {"bing-rss": {"convergence": 1}},
+                "diagnostic_errors": 0,
+            }
+        }])
+        diag.add_raw_rows([{"source": "hackernews"}])
+        diag.record_rejection("no_family", "bing-rss-free", "explore")
+        snap = diag.snapshot()
+        self.assertEqual(snap["raw_results_by_source"]["bing-rss"], 2)
+        self.assertEqual(snap["raw_results_by_source"]["hn"], 1)
+        self.assertEqual(snap["rejected_by_source"]["bing-rss"], {"no_family": 1})
+        self.assertEqual(snap["rejected_by_query_class"]["explore"], {"no_family": 1})
+
+    def test_disabled_diagnostics_are_noop(self):
+        diag = IngestionDiagnostics(False)
+        diag.add_raw_rows([{"source": "hackernews"}])
+        diag.record_rejection("no_family", "hackernews", "scout")
+        self.assertEqual(diag.snapshot(), {"enabled": False})
+
+
+if __name__ == "__main__":
+    unittest.main()
