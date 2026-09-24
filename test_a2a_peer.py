@@ -29,10 +29,10 @@ class ContractTests(unittest.TestCase):
         card['supportedInterfaces'][0]['protocolBinding']='GRPC'
         with self.assertRaises(ValueError): select_interface(card,CARD_URL)
 
-    def test_same_origin_preserved(self):
+    def test_explicit_cross_origin_interface_is_allowed(self):
         card=copy.deepcopy(V1)
         card['supportedInterfaces'][0]['url']='https://different.example.net/a2a'
-        with self.assertRaises(ValueError): select_interface(card,CARD_URL)
+        self.assertEqual(select_interface(card,CARD_URL),Interface('https://different.example.net/a2a','1.0'))
 
     def test_private_ip_and_http_rejected(self):
         for url in ('https://127.0.0.1/a2a','https://10.0.0.1/a2a','http://peer.example.net/a2a'):
@@ -48,6 +48,16 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(body['method'],'SendMessage')
         self.assertEqual(body['params']['message']['role'],'ROLE_USER')
         self.assertNotIn('kind',body['params']['message']['parts'][0])
+
+    def test_v1_tenant_header(self):
+        _,headers=send_request(Interface(ENDPOINT,'1.0','tenant-a'),'fixture')
+        self.assertEqual(headers['A2A-Tenant'],'tenant-a')
+
+    def test_invalid_tenant_is_rejected_by_interface_selection(self):
+        card=copy.deepcopy(V1)
+        card['supportedInterfaces'][0]['tenant']='x\nunsafe'
+        with self.assertRaises(ValueError):
+            select_interface(card,CARD_URL)
 
     def test_v03_wire_format(self):
         body,headers=send_request(Interface(ENDPOINT,'0.3'),'fixture')
@@ -126,6 +136,7 @@ class NetworkBoundaryTests(unittest.IsolatedAsyncioTestCase):
             row=await peer.resolve_peer({'url':CARD_URL},{'contact_mode':'agent_card'})
         self.assertTrue(row['ok'])
         self.assertEqual(row['interface']['version'],'1.0')
+        self.assertIsNone(row['interface']['tenant'])
 
     async def test_resolution_failure_never_calls_rpc(self):
         request=AsyncMock(return_value={'status':404,'body':{}})
