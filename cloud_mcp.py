@@ -89,7 +89,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.5"  # stable thesis identity across generic-customer planner drift
+VERSION = "0.99.6"  # canonical problem snapshot lookup
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -4560,7 +4560,7 @@ def _problem_snapshot(problem_key: str) -> dict:
             continue
         family=str(row.get("family") or "")
         row_key=canonical_problem_key(family,str(row.get("problem_key") or ""))
-        if row_key!=problem_key:
+        if row_key!=key:
             continue
         if not bool(row.get("gate_eligible")) or not gate_eligible_problem_key(row_key):
             continue
@@ -4574,7 +4574,7 @@ def _problem_snapshot(problem_key: str) -> dict:
             strong.add(domain)
         tags.update(set(row.get("signal_types") or []) - {"DISCONFIRM","COMPETITION"})
     return {
-        "problem_key":problem_key,
+        "problem_key":key,
         "domains":domains,
         "fresh_domains":fresh,
         "strong_domains":strong,

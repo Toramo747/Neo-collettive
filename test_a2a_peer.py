@@ -270,6 +270,31 @@ class PeerQualityIntegrationTests(unittest.TestCase):
         self.assertIn('problem_customer_segment(key)',anthropic)
         self.assertIn('key = canonical_problem_key(family, problem_id)',anthropic)
 
+    def test_problem_snapshot_canonicalizes_input_key(self):
+        source=IntegratedRoutingTests().function('_problem_snapshot')
+        import time
+        from evidence_integrity import canonical_problem_key, gate_eligible_problem_key
+        namespace={
+            "AUTOPILOT_STATE":{
+                "commercial_evidence_memory":[{
+                    "family":"manual_data_entry",
+                    "problem_key":"manual_data_entry:manual_data_entry",
+                    "gate_eligible":True,
+                    "domain":"a.com",
+                    "last_seen_epoch":time.time(),
+                    "strong_markers":[],
+                    "signal_types":["PAIN"],
+                }],
+            },
+            "canonical_problem_key":canonical_problem_key,
+            "gate_eligible_problem_key":gate_eligible_problem_key,
+            "time":time,
+        }
+        exec(source,namespace)
+        snapshot=namespace["_problem_snapshot"]("manual_data_entry:buyers:manual_data_entry")
+        self.assertEqual(snapshot["domains"],{"a.com"})
+        self.assertEqual(snapshot["problem_key"],"manual_data_entry:manual_data_entry")
+
     def test_cloud_requires_multiturn_collaboration_before_admission(self):
         source=IntegratedRoutingTests().function('_seti_interview_one_candidate')
         self.assertIn('collaborative_rounds >= 3',source)
