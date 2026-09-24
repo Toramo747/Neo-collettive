@@ -1,0 +1,37 @@
+name: External proof validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloud_mcp.py"
+      - "neo_policy.json"
+      - "thesis_control.py"
+      - "test_thesis_control.py"
+      - "a2a_peer.py"
+      - "peer_quality.py"
+      - "seti_radar.py"
+      - "tools/peer_candidate_probe.py"
+      - ".github/workflows/peer-candidate-probe.yml"
+      - ".github/workflows/external-proof-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile changed runtime paths
+        run: |
+          python -m py_compile cloud_mcp.py thesis_control.py tools/peer_candidate_probe.py
+
+      - name: Validate policy JSON
+        run: python -m json.tool neo_policy.json >/dev/null
+
+      - name: Run focused regression tests
+        run: |
+          python -m unittest -v             test_thesis_control.py             test_seti_radar.py             test_a2a_peer.py             test_peer_quality.py

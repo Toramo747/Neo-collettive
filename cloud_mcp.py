@@ -25,6 +25,7 @@ from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_co
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
+from thesis_control import exhausted_seed_blocked
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -85,7 +86,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.98.2"  # opportunistic Tiza circuit breaker + registry/Reddit fallback
+VERSION = "0.98.3"  # external-proof focus + exhausted-thesis anti-loop
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -3627,6 +3628,7 @@ DEFAULT_POLICY = {
     "max_exploitation_slots": 2,
     "smoothing_old_weight": 0.65,
     "minimum_observations_for_exploitation": 2,
+    "thesis_exhausted_cooldown_cycles": 12,
     "autonomous_builder_enabled": True,
     "builder_min_readiness": 45,
     "builder_allowed_families": [
@@ -3673,6 +3675,7 @@ def _load_policy() -> dict:
     policy["max_exploitation_slots"] = max(1, min(3, int(policy.get("max_exploitation_slots") or 2)))
     policy["smoothing_old_weight"] = max(0.50, min(0.85, float(policy.get("smoothing_old_weight") or 0.65)))
     policy["minimum_observations_for_exploitation"] = max(1, min(6, int(policy.get("minimum_observations_for_exploitation") or 2)))
+    policy["thesis_exhausted_cooldown_cycles"] = max(4, min(48, int(policy.get("thesis_exhausted_cooldown_cycles") or 12)))
     return policy
 
 
@@ -4215,8 +4218,25 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         if row.get("title"):
             cl["titles"].append(str(row.get("title"))[:180])
 
+    policy=_load_policy()
+    current_cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    thesis_history=list(AUTOPILOT_STATE.get("thesis_history") or [])
+    active_now=AUTOPILOT_STATE.get("active_thesis")
+    active_seed=(
+        str(active_now.get("seed_problem_key") or "")
+        if isinstance(active_now,dict) and str(active_now.get("status") or "").upper()=="ACTIVE"
+        else ""
+    )
+
     ranked=[]
     for key,cl in by_problem.items():
+        if key!=active_seed and exhausted_seed_blocked(
+            thesis_history,
+            key,
+            current_cycle,
+            int(policy["thesis_exhausted_cooldown_cycles"]),
+        ):
+            continue
         purpose="convergence" if gate_eligible_problem_key(key) else "hypothesis"
         if _family_on_cooldown(cl["family"],purpose=purpose,problem_key=key):
             continue
