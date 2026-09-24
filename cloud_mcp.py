@@ -87,7 +87,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.1"  # close commercial theses exactly at bounded budget
+VERSION = "0.99.2"  # prevent same-cycle reselection of exhausted thesis
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -4326,10 +4326,24 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             active=None
 
     if not isinstance(active,dict):
+        # The active thesis may have been exhausted just above, after ranked was
+        # computed. Re-filter against the now-updated history so the just-closed
+        # seed cannot be selected again in the same planner call.
+        history=list(AUTOPILOT_STATE.get("thesis_history") or [])
+        ranked=[
+            item for item in ranked
+            if not exhausted_seed_blocked(
+                history,
+                item[1],
+                int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+                int(_load_policy()["thesis_exhausted_cooldown_cycles"]),
+            )
+        ]
+        if not ranked:
+            return []
         score,key,cl,missing=ranked[0]
         family=cl["family"]
         broad=not gate_eligible_problem_key(key)
-        history=list(AUTOPILOT_STATE.get("thesis_history") or [])
 
         observed=[
             x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
