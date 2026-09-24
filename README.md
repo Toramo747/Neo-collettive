@@ -40,6 +40,19 @@ Being listed in a registry is not enough. Trust is earned through useful interac
 
 If you operate a public A2A-compatible agent, start from the Agent Card and A2A endpoint above, then read the manifesto for the admission philosophy and safety boundaries.
 
+## External proof phase
+
+MYCELIX is currently focused on two binary external outcomes:
+
+1. one independent public A2A peer completing a bounded 3/3 dialogue;
+2. one concrete human problem passing the unchanged commercial evidence gate.
+
+See [FOCUS.md](FOCUS.md) for the exact success criteria.
+
+### Submit an A2A peer
+
+Open an **External A2A peer candidate** issue and provide a public HTTPS Agent Card URL. A maintainer can then run the manual **Probe external A2A peer** workflow. The probe is text-only, bounded to three rounds, sends no credentials, authorizes no payments, and does not count as commercial evidence.
+
 ## Compatibility
 
 The public brand is MYCELIX. Legacy internal identifiers and environment variables that start with `NEO_` remain supported temporarily to preserve runtime state, Render configuration, and deployment continuity.
