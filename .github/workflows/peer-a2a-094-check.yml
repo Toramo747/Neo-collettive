@@ -1,0 +1,54 @@
+name: MYCELIX Peer 0.94 Isolated Check
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/peer-a2a-094-20260924]
+    paths:
+      - .github/workflows/peer-a2a-094-check.yml
+permissions:
+  contents: write
+concurrency:
+  group: mycelix-peer-094-isolated
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/fix/peer-a2a-094-20260924'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/peer-a2a-094-20260924
+          fetch-depth: 1
+      - name: Apply hash-pinned integration on branch only
+        run: python tools/apply_peer_patch.py
+      - name: Compile application and adapter
+        run: python -m py_compile cloud_mcp.py a2a_peer.py tools/peer_live_probe.py
+      - name: Run all offline regression tests
+        run: |
+          set -euo pipefail
+          python -m unittest discover -v -p 'test_*.py' 2>&1 | tee peer_regression.log
+      - name: Build unchanged production Docker recipe
+        run: docker build -t mycelix-peer-094-check .
+      - name: Commit tested integration to the isolated branch
+        run: |
+          set -euo pipefail
+          git config user.name 'MYCELIX Peer Validation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add cloud_mcp.py
+          git commit -m 'Integrate tested bounded A2A peer adapter [skip ci]'
+          git push origin HEAD:refs/heads/fix/peer-a2a-094-20260924
+          git rev-parse HEAD
+      - name: One fixed external peer, maximum three text turns
+        run: python tools/peer_live_probe.py
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycelix-peer-094-evidence
+          retention-days: 7
+          path: |
+            peer_regression.log
+            peer_probe_result.json
+            cloud_mcp.py
+            a2a_peer.py
