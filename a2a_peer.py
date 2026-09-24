@@ -23,6 +23,7 @@ from uuid import uuid4
 class Interface:
     url: str
     version: str
+    tenant: str | None = None
 
 
 def protocol_version(value: Any) -> str:
@@ -56,7 +57,7 @@ def select_interface(card: dict, card_url: str) -> Interface:
     """
     if not isinstance(card, dict):
         raise ValueError("invalid_card")
-    origin = _origin(card_url)
+    _origin(card_url)
     if card.get("securityRequirements") or card.get("security"):
         raise ValueError("AUTH_REQUIRED")
     if "supportedInterfaces" in card:
@@ -74,18 +75,22 @@ def select_interface(card: dict, card_url: str) -> Interface:
                              "protocolBinding": row.get("transport"),
                              "protocolVersion": version})
     for row in rows[:16]:
-        if not isinstance(row, dict) or row.get("protocolBinding") != "JSONRPC":
+        if not isinstance(row, dict) or str(row.get("protocolBinding") or "").upper() != "JSONRPC":
             continue
         try:
             url = str(row.get("url") or "")
             version = protocol_version(row.get("protocolVersion"))
-            if _origin(url) != origin:
-                continue
+            _origin(url)
             if urlparse(url).path.endswith(("agent-card.json", "agent.json")):
                 continue
+            tenant = row.get("tenant")
+            if tenant is not None:
+                tenant = str(tenant).strip()
+                if not tenant or len(tenant) > 256 or any(ord(c) < 32 for c in tenant):
+                    continue
         except ValueError:
             continue
-        return Interface(url, version)
+        return Interface(url, version, tenant)
     raise ValueError("no_safe_supported_jsonrpc_interface")
 
 
@@ -114,6 +119,8 @@ def send_request(interface: Interface, text: str, *, context_id: str | None = No
                "params": {"message": message}}
     headers = {"A2A-Version": version, "Content-Type": "application/json",
                "Accept": "application/json"}
+    if version == "1.0" and interface.tenant:
+        headers["A2A-Tenant"] = interface.tenant
     return payload, headers
 
 
@@ -307,7 +314,7 @@ async def resolve_peer(candidate: dict, eligibility: dict, budget: RequestBudget
         else:
             raise ValueError("unsupported_contact_mode")
         return {"ok": True, "endpoint": interface.url, "mode": mode,
-                "interface": {"url": interface.url, "version": interface.version},
+                "interface": {"url": interface.url, "version": interface.version, "tenant": interface.tenant},
                 "card": {"name": str(card.get("name") or "")[:180], "protocolVersion": interface.version}}
     except (ValueError, TypeError) as exc:
         return {"ok": False, "reason": str(exc)[:160], "post_started": False}
@@ -321,7 +328,11 @@ async def exchange_peer(interface: Interface, question: str, prior: dict | None 
             "http_response_received": False, "peer_context": {}, "delivery_unknown": False}
     try:
         _origin(interface.url)
-        same = prior.get("endpoint") == interface.url and prior.get("protocol_version") == interface.version
+        same = (
+            prior.get("endpoint") == interface.url
+            and prior.get("protocol_version") == interface.version
+            and prior.get("tenant") == interface.tenant
+        )
         context_id = prior.get("context_id") if same and _valid_id(prior.get("context_id")) else None
         task_id = prior.get("task_id") if same and _valid_id(prior.get("task_id")) else None
         state = prior.get("state") if same else None
@@ -359,6 +370,7 @@ async def exchange_peer(interface: Interface, question: str, prior: dict | None 
         base.update(protocol_ok=parsed["protocol_ok"], peer_state=parsed["state"], response={"text": parsed["text"]})
         if parsed["protocol_ok"] or parsed["state"] in {"AUTH_REQUIRED", "PAYMENT_REQUIRED"}:
             base["peer_context"] = {"endpoint": interface.url, "protocol_version": interface.version,
+                                    "tenant": interface.tenant,
                                     "context_id": parsed.get("context_id") or context_id,
                                     "task_id": parsed.get("task_id"), "state": parsed["state"]}
         base["ok"] = parsed["protocol_ok"] and parsed["state"] in {"MESSAGE", "COMPLETED", "INPUT_REQUIRED"}

@@ -1,0 +1,21 @@
+name: MYCELIX A2A 0.95 Isolated Check
+on:
+  push:
+    branches: [fix/a2a-095-cross-origin-tenant]
+permissions:
+  contents: read
+concurrency:
+  group: mycelix-a2a-095-isolated
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python -m py_compile cloud_mcp.py a2a_peer.py
+      - name: Full regression
+        run: python -m unittest discover -v -p 'test_*.py'
+      - name: Docker build
+        run: docker build -t mycelix-a2a-095-check .
