@@ -25,7 +25,7 @@ from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_co
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
-from thesis_control import exhausted_seed_blocked
+from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 
 from seti_radar import (
@@ -87,7 +87,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.0"  # outcome-driven control plane with specialized agents
+VERSION = "0.99.1"  # close commercial theses exactly at bounded budget
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -9441,6 +9441,21 @@ async def _autopilot_cycle() -> None:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
+
+            quality=result.get("evidence_quality") if isinstance(result.get("evidence_quality"),dict) else {}
+            finalized=finalize_exhausted_thesis(
+                AUTOPILOT_STATE.get("active_thesis"),
+                quality_gate=bool(quality.get("quality_gate")),
+                closed_at_cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+            )
+            if finalized.get("closed"):
+                finished=finalized.get("finished")
+                history=list(AUTOPILOT_STATE.get("thesis_history") or [])
+                if isinstance(finished,dict):
+                    history.append(finished)
+                AUTOPILOT_STATE["thesis_history"]=history[-30:]
+                AUTOPILOT_STATE["active_thesis"]=None
+
             await _seti_cycle_if_due()
             council=outcome_council(
                 result=result,
