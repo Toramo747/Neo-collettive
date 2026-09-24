@@ -990,7 +990,7 @@ def seti_retry_ready(previous: dict | None, now_utc: str, min_seconds: int = 360
     previous=previous if isinstance(previous,dict) else {}
     if not previous:
         return True
-    if seti_followup_state(previous) in {"COMPLETE","EXHAUSTED"}:
+    if seti_followup_state(previous) in {"COMPLETE","EXHAUSTED","AUTH_BLOCKED"}:
         return False
     last=str(previous.get("last_attempt_utc") or previous.get("interviewed_at_utc") or "").strip()
     if not last:
