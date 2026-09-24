@@ -35,6 +35,8 @@ from seti_radar import (
     registry_agent_candidate,
     reddit_public_rows,
     tiza_search_candidates,
+    opportunistic_source_ready,
+    update_opportunistic_source_state,
     seti_dialogue_round,
     seti_followup_state,
     seti_progressive_interview_prompt,
@@ -83,7 +85,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.98.1"  # Tiza via official MCP client; Reddit/Tiza discovery lanes
+VERSION = "0.98.2"  # opportunistic Tiza circuit breaker + registry/Reddit fallback
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -118,6 +120,8 @@ SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","t
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
 SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))))
 SETI_FOLLOWUP_MIN_SECONDS = max(900, min(86400, int(os.getenv("NEO_SETI_FOLLOWUP_MIN_SECONDS", "3600"))))
+TIZA_DISCOVERY_TIMEOUT_SECONDS = max(5.0, min(20.0, float(os.getenv("NEO_TIZA_DISCOVERY_TIMEOUT_SECONDS", "12"))))
+TIZA_BACKOFF_MAX_CYCLES = max(SETI_EVERY_CYCLES, min(96, int(os.getenv("NEO_TIZA_BACKOFF_MAX_CYCLES", "48"))))
 AUTOPILOT_GOAL = os.getenv(
     "NEO_AUTOPILOT_GOAL",
     "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
@@ -5723,7 +5727,47 @@ async def _seti_tiza_candidate_batch(limit: int = 12) -> dict:
         "candidate_count":len(rows[:limit]),
         "source_counts":{"tiza-mcp":len(rows[:limit])} if rows else {},
         "errors":errors[:8],
+        "attempted":True,
     }
+
+
+async def _seti_tiza_opportunistic(state: dict, current_cycle: int, limit: int) -> dict:
+    """Use Tiza only when its circuit breaker permits an attempt."""
+    health=(state or {}).get("tiza_health") if isinstance(state,dict) else {}
+    if not opportunistic_source_ready(health,current_cycle):
+        return {
+            "candidates":[],
+            "candidate_count":0,
+            "source_counts":{},
+            "errors":[],
+            "attempted":False,
+            "skipped":True,
+            "skip_reason":"circuit_backoff",
+            "next_retry_cycle":int((health or {}).get("next_retry_cycle") or 0),
+        }
+    try:
+        return await asyncio.wait_for(
+            _seti_tiza_candidate_batch(limit=limit),
+            timeout=TIZA_DISCOVERY_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return {
+            "candidates":[],
+            "candidate_count":0,
+            "source_counts":{},
+            "errors":[{"source":"tiza-mcp","error":"discovery_timeout"}],
+            "attempted":True,
+            "skipped":False,
+        }
+    except Exception as e:
+        return {
+            "candidates":[],
+            "candidate_count":0,
+            "source_counts":{},
+            "errors":[{"source":"tiza-mcp","error":type(e).__name__+": "+str(e)[:180]}],
+            "attempted":True,
+            "skipped":False,
+        }
 
 
 async def seti_public_search(query: str, limit: int = 6) -> dict:
@@ -9169,7 +9213,14 @@ async def _seti_cycle_if_due() -> dict | None:
         )
         registry_batch,tiza_batch=await asyncio.gather(
             _seti_registry_candidate_batch(limit=max(8,SETI_RESULT_LIMIT)),
-            _seti_tiza_candidate_batch(limit=max(8,SETI_RESULT_LIMIT)),
+            _seti_tiza_opportunistic(state,cycles,limit=max(8,SETI_RESULT_LIMIT)),
+        )
+        tiza_health=update_opportunistic_source_state(
+            state.get("tiza_health") or {},
+            tiza_batch,
+            cycles,
+            base_backoff_cycles=SETI_EVERY_CYCLES,
+            max_backoff_cycles=TIZA_BACKOFF_MAX_CYCLES,
         )
         memory,enriched=merge_signal_memory(state.get("signal_memory") or {},scan,max_entries=80)
         private_inputs=(
@@ -9210,6 +9261,7 @@ async def _seti_cycle_if_due() -> dict | None:
             "bounded_research_only":True,
             "commercial_actions":False,
             "tool_execution_requested":False,
+            "discovery_index_tool_called":bool(tiza_batch.get("attempted")),
         }
 
         interesting=[x for x in enriched if x.get("classification") in {"INTERESTING","HIGH_INTEREST"}]
@@ -9222,6 +9274,7 @@ async def _seti_cycle_if_due() -> dict | None:
             "last_scan_utc":scan.get("scanned_at_utc"),
             "last_error":None,
             "signal_memory":memory,
+            "tiza_health":tiza_health,
             "private_candidate_count":private_summary.get("private_candidates",0),
             "private_high_interest":private_summary.get("private_high_interest",0),
             "private_interesting":private_summary.get("private_interesting",0),
@@ -9260,6 +9313,11 @@ async def _seti_cycle_if_due() -> dict | None:
                 "tiza_candidates":tiza_batch.get("candidate_count",0),
                 "tiza_candidate_sources":tiza_batch.get("source_counts") or {},
                 "tiza_candidate_errors":len(tiza_batch.get("errors") or []),
+                "tiza_attempted":bool(tiza_batch.get("attempted")),
+                "tiza_skipped":bool(tiza_batch.get("skipped")),
+                "tiza_status":str(tiza_health.get("status") or "unknown"),
+                "tiza_consecutive_failures":int(tiza_health.get("consecutive_failures") or 0),
+                "tiza_next_retry_cycle":int(tiza_health.get("next_retry_cycle") or 0),
                 "tiza_error_samples":[
                     {
                         "error":str(x.get("error") or "")[:220],

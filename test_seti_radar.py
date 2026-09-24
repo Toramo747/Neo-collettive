@@ -22,6 +22,8 @@ from seti_radar import (
     registry_agent_candidate,
     reddit_public_rows,
     tiza_search_candidates,
+    opportunistic_source_ready,
+    update_opportunistic_source_state,
     score_public_result,
 )
 
@@ -190,6 +192,67 @@ class SetiRadarTests(unittest.TestCase):
             "url":"https://tiza.cc/entities/example",
         }]}
         self.assertEqual(tiza_search_candidates(payload),[])
+
+    def test_optional_source_backoff_is_exponential_and_bounded(self):
+        first=update_opportunistic_source_state(
+            {},
+            {"candidate_count":0,"errors":[{"error":"timeout"}],"attempted":True},
+            100,
+            base_backoff_cycles=6,
+            max_backoff_cycles=48,
+        )
+        self.assertEqual(first["consecutive_failures"],1)
+        self.assertEqual(first["next_retry_cycle"],106)
+        self.assertFalse(opportunistic_source_ready(first,105))
+        self.assertTrue(opportunistic_source_ready(first,106))
+
+        second=update_opportunistic_source_state(
+            first,
+            {"candidate_count":0,"errors":[{"error":"timeout"}],"attempted":True},
+            106,
+            base_backoff_cycles=6,
+            max_backoff_cycles=48,
+        )
+        self.assertEqual(second["consecutive_failures"],2)
+        self.assertEqual(second["next_retry_cycle"],118)
+
+        later=second
+        cycle=118
+        for _ in range(5):
+            later=update_opportunistic_source_state(
+                later,
+                {"candidate_count":0,"errors":[{"error":"down"}],"attempted":True},
+                cycle,
+                base_backoff_cycles=6,
+                max_backoff_cycles=48,
+            )
+            cycle=later["next_retry_cycle"]
+        self.assertLessEqual(later["next_retry_cycle"]-later["last_attempt_cycle"],48)
+
+    def test_optional_source_success_resets_circuit(self):
+        failed={"consecutive_failures":3,"next_retry_cycle":150,"status":"backoff"}
+        healthy=update_opportunistic_source_state(
+            failed,
+            {"candidate_count":2,"errors":[],"attempted":True},
+            150,
+            base_backoff_cycles=6,
+            max_backoff_cycles=48,
+        )
+        self.assertEqual(healthy["consecutive_failures"],0)
+        self.assertEqual(healthy["status"],"available")
+        self.assertTrue(opportunistic_source_ready(healthy,150))
+
+    def test_optional_source_skip_preserves_failure_count(self):
+        prev={"consecutive_failures":2,"next_retry_cycle":120,"status":"backoff"}
+        skipped=update_opportunistic_source_state(
+            prev,
+            {"skipped":True,"attempted":False},
+            110,
+            base_backoff_cycles=6,
+            max_backoff_cycles=48,
+        )
+        self.assertEqual(skipped["consecutive_failures"],2)
+        self.assertEqual(skipped["next_retry_cycle"],120)
 
     def test_interview_gate_requires_repeat_and_explicit_endpoint(self):
         base={

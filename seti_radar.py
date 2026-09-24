@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable
 from peer_quality import BLOCKED_PEER_CLASSES
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 13
+SETI_ENGINE_VERSION = 14
 
 DEFAULT_PASSIVE_QUERIES = [
     'site:reddit.com/r/AI_Agents "A2A" "agent card" "endpoint"',
@@ -97,6 +97,66 @@ def _clean_text(value: Any) -> str:
     text=re.sub(r"<[^>]+>", " ", text)
     text=re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def opportunistic_source_ready(state: dict | None, current_cycle: int) -> bool:
+    """Return whether an optional discovery source may be attempted this cycle."""
+    row=state if isinstance(state,dict) else {}
+    return int(current_cycle or 0) >= max(0,int(row.get("next_retry_cycle") or 0))
+
+
+def update_opportunistic_source_state(
+    previous: dict | None,
+    batch: dict | None,
+    current_cycle: int,
+    base_backoff_cycles: int = 6,
+    max_backoff_cycles: int = 48,
+) -> dict:
+    """Track a discovery-only source without letting outages block the main radar."""
+    prev=dict(previous) if isinstance(previous,dict) else {}
+    data=dict(batch) if isinstance(batch,dict) else {}
+    cycle=max(0,int(current_cycle or 0))
+    if data.get("skipped"):
+        prev.update({
+            "status":"backoff",
+            "last_skip_cycle":cycle,
+        })
+        return prev
+
+    attempted=bool(data.get("attempted",True))
+    if not attempted:
+        return prev
+
+    candidates=max(0,int(data.get("candidate_count") or 0))
+    errors=[x for x in (data.get("errors") or []) if isinstance(x,dict)]
+    now=_utcnow()
+    if candidates>0 or not errors:
+        return {
+            "status":"available" if candidates>0 else "available_no_results",
+            "consecutive_failures":0,
+            "next_retry_cycle":cycle,
+            "last_attempt_cycle":cycle,
+            "last_attempt_utc":now,
+            "last_success_utc":now,
+            "last_candidate_count":candidates,
+            "last_error":"",
+        }
+
+    failures=max(0,int(prev.get("consecutive_failures") or 0))+1
+    base=max(1,int(base_backoff_cycles or 1))
+    cap=max(base,int(max_backoff_cycles or base))
+    delay=min(cap,base*(2**min(failures-1,6)))
+    first=errors[0]
+    return {
+        "status":"backoff",
+        "consecutive_failures":failures,
+        "next_retry_cycle":cycle+delay,
+        "last_attempt_cycle":cycle,
+        "last_attempt_utc":now,
+        "last_success_utc":str(prev.get("last_success_utc") or ""),
+        "last_candidate_count":0,
+        "last_error":str(first.get("error") or "source_error")[:220],
+    }
 
 
 def reddit_public_rows(data: Any, source: str = "reddit-public-json", limit: int = 8) -> list[dict]:
