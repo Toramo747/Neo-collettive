@@ -260,6 +260,16 @@ class PeerQualityIntegrationTests(unittest.TestCase):
         self.assertIn('current_rank=active_rank',source)
         self.assertIn('current_rank=item[0]',source)
 
+    def test_cloud_uses_stable_problem_identity_for_planner_queries(self):
+        convergence=IntegratedRoutingTests().function('_convergence_search_queries')
+        breakout=IntegratedRoutingTests().function('_stagnation_breakout_queries')
+        anthropic=IntegratedRoutingTests().function('_anthropic_convergence_queries')
+        self.assertIn('problem_job_tail(key)',convergence)
+        self.assertIn('problem_job_tail(problem_key)',breakout)
+        self.assertIn('problem_job_tail(key)',anthropic)
+        self.assertIn('problem_customer_segment(key)',anthropic)
+        self.assertIn('key = canonical_problem_key(family, problem_id)',anthropic)
+
     def test_cloud_requires_multiturn_collaboration_before_admission(self):
         source=IntegratedRoutingTests().function('_seti_interview_one_candidate')
         self.assertIn('collaborative_rounds >= 3',source)
