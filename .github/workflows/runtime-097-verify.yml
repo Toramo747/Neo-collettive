@@ -1,0 +1,43 @@
+name: MYCELIX v0.97 Runtime Readonly Verify
+on:
+  push:
+    branches: [verify/runtime-097]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch runtime
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://neo-collettive.onrender.com/api/autopilot/status > /tmp/status.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/status.json'))
+          a=d.get('autopilot') or {}
+          print(json.dumps({
+            'neo_version':d.get('neo_version'),
+            'cycles_completed':a.get('cycles_completed'),
+            'running':a.get('running'),
+            'last_status':a.get('last_status'),
+            'last_error':a.get('last_error'),
+            'last_started_utc':a.get('last_started_utc'),
+            'last_finished_utc':a.get('last_finished_utc'),
+            'seti':a.get('seti'),
+          },ensure_ascii=False,indent=2))
+          PY
+      - name: Fetch sanitized interviews
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://neo-collettive.onrender.com/api/seti/interviews > /tmp/interviews.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/interviews.json'))
+          rows=d.get('interviews') or []
+          print(json.dumps({
+            'neo_version':d.get('neo_version'),
+            'latest':rows[:8],
+          },ensure_ascii=False,indent=2))
+          PY
