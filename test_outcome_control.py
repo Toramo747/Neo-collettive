@@ -49,6 +49,20 @@ class OutcomeCouncilTests(unittest.TestCase):
         )
         self.assertIn("THESIS_REJECTED_WITHIN_BUDGET",report["wins"])
 
+    def test_over_budget_exhaustion_is_not_counted_as_success(self):
+        report=outcome_council(
+            result={"quality_gate":False},
+            seti={},
+            inbound_stats={},
+            active_thesis={"thesis_id":"new","budget_cycles":4,"cycles_used":1},
+            thesis_history=[{
+                "thesis_id":"old","status":"EXHAUSTED","closed_at_cycle":9,
+                "budget_cycles":4,"cycles_used":5,
+            }],
+            cycle=10,
+        )
+        self.assertNotIn("THESIS_REJECTED_WITHIN_BUDGET",report["wins"])
+
     def test_activity_alone_is_not_result(self):
         report=outcome_council(
             result={"quality_gate":False},
