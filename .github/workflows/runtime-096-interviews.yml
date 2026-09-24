@@ -1,0 +1,20 @@
+name: MYCELIX v0.96 Interview Transcript Readonly
+on:
+  push:
+    branches: [verify/runtime-096]
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Fetch sanitized SETI interviews
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://neo-collettive.onrender.com/api/seti/interviews > /tmp/interviews.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/interviews.json'))
+          print(json.dumps(d,ensure_ascii=False,indent=2))
+          PY
