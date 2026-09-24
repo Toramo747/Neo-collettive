@@ -7,6 +7,8 @@ on:
       - "cloud_mcp.py"
       - "neo_policy.json"
       - "thesis_control.py"
+      - "outcome_control.py"
+      - "test_outcome_control.py"
       - "test_thesis_control.py"
       - "a2a_peer.py"
       - "peer_quality.py"
@@ -27,7 +29,7 @@ jobs:
 
       - name: Compile changed runtime paths
         run: |
-          python -m py_compile cloud_mcp.py thesis_control.py tools/peer_candidate_probe.py
+          python -m py_compile cloud_mcp.py thesis_control.py outcome_control.py tools/peer_candidate_probe.py
 
       - name: Validate policy JSON
         run: python -m json.tool neo_policy.json >/dev/null

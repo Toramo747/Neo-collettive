@@ -26,6 +26,7 @@ from venture_measurement import complete_observed_measurement, measurement_summa
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked
+from outcome_control import outcome_council
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -86,7 +87,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.98.5"  # exhausted-thesis cooldown covers convergence slots
+VERSION = "0.99.0"  # outcome-driven control plane with specialized agents
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -125,9 +126,9 @@ TIZA_DISCOVERY_TIMEOUT_SECONDS = max(5.0, min(20.0, float(os.getenv("NEO_TIZA_DI
 TIZA_BACKOFF_MAX_CYCLES = max(SETI_EVERY_CYCLES, min(96, int(os.getenv("NEO_TIZA_BACKOFF_MAX_CYCLES", "48"))))
 AUTOPILOT_GOAL = os.getenv(
     "NEO_AUTOPILOT_GOAL",
-    "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
-    "con investimento iniziale minimo. Coordina Jarvis, agenti ed evidence scouts. Privilegia domanda pagante verificabile, "
-    "costi fissi bassi e automazione. Procedi solo con esperimenti reversibili a costo zero/minimo. "
+    "Produci risultati esterni verificabili, non semplice attivita interna. Priorita 1: completa un dialogo 3/3 con almeno un peer A2A pubblico indipendente. "
+    "Priorita 2: su una sola tesi commerciale concreta, supera il gate invariato di domanda pagante oppure scartala entro il budget di 4 cicli e cambia problema. "
+    "Coordina Jarvis, Peer Closer, Market Closer, Outcome Auditor, agenti ed evidence scouts. Non considerare versioni, scan, candidati o build come risultati. "
     "Non effettuare spese, pagamenti, contratti, outreach commerciale, uso di account personali o transazioni senza approvazione umana."
 )
 AUTOPILOT_LOCK = asyncio.Lock()
@@ -266,6 +267,19 @@ AUTOPILOT_STATE: dict[str, Any] = {
         "observed_improved_total": 0,
     },
     "venture_measurements": [],
+    "outcome_control": {
+        "schema_v":1,
+        "cycle":0,
+        "mode":"external_results_only",
+        "wins":[],
+        "new_wins":[],
+        "result_count":0,
+        "agents":{},
+        "overall_status":"WORKING",
+        "feature_freeze":True,
+        "rule":"A version, scan, candidate, build, or internal score is not a result by itself.",
+    },
+    "outcome_history": [],
     "seti": {
         "enabled": SETI_ENABLED,
         "mode": "passive",
@@ -320,6 +334,8 @@ def _state_payload() -> dict:
         "jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
         "venture_measurements": list(AUTOPILOT_STATE.get("venture_measurements") or [])[-50:],
+        "outcome_control": AUTOPILOT_STATE.get("outcome_control") or {},
+        "outcome_history": list(AUTOPILOT_STATE.get("outcome_history") or [])[-40:],
         "seti": AUTOPILOT_STATE.get("seti") or {},
     }
 
@@ -441,6 +457,12 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(payload.get("venture_measurements"), list):
         AUTOPILOT_STATE["venture_measurements"] = [
             x for x in payload.get("venture_measurements")[-50:] if isinstance(x,dict)
+        ]
+    if isinstance(payload.get("outcome_control"), dict):
+        AUTOPILOT_STATE["outcome_control"] = payload.get("outcome_control") or {}
+    if isinstance(payload.get("outcome_history"), list):
+        AUTOPILOT_STATE["outcome_history"] = [
+            x for x in payload.get("outcome_history")[-40:] if isinstance(x,dict)
         ]
     if isinstance(payload.get("seti"), dict):
         restored=dict(payload.get("seti") or {})
@@ -9079,7 +9101,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             and answer.get("quality_ok")
             and quality.get("accepted")
             and peer_quality.get("peer_class")=="COLLABORATIVE"
-            and collaborative_rounds>=2
+            and collaborative_rounds>=3
             and peer_quality.get("falsifiable_test")
         )
         status="ADMITTED" if accepted else "PARKED"
@@ -9420,6 +9442,26 @@ async def _autopilot_cycle() -> None:
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
             await _seti_cycle_if_due()
+            council=outcome_council(
+                result=result,
+                seti=AUTOPILOT_STATE.get("seti") or {},
+                inbound_stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+                active_thesis=AUTOPILOT_STATE.get("active_thesis"),
+                thesis_history=AUTOPILOT_STATE.get("thesis_history") or [],
+                cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+                previous=AUTOPILOT_STATE.get("outcome_control") or {},
+            )
+            AUTOPILOT_STATE["outcome_control"]=council
+            outcome_history=list(AUTOPILOT_STATE.get("outcome_history") or [])
+            outcome_history.append({
+                "cycle":council.get("cycle"),
+                "overall_status":council.get("overall_status"),
+                "wins":council.get("wins") or [],
+                "new_wins":council.get("new_wins") or [],
+                "peer_status":((council.get("agents") or {}).get("peer_closer") or {}).get("status"),
+                "market_status":((council.get("agents") or {}).get("market_closer") or {}).get("status"),
+            })
+            AUTOPILOT_STATE["outcome_history"]=outcome_history[-40:]
             AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
             completed=True
             _save_local_state()
@@ -9437,6 +9479,16 @@ async def _autopilot_loop() -> None:
     while True:
         await _autopilot_cycle()
         await asyncio.sleep(AUTOPILOT_INTERVAL_SECONDS)
+
+
+async def api_outcomes(request: Request):
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "outcome_control":AUTOPILOT_STATE.get("outcome_control") or {},
+        "history":list(AUTOPILOT_STATE.get("outcome_history") or [])[-20:],
+        "guardrail":"No outcome agent can bypass commercial evidence, peer trust, spending, payment, contract, outreach or publishing controls.",
+    })
 
 
 async def api_autopilot_status(request: Request):
@@ -9861,6 +9913,7 @@ app = Starlette(
         Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/render/diagnostics", api_render_diagnostics, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
+        Route("/api/outcomes", api_outcomes, methods=["GET"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
