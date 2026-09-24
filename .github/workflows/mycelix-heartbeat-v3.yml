@@ -251,6 +251,8 @@ jobs:
                   "problem_cooldowns": ap.get("problem_cooldowns") or {},
                   "query_execution": ap.get("query_execution") or {},
                   "venture_metrics": ap.get("venture_metrics") or {},
+                  "outcome_control": ap.get("outcome_control") or {},
+                  "outcome_history": list(ap.get("outcome_history") or [])[-20:],
                   "seti": {
                       "enabled": (ap.get("seti") or {}).get("enabled"),
                       "mode": (ap.get("seti") or {}).get("mode"),
