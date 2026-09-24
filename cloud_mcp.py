@@ -86,7 +86,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.98.4"  # semantic exhausted-thesis anti-loop
+VERSION = "0.98.5"  # exhausted-thesis cooldown covers convergence slots
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -4114,8 +4114,19 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
             continue
         candidates[key]=family
 
+    policy=_load_policy()
+    current_cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    thesis_history=list(AUTOPILOT_STATE.get("thesis_history") or [])
+
     ranked=[]
     for key,family in candidates.items():
+        if exhausted_seed_blocked(
+            thesis_history,
+            key,
+            current_cycle,
+            int(policy["thesis_exhausted_cooldown_cycles"]),
+        ):
+            continue
         snap=_problem_snapshot(key)
         d=len(snap["domains"])
         fresh=len(snap["fresh_domains"])
