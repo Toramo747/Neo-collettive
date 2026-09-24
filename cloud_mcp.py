@@ -72,6 +72,8 @@ from evidence_integrity import (
     make_problem_id,
     make_thesis_id,
     migrate_evidence_memory,
+    problem_customer_segment,
+    problem_job_tail,
     structured_paid_source,
     thesis_attributed_problem_key,
 )
@@ -87,7 +89,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.4"  # reopen exhausted thesis only after measurable evidence progress
+VERSION = "0.99.5"  # stable thesis identity across generic-customer planner drift
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -4172,7 +4174,7 @@ def _convergence_search_queries(limit: int = 3) -> list[dict]:
     out=[]
     seen=set()
     for pos,(rank,key,family,snap,missing) in enumerate(ranked[:3]):
-        marker=key.split(":",1)[-1].replace("_"," ")
+        marker=problem_job_tail(key).replace("_"," ")
         exclusions=" ".join("-site:"+d for d in sorted(snap["domains"]) if d)[:500]
         patterns=[]
         if "independent_domains" in missing or "fresh_independent_domains" in missing:
@@ -4420,9 +4422,10 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         if not h:
             hypotheses=_human_problem_hypotheses(family,key) if broad else []
             if not hypotheses:
-                term=key.split(":",1)[-1].replace("_"," ")
+                term=problem_job_tail(key).replace("_"," ")
+                customer=problem_customer_segment(key).replace("_"," ") or "buyers"
                 hypotheses=[{
-                    "customer":"buyers",
+                    "customer":customer,
                     "job":term,
                     "pain":f"manual or costly work around {term}",
                     "term":term,
@@ -4432,6 +4435,8 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
 
         problem_id=make_problem_id(family,h["customer"],h["job"])
         thesis_id=make_thesis_id(family,h["customer"],h["job"],h["pain"])
+        if not broad:
+            key=canonical_problem_key(family,problem_id)
         active={
             "thesis_id":thesis_id,
             "problem_id":problem_id,
@@ -4532,7 +4537,7 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
     ranked = sorted(by_problem.items(), key=lambda kv: (-(len(kv[1]["domains"])*20),kv[0]))
     out=[]
     for problem_key,cl in ranked[:2]:
-        marker=problem_key.split(":",1)[-1].replace("_"," ")
+        marker=problem_job_tail(problem_key).replace("_"," ")
         for q in [
             f'site:reddit.com "{marker}" "need help"',
             f'site:upwork.com "{marker}" automation OR consultant',
