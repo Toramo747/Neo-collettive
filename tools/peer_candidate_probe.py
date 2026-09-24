@@ -13,6 +13,7 @@ from pathlib import Path
 
 import a2a_peer as peer
 from peer_quality import classify_peer_response
+from seti_radar import interview_response_score
 
 
 QUESTIONS=[
@@ -68,13 +69,15 @@ async def run(card_url: str) -> dict:
     for index,question in enumerate(QUESTIONS,1):
         answer=await peer.exchange_peer(interface,question,context,budget)
         text=str((answer.get("response") or {}).get("text") or "")
+        scored=interview_response_score(text)
         classification=classify_peer_response(
             text,
             peer_state=answer.get("peer_state"),
             protocol_ok=bool(answer.get("protocol_ok")),
             quality_ok=bool(answer.get("quality_ok")),
-            markers={},
+            markers=scored.get("markers") or {},
         )
+        classification["interview_score"]=int(scored.get("score") or 0)
         if classification.get("peer_class")=="COLLABORATIVE":
             collaborative += 1
         report["turns"].append({
