@@ -160,13 +160,51 @@ def demand_signal_type(title: str, body: str, query_role: str = "") -> list[str]
     return tags
 
 
+GENERIC_CUSTOMER_SEGMENTS = {"buyers"}
+
+
 def problem_tail(problem_key: str) -> str:
     return str(problem_key or "").split(":", 1)[-1].strip().lower()
 
 
+def _strip_generic_customer(problem_key: str) -> str:
+    """Remove planner-only customer placeholders from a concrete problem identity."""
+    key=str(problem_key or "").strip()
+    parts=key.split(":")
+    if len(parts)<3 or parts[1].strip().lower() not in GENERIC_CUSTOMER_SEGMENTS:
+        return key
+    family=parts[0]
+    job=":".join(parts[2:]).strip()
+    while job.lower().startswith("buyers_"):
+        remainder=job[len("buyers_"):]
+        if not remainder:
+            break
+        job=remainder
+    return family+":"+job if job else key
+
+
+def problem_job_tail(problem_key: str) -> str:
+    """Return only the job portion, never a customer:job composite."""
+    key=_strip_generic_customer(problem_key)
+    parts=key.split(":")
+    if len(parts)>=3:
+        return ":".join(parts[2:]).strip().lower()
+    return problem_tail(key)
+
+
+def problem_customer_segment(problem_key: str) -> str:
+    """Return a real customer segment from family:customer:job, never a generic placeholder."""
+    key=_strip_generic_customer(problem_key)
+    parts=key.split(":")
+    if len(parts)<3:
+        return ""
+    customer=parts[1].strip().lower()
+    return "" if customer in GENERIC_CUSTOMER_SEGMENTS else customer
+
+
 def canonical_problem_key(family: str, problem_key: str) -> str:
     family = str(family or "").strip()
-    key = str(problem_key or "").strip()
+    key = _strip_generic_customer(str(problem_key or "").strip())
     tail = problem_tail(key)
     if not family:
         return key
