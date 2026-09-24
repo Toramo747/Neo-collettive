@@ -244,6 +244,11 @@ if __name__=='__main__':
 
 
 class PeerQualityIntegrationTests(unittest.TestCase):
+    def test_cloud_discards_restored_active_exhausted_seed(self):
+        source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
+        self.assertGreaterEqual(source.count('exhausted_seed_blocked'),3)
+        self.assertIn("AUTOPILOT_STATE['active_thesis'] = None",source)
+
     def test_cloud_refilters_ranked_after_thesis_exhaustion(self):
         source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
         self.assertGreaterEqual(source.count('exhausted_seed_blocked'),2)
