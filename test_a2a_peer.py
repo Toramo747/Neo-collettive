@@ -244,6 +244,10 @@ if __name__=='__main__':
 
 
 class PeerQualityIntegrationTests(unittest.TestCase):
+    def test_cloud_refilters_ranked_after_thesis_exhaustion(self):
+        source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
+        self.assertGreaterEqual(source.count('exhausted_seed_blocked'),2)
+
     def test_cloud_requires_multiturn_collaboration_before_admission(self):
         source=IntegratedRoutingTests().function('_seti_interview_one_candidate')
         self.assertIn('collaborative_rounds >= 3',source)
