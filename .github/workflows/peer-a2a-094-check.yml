@@ -20,8 +20,8 @@ jobs:
         with:
           ref: fix/peer-a2a-094-20260924
           fetch-depth: 1
-      - name: Apply hash-pinned integration on branch only
-        run: python tools/apply_peer_patch.py
+      - name: Apply final isolated refusal regression
+        run: python tools/finalize_peer_patch.py
       - name: Compile application and adapter
         run: python -m py_compile cloud_mcp.py a2a_peer.py tools/peer_live_probe.py
       - name: Run all offline regression tests
@@ -30,25 +30,24 @@ jobs:
           python -m unittest discover -v -p 'test_*.py' 2>&1 | tee peer_regression.log
       - name: Build unchanged production Docker recipe
         run: docker build -t mycelix-peer-094-check .
-      - name: Commit tested integration to the isolated branch
+      - name: Commit tested adapter only to isolated branch
         run: |
           set -euo pipefail
           git config user.name 'MYCELIX Peer Validation'
           git config user.email 'actions@users.noreply.github.com'
-          git add cloud_mcp.py
-          git commit -m 'Integrate tested bounded A2A peer adapter [skip ci]'
+          git add a2a_peer.py
+          git commit -m 'Stop on explicit textual peer payment refusal [skip ci]'
           git push origin HEAD:refs/heads/fix/peer-a2a-094-20260924
           git rev-parse HEAD
-      - name: One fixed external peer, maximum three text turns
-        run: python tools/peer_live_probe.py
+      - name: No additional external peer request
+        run: echo 'The live probe stopped on PAYMENT_REQUIRED. It is not repeated or bypassed.'
       - name: Preserve verification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mycelix-peer-094-evidence
+          name: mycelix-peer-094-final-offline-evidence
           retention-days: 7
           path: |
             peer_regression.log
-            peer_probe_result.json
             cloud_mcp.py
             a2a_peer.py
