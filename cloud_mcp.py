@@ -87,7 +87,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.3"  # discard restored active thesis whose seed is already exhausted
+VERSION = "0.99.4"  # reopen exhausted thesis only after measurable evidence progress
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -4291,6 +4291,15 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
             # Generic technology is discovery-only. Rank it by recurrence, never as gate progress.
             missing=["human_problem_hypothesis"]
             score=min(60,d*12+len(cl["titles"])*3)
+        if key!=active_seed and exhausted_seed_blocked(
+            thesis_history,
+            key,
+            current_cycle,
+            int(policy["thesis_exhausted_cooldown_cycles"]),
+            current_rank=score,
+            current_missing=missing,
+        ):
+            continue
         ranked.append((score,key,cl,missing))
     ranked.sort(key=lambda x:(-x[0],x[1]))
     if not ranked:
@@ -4310,11 +4319,19 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         # A deploy/restart can restore a duplicate ACTIVE thesis created just before
         # its predecessor was persisted as EXHAUSTED. Never let that stale duplicate
         # bypass the exhausted-seed cooldown merely because it is already active.
+        active_candidate=next(
+            (item for item in ranked if item[1]==str(active.get("seed_problem_key") or "")),
+            None,
+        )
+        active_rank=active_candidate[0] if active_candidate else active.get("rank")
+        active_missing=active_candidate[3] if active_candidate else list(active.get("missing") or [])
         if exhausted_seed_blocked(
             list(AUTOPILOT_STATE.get("thesis_history") or []),
             str(active.get("seed_problem_key") or ""),
             int(AUTOPILOT_STATE.get("cycles_completed") or 0),
             int(_load_policy()["thesis_exhausted_cooldown_cycles"]),
+            current_rank=active_rank,
+            current_missing=active_missing,
         ):
             AUTOPILOT_STATE["active_thesis"]=None
             active=None
@@ -4350,6 +4367,8 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
                 item[1],
                 int(AUTOPILOT_STATE.get("cycles_completed") or 0),
                 int(_load_policy()["thesis_exhausted_cooldown_cycles"]),
+                current_rank=item[0],
+                current_missing=item[3],
             )
         ]
         if not ranked:

@@ -38,8 +38,18 @@ def exhausted_seed_blocked(
     seed_problem_key: str,
     current_cycle: int,
     cooldown_cycles: int,
+    *,
+    current_rank: int | None = None,
+    current_missing: list[str] | None = None,
 ) -> bool:
-    """Prevent immediate recreation of an exhausted thesis on the same semantic seed."""
+    """Block stale exhausted seeds unless new evidence materially improves them.
+
+    Inside the cooldown the seed is always blocked. After the cooldown, callers
+    that provide candidate evidence context may reopen only when the candidate
+    rank improved or at least one previously-missing gate requirement was
+    satisfied. Callers without evidence context retain the legacy cooldown-only
+    behavior.
+    """
     fingerprint=thesis_seed_fingerprint(seed_problem_key)
     if not fingerprint:
         return False
@@ -53,9 +63,34 @@ def exhausted_seed_blocked(
         if thesis_seed_fingerprint(str(raw.get("seed_problem_key") or ""))!=fingerprint:
             continue
         closed=max(0,int(raw.get("closed_at_cycle") or 0))
-        return current < closed + cooldown
+        if current < closed + cooldown:
+            return True
+        if current_rank is None and current_missing is None:
+            return False
+        try:
+            previous_rank=int(raw.get("rank") or 0)
+        except (TypeError,ValueError):
+            previous_rank=0
+        candidate_rank=None
+        if current_rank is not None:
+            try:
+                candidate_rank=int(current_rank)
+            except (TypeError,ValueError):
+                candidate_rank=None
+        previous_missing={
+            str(x) for x in (raw.get("missing") or []) if str(x)
+        }
+        candidate_missing={
+            str(x) for x in (current_missing or []) if str(x)
+        }
+        rank_progress=bool(
+            candidate_rank is not None and candidate_rank > previous_rank
+        )
+        missing_progress=bool(
+            previous_missing and candidate_missing < previous_missing
+        )
+        return not (rank_progress or missing_progress)
     return False
-
 
 def finalize_exhausted_thesis(active: dict | None, *, quality_gate: bool, closed_at_cycle: int) -> dict:
     """Close an active thesis exactly when its bounded cycle budget is consumed.

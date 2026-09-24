@@ -253,6 +253,13 @@ class PeerQualityIntegrationTests(unittest.TestCase):
         source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
         self.assertGreaterEqual(source.count('exhausted_seed_blocked'),2)
 
+    def test_cloud_reopens_exhausted_seed_only_after_evidence_progress(self):
+        source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
+        self.assertIn('current_rank=score',source)
+        self.assertIn('current_missing=missing',source)
+        self.assertIn('current_rank=active_rank',source)
+        self.assertIn('current_rank=item[0]',source)
+
     def test_cloud_requires_multiturn_collaboration_before_admission(self):
         source=IntegratedRoutingTests().function('_seti_interview_one_candidate')
         self.assertIn('collaborative_rounds >= 3',source)
