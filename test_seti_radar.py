@@ -231,6 +231,8 @@ class SetiRadarTests(unittest.TestCase):
         self.assertEqual(seti_candidate_attempt_state(candidate,parked,now,3600)["reason"],"rate_limited")
         exhausted={"status":"PARKED","attempts":3,"last_attempt_utc":"2026-09-23T10:00:00+00:00"}
         self.assertEqual(seti_candidate_attempt_state(candidate,exhausted,now,3600)["reason"],"attempts_exhausted")
+        auth={"status":"PARKED","attempts":1,"reason":"AUTH_REQUIRED","followup_state":"AUTH_BLOCKED"}
+        self.assertEqual(seti_candidate_attempt_state(candidate,auth,now,3600)["reason"],"auth_required")
 
     def test_readiness_summary_counts_ready_candidates(self):
         candidates={
@@ -256,6 +258,12 @@ class SetiRadarTests(unittest.TestCase):
         exhausted=dict(prior,attempts=3)
         self.assertEqual(seti_followup_state(exhausted),"EXHAUSTED")
         self.assertFalse(seti_retry_ready(exhausted,"2026-09-24T10:00:01+00:00",3600))
+        timeout=dict(prior,last_attempt_utc="2026-09-23T09:00:00+00:00",retry_after_seconds=21600)
+        self.assertFalse(seti_retry_ready(timeout,"2026-09-23T14:59:59+00:00",3600))
+        self.assertTrue(seti_retry_ready(timeout,"2026-09-23T15:00:01+00:00",3600))
+        auth=dict(prior,reason="AUTH_REQUIRED",followup_state="AUTH_BLOCKED")
+        self.assertEqual(seti_followup_state(auth),"AUTH_BLOCKED")
+        self.assertFalse(seti_retry_ready(auth,"2026-09-25T15:00:01+00:00",3600))
 
     def test_inbound_contact_is_parked_before_protocol_aware_intro(self):
         first=inbound_admission_transition(True,"Hello, I can help.",{})

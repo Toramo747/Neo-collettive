@@ -231,5 +231,13 @@ class IntegratedRoutingTests(unittest.TestCase):
     def test_send_not_inferred_from_attempt(self):
         self.assertIn("bool(interview_result.get('message_post_started_count'))",self.function('_seti_cycle_if_due'))
 
+    def test_slots_count_real_a2a_attempts_not_preflight_failures(self):
+        source=self.function('_seti_interview_one_candidate')
+        self.assertIn('conversation_slots',source)
+        self.assertIn('conversation_slot_used',source)
+        self.assertIn('AUTH_BLOCKED',source)
+        self.assertIn('retry_after_seconds',source)
+        self.assertNotIn("if len(results) >= max(1, min(int(max_interviews or 1), 3))",source)
+
 if __name__=='__main__':
     unittest.main()

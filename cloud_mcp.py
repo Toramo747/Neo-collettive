@@ -78,7 +78,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.95.0"  # A2A declared cross-origin interfaces, tenant propagation, failure telemetry
+VERSION = "0.96.0"  # SETI slots count real A2A attempts; auth excluded, timeouts cooled down
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -8751,6 +8751,8 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     admitted=dict(SETI_PRIVATE_STATE.get("admitted") or {})
     results=[]
     peer_budget=peer_a2a.RequestBudget(limit=9)
+    conversation_slots=0
+    candidate_checks=0
 
     ranked=sorted(
         [(str(k),v) for k,v in candidates.items() if isinstance(v,dict)],
@@ -8770,42 +8772,58 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         eligibility=interview_candidate_eligibility(candidate)
 
         resolved=await _seti_resolve_interview_endpoint(candidate,eligibility,peer_budget)
+        candidate_checks += 1
         if not resolved.get("ok"):
+            reason=str(resolved.get("reason") or "RESOLUTION_FAILED")
+            auth_blocked=(reason.upper()=="AUTH_REQUIRED")
+            timeout_failure=("TIMEOUT" in reason.upper())
+            retry_after_seconds=max(21600,SETI_FOLLOWUP_MIN_SECONDS*6) if timeout_failure else SETI_FOLLOWUP_MIN_SECONDS
+            next_attempts=prior_attempts+1
+            followup_state=(
+                "AUTH_BLOCKED" if auth_blocked
+                else ("EXHAUSTED" if next_attempts>=3 else "RETRY_TRANSPORT")
+            )
             prior_history=list(prior.get("attempt_history") or [])
             prior_history.append({
-                "attempt":prior_attempts+1,
+                "attempt":next_attempts,
                 "timestamp_utc":now,
                 "status":"PARKED",
                 "score":0,
-                "reason":resolved.get("reason"),
-                "post_started":False,"peer_state":"RESOLUTION_FAILED",
+                "reason":reason,
+                "post_started":False,"peer_state":"AUTH_REQUIRED" if auth_blocked else "RESOLUTION_FAILED",
                 "response":"",
                 "endpoint":str(resolved.get("endpoint") or ""),
+                "conversation_slot_used":False,
             })
             interviews[key]={
                 "status":"PARKED",
                 "interviewed_at_utc":now,
                 "last_attempt_utc":now,
-                "attempts":prior_attempts+1,
-                "reason":resolved.get("reason"),
-                "post_started":False,"peer_state":"RESOLUTION_FAILED",
+                "attempts":next_attempts,
+                "reason":reason,
+                "post_started":False,
+                "peer_state":"AUTH_REQUIRED" if auth_blocked else "RESOLUTION_FAILED",
                 "attempt_history":prior_history[-3:],
                 "candidate_score":int(candidate.get("max_score") or 0),
                 "dialogue_round":1,
-                "followup_state":"EXHAUSTED" if prior_attempts+1>=3 else "RETRY_TRANSPORT",
-                "next_followup_after_seconds":0 if prior_attempts+1>=3 else SETI_FOLLOWUP_MIN_SECONDS,
+                "followup_state":followup_state,
+                "retry_after_seconds":0 if auth_blocked else retry_after_seconds,
+                "next_followup_after_seconds":0 if auth_blocked or next_attempts>=3 else retry_after_seconds,
             }
             SETI_PRIVATE_STATE["interviews"]=interviews
             results.append({
-                "attempted":True,
+                "attempted":False,
+                "candidate_checked":True,
                 "candidate_key":key,
                 "admitted":False,
                 "status":"PARKED",
                 "score":0,
-                "reason":resolved.get("reason"),
-                "post_started":False,"peer_state":"RESOLUTION_FAILED",
+                "reason":reason,
+                "post_started":False,
+                "peer_state":"AUTH_REQUIRED" if auth_blocked else "RESOLUTION_FAILED",
+                "conversation_slot_used":False,
             })
-            if len(results)>=max(1,min(int(max_interviews or 1),3)):
+            if peer_budget.used>=peer_budget.limit:
                 break
             continue
 
@@ -8817,6 +8835,9 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
              "_peer_context":prior.get("peer_context"),"_peer_budget":peer_budget},
             interview_prompt,
         )
+        slot_used=bool(answer.get("post_started") or answer.get("delivery_unknown"))
+        if slot_used:
+            conversation_slots += 1
         response_text=_response_text(answer)
         quality=interview_response_score(response_text)
         accepted=bool(answer.get("ok") and answer.get("quality_ok") and quality.get("accepted"))
@@ -8838,6 +8859,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "response":response_text[:3000],
             "endpoint":endpoint,
             "contact_mode":resolved.get("mode"),
+            "conversation_slot_used":slot_used,
         }
         for field in ("protocol_version","protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method"):
             attempt_entry[field]=answer.get(field)
@@ -8861,6 +8883,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "contact_mode":resolved.get("mode"),
             "candidate_score":int(candidate.get("max_score") or 0),
             "dialogue_round":dialogue_round,
+            "conversation_slot_used":slot_used,
             "followup_state":"COMPLETE" if accepted else seti_followup_state({
                 "status":status,
                 "attempts":prior_attempts+1,
@@ -8900,9 +8923,12 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "status":status,
             "score":int(quality.get("score") or 0),
             "transport":answer.get("transport"),
+            "conversation_slot_used":slot_used,
             **{field:answer.get(field) for field in ("protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method")},
         })
-        if len(results)>=max(1,min(int(max_interviews or 1),3)):
+        if conversation_slots>=max(1,min(int(max_interviews or 1),3)):
+            break
+        if peer_budget.used>=peer_budget.limit:
             break
 
     if not results:
@@ -8917,8 +8943,10 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         failure_reasons[reason]=int(failure_reasons.get(reason) or 0)+1
     overall="ADMITTED" if admitted_count else ("PARKED" if parked_count else str(results[-1].get("status") or "COMPLETED"))
     return {
-        "attempted":True,
-        "attempted_count":len(results),
+        "attempted":bool(conversation_slots),
+        "attempted_count":conversation_slots,
+        "candidate_checks_count":candidate_checks,
+        "preflight_skipped_count":sum(1 for x in results if not x.get("conversation_slot_used")),
         "post_started_count":sum(1 for x in results if x.get("post_started")),
         "message_post_started_count":sum(1 for x in results if x.get("post_started") and x.get("rpc_method") in {"message/send","SendMessage"}),
         "http_response_count":sum(1 for x in results if x.get("http_response_received")),
@@ -9050,6 +9078,8 @@ async def _seti_cycle_if_due() -> dict | None:
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "interview_attempted_count":interview_result.get("attempted_count",0),
+                "interview_candidate_checks_count":interview_result.get("candidate_checks_count",0),
+                "interview_preflight_skipped_count":interview_result.get("preflight_skipped_count",0),
                 "interview_post_started_count":interview_result.get("post_started_count",0),
                 "interview_message_post_started_count":interview_result.get("message_post_started_count",0),
                 "interview_http_response_count":interview_result.get("http_response_count",0),
