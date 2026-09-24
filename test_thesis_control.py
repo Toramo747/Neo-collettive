@@ -19,6 +19,36 @@ class ThesisControlTests(unittest.TestCase):
         history=[{"status":"COMPLETE","seed_problem_key":"manual_data_entry:x","closed_at_cycle":100}]
         self.assertFalse(exhausted_seed_blocked(history,"manual_data_entry:x",101,12))
 
+    def test_mechanical_buyer_prefix_drift_is_blocked(self):
+        history=[{
+            "status":"EXHAUSTED",
+            "seed_problem_key":"manual_data_entry:buyers:manual_data_entry",
+            "closed_at_cycle":290,
+        }]
+        self.assertTrue(
+            exhausted_seed_blocked(
+                history,
+                "manual_data_entry:buyers:buyers_manual_data_entry",
+                292,
+                12,
+            )
+        )
+
+    def test_real_different_problem_is_not_blocked(self):
+        history=[{
+            "status":"EXHAUSTED",
+            "seed_problem_key":"manual_data_entry:buyers:manual_data_entry",
+            "closed_at_cycle":290,
+        }]
+        self.assertFalse(
+            exhausted_seed_blocked(
+                history,
+                "manual_data_entry:buyers:invoice_reconciliation",
+                292,
+                12,
+            )
+        )
+
 
 if __name__=="__main__":
     unittest.main()
