@@ -74,6 +74,8 @@ from evidence_integrity import (
 
 import httpx
 import uvicorn
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
@@ -81,7 +83,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.98.0"  # Reddit + Tiza discovery lanes; existing peer-quality gates unchanged
+VERSION = "0.98.1"  # Tiza via official MCP client; Reddit/Tiza discovery lanes
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -5630,28 +5632,12 @@ async def _reddit_seti_search(query: str, limit: int = 5) -> list[dict]:
         return []
 
 
-def _mcp_http_payload(response: httpx.Response) -> dict:
-    try:
-        data=response.json()
-        return data if isinstance(data,dict) else {"result":data}
-    except Exception:
-        pass
-    for line in reversed((response.text or "").splitlines()):
-        line=line.strip()
-        if not line.startswith("data:"):
-            continue
-        raw=line[5:].strip()
-        try:
-            data=json.loads(raw)
-            if isinstance(data,dict):
-                return data
-        except Exception:
-            continue
-    return {}
-
-
 async def _seti_tiza_candidate_batch(limit: int = 12) -> dict:
-    """Query Tiza's unauthenticated MCP search tool for public A2A agents only."""
+    """Query Tiza through the official MCP Streamable HTTP client.
+
+    Tiza remains discovery-only: only its search tool is callable here, and returned
+    agents are normalized into SETI candidates without executing any discovered tool.
+    """
     limit=max(3,min(int(limit or 12),20))
     queries=[
         "public A2A research evidence analysis agent",
@@ -5662,77 +5648,74 @@ async def _seti_tiza_candidate_batch(limit: int = 12) -> dict:
     errors=[]
     seen=set()
     try:
-        headers={
-            "Accept":"application/json, text/event-stream",
-            "Content-Type":"application/json",
-            "User-Agent":"MYCELIX/"+VERSION,
-        }
-        async with httpx.AsyncClient(timeout=min(TIMEOUT,18),follow_redirects=True,headers=headers) as client:
-            init=await client.post(TIZA_MCP,json={
-                "jsonrpc":"2.0","id":1,"method":"initialize",
-                "params":{
-                    "protocolVersion":"2025-06-18",
-                    "capabilities":{},
-                    "clientInfo":{"name":"MYCELIX","version":VERSION},
-                },
-            })
-            if not init.is_success:
-                return {"candidates":[],"candidate_count":0,"source_counts":{},"errors":[{"source":"tiza-mcp","error":"initialize_http_"+str(init.status_code)}]}
-            init_data=_mcp_http_payload(init)
-            if init_data.get("error"):
-                return {"candidates":[],"candidate_count":0,"source_counts":{},"errors":[{"source":"tiza-mcp","error":"initialize_rpc_error"}]}
-            session_id=(init.headers.get("mcp-session-id") or init.headers.get("Mcp-Session-Id") or "").strip()
-            call_headers=dict(headers)
-            if session_id:
-                call_headers["Mcp-Session-Id"]=session_id
-            try:
-                await client.post(TIZA_MCP,headers=call_headers,json={
-                    "jsonrpc":"2.0","method":"notifications/initialized","params":{}
-                })
-            except Exception:
-                pass
+        async with streamable_http_client(TIZA_MCP,terminate_on_close=True) as (read_stream,write_stream):
+            async with ClientSession(
+                read_stream,
+                write_stream,
+                read_timeout_seconds=min(TIMEOUT,18),
+            ) as session:
+                init=await session.initialize()
+                tools=await session.list_tools()
+                tool_names=[str(getattr(x,"name","") or "") for x in (getattr(tools,"tools",[]) or [])]
+                if "search" not in tool_names:
+                    return {
+                        "candidates":[],
+                        "candidate_count":0,
+                        "source_counts":{},
+                        "errors":[{
+                            "source":"tiza-mcp",
+                            "error":"search_tool_missing",
+                            "server":str(getattr(getattr(init,"server_info",None),"name","") or "")[:120],
+                            "tools":tool_names[:12],
+                        }],
+                    }
 
-            for idx,query in enumerate(queries,start=2):
-                try:
-                    response=await client.post(TIZA_MCP,headers=call_headers,json={
-                        "jsonrpc":"2.0","id":idx,"method":"tools/call",
-                        "params":{
-                            "name":"search",
-                            "arguments":{
+                for query in queries:
+                    try:
+                        result=await session.call_tool(
+                            "search",
+                            {
                                 "query":query,
                                 "types":["a2a_agent"],
                                 "authentication":["none"],
                                 "limit":min(limit,20),
                             },
-                        },
-                    })
-                    if not response.is_success:
-                        errors.append({"source":"tiza-mcp","query":query,"error":"http_"+str(response.status_code)})
-                        continue
-                    payload=_mcp_http_payload(response)
-                    if payload.get("error"):
-                        errors.append({"source":"tiza-mcp","query":query,"error":"rpc_error"})
-                        continue
-                    for candidate in tiza_search_candidates(payload,"tiza-mcp",limit):
-                        fp=str(candidate.get("fingerprint") or "")
-                        if not fp or fp in seen:
+                            read_timeout_seconds=min(TIMEOUT,18),
+                        )
+                        if bool(getattr(result,"is_error",False)):
+                            errors.append({
+                                "source":"tiza-mcp",
+                                "query":query,
+                                "error":"tool_result_error",
+                            })
                             continue
-                        seen.add(fp)
-                        candidate["registry_query"]=query
-                        rows.append(candidate)
+                        payload=(
+                            result.model_dump(by_alias=True,mode="json")
+                            if hasattr(result,"model_dump")
+                            else {"result":str(result)}
+                        )
+                        for candidate in tiza_search_candidates(payload,"tiza-mcp",limit):
+                            fp=str(candidate.get("fingerprint") or "")
+                            if not fp or fp in seen:
+                                continue
+                            seen.add(fp)
+                            candidate["registry_query"]=query
+                            rows.append(candidate)
+                            if len(rows)>=limit:
+                                break
                         if len(rows)>=limit:
                             break
-                    if len(rows)>=limit:
-                        break
-                except Exception as e:
-                    errors.append({"source":"tiza-mcp","query":query,"error":type(e).__name__+": "+str(e)[:180]})
-            if session_id:
-                try:
-                    await client.delete(TIZA_MCP,headers=call_headers)
-                except Exception:
-                    pass
+                    except Exception as e:
+                        errors.append({
+                            "source":"tiza-mcp",
+                            "query":query,
+                            "error":type(e).__name__+": "+str(e)[:180],
+                        })
     except Exception as e:
-        errors.append({"source":"tiza-mcp","error":type(e).__name__+": "+str(e)[:180]})
+        errors.append({
+            "source":"tiza-mcp",
+            "error":type(e).__name__+": "+str(e)[:180],
+        })
 
     rows.sort(key=lambda x:int(x.get("agent_likelihood_score") or 0),reverse=True)
     return {
@@ -9277,6 +9260,14 @@ async def _seti_cycle_if_due() -> dict | None:
                 "tiza_candidates":tiza_batch.get("candidate_count",0),
                 "tiza_candidate_sources":tiza_batch.get("source_counts") or {},
                 "tiza_candidate_errors":len(tiza_batch.get("errors") or []),
+                "tiza_error_samples":[
+                    {
+                        "error":str(x.get("error") or "")[:220],
+                        "query":str(x.get("query") or "")[:180],
+                    }
+                    for x in (tiza_batch.get("errors") or [])[:2]
+                    if isinstance(x,dict)
+                ],
                 "interesting":len(interesting),
                 "high_interest":len(high),
                 "private_candidates":private_summary.get("private_candidates",0),
