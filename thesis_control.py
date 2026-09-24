@@ -55,3 +55,25 @@ def exhausted_seed_blocked(
         closed=max(0,int(raw.get("closed_at_cycle") or 0))
         return current < closed + cooldown
     return False
+
+
+def finalize_exhausted_thesis(active: dict | None, *, quality_gate: bool, closed_at_cycle: int) -> dict:
+    """Close an active thesis exactly when its bounded cycle budget is consumed.
+
+    A passed commercial quality gate is never converted into exhaustion.
+    The caller owns persistence/history updates.
+    """
+    row=dict(active) if isinstance(active,dict) else {}
+    if not row or str(row.get("status") or "").upper()!="ACTIVE":
+        return {"closed":False,"active":active,"finished":None}
+    try:
+        used=max(0,int(row.get("cycles_used") or 0))
+        budget=max(1,int(row.get("budget_cycles") or 4))
+    except (TypeError,ValueError):
+        return {"closed":False,"active":active,"finished":None}
+    if quality_gate or used < budget:
+        return {"closed":False,"active":row,"finished":None}
+    finished=dict(row)
+    finished["status"]="EXHAUSTED"
+    finished["closed_at_cycle"]=max(0,int(closed_at_cycle or 0))
+    return {"closed":True,"active":None,"finished":finished}
