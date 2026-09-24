@@ -44,7 +44,7 @@ class OutcomeCouncilTests(unittest.TestCase):
             seti={},
             inbound_stats={},
             active_thesis={"thesis_id":"new","budget_cycles":4,"cycles_used":1},
-            thesis_history=[{"thesis_id":"old","status":"EXHAUSTED","closed_at_cycle":9}],
+            thesis_history=[{"thesis_id":"old","status":"EXHAUSTED","closed_at_cycle":9,"budget_cycles":4,"cycles_used":4}],
             cycle=10,
         )
         self.assertIn("THESIS_REJECTED_WITHIN_BUDGET",report["wins"])
