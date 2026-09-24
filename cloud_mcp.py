@@ -33,6 +33,8 @@ from seti_radar import (
     interview_candidate_eligibility,
     interview_response_score,
     registry_agent_candidate,
+    reddit_public_rows,
+    tiza_search_candidates,
     seti_dialogue_round,
     seti_followup_state,
     seti_progressive_interview_prompt,
@@ -79,10 +81,11 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.97.0"  # peer quality lanes, collaborative multi-turn admission, inventory rotation
+VERSION = "0.98.0"  # Reddit + Tiza discovery lanes; existing peer-quality gates unchanged
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
+TIZA_MCP = "https://tiza.cc/mcp"
 RENDER_API_BASE = "https://api.render.com/v1"
 TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
@@ -5589,12 +5592,169 @@ async def _grep_app_code_search(query: str, limit: int = 5) -> list[dict]:
         return []
 
 
+async def _reddit_seti_search(query: str, limit: int = 5) -> list[dict]:
+    """Read-only Reddit discovery for SETI-tagged queries; failures are non-fatal."""
+    marker=re.search(r"site:reddit\\.com/r/([A-Za-z0-9_]+)",str(query or ""),re.I)
+    subreddit=marker.group(1) if marker else ""
+    seed=re.sub(r"site:reddit\\.com(?:/r/[A-Za-z0-9_]+)?"," ",str(query or ""),flags=re.I)
+    seed=" ".join(seed.replace("(", " ").replace(")", " ").split()).strip()
+    if not seed:
+        seed="A2A public agent registry"
+    url=(
+        "https://www.reddit.com/r/"+subreddit+"/search.json"
+        if subreddit else "https://www.reddit.com/search.json"
+    )
+    params={
+        "q":seed,
+        "sort":"new",
+        "t":"month",
+        "limit":max(1,min(int(limit or 5),10)),
+        "raw_json":1,
+    }
+    if subreddit:
+        params["restrict_sr"]=1
+    try:
+        async with httpx.AsyncClient(
+            timeout=min(TIMEOUT,12),
+            follow_redirects=True,
+            headers={
+                "Accept":"application/json",
+                "User-Agent":"MYCELIX/"+VERSION+" public-research",
+            },
+        ) as client:
+            r=await client.get(url,params=params)
+        if not r.is_success:
+            return []
+        return reddit_public_rows(r.json(),limit=max(1,min(limit,10)))
+    except Exception:
+        return []
+
+
+def _mcp_http_payload(response: httpx.Response) -> dict:
+    try:
+        data=response.json()
+        return data if isinstance(data,dict) else {"result":data}
+    except Exception:
+        pass
+    for line in reversed((response.text or "").splitlines()):
+        line=line.strip()
+        if not line.startswith("data:"):
+            continue
+        raw=line[5:].strip()
+        try:
+            data=json.loads(raw)
+            if isinstance(data,dict):
+                return data
+        except Exception:
+            continue
+    return {}
+
+
+async def _seti_tiza_candidate_batch(limit: int = 12) -> dict:
+    """Query Tiza's unauthenticated MCP search tool for public A2A agents only."""
+    limit=max(3,min(int(limit or 12),20))
+    queries=[
+        "public A2A research evidence analysis agent",
+        "public A2A technical critical review agent",
+        "public A2A interoperability collaboration agent",
+    ]
+    rows=[]
+    errors=[]
+    seen=set()
+    try:
+        headers={
+            "Accept":"application/json, text/event-stream",
+            "Content-Type":"application/json",
+            "User-Agent":"MYCELIX/"+VERSION,
+        }
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,18),follow_redirects=True,headers=headers) as client:
+            init=await client.post(TIZA_MCP,json={
+                "jsonrpc":"2.0","id":1,"method":"initialize",
+                "params":{
+                    "protocolVersion":"2025-06-18",
+                    "capabilities":{},
+                    "clientInfo":{"name":"MYCELIX","version":VERSION},
+                },
+            })
+            if not init.is_success:
+                return {"candidates":[],"candidate_count":0,"source_counts":{},"errors":[{"source":"tiza-mcp","error":"initialize_http_"+str(init.status_code)}]}
+            init_data=_mcp_http_payload(init)
+            if init_data.get("error"):
+                return {"candidates":[],"candidate_count":0,"source_counts":{},"errors":[{"source":"tiza-mcp","error":"initialize_rpc_error"}]}
+            session_id=(init.headers.get("mcp-session-id") or init.headers.get("Mcp-Session-Id") or "").strip()
+            call_headers=dict(headers)
+            if session_id:
+                call_headers["Mcp-Session-Id"]=session_id
+            try:
+                await client.post(TIZA_MCP,headers=call_headers,json={
+                    "jsonrpc":"2.0","method":"notifications/initialized","params":{}
+                })
+            except Exception:
+                pass
+
+            for idx,query in enumerate(queries,start=2):
+                try:
+                    response=await client.post(TIZA_MCP,headers=call_headers,json={
+                        "jsonrpc":"2.0","id":idx,"method":"tools/call",
+                        "params":{
+                            "name":"search",
+                            "arguments":{
+                                "query":query,
+                                "types":["a2a_agent"],
+                                "authentication":["none"],
+                                "limit":min(limit,20),
+                            },
+                        },
+                    })
+                    if not response.is_success:
+                        errors.append({"source":"tiza-mcp","query":query,"error":"http_"+str(response.status_code)})
+                        continue
+                    payload=_mcp_http_payload(response)
+                    if payload.get("error"):
+                        errors.append({"source":"tiza-mcp","query":query,"error":"rpc_error"})
+                        continue
+                    for candidate in tiza_search_candidates(payload,"tiza-mcp",limit):
+                        fp=str(candidate.get("fingerprint") or "")
+                        if not fp or fp in seen:
+                            continue
+                        seen.add(fp)
+                        candidate["registry_query"]=query
+                        rows.append(candidate)
+                        if len(rows)>=limit:
+                            break
+                    if len(rows)>=limit:
+                        break
+                except Exception as e:
+                    errors.append({"source":"tiza-mcp","query":query,"error":type(e).__name__+": "+str(e)[:180]})
+            if session_id:
+                try:
+                    await client.delete(TIZA_MCP,headers=call_headers)
+                except Exception:
+                    pass
+    except Exception as e:
+        errors.append({"source":"tiza-mcp","error":type(e).__name__+": "+str(e)[:180]})
+
+    rows.sort(key=lambda x:int(x.get("agent_likelihood_score") or 0),reverse=True)
+    return {
+        "candidates":rows[:limit],
+        "candidate_count":len(rows[:limit]),
+        "source_counts":{"tiza-mcp":len(rows[:limit])} if rows else {},
+        "errors":errors[:8],
+    }
+
+
 async def seti_public_search(query: str, limit: int = 6) -> dict:
     """SETI-only passive multi-source search over public indexes."""
     meta={"role":"discovery","class":"seti"}
-    routed,code=await asyncio.gather(
+    reddit_task=(
+        _reddit_seti_search(query,max(3,min(limit,8)))
+        if "site:reddit.com" in str(query or "").lower()
+        else asyncio.sleep(0,result=[])
+    )
+    routed,code,reddit=await asyncio.gather(
         routed_public_search(query,meta,max(3,min(limit,8))),
         _grep_app_code_search(query,max(3,min(limit,8))),
+        reddit_task,
         return_exceptions=True,
     )
     results=[]
@@ -5619,6 +5779,8 @@ async def seti_public_search(query: str, limit: int = 6) -> dict:
         add_rows(routed.get("results") or [])
     if isinstance(code,list):
         add_rows(code)
+    if isinstance(reddit,list):
+        add_rows(reddit)
 
     return {
         "ok":True,
@@ -9022,9 +9184,16 @@ async def _seti_cycle_if_due() -> dict | None:
             per_query=5,
             registry_checks=min(10,SETI_RESULT_LIMIT),
         )
-        registry_batch=await _seti_registry_candidate_batch(limit=max(8,SETI_RESULT_LIMIT))
+        registry_batch,tiza_batch=await asyncio.gather(
+            _seti_registry_candidate_batch(limit=max(8,SETI_RESULT_LIMIT)),
+            _seti_tiza_candidate_batch(limit=max(8,SETI_RESULT_LIMIT)),
+        )
         memory,enriched=merge_signal_memory(state.get("signal_memory") or {},scan,max_entries=80)
-        private_inputs=list(enriched)+list(registry_batch.get("candidates") or [])
+        private_inputs=(
+            list(enriched)
+            + list(registry_batch.get("candidates") or [])
+            + list(tiza_batch.get("candidates") or [])
+        )
         private_state,private_summary=merge_private_candidate_state(
             SETI_PRIVATE_STATE,private_inputs,max_entries=24
         )
@@ -9105,6 +9274,9 @@ async def _seti_cycle_if_due() -> dict | None:
                 "registry_candidates":registry_batch.get("candidate_count",0),
                 "registry_candidate_sources":registry_batch.get("source_counts") or {},
                 "registry_candidate_errors":len(registry_batch.get("errors") or []),
+                "tiza_candidates":tiza_batch.get("candidate_count",0),
+                "tiza_candidate_sources":tiza_batch.get("source_counts") or {},
+                "tiza_candidate_errors":len(tiza_batch.get("errors") or []),
                 "interesting":len(interesting),
                 "high_interest":len(high),
                 "private_candidates":private_summary.get("private_candidates",0),

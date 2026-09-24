@@ -9,9 +9,11 @@ from typing import Any, Awaitable, Callable
 from peer_quality import BLOCKED_PEER_CLASSES
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 12
+SETI_ENGINE_VERSION = 13
 
 DEFAULT_PASSIVE_QUERIES = [
+    'site:reddit.com/r/AI_Agents "A2A" "agent card" "endpoint"',
+    'site:reddit.com/r/mcp "A2A" "public agent" "registry"',
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
     '"https://" "/.well-known/agent-card.json" "Agent2Agent" -site:a2aregistry.org',
     '"agent-card.json" "protocolVersion" "skills" -site:a2aregistry.org',
@@ -95,6 +97,165 @@ def _clean_text(value: Any) -> str:
     text=re.sub(r"<[^>]+>", " ", text)
     text=re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def reddit_public_rows(data: Any, source: str = "reddit-public-json", limit: int = 8) -> list[dict]:
+    """Normalize public Reddit search JSON into passive SETI index rows."""
+    try:
+        children=((data or {}).get("data") or {}).get("children") or []
+    except Exception:
+        children=[]
+    out=[]
+    seen=set()
+    for child in children:
+        row=(child or {}).get("data") if isinstance(child,dict) else None
+        if not isinstance(row,dict):
+            continue
+        permalink=str(row.get("permalink") or "").strip()
+        url=str(row.get("url") or "").strip()
+        if permalink.startswith("/"):
+            reddit_url="https://www.reddit.com"+permalink
+        elif permalink.startswith("https://"):
+            reddit_url=permalink
+        elif url.startswith("https://") and canonical_host(url) in {"reddit.com","www.reddit.com"}:
+            reddit_url=url
+        else:
+            reddit_url=""
+        if not reddit_url or reddit_url in seen:
+            continue
+        seen.add(reddit_url)
+        title=_clean_text(row.get("title"))[:300]
+        body=_clean_text(row.get("selftext") or row.get("selftext_html") or "")[:2400]
+        if not title and not body:
+            continue
+        out.append({
+            "title":title,
+            "url":reddit_url,
+            "snippet":body or title,
+            "source":source,
+            "source_provenance":[source],
+            "community_source":True,
+        })
+        if len(out)>=max(1,min(int(limit or 8),20)):
+            break
+    return out
+
+
+def tiza_search_candidates(payload: Any, source: str = "tiza-mcp", limit: int = 16) -> list[dict]:
+    """Extract explicitly callable A2A entries from a Tiza MCP search response.
+
+    Tiza is used as a discovery index only. This function never executes a discovered
+    agent or tool, and it rejects rows that expose only a landing page.
+    """
+    queue=[payload]
+    nodes=[]
+    visited=0
+    while queue and visited<600:
+        node=queue.pop(0)
+        visited += 1
+        if isinstance(node,str):
+            text=node.strip()
+            if text[:1] in {"{","["}:
+                try:
+                    queue.append(json.loads(text))
+                except Exception:
+                    pass
+            continue
+        if isinstance(node,list):
+            queue.extend(node[:120])
+            continue
+        if not isinstance(node,dict):
+            continue
+        nodes.append(node)
+        for value in node.values():
+            if isinstance(value,(dict,list)):
+                queue.append(value)
+            elif isinstance(value,str):
+                text=value.strip()
+                if text[:1] in {"{","["} and len(text)<=200000:
+                    try:
+                        queue.append(json.loads(text))
+                    except Exception:
+                        pass
+
+    out=[]
+    seen=set()
+
+    def first_text(mapping: dict, keys: tuple[str,...]) -> str:
+        for key in keys:
+            value=mapping.get(key)
+            if isinstance(value,str) and value.strip():
+                return value.strip()
+        return ""
+
+    for node in nodes:
+        kind=" ".join(str(node.get(k) or "") for k in ("type","kind","entityType","entity_type","protocol")).lower()
+        has_card=any(k in node for k in ("agentCard","agent_card","agentCardUrl","agent_card_url","wellKnownURI","well_known_uri"))
+        if "a2a" not in kind and not has_card:
+            continue
+
+        containers=[node]
+        for key in ("connection","connectionInfo","connection_info","agentCard","agent_card","card"):
+            value=node.get(key)
+            if isinstance(value,dict):
+                containers.append(value)
+
+        endpoint=""
+        card_url=""
+        for obj in containers:
+            if not endpoint:
+                endpoint=first_text(obj,("endpoint","endpoint_url","a2a_url","rpc_url","message_url"))
+            if not card_url:
+                card_url=first_text(obj,("agent_card_url","agentCardUrl","wellKnownURI","well_known_uri","manifest_url","manifestUrl"))
+
+        # A URL nested in explicit connection metadata is acceptable for a Tiza A2A row.
+        if not endpoint:
+            for key in ("connection","connectionInfo","connection_info"):
+                obj=node.get(key)
+                if isinstance(obj,dict):
+                    value=first_text(obj,("url","uri"))
+                    if value:
+                        endpoint=value
+                        break
+
+        generic_url=first_text(node,("url","uri"))
+        if not endpoint and generic_url and explicit_agent_endpoint_url(generic_url):
+            endpoint=generic_url
+
+        if not endpoint and not card_url:
+            continue
+
+        name=first_text(node,("name","displayName","display_name","title","id")) or canonical_host(endpoint or card_url)
+        description=first_text(node,("description","summary","snippet"))
+        health=(" ".join(str(node.get(k) or "") for k in ("health","status","availability"))).lower()
+        verified=bool(node.get("verified") or node.get("is_verified") or node.get("validated") or "healthy" in health or "ready" in health)
+
+        raw={
+            "name":name,
+            "description":description,
+            "endpoint":endpoint,
+            "agent_card_url":card_url,
+            "healthy":verified,
+            "verified":verified,
+            "conformance":"standard" if ("a2a" in kind or has_card) else "",
+        }
+        candidate=registry_agent_candidate(raw,source)
+        if not candidate:
+            continue
+        fp=str(candidate.get("fingerprint") or "")
+        if not fp or fp in seen:
+            continue
+        seen.add(fp)
+        candidate["registry_status"]="tiza_listed"
+        candidate["endpoint_evidence"]="tiza_validated_a2a_index"
+        signals=list(candidate.get("signals") or [])
+        if "tiza_validated_index" not in signals:
+            signals.append("tiza_validated_index")
+        candidate["signals"]=signals
+        out.append(candidate)
+        if len(out)>=max(1,min(int(limit or 16),40)):
+            break
+    return out
 
 
 EXPLICIT_AGENT_CARD_PATHS = (

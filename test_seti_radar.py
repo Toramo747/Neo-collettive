@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from seti_radar import (
@@ -19,6 +20,8 @@ from seti_radar import (
     seti_candidate_attempt_state,
     registry_match,
     registry_agent_candidate,
+    reddit_public_rows,
+    tiza_search_candidates,
     score_public_result,
 )
 
@@ -145,6 +148,48 @@ class SetiRadarTests(unittest.TestCase):
             "name":"Unsafe",
             "url":"http://agent.example.ai/a2a",
         }))
+
+    def test_reddit_public_rows_preserve_post_text_for_endpoint_extraction(self):
+        data={"data":{"children":[{"data":{
+            "title":"Shared A2A agent",
+            "permalink":"/r/AI_Agents/comments/example/shared_agent/",
+            "selftext":"Public A2A endpoint: https://peer.example.ai/a2a supports JSON-RPC message/send."
+        }}]}}
+        rows=reddit_public_rows(data)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["source"],"reddit-public-json")
+        self.assertIn("https://peer.example.ai/a2a",rows[0]["snippet"])
+        leads=indexed_endpoint_leads(rows[0])
+        self.assertEqual(leads[0]["url"],"https://peer.example.ai/a2a")
+
+    def test_tiza_mcp_rows_become_bounded_a2a_candidates(self):
+        payload={
+            "result":{
+                "content":[{
+                    "type":"text",
+                    "text":json.dumps({"results":[{
+                        "type":"a2a_agent",
+                        "name":"Peer Research Agent",
+                        "description":"Evidence analysis and critical review.",
+                        "connection":{"url":"https://peer.example.ai/rpc/v1"},
+                        "health":"healthy",
+                    }]})
+                }]
+            }
+        }
+        rows=tiza_search_candidates(payload)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["source"],"tiza-mcp")
+        self.assertEqual(rows[0]["endpoint_evidence"],"tiza_validated_a2a_index")
+        self.assertTrue(interview_candidate_eligibility(rows[0])["eligible"])
+
+    def test_tiza_landing_page_without_callable_connection_is_rejected(self):
+        payload={"results":[{
+            "type":"a2a_agent",
+            "name":"Directory row only",
+            "url":"https://tiza.cc/entities/example",
+        }]}
+        self.assertEqual(tiza_search_candidates(payload),[])
 
     def test_interview_gate_requires_repeat_and_explicit_endpoint(self):
         base={
