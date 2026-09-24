@@ -1,5 +1,6 @@
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
+import a2a_peer as peer_a2a
 import base64
 import html
 import json
@@ -77,7 +78,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.93.0"  # quarantine execution-shaped crypto spam before agent dialogue
+VERSION = "0.94.0"  # quarantine execution-shaped crypto spam before agent dialogue
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -2332,6 +2333,16 @@ def _a2a_timeout(transport_name: str) -> httpx.Timeout:
 
 
 async def _ask_a2a_transport(agent: dict, question: str) -> dict:
+    if agent.get("_peer_interface"):
+        interface = peer_a2a.Interface(**agent["_peer_interface"])
+        answer = await peer_a2a.exchange_peer(
+            interface, question, agent.get("_peer_context"), agent.get("_peer_budget")
+        )
+        answer["agent"] = agent.get("name") or "SETI peer"
+        answer["agent_id"] = agent.get("id") or agent.get("agent_id") or ""
+        if answer.get("quality_ok"):
+            answer["quality_ok"], answer["quality_reason"] = _quality_check(answer, question)
+        return answer
     agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
     name=agent.get("name") or agent_id or "unknown"
     attempts=[]
@@ -7786,6 +7797,10 @@ def _public_seti_interviews() -> list[dict]:
             "classification":str(candidate.get("classification") or ""),
             "transport":str(raw.get("transport") or ""),
             "http_status":raw.get("http_status"),
+            "protocol_version":raw.get("protocol_version"),
+            "peer_state":raw.get("peer_state"),
+            "post_started":bool(raw.get("post_started")),
+            "http_response_received":bool(raw.get("http_response_received")),
             "quality_ok":bool(raw.get("quality_ok")),
             "quality_reason":str(raw.get("quality_reason") or ""),
             "reason":str(raw.get("reason") or ""),
@@ -8439,6 +8454,7 @@ def _seti_admitted_agent_details() -> list[dict]:
             "description":str(row.get("capability_excerpt") or "Provisional agent admitted after bounded SETI interview.")[:700],
             "url":endpoint,
             "_seti_admitted":True,
+            "_peer_interface":row.get("peer_interface"),
             "_matched_queries":["seti-admitted"],
         })
     return rows
@@ -8504,54 +8520,9 @@ def _seti_seed_provisional_trust(key: str, interview: dict) -> None:
     AUTOPILOT_STATE["agent_trust"]=trust
 
 
-async def _seti_resolve_interview_endpoint(candidate: dict, eligibility: dict) -> dict:
-    """Resolve an explicitly indexed public Agent Card to its declared A2A endpoint."""
-    mode=str(eligibility.get("contact_mode") or "")
-    url=str(eligibility.get("url") or candidate.get("url") or "").strip()
-    safe,why=_safe_public_https(url)
-    if not safe:
-        return {"ok":False,"reason":why}
-    if mode=="direct_a2a":
-        return {"ok":True,"endpoint":url,"mode":mode,"card":None}
-
-    if mode!="agent_card":
-        return {"ok":False,"reason":"unsupported_contact_mode"}
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=min(TIMEOUT,12),
-            follow_redirects=False,
-            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
-        ) as client:
-            r=await client.get(url)
-        if not r.is_success:
-            return {"ok":False,"reason":"agent_card_http_"+str(r.status_code)}
-        ctype=(r.headers.get("content-type") or "").lower()
-        if "json" not in ctype:
-            return {"ok":False,"reason":"agent_card_not_json"}
-        card=r.json()
-        if not isinstance(card,dict):
-            return {"ok":False,"reason":"agent_card_invalid"}
-        endpoint=str(card.get("url") or card.get("endpoint") or "").strip()
-        esafe,ewhy=_safe_public_https(endpoint)
-        if not esafe:
-            return {"ok":False,"reason":"declared_endpoint_"+ewhy.replace(" ","_")}
-        card_host=(urlparse(url).hostname or "").lower().strip(".")
-        endpoint_host=(urlparse(endpoint).hostname or "").lower().strip(".")
-        if not card_host or endpoint_host!=card_host:
-            return {"ok":False,"reason":"cross_host_agent_card_endpoint_blocked"}
-        return {
-            "ok":True,
-            "endpoint":endpoint,
-            "mode":"agent_card",
-            "card":{
-                "name":str(card.get("name") or "")[:180],
-                "version":str(card.get("version") or "")[:80],
-                "protocolVersion":str(card.get("protocolVersion") or "")[:80],
-            },
-        }
-    except Exception as e:
-        return {"ok":False,"reason":type(e).__name__}
+async def _seti_resolve_interview_endpoint(candidate: dict, eligibility: dict, budget=None) -> dict:
+    """Negotiate an explicit same-origin JSON-RPC interface; do not guess v1 URLs."""
+    return await peer_a2a.resolve_peer(candidate, eligibility, budget)
 
 
 def _admin_authorized(request: Request) -> bool:
@@ -8597,6 +8568,7 @@ def _private_seti_console_payload() -> dict:
         if not isinstance(interview,dict):
             continue
         candidate=candidates.get(key) if isinstance(candidates.get(key),dict) else {}
+        eligibility=interview_candidate_eligibility(candidate)
         rows.append({
             "candidate_key":str(key),
             "status":interview.get("status"),
@@ -8607,6 +8579,10 @@ def _private_seti_console_payload() -> dict:
             "markers":interview.get("markers") or {},
             "transport":interview.get("transport"),
             "http_status":interview.get("http_status"),
+            "protocol_version":interview.get("protocol_version"),
+            "peer_state":interview.get("peer_state"),
+            "peer_context":interview.get("peer_context") or {},
+            "post_started":bool(interview.get("post_started")),
             "quality_ok":interview.get("quality_ok"),
             "quality_reason":interview.get("quality_reason"),
             "reason":interview.get("reason"),
@@ -8774,15 +8750,11 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     interviews=dict(SETI_PRIVATE_STATE.get("interviews") or {})
     admitted=dict(SETI_PRIVATE_STATE.get("admitted") or {})
     results=[]
+    peer_budget=peer_a2a.RequestBudget(limit=9)
 
     ranked=sorted(
         [(str(k),v) for k,v in candidates.items() if isinstance(v,dict)],
-        key=lambda kv:(
-            1 if str((interviews.get(str(kv[0])) or {}).get("status") or "")=="PARKED" else 0,
-            int((kv[1] or {}).get("max_score") or 0),
-            int((kv[1] or {}).get("scan_count") or 0),
-            int((kv[1] or {}).get("source_diversity") or 0),
-        ),
+        key=lambda kv:peer_a2a.peer_priority(kv[1],interviews.get(kv[0]) or {}),
         reverse=True,
     )
 
@@ -8797,7 +8769,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
 
         eligibility=interview_candidate_eligibility(candidate)
 
-        resolved=await _seti_resolve_interview_endpoint(candidate,eligibility)
+        resolved=await _seti_resolve_interview_endpoint(candidate,eligibility,peer_budget)
         if not resolved.get("ok"):
             prior_history=list(prior.get("attempt_history") or [])
             prior_history.append({
@@ -8806,6 +8778,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
                 "status":"PARKED",
                 "score":0,
                 "reason":resolved.get("reason"),
+                "post_started":False,"peer_state":"RESOLUTION_FAILED",
                 "response":"",
                 "endpoint":str(resolved.get("endpoint") or ""),
             })
@@ -8815,6 +8788,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
                 "last_attempt_utc":now,
                 "attempts":prior_attempts+1,
                 "reason":resolved.get("reason"),
+                "post_started":False,"peer_state":"RESOLUTION_FAILED",
                 "attempt_history":prior_history[-3:],
                 "candidate_score":int(candidate.get("max_score") or 0),
                 "dialogue_round":1,
@@ -8829,6 +8803,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
                 "status":"PARKED",
                 "score":0,
                 "reason":resolved.get("reason"),
+                "post_started":False,"peer_state":"RESOLUTION_FAILED",
             })
             if len(results)>=max(1,min(int(max_interviews or 1),3)):
                 break
@@ -8837,7 +8812,9 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         endpoint=str(resolved.get("endpoint") or "")
         interview_prompt=seti_progressive_interview_prompt(prior,_seti_interview_prompt())
         answer=await _ask_a2a_transport(
-            {"name":"SETI candidate "+key[:8],"url":endpoint},
+            {"name":"SETI candidate "+key[:8],"url":endpoint,
+             "_peer_interface":resolved["interface"],
+             "_peer_context":prior.get("peer_context"),"_peer_budget":peer_budget},
             interview_prompt,
         )
         response_text=_response_text(answer)
@@ -8849,7 +8826,8 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         attempt_entry={
             "attempt":prior_attempts+1,
             "dialogue_round":dialogue_round,
-            "prompt":interview_prompt[:3000],
+            "prompt":(interview_prompt[:3000] if answer.get("rpc_method") in {"SendMessage","message/send"}
+                      else str(prior.get("last_prompt") or "")),
             "timestamp_utc":now,
             "status":status,
             "score":int(quality.get("score") or 0),
@@ -8861,6 +8839,8 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "endpoint":endpoint,
             "contact_mode":resolved.get("mode"),
         }
+        for field in ("protocol_version","protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method"):
+            attempt_entry[field]=answer.get(field)
         attempt_history=list(prior.get("attempt_history") or [])
         attempt_history.append(attempt_entry)
         interview={
@@ -8889,6 +8869,12 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             }),
             "next_followup_after_seconds":0 if accepted or prior_attempts+1>=3 else SETI_FOLLOWUP_MIN_SECONDS,
         }
+        interview.update({
+            "peer_interface":resolved["interface"],
+            "peer_context":answer.get("peer_context") or prior.get("peer_context") or {},
+            "last_prompt":attempt_entry["prompt"],
+            **{field:answer.get(field) for field in ("protocol_version","protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method")},
+        })
         interviews[key]=interview
 
         if accepted:
@@ -8897,6 +8883,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
                 "admitted_at_utc":now,
                 "endpoint":endpoint,
                 "contact_mode":resolved.get("mode"),
+                "peer_interface":resolved["interface"],
                 "interview_score":int(quality.get("score") or 0),
                 "capability_excerpt":response_text[:700],
             }
@@ -8913,6 +8900,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
             "status":status,
             "score":int(quality.get("score") or 0),
             "transport":answer.get("transport"),
+            **{field:answer.get(field) for field in ("protocol_ok","peer_state","post_started","http_response_received","delivery_unknown","rpc_method")},
         })
         if len(results)>=max(1,min(int(max_interviews or 1),3)):
             break
@@ -8925,6 +8913,13 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     return {
         "attempted":True,
         "attempted_count":len(results),
+        "post_started_count":sum(1 for x in results if x.get("post_started")),
+        "message_post_started_count":sum(1 for x in results if x.get("post_started") and x.get("rpc_method") in {"message/send","SendMessage"}),
+        "http_response_count":sum(1 for x in results if x.get("http_response_received")),
+        "protocol_response_count":sum(1 for x in results if x.get("protocol_ok")),
+        "delivery_unknown_count":sum(1 for x in results if x.get("delivery_unknown")),
+        "target_request_attempts":peer_budget.used,
+        "request_budget_limit":peer_budget.limit,
         "admitted":bool(admitted_count),
         "admitted_count":admitted_count,
         "parked_count":parked_count,
@@ -8978,9 +8973,10 @@ async def _seti_cycle_if_due() -> dict | None:
         )
         private_checkpoint=await _checkpoint_seti_private_to_render()
         full_safety={
-            "target_http_requests":bool(interview_result.get("attempted")),
-            "active_probe":bool(interview_result.get("attempted")),
-            "messages_sent":bool(interview_result.get("attempted")),
+            "target_http_requests":bool(interview_result.get("target_request_attempts")),
+            "active_probe":bool(interview_result.get("target_request_attempts")),
+            "messages_sent":bool(interview_result.get("message_post_started_count")),
+            "message_delivery_not_guaranteed":True,
             "port_scan":False,
             "bounded_research_only":True,
             "commercial_actions":False,
@@ -9047,6 +9043,12 @@ async def _seti_cycle_if_due() -> dict | None:
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "interview_attempted_count":interview_result.get("attempted_count",0),
+                "interview_post_started_count":interview_result.get("post_started_count",0),
+                "interview_message_post_started_count":interview_result.get("message_post_started_count",0),
+                "interview_http_response_count":interview_result.get("http_response_count",0),
+                "interview_protocol_response_count":interview_result.get("protocol_response_count",0),
+                "interview_delivery_unknown_count":interview_result.get("delivery_unknown_count",0),
+                "interview_request_budget":interview_result.get("request_budget_limit",9),
                 "interview_admitted_count":interview_result.get("admitted_count",0),
                 "interview_parked_count":interview_result.get("parked_count",0),
                 "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),

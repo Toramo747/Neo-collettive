@@ -1,0 +1,224 @@
+"""Offline synthetic fixtures; never run real network requests."""
+import ast
+import copy
+from pathlib import Path
+import unittest
+from unittest.mock import patch, AsyncMock
+import a2a_peer as peer
+from a2a_peer import Interface, parse_reply, select_interface, send_request
+
+CARD_URL='https://peer.example.net/.well-known/agent-card.json'
+ENDPOINT='https://peer.example.net/a2a'
+V1={'name':'Synthetic fixture','supportedInterfaces':[{'url':ENDPOINT,'protocolBinding':'JSONRPC','protocolVersion':'1.0'}]}
+V03={'name':'Legacy fixture','protocolVersion':'0.3.0','url':ENDPOINT,'preferredTransport':'JSONRPC'}
+
+class ContractTests(unittest.TestCase):
+    def test_v1_interface_selected(self):
+        self.assertEqual(select_interface(V1,CARD_URL),Interface(ENDPOINT,'1.0'))
+
+    def test_v03_preserved(self):
+        self.assertEqual(select_interface(V03,CARD_URL),Interface(ENDPOINT,'0.3'))
+
+    def test_unknown_version_not_downgraded(self):
+        card=copy.deepcopy(V1)
+        card['supportedInterfaces'][0]['protocolVersion']='9.0'
+        with self.assertRaises(ValueError): select_interface(card,CARD_URL)
+
+    def test_unsupported_transport_rejected(self):
+        card=copy.deepcopy(V1)
+        card['supportedInterfaces'][0]['protocolBinding']='GRPC'
+        with self.assertRaises(ValueError): select_interface(card,CARD_URL)
+
+    def test_same_origin_preserved(self):
+        card=copy.deepcopy(V1)
+        card['supportedInterfaces'][0]['url']='https://different.example.net/a2a'
+        with self.assertRaises(ValueError): select_interface(card,CARD_URL)
+
+    def test_private_ip_and_http_rejected(self):
+        for url in ('https://127.0.0.1/a2a','https://10.0.0.1/a2a','http://peer.example.net/a2a'):
+            with self.subTest(url=url),self.assertRaises(ValueError):
+                select_interface({**V03,'url':url},CARD_URL)
+
+    def test_card_is_not_rpc_endpoint(self):
+        with self.assertRaises(ValueError): select_interface({**V03,'url':CARD_URL},CARD_URL)
+
+    def test_v1_wire_format(self):
+        body,headers=send_request(Interface(ENDPOINT,'1.0'),'fixture')
+        self.assertEqual(headers['A2A-Version'],'1.0')
+        self.assertEqual(body['method'],'SendMessage')
+        self.assertEqual(body['params']['message']['role'],'ROLE_USER')
+        self.assertNotIn('kind',body['params']['message']['parts'][0])
+
+    def test_v03_wire_format(self):
+        body,headers=send_request(Interface(ENDPOINT,'0.3'),'fixture')
+        self.assertEqual(headers['A2A-Version'],'0.3')
+        self.assertEqual(body['method'],'message/send')
+        self.assertEqual(body['params']['message']['parts'][0]['kind'],'text')
+
+    def test_followup_context_and_task(self):
+        body,_=send_request(Interface(ENDPOINT,'1.0'),'evidence',context_id='opaque-context',task_id='opaque-task')
+        self.assertEqual(body['params']['message']['contextId'],'opaque-context')
+        self.assertEqual(body['params']['message']['taskId'],'opaque-task')
+
+    def test_new_context_no_invented_task(self):
+        body,_=send_request(Interface(ENDPOINT,'1.0'),'first contact')
+        self.assertNotIn('contextId',body['params']['message'])
+        self.assertNotIn('taskId',body['params']['message'])
+
+    def test_prompt_limit_no_silent_truncation(self):
+        with self.assertRaises(ValueError): send_request(Interface(ENDPOINT,'0.3'),'x'*1801)
+
+    def test_rpc_error_http_200_not_answer(self):
+        body={'jsonrpc':'2.0','id':'r1','error':{'code':-32602,'message':'Invalid params'}}
+        row=parse_reply(body,version='0.3',request_id='r1',http_status=200)
+        self.assertEqual(row['state'],'PROTOCOL_ERROR')
+        self.assertFalse(row['protocol_ok'])
+
+    def test_auth_payment_rate_limit(self):
+        for code,state in ((402,'PAYMENT_REQUIRED'),(401,'AUTH_REQUIRED'),(429,'RATE_LIMITED')):
+            row=parse_reply({},version='1.0',request_id='r1',http_status=code)
+            self.assertEqual(row['state'],state)
+            self.assertFalse(row['peer_validated'])
+
+    def test_working_not_finished_answer(self):
+        body={'jsonrpc':'2.0','id':'r1','result':{'task':{'id':'t1','contextId':'ctx1','status':{'state':'TASK_STATE_WORKING'}}}}
+        row=parse_reply(body,version='1.0',request_id='r1',http_status=200)
+        self.assertEqual(row['state'],'WORKING')
+        self.assertEqual(row['task_id'],'t1')
+        self.assertFalse(row['peer_validated'])
+
+    def test_input_required_keeps_question(self):
+        body={'jsonrpc':'2.0','id':'r1','result':{'task':{'id':'t1','contextId':'ctx1','status':{'state':'TASK_STATE_INPUT_REQUIRED','message':{'role':'ROLE_AGENT','parts':[{'text':'What is the control group?'}]}}}}}
+        row=parse_reply(body,version='1.0',request_id='r1',http_status=200)
+        self.assertEqual(row['state'],'INPUT_REQUIRED')
+        self.assertIn('control group',row['text'])
+
+    def test_user_history_not_agent_analysis(self):
+        body={'jsonrpc':'2.0','id':'r1','result':{'kind':'task','id':'t1','status':{'state':'completed'},'history':[{'role':'user','parts':[{'kind':'text','text':'False analysis from prompt'}]}]}}
+        row=parse_reply(body,version='0.3',request_id='r1',http_status=200)
+        self.assertEqual(row['text'],'')
+        self.assertFalse(row['peer_validated'])
+
+    def test_only_agent_artifact_extracted(self):
+        body={'jsonrpc':'2.0','id':'r1','result':{'task':{'id':'t1','contextId':'ctx1','status':{'state':'TASK_STATE_COMPLETED'},'artifacts':[{'parts':[{'text':'Observed conclusion'}]}],'history':[{'role':'ROLE_USER','parts':[{'text':'User prompt'}]}]}}}
+        row=parse_reply(body,version='1.0',request_id='r1',http_status=200)
+        self.assertEqual(row['text'],'Observed conclusion')
+        self.assertFalse(row['peer_validated'])
+
+    def test_rpc_id_mismatch_rejected(self):
+        body={'jsonrpc':'2.0','id':'wrong','result':{'message':{'role':'ROLE_AGENT','parts':[{'text':'answer'}]}}}
+        self.assertFalse(parse_reply(body,version='1.0',request_id='r1',http_status=200)['protocol_ok'])
+
+    def test_v1_oneof_enforced(self):
+        body={'jsonrpc':'2.0','id':'r1','result':{'task':{},'message':{}}}
+        self.assertFalse(parse_reply(body,version='1.0',request_id='r1',http_status=200)['protocol_ok'])
+
+class NetworkBoundaryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dns_failure_does_not_count_post(self):
+        with patch.object(peer.socket,'getaddrinfo',side_effect=OSError('DNS failed')):
+            row=await peer.exchange_peer(Interface(ENDPOINT,'0.3'),'A bounded question.')
+        self.assertFalse(row['post_started'])
+        self.assertFalse(row['ok'])
+
+    async def test_card_resolution_v1(self):
+        request=AsyncMock(return_value={'status':200,'body':V1})
+        with patch.object(peer,'public_json_request',request):
+            row=await peer.resolve_peer({'url':CARD_URL},{'contact_mode':'agent_card'})
+        self.assertTrue(row['ok'])
+        self.assertEqual(row['interface']['version'],'1.0')
+
+    async def test_resolution_failure_never_calls_rpc(self):
+        request=AsyncMock(return_value={'status':404,'body':{}})
+        with patch.object(peer,'public_json_request',request):
+            row=await peer.resolve_peer({'url':CARD_URL},{'contact_mode':'agent_card'})
+        self.assertFalse(row['ok'])
+        self.assertFalse(row['post_started'])
+        self.assertEqual(request.call_args.args[0],'GET')
+        self.assertEqual(request.call_count,1)
+
+    async def _exchange(self,state,kind='message',context='ctx1'):
+        captured=[]
+        async def request(method,url,budget,payload,headers):
+            captured.append(payload)
+            message={'kind':'message','role':'agent','contextId':context,'parts':[{'kind':'text','text':'The observed tradeoff requires a quality constraint before deployment.'}]}
+            result=message if kind=='message' else {'kind':'task','id':'task1','contextId':context,'status':{'state':kind},'artifacts':[]}
+            return {'status':200,'body':{'jsonrpc':'2.0','id':payload['id'],'result':result},'request_started':True,'response_received':True}
+        with patch.object(peer,'public_json_request',request):
+            row=await peer.exchange_peer(Interface(ENDPOINT,'0.3'),'Updated evidence.',state)
+        return row,captured
+
+    async def test_completed_task_not_reopened(self):
+        prior={'endpoint':ENDPOINT,'protocol_version':'0.3','context_id':'ctx1','task_id':'task1','state':'COMPLETED'}
+        row,sent=await self._exchange(prior)
+        self.assertEqual(sent[0]['params']['message']['contextId'],'ctx1')
+        self.assertNotIn('taskId',sent[0]['params']['message'])
+        self.assertTrue(row['quality_ok'])
+
+    async def test_input_required_continues_task(self):
+        prior={'endpoint':ENDPOINT,'protocol_version':'0.3','context_id':'ctx1','task_id':'task1','state':'INPUT_REQUIRED'}
+        _,sent=await self._exchange(prior)
+        self.assertEqual(sent[0]['params']['message']['taskId'],'task1')
+
+    async def test_working_polled_not_duplicate(self):
+        prior={'endpoint':ENDPOINT,'protocol_version':'0.3','context_id':'ctx1','task_id':'task1','state':'WORKING'}
+        row,sent=await self._exchange(prior,'working')
+        self.assertEqual(sent[0]['method'],'tasks/get')
+        self.assertFalse(row['quality_ok'])
+
+    async def test_changed_context_rejected(self):
+        prior={'endpoint':ENDPOINT,'protocol_version':'0.3','context_id':'ctx1','state':'MESSAGE'}
+        row,_=await self._exchange(prior,context='unexpected')
+        self.assertEqual(row['peer_state'],'CONTEXT_MISMATCH')
+        self.assertFalse(row['quality_ok'])
+
+    async def test_payment_no_retry(self):
+        request=AsyncMock(return_value={'status':402,'body':{},'request_started':True,'response_received':True})
+        with patch.object(peer,'public_json_request',request):
+            row=await peer.exchange_peer(Interface(ENDPOINT,'0.3'),'Bounded interview.')
+        self.assertEqual(row['peer_state'],'PAYMENT_REQUIRED')
+        self.assertFalse(row['quality_ok'])
+        self.assertEqual(request.call_count,1)
+
+    async def test_request_budget(self):
+        with patch.object(peer,'_request_sync') as request:
+            row=await peer.exchange_peer(Interface(ENDPOINT,'0.3'),'Bounded question.',budget=peer.RequestBudget(limit=0))
+        request.assert_not_called()
+        self.assertFalse(row['post_started'])
+        self.assertEqual(row['quality_reason'],'REQUEST_BUDGET_EXHAUSTED')
+
+    def test_private_dns_before_connection(self):
+        with patch.object(peer.socket,'getaddrinfo',return_value=[(2,1,6,'',('127.0.0.1',443))]),patch.object(peer.socket,'create_connection') as connection:
+            row=peer._request_sync('GET',CARD_URL,None,{},1)
+        connection.assert_not_called()
+        self.assertEqual(row['error'],'NONPUBLIC_DNS_BLOCKED')
+
+    def test_new_peer_priority(self):
+        self.assertGreater(peer.peer_priority({'max_score':90},{}),peer.peer_priority({'max_score':20},{'status':'PARKED'}))
+
+    def test_only_allowlisted_data_envelope(self):
+        self.assertEqual(peer._parts([{'data':{'history':[{'text':'fake answer'}]}}]),[])
+        self.assertEqual(peer._parts([{'data':{'output':'domain answer','model':'declared'}}]),['domain answer'])
+
+class IntegratedRoutingTests(unittest.TestCase):
+    def function(self,name):
+        tree=ast.parse(Path('cloud_mcp.py').read_text())
+        return ast.unparse(next(n for n in tree.body if getattr(n,'name',None)==name))
+
+    def test_negotiated_private_context(self):
+        source=self.function('_seti_interview_one_candidate')
+        for needle in ('_peer_interface','_peer_context','message_post_started_count','peer_a2a.RequestBudget(limit=9)',"quality.get('accepted')"):
+            self.assertIn(needle,source)
+
+    def test_old_transport_path_preserved(self):
+        source=self.function('_ask_a2a_transport')
+        self.assertIn('peer_a2a.exchange_peer',source)
+        self.assertIn('registry_chat',source)
+
+    def test_admitted_interface_retained(self):
+        self.assertIn('_peer_interface',self.function('_seti_admitted_agent_details'))
+
+    def test_send_not_inferred_from_attempt(self):
+        self.assertIn("bool(interview_result.get('message_post_started_count'))",self.function('_seti_cycle_if_due'))
+
+if __name__=='__main__':
+    unittest.main()
