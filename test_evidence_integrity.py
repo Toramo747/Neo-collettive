@@ -7,6 +7,8 @@ from evidence_integrity import (
     demand_signal_type,
     gate_eligible_problem_key,
     migrate_evidence_memory,
+    problem_customer_segment,
+    problem_job_tail,
     structured_paid_source,
     thesis_attributed_problem_key,
 )
@@ -55,6 +57,40 @@ class EvidenceIntegrityTests(unittest.TestCase):
     def test_generic_never_gate_eligible(self):
         self.assertFalse(gate_eligible_problem_key("ai_tools:generic_technology"))
         self.assertFalse(gate_eligible_problem_key("ai_tools:general"))
+
+    def test_generic_customer_placeholder_is_removed_from_identity(self):
+        self.assertEqual(
+            canonical_problem_key("manual_data_entry","manual_data_entry:buyers:manual_data_entry"),
+            "manual_data_entry:manual_data_entry",
+        )
+        self.assertEqual(
+            canonical_problem_key("","manual_data_entry:buyers:buyers_manual_data_entry"),
+            "manual_data_entry:manual_data_entry",
+        )
+        self.assertEqual(
+            canonical_problem_key("","manual_data_entry:buyers:buyers_buyers_manual_data_entry"),
+            "manual_data_entry:manual_data_entry",
+        )
+
+    def test_problem_job_tail_never_contains_customer_segment(self):
+        self.assertEqual(
+            problem_job_tail("manual_data_entry:small_businesses:invoice_reconciliation"),
+            "invoice_reconciliation",
+        )
+        self.assertEqual(
+            problem_job_tail("manual_data_entry:buyers:buyers_manual_data_entry"),
+            "manual_data_entry",
+        )
+
+    def test_problem_customer_segment_preserves_real_customer_only(self):
+        self.assertEqual(
+            problem_customer_segment("manual_data_entry:small_businesses:invoice_reconciliation"),
+            "small_businesses",
+        )
+        self.assertEqual(
+            problem_customer_segment("manual_data_entry:buyers:manual_data_entry"),
+            "",
+        )
 
     def test_url_dedup_strips_tracking_and_fragment(self):
         a=canonical_url("https://Example.com/path/?utm_source=x&a=1#frag")
@@ -139,6 +175,14 @@ class EvidenceIntegrityTests(unittest.TestCase):
             problem_id,
         )
         self.assertTrue(gate_eligible_problem_key(problem_id))
+
+    def test_thesis_attribution_canonicalizes_generic_customer_identity(self):
+        observed="manual_data_entry:general"
+        problem_id="manual_data_entry:buyers:buyers_manual_data_entry"
+        self.assertEqual(
+            thesis_attributed_problem_key(observed,problem_id,"th-123",80,3),
+            "manual_data_entry:manual_data_entry",
+        )
 
     def test_plain_devops_maps_to_developer_tools(self):
         self.assertEqual(commercial_family("Hiring DevOps engineer for deployment automation"),"developer_tools")
