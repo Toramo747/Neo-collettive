@@ -69,7 +69,13 @@ def _market_proof(result: dict | None, active_thesis: dict | None, thesis_histor
     for row in reversed(history):
         if str(row.get("status") or "").upper() != "EXHAUSTED":
             continue
-        if _int(row.get("closed_at_cycle")) >= max(0, cycle - 1):
+        row_budget = _int(row.get("budget_cycles"))
+        row_used = _int(row.get("cycles_used"))
+        if (
+            _int(row.get("closed_at_cycle")) >= max(0, cycle - 1)
+            and row_budget > 0
+            and row_used <= row_budget
+        ):
             recent_exhausted = row
             break
 
