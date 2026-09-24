@@ -22,6 +22,7 @@ from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
+from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -76,7 +77,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.92.0"  # observed before/after measurement gate for venture MVPs
+VERSION = "0.93.0"  # quarantine execution-shaped crypto spam before agent dialogue
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -169,6 +170,12 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
+    "inbound_security_events": [],
+    "inbound_security_stats": {
+        "blocked_total":0,
+        "crypto_transfer_requests":0,
+        "last_seen_utc":None,
+    },
     "trust_lab_evaluations": [],
     "agent_chat_events": [],
     "agent_chat_monitor": {
@@ -282,6 +289,8 @@ def _state_payload() -> dict:
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "inbound_security_events": list(AUTOPILOT_STATE.get("inbound_security_events") or [])[-80:],
+        "inbound_security_stats": AUTOPILOT_STATE.get("inbound_security_stats") or {},
         "agent_chat_events": list(AUTOPILOT_STATE.get("agent_chat_events") or [])[-240:],
         "agent_chat_monitor": AUTOPILOT_STATE.get("agent_chat_monitor") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
@@ -347,6 +356,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
+    if isinstance(payload.get("inbound_security_events"), list):
+        AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
+    if isinstance(payload.get("inbound_security_stats"), dict):
+        AUTOPILOT_STATE["inbound_security_stats"] = payload.get("inbound_security_stats") or {}
     if isinstance(payload.get("agent_chat_events"), list):
         AUTOPILOT_STATE["agent_chat_events"] = payload.get("agent_chat_events")[-240:]
     if isinstance(payload.get("agent_chat_monitor"), dict):
@@ -682,6 +695,8 @@ def _restore_state() -> str:
     cycle_floor_meta["load"]=cycle_floor_load
     payload=upgrade_legacy_admitted_interviews(payload)
     payload=upgrade_legacy_intent_state(payload)
+    payload,inbound_security_migration=quarantine_legacy_inbound_security(payload)
+    meta["inbound_security_migration"]=inbound_security_migration
     if isinstance(payload,dict):
         payload=dict(payload)
         payload["agent_demand_observatory"]=summarize_agent_demand(
@@ -975,6 +990,40 @@ def _inbound_is_substantive(text: str) -> bool:
     return len(_tokens(text))>=8
 
 
+
+def _record_inbound_security_event(payload: dict, request: Request, verdict: dict) -> dict:
+    text=_a2a_inbound_text(payload)
+    sender=_a2a_sender(payload,request)
+    thread_id=_a2a_thread_id(payload,sender)
+    now=datetime.now(timezone.utc).isoformat()
+    message_id=str(((payload.get("params") or {}).get("message") or {}).get("messageId") or ("sec-in-"+secrets.token_hex(6)))[:180]
+    event={
+        "schema_v":1,
+        "event_id":"sec-"+security_fingerprint(message_id+"|"+text),
+        "received_at_utc":now,
+        "source_message_id":message_id,
+        "thread_id":thread_id,
+        "traffic_class":str(verdict.get("traffic_class") or "ADVERSARIAL_SPAM"),
+        "reason":str(verdict.get("reason") or "blocked_by_inbound_security"),
+        "signals":list(verdict.get("signals") or []),
+        "sender_declared":bool(sender.get("declared")),
+        "text_excerpt":redact_security_text(text),
+        "response_suppressed":True,
+        "commercial_influence":"NONE",
+        "protected_actions_enforced":True,
+    }
+    events=list(AUTOPILOT_STATE.get("inbound_security_events") or [])
+    events.append(event)
+    AUTOPILOT_STATE["inbound_security_events"]=events[-80:]
+    stats=dict(AUTOPILOT_STATE.get("inbound_security_stats") or {})
+    stats["blocked_total"]=int(stats.get("blocked_total") or 0)+1
+    if event["reason"]=="execution_shaped_crypto_transfer_request":
+        stats["crypto_transfer_requests"]=int(stats.get("crypto_transfer_requests") or 0)+1
+    stats["last_seen_utc"]=now
+    AUTOPILOT_STATE["inbound_security_stats"]=stats
+    return event
+
+
 def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     text=_a2a_inbound_text(payload)
     sender=_a2a_sender(payload,request)
@@ -1216,6 +1265,31 @@ async def a2a_endpoint(request: Request):
             "error":{"code":-32601,"message":"Method not found. MYCELIX accepts message/send (and SendMessage compatibility)."}
         },status_code=404)
 
+    inbound_text=_a2a_inbound_text(payload)
+    security_verdict=classify_inbound_security(inbound_text)
+    if security_verdict.get("blocked"):
+        event=_record_inbound_security_event(payload,request,security_verdict)
+        _save_local_state()
+        suppressed={
+            "role":"agent",
+            "messageId":"neo-suppressed-"+secrets.token_hex(8),
+            "contextId":event.get("thread_id"),
+            "parts":[],
+            "metadata":{
+                "neo_version":VERSION,
+                "a2a_version":requested_version,
+                "brand":"MYCELIX",
+                "traffic_class":event.get("traffic_class"),
+                "response_suppressed":True,
+                "conversation_allowed_bounded":False,
+                "commercial_influence":"NONE",
+                "protected_actions_enforced":True,
+            },
+        }
+        if requested_version=="0.3":
+            suppressed["kind"]="message"
+        return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":suppressed})
+
     row=_record_inbound_agent_message(payload,request)
     reply=_inbound_reply_text(row)
     message_id="neo-reply-"+secrets.token_hex(8)
@@ -1436,6 +1510,8 @@ async def api_inbound_agents(request: Request):
     stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
     declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
     messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
+    security_events=list(AUTOPILOT_STATE.get("inbound_security_events") or [])
+    security_stats=dict(AUTOPILOT_STATE.get("inbound_security_stats") or {})
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
@@ -1444,6 +1520,9 @@ async def api_inbound_agents(request: Request):
         "inbound_messages":len(messages),
         "declared_unique_agents":len(declared),
         "anonymous_messages":sum(1 for x in messages if not ((x.get("sender") or {}).get("declared"))),
+        "security_blocked_total":int(security_stats.get("blocked_total") or 0),
+        "security_crypto_transfer_requests":int(security_stats.get("crypto_transfer_requests") or 0),
+        "security_last_seen_utc":security_stats.get("last_seen_utc"),
         "admitted_agents":sum(1 for x in declared if str(x.get("status") or "")=="ADMITTED"),
         "parked_agents":sum(1 for x in declared if str(x.get("status") or "")=="PARKED"),
         "active_peer_interviews":sum(1 for x in declared if str(x.get("dialogue_status") or "")=="ACTIVE"),
@@ -1456,6 +1535,7 @@ async def api_inbound_agents(request: Request):
         "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
         "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
         "recent_messages":messages[-20:],
+        "recent_security_events":security_events[-20:],
     })
 
 
@@ -1463,12 +1543,14 @@ async def inbound_page(request: Request):
     stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
     declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
     messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
+    security_stats=dict(AUTOPILOT_STATE.get("inbound_security_stats") or {})
     body=(
         '<section class="card"><span class="tag">PUBLIC A2A</span><h2>MYCELIX Agent Inbox</h2>'
         '<p>MYCELIX e raggiungibile dagli agenti esterni. Ogni messaggio viene trattato come evidenza non fidata e non puo eseguire istruzioni remote.</p>'
         '<div class="grid">'
         '<article><div class="muted">Agenti inbound dichiarati</div><h2>'+str(len(declared))+'</h2></article>'
         '<article><div class="muted">Messaggi inbound</div><h2>'+str(len(messages))+'</h2></article>'
+        '<article><div class="muted">Spam/adversarial bloccati</div><h2>'+str(int(security_stats.get("blocked_total") or 0))+'</h2></article>'
         '<article><div class="muted">Endpoint</div><h3>/a2a</h3></article>'
         '</div>'
         '<p class="muted">Agent Card: '+html.escape(PUBLIC_BASE_URL+'/.well-known/agent-card.json')+'</p></section>'
