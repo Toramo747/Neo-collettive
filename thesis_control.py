@@ -4,7 +4,33 @@ This module changes search allocation only. It never relaxes the commercial
 quality gate or turns historical evidence into current evidence.
 """
 from __future__ import annotations
-from typing import Any
+
+import re
+
+
+def thesis_seed_fingerprint(seed_problem_key: str) -> str:
+    """Normalize mechanical seed drift without broad semantic guessing.
+
+    Examples such as:
+      manual_data_entry:buyers:manual_data_entry
+      manual_data_entry:buyers:buyers_manual_data_entry
+    map to the same fingerprint because the duplicated adjacent actor token is
+    a planner artifact, not a genuinely different customer problem.
+    """
+    raw=str(seed_problem_key or "").strip().lower()
+    if not raw:
+        return ""
+    family, sep, rest=raw.partition(":")
+    if not sep:
+        family=""
+        rest=raw
+    words=[x for x in re.split(r"[^a-z0-9]+",rest) if x]
+    collapsed=[]
+    for word in words:
+        if not collapsed or collapsed[-1]!=word:
+            collapsed.append(word)
+    normalized=" ".join(collapsed)
+    return (family+"|"+normalized) if family else normalized
 
 
 def exhausted_seed_blocked(
@@ -13,9 +39,9 @@ def exhausted_seed_blocked(
     current_cycle: int,
     cooldown_cycles: int,
 ) -> bool:
-    """Prevent immediate recreation of an exhausted thesis on the same seed."""
-    key=str(seed_problem_key or "").strip()
-    if not key:
+    """Prevent immediate recreation of an exhausted thesis on the same semantic seed."""
+    fingerprint=thesis_seed_fingerprint(seed_problem_key)
+    if not fingerprint:
         return False
     current=max(0,int(current_cycle or 0))
     cooldown=max(1,int(cooldown_cycles or 1))
@@ -24,7 +50,7 @@ def exhausted_seed_blocked(
             continue
         if str(raw.get("status") or "").upper()!="EXHAUSTED":
             continue
-        if str(raw.get("seed_problem_key") or "")!=key:
+        if thesis_seed_fingerprint(str(raw.get("seed_problem_key") or ""))!=fingerprint:
             continue
         closed=max(0,int(raw.get("closed_at_cycle") or 0))
         return current < closed + cooldown
