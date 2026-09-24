@@ -119,6 +119,8 @@ def send_request(interface: Interface, text: str, *, context_id: str | None = No
                "params": {"message": message}}
     headers = {"A2A-Version": version, "Content-Type": "application/json",
                "Accept": "application/json"}
+    if version == "1.0" and interface.tenant:
+        headers["A2A-Tenant"] = interface.tenant
     return payload, headers
 
 
