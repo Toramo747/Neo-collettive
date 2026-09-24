@@ -56,10 +56,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Require explicit confirmation
+      - name: Require Reddit API approval and explicit confirmation
         env:
           CONFIRM_TEXT: ${{ inputs.confirm }}
+          REDDIT_API_APPROVED: ${{ vars.REDDIT_API_APPROVED }}
         run: |
+          if [ "$REDDIT_API_APPROVED" != "true" ]; then
+            echo "Publish blocked: repository variable REDDIT_API_APPROVED must be true after Reddit approval."
+            exit 1
+          fi
           if [ "$CONFIRM_TEXT" != "PUBLISH" ]; then
             echo "Publish blocked: confirm input must be exactly PUBLISH."
             exit 1
