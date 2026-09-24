@@ -1,0 +1,46 @@
+name: MYCELIX v0.96 Runtime Readonly Verify
+on:
+  push:
+    branches: [verify/runtime-096]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Runtime health
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://neo-collettive.onrender.com/health | tee /tmp/health.json
+      - name: Autopilot status
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://neo-collettive.onrender.com/api/autopilot/status > /tmp/status.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/status.json'))
+          a=d.get('autopilot') or {}
+          print(json.dumps({
+            'neo_version':d.get('neo_version'),
+            'runtime_profile':d.get('runtime_profile'),
+            'cycles_completed':a.get('cycles_completed'),
+            'running':a.get('running'),
+            'last_status':a.get('last_status'),
+            'last_error':a.get('last_error'),
+            'last_started_utc':a.get('last_started_utc'),
+            'last_finished_utc':a.get('last_finished_utc'),
+            'seti':a.get('seti'),
+            'agent_chat_monitor':a.get('agent_chat_monitor'),
+            'last_measurement':a.get('last_measurement'),
+          },ensure_ascii=False,indent=2))
+          PY
+      - name: Public surfaces
+        run: |
+          set -euo pipefail
+          for url in             https://neo-collettive.onrender.com/.well-known/agent-card.json             https://neo-collettive.onrender.com/api/memory/status             https://neo-collettive.onrender.com/api/builder/status             https://neo-collettive.onrender.com/api/autonomy/status
+          do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 30 "$url")"
+            echo "$code $url"
+            test "$code" = "200"
+          done
