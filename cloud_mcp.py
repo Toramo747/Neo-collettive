@@ -86,7 +86,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.98.3"  # external-proof focus + exhausted-thesis anti-loop
+VERSION = "0.98.4"  # semantic exhausted-thesis anti-loop
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
