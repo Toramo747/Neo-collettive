@@ -325,8 +325,8 @@ async def exchange_peer(interface: Interface, question: str, prior: dict | None 
         context_id = prior.get("context_id") if same and _valid_id(prior.get("context_id")) else None
         task_id = prior.get("task_id") if same and _valid_id(prior.get("task_id")) else None
         state = prior.get("state") if same else None
-        if state == "AUTH_REQUIRED":
-            base["peer_state"] = "AUTH_REQUIRED"
+        if state in {"AUTH_REQUIRED", "PAYMENT_REQUIRED"}:
+            base["peer_state"] = state
             return base
         polling = bool(task_id and state in {"SUBMITTED", "WORKING"})
         if polling:
@@ -353,8 +353,11 @@ async def exchange_peer(interface: Interface, question: str, prior: dict | None 
             parsed.update(protocol_ok=False, state="CONTEXT_MISMATCH", text="")
         if polling and parsed.get("protocol_ok") and parsed.get("task_id") != task_id:
             parsed.update(protocol_ok=False, state="TASK_MISMATCH", text="")
+        refusal = explicit_peer_refusal(parsed["text"]) if parsed["protocol_ok"] else None
+        if refusal:
+            parsed["state"] = refusal
         base.update(protocol_ok=parsed["protocol_ok"], peer_state=parsed["state"], response={"text": parsed["text"]})
-        if parsed["protocol_ok"]:
+        if parsed["protocol_ok"] or parsed["state"] in {"AUTH_REQUIRED", "PAYMENT_REQUIRED"}:
             base["peer_context"] = {"endpoint": interface.url, "protocol_version": interface.version,
                                     "context_id": parsed.get("context_id") or context_id,
                                     "task_id": parsed.get("task_id"), "state": parsed["state"]}
@@ -367,3 +370,22 @@ async def exchange_peer(interface: Interface, question: str, prior: dict | None 
     except (ValueError, TypeError) as exc:
         base["quality_reason"] = str(exc)[:160]
         return base
+
+
+def explicit_peer_refusal(text: str) -> str | None:
+    """Recognize an explicit refusal, including the observed JSON-as-text envelope.
+
+    A peer's payment claim is not an independently verified price. It is still a
+    stop condition. General research mentioning payments does not trigger this.
+    """
+    value=str(text or "").strip()
+    try:
+        data=json.loads(value)
+    except (ValueError,TypeError):
+        data=None
+    if isinstance(data,dict):
+        fields=[k for k in ("output","text","response") if isinstance(data.get(k),str)]
+        if len(fields)==1:
+            value=data[fields[0]].strip()
+    match=re.match(r"^(PAYMENT_REQUIRED|AUTH_REQUIRED)\b",value,re.I)
+    return match[1].upper() if match else None
