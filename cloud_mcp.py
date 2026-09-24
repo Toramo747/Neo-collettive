@@ -87,7 +87,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.2"  # prevent same-cycle reselection of exhausted thesis
+VERSION = "0.99.3"  # discard restored active thesis whose seed is already exhausted
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -4307,15 +4307,28 @@ def _anthropic_convergence_queries(limit: int = 6) -> list[dict]:
         )
         AUTOPILOT_STATE["active_thesis"]=active
 
+        # A deploy/restart can restore a duplicate ACTIVE thesis created just before
+        # its predecessor was persisted as EXHAUSTED. Never let that stale duplicate
+        # bypass the exhausted-seed cooldown merely because it is already active.
+        if exhausted_seed_blocked(
+            list(AUTOPILOT_STATE.get("thesis_history") or []),
+            str(active.get("seed_problem_key") or ""),
+            int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+            int(_load_policy()["thesis_exhausted_cooldown_cycles"]),
+        ):
+            AUTOPILOT_STATE["active_thesis"]=None
+            active=None
+
         # Observed-pain hypotheses are persisted across deploys. Do not let a thesis
         # created by the pre-humanization schema keep consuming convergence cycles.
-        stale_observed=(
-            str(active.get("origin") or "")=="observed_pain"
+        stale_observed=bool(
+            isinstance(active,dict)
+            and str(active.get("origin") or "")=="observed_pain"
             and int(active.get("hypothesis_schema_v") or 1)<OBSERVED_HYPOTHESIS_SCHEMA_VERSION
         )
-        used=int(active.get("cycles_used") or 0)
-        budget=max(1,int(active.get("budget_cycles") or 4))
-        if stale_observed or used>=budget:
+        used=int(active.get("cycles_used") or 0) if isinstance(active,dict) else 0
+        budget=max(1,int(active.get("budget_cycles") or 4)) if isinstance(active,dict) else 4
+        if isinstance(active,dict) and (stale_observed or used>=budget):
             finished=dict(active)
             finished["status"]="STALE_SCHEMA" if stale_observed else "EXHAUSTED"
             finished["closed_at_cycle"]=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
