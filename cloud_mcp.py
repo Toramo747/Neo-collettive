@@ -78,7 +78,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.94.0"  # quarantine execution-shaped crypto spam before agent dialogue
+VERSION = "0.95.0"  # A2A declared cross-origin interfaces, tenant propagation, failure telemetry
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -8909,6 +8909,12 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         return {"attempted":False,"attempted_count":0,"admitted":False,"admitted_count":0,"status":"NO_ELIGIBLE_CANDIDATE","results":[]}
     admitted_count=sum(1 for x in results if x.get("admitted"))
     parked_count=sum(1 for x in results if x.get("status")=="PARKED")
+    failure_reasons={}
+    for row in results:
+        if row.get("admitted"):
+            continue
+        reason=str(row.get("reason") or row.get("peer_state") or row.get("quality_reason") or "unknown")
+        failure_reasons[reason]=int(failure_reasons.get(reason) or 0)+1
     overall="ADMITTED" if admitted_count else ("PARKED" if parked_count else str(results[-1].get("status") or "COMPLETED"))
     return {
         "attempted":True,
@@ -8918,6 +8924,7 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         "http_response_count":sum(1 for x in results if x.get("http_response_received")),
         "protocol_response_count":sum(1 for x in results if x.get("protocol_ok")),
         "delivery_unknown_count":sum(1 for x in results if x.get("delivery_unknown")),
+        "failure_reason_counts":failure_reasons,
         "target_request_attempts":peer_budget.used,
         "request_budget_limit":peer_budget.limit,
         "admitted":bool(admitted_count),
@@ -9048,6 +9055,7 @@ async def _seti_cycle_if_due() -> dict | None:
                 "interview_http_response_count":interview_result.get("http_response_count",0),
                 "interview_protocol_response_count":interview_result.get("protocol_response_count",0),
                 "interview_delivery_unknown_count":interview_result.get("delivery_unknown_count",0),
+                "interview_failure_reason_counts":interview_result.get("failure_reason_counts") or {},
                 "interview_request_budget":interview_result.get("request_budget_limit",9),
                 "interview_admitted_count":interview_result.get("admitted_count",0),
                 "interview_parked_count":interview_result.get("parked_count",0),
