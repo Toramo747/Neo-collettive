@@ -7,7 +7,7 @@ from urllib.parse import urlparse, unquote
 from typing import Any, Awaitable, Callable
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 10
+SETI_ENGINE_VERSION = 11
 
 DEFAULT_PASSIVE_QUERIES = [
     'inurl:"/.well-known/agent-card.json" "message/send" -site:a2aregistry.org',
@@ -839,8 +839,12 @@ def seti_candidate_attempt_state(candidate: dict, prior: dict | None, now_utc: s
     prior=prior if isinstance(prior,dict) else {}
     status=str(prior.get("status") or "")
     attempts=max(0,int(prior.get("attempts") or (1 if prior else 0)))
+    block_reason=str(prior.get("reason") or prior.get("peer_state") or "").upper()
+    followup_state=str(prior.get("followup_state") or "").upper()
     if status=="ADMITTED":
         return {"ready":False,"reason":"already_admitted","attempts":attempts}
+    if block_reason=="AUTH_REQUIRED" or followup_state=="AUTH_BLOCKED":
+        return {"ready":False,"reason":"auth_required","attempts":attempts}
     if status=="PARKED" and attempts>=3:
         return {"ready":False,"reason":"attempts_exhausted","attempts":attempts}
     if status=="PARKED" and not seti_retry_ready(prior,now_utc,min_seconds):
@@ -964,6 +968,9 @@ def seti_followup_state(previous: dict | None, max_attempts: int = 3) -> str:
     attempts=max(0,int(previous.get("attempts") or 0))
     if status=="ADMITTED":
         return "COMPLETE"
+    reason=str(previous.get("reason") or previous.get("peer_state") or "").upper()
+    if reason=="AUTH_REQUIRED" or str(previous.get("followup_state") or "").upper()=="AUTH_BLOCKED":
+        return "AUTH_BLOCKED"
     if attempts>=max(1,int(max_attempts or 3)):
         return "EXHAUSTED"
     if not previous:
@@ -991,7 +998,9 @@ def seti_retry_ready(previous: dict | None, now_utc: str, min_seconds: int = 360
     try:
         now=datetime.fromisoformat(str(now_utc).replace("Z","+00:00")).astimezone(timezone.utc)
         then=datetime.fromisoformat(last.replace("Z","+00:00")).astimezone(timezone.utc)
-        return (now-then).total_seconds()>=max(0,int(min_seconds or 0))
+        configured=max(0,int(min_seconds or 0))
+        override=max(0,int(previous.get("retry_after_seconds") or 0))
+        return (now-then).total_seconds()>=max(configured,override)
     except Exception:
         return True
 
