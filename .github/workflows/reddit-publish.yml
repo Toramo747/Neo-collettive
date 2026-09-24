@@ -1,0 +1,95 @@
+name: Publish MYCELIX Reddit manifesto
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Validate only, or publish to Reddit"
+        required: true
+        default: validate
+        type: choice
+        options:
+          - validate
+          - publish
+      subreddit:
+        description: "Target subreddit name, without r/"
+        required: true
+        default: AI_Agents
+        type: string
+      confirm:
+        description: "For publish only: type PUBLISH exactly"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mycelix-reddit-manifest
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile publisher
+        run: python3 -m py_compile ops/reddit_publish.py
+
+      - name: Validate manifesto
+        env:
+          TARGET_SUBREDDIT: ${{ inputs.subreddit }}
+        run: |
+          python3 ops/reddit_publish.py \
+            --mode validate \
+            --subreddit "$TARGET_SUBREDDIT" \
+            --body-file docs/reddit_manifest.md
+
+  publish:
+    if: ${{ inputs.action == 'publish' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit confirmation
+        env:
+          CONFIRM_TEXT: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM_TEXT" != "PUBLISH" ]; then
+            echo "Publish blocked: confirm input must be exactly PUBLISH."
+            exit 1
+          fi
+
+      - name: Publish manifesto to Reddit
+        id: reddit
+        env:
+          TARGET_SUBREDDIT: ${{ inputs.subreddit }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_REFRESH_TOKEN: ${{ secrets.REDDIT_REFRESH_TOKEN }}
+          REDDIT_USER_AGENT: "script:mycelix-reddit-publisher:v1.0 (GitHub Actions)"
+        run: |
+          python3 ops/reddit_publish.py \
+            --mode publish \
+            --subreddit "$TARGET_SUBREDDIT" \
+            --body-file docs/reddit_manifest.md | tee reddit-publish-result.txt
+          POST_URL="$(grep '^POST_URL=' reddit-publish-result.txt | tail -n 1 | cut -d= -f2-)"
+          test -n "$POST_URL"
+          echo "post_url=$POST_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish result summary
+        env:
+          POST_URL: ${{ steps.reddit.outputs.post_url }}
+          TARGET_SUBREDDIT: ${{ inputs.subreddit }}
+        run: |
+          {
+            echo "## MYCELIX Reddit publication"
+            echo
+            echo "- Subreddit: r/$TARGET_SUBREDDIT"
+            echo "- Post: $POST_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
