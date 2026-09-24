@@ -21,6 +21,7 @@ from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
+from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -75,7 +76,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.91.0"  # bounded-active SETI with corrected dual A2A registries
+VERSION = "0.92.0"  # observed before/after measurement gate for venture MVPs
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -241,7 +242,11 @@ AUTOPILOT_STATE: dict[str, Any] = {
         "audits_total": 0,
         "audits_with_baseline": 0,
         "audits_with_error_baseline": 0,
+        "observed_baselines_total": 0,
+        "observed_results_total": 0,
+        "observed_improved_total": 0,
     },
+    "venture_measurements": [],
     "seti": {
         "enabled": SETI_ENABLED,
         "mode": "passive",
@@ -293,6 +298,7 @@ def _state_payload() -> dict:
         "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
         "jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
+        "venture_measurements": list(AUTOPILOT_STATE.get("venture_measurements") or [])[-50:],
         "seti": AUTOPILOT_STATE.get("seti") or {},
     }
 
@@ -407,6 +413,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["jarvis_runtime"] = payload.get("jarvis_runtime") or {}
     if isinstance(payload.get("venture_metrics"), dict):
         AUTOPILOT_STATE["venture_metrics"] = payload.get("venture_metrics") or {}
+    if isinstance(payload.get("venture_measurements"), list):
+        AUTOPILOT_STATE["venture_measurements"] = [
+            x for x in payload.get("venture_measurements")[-50:] if isinstance(x,dict)
+        ]
     if isinstance(payload.get("seti"), dict):
         restored=dict(payload.get("seti") or {})
         current=dict(AUTOPILOT_STATE.get("seti") or {})
@@ -6593,22 +6603,44 @@ def _measurement_snapshot(build: dict) -> dict:
     baseline=int(build.get("audit_count_at_build") or 0)
     total=int(metrics.get("audits_total") or 0)
     new_usage=max(0,total-baseline)
+    observed=measurement_summary(
+        list(AUTOPILOT_STATE.get("venture_measurements") or []),
+        build_id=str(build.get("build_id") or ""),
+        family=str(build.get("family") or ""),
+    )
+    latest_observed=observed.get("latest_completed")
+    if int(observed.get("completed_results") or 0)>0:
+        status="OBSERVED_RESULT"
+    elif int(observed.get("open_baselines") or 0)>0:
+        status="BASELINE_RECORDED"
+    elif new_usage>0:
+        status="MEASURING"
+    else:
+        status="AWAITING_REAL_USAGE"
     row={
         "ok":True,
         "measured_at_utc":datetime.now(timezone.utc).isoformat(),
         "build_id":build.get("build_id"),
         "family":build.get("family"),
-        "status":"MEASURING" if new_usage>0 else "AWAITING_REAL_USAGE",
+        "status":status,
         "audits_total":total,
         "new_audits_since_build":new_usage,
         "audits_with_baseline":int(metrics.get("audits_with_baseline") or 0),
         "audits_with_error_baseline":int(metrics.get("audits_with_error_baseline") or 0),
+        "observed_sessions":int(observed.get("sessions") or 0),
+        "observed_open_baselines":int(observed.get("open_baselines") or 0),
+        "observed_completed_results":int(observed.get("completed_results") or 0),
+        "latest_observed_outcome":(latest_observed or {}).get("outcome"),
+        "latest_observed":latest_observed,
+        "measurement_rule":"Only an explicit observed baseline plus observed after-result counts as outcome evidence.",
         "conversion_measurement":"not_available_without_explicit_external_launch",
         "external_actions_performed":False,
     }
     history=list(AUTOPILOT_STATE.get("measurement_history") or [])
     prev=AUTOPILOT_STATE.get("last_measurement")
-    if not isinstance(prev,dict) or prev.get("new_audits_since_build")!=new_usage or prev.get("build_id")!=row.get("build_id"):
+    fingerprint=(row.get("build_id"),row.get("status"),row.get("new_audits_since_build"),row.get("observed_open_baselines"),row.get("observed_completed_results"),row.get("latest_observed_outcome"))
+    prev_fingerprint=((prev or {}).get("build_id"),(prev or {}).get("status"),(prev or {}).get("new_audits_since_build"),(prev or {}).get("observed_open_baselines"),(prev or {}).get("observed_completed_results"),(prev or {}).get("latest_observed_outcome")) if isinstance(prev,dict) else None
+    if prev_fingerprint!=fingerprint:
         history.append(row)
         AUTOPILOT_STATE["measurement_history"]=history[-30:]
     AUTOPILOT_STATE["last_measurement"]=row
@@ -7090,11 +7122,23 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         measurement = _measurement_snapshot(build_result)
 
     if build_result.get("tests_passed"):
-        final_status = "MEASURE_READY" if measurement.get("status")=="AWAITING_REAL_USAGE" else "MEASURING"
-        lifecycle_current = "MEASURE"
-        next_gate = (
-            "MEASURE: raccogli uso reale e baseline dall'MVP senza outreach automatico; migliora solo su dati osservati."
-        )
+        measurement_status=str(measurement.get("status") or "")
+        observed_outcome=str(measurement.get("latest_observed_outcome") or "")
+        if measurement_status=="OBSERVED_RESULT":
+            final_status="IMPROVE_READY" if observed_outcome=="IMPROVED" else "REVISE_READY"
+            lifecycle_current="IMPROVE"
+            next_gate=(
+                "IMPROVE: usa esclusivamente il confronto osservato prima/dopo per decidere il prossimo cambiamento."
+                if observed_outcome=="IMPROVED"
+                else "REVISE: il risultato osservato non mostra miglioramento; modifica o scarta il pilot prima di estenderlo."
+            )
+        else:
+            final_status = "MEASURE_READY" if measurement_status=="AWAITING_REAL_USAGE" else "MEASURING"
+            lifecycle_current = "MEASURE"
+            next_gate = (
+                "MEASURE: registra una baseline osservata e poi un risultato osservato sullo stesso processo; "
+                "gli audit sintetici non contano come prova di efficacia."
+            )
     elif build_ready:
         final_status = "BUILD_READY"
         lifecycle_current = "BUILD"
@@ -7562,6 +7606,7 @@ async def api_console(request: Request):
         "builds":history,
         "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
         "venture_metrics":AUTOPILOT_STATE.get("venture_metrics") or {},
+        "venture_measurements":list(AUTOPILOT_STATE.get("venture_measurements") or [])[-20:],
         "dialogue_count":len(AUTOPILOT_STATE.get("dialogue_history") or []),
         "knowledge_count":len(AUTOPILOT_STATE.get("knowledge_ledger") or []),
         "open_hypotheses":list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[:10],
@@ -9008,6 +9053,84 @@ def _float_value(raw: Any) -> float:
         return 0.0
 
 
+
+def _active_build_for_family(family: str) -> dict:
+    family=str(family or "").strip()
+    last=AUTOPILOT_STATE.get("last_build")
+    if isinstance(last,dict) and str(last.get("family") or "")==family and last.get("tests_passed"):
+        return last
+    for row in reversed(list(AUTOPILOT_STATE.get("build_history") or [])):
+        if isinstance(row,dict) and str(row.get("family") or "")==family and row.get("tests_passed"):
+            return row
+    return {}
+
+
+def _observed_confirmed(payload: dict) -> bool:
+    return str(payload.get("observed_confirmed") or "").strip().lower() in {"1","true","yes","on"}
+
+
+async def _apply_venture_measurement_action(payload: dict) -> dict:
+    action=str(payload.get("measurement_action") or payload.get("action") or "").strip().lower()
+    if action not in {"start","complete"}:
+        return {"ok":False,"error":"measurement_action_required"}
+    if not _observed_confirmed(payload):
+        return {"ok":False,"error":"observed_confirmation_required"}
+    sessions=list(AUTOPILOT_STATE.get("venture_measurements") or [])
+    now=datetime.now(timezone.utc).isoformat()
+    if action=="start":
+        family=str(payload.get("family") or "manual_data_entry").strip()
+        build=_active_build_for_family(family)
+        if not build:
+            return {"ok":False,"error":"tested_build_required","family":family}
+        try:
+            session=start_observed_measurement(
+                measurement_id="vm-"+secrets.token_hex(6),
+                build_id=str(build.get("build_id") or ""),
+                family=family,
+                process_label=str(payload.get("process_label") or payload.get("process") or ""),
+                baseline_minutes_each=payload.get("baseline_minutes_each"),
+                baseline_weekly_runs=payload.get("baseline_weekly_runs"),
+                baseline_weekly_errors=payload.get("baseline_weekly_errors") or 0,
+                observed_at_utc=now,
+            )
+        except ValueError as e:
+            return {"ok":False,"error":str(e)}
+        sessions.append(session)
+        AUTOPILOT_STATE["venture_measurements"]=sessions[-50:]
+        metrics=dict(AUTOPILOT_STATE.get("venture_metrics") or {})
+        metrics["observed_baselines_total"]=int(metrics.get("observed_baselines_total") or 0)+1
+        metrics["last_observed_baseline_utc"]=now
+        AUTOPILOT_STATE["venture_metrics"]=metrics
+        _save_local_state()
+        checkpoint=await _checkpoint_state_to_render()
+        return {"ok":True,"action":"start","measurement":session,"checkpoint":{"ok":bool(checkpoint.get("ok")),"status":checkpoint.get("status")}}
+    measurement_id=str(payload.get("measurement_id") or "").strip()
+    index=next((i for i,x in enumerate(sessions) if isinstance(x,dict) and str(x.get("measurement_id") or "")==measurement_id),None)
+    if index is None:
+        return {"ok":False,"error":"measurement_not_found"}
+    try:
+        updated=complete_observed_measurement(
+            sessions[index],
+            after_minutes_each=payload.get("after_minutes_each"),
+            after_weekly_runs=payload.get("after_weekly_runs"),
+            after_weekly_errors=payload.get("after_weekly_errors") or 0,
+            observed_at_utc=now,
+        )
+    except ValueError as e:
+        return {"ok":False,"error":str(e)}
+    sessions[index]=updated
+    AUTOPILOT_STATE["venture_measurements"]=sessions[-50:]
+    metrics=dict(AUTOPILOT_STATE.get("venture_metrics") or {})
+    metrics["observed_results_total"]=int(metrics.get("observed_results_total") or 0)+1
+    if updated.get("outcome")=="IMPROVED":
+        metrics["observed_improved_total"]=int(metrics.get("observed_improved_total") or 0)+1
+    metrics["last_observed_result_utc"]=now
+    AUTOPILOT_STATE["venture_metrics"]=metrics
+    _save_local_state()
+    checkpoint=await _checkpoint_state_to_render()
+    return {"ok":True,"action":"complete","measurement":updated,"checkpoint":{"ok":bool(checkpoint.get("ok")),"status":checkpoint.get("status")}}
+
+
 async def venture(request: Request):
     payload=await _venture_payload(request)
     family=str(payload.get("family") or "spreadsheet_process").strip()
@@ -9015,10 +9138,13 @@ async def venture(request: Request):
     minutes_each=_float_value(payload.get("minutes_each"))
     weekly_runs=_float_value(payload.get("weekly_runs"))
     weekly_errors=_float_value(payload.get("weekly_errors"))
+    measurement_feedback=None
+    if str(payload.get("measurement_action") or "").strip():
+        measurement_feedback=await _apply_venture_measurement_action(payload)
 
     profile=_design_profile_for_family(family)
     product_names={
-        "spreadsheet_process":"SheetFlow Audit","developer_tools":"DevTool Pilot","ai_tools":"AI Utility Pilot",
+        "spreadsheet_process":"SheetFlow Audit","manual_data_entry":"DataEntry Fix Audit","developer_tools":"DevTool Pilot","ai_tools":"AI Utility Pilot",
         "micro_saas":"MicroSaaS Pilot","integration_api":"Integration Pilot","ecommerce_tools":"CommerceOps Pilot",
         "marketing_seo":"GrowthOps Pilot","analytics_tools":"InsightOps Pilot","compliance_tools":"ComplianceOps Pilot",
         "customer_support":"SupportOps Pilot","cybersecurity_tools":"SecurityOps Pilot",
@@ -9034,11 +9160,71 @@ async def venture(request: Request):
         '. Nessuna spesa o pagamento. Non inserire password, credenziali o dati sensibili.</p></section>'
     )
     body+='<section class="card"><form method="post" action="/venture"><input type="hidden" name="family" value="'+html.escape(family,quote=True)+'"><label>Descrivi il processo attuale</label><textarea name="process" placeholder="Esempio: ricevo un CSV via email, copio le righe in Excel, controllo alcune colonne e aggiorno il CRM...">'+html.escape(process)+'</textarea><label>Minuti impiegati ogni volta</label><input name="minutes_each" type="number" min="0" step="1" value="'+str(minutes_each)+'"><label>Quante volte a settimana</label><input name="weekly_runs" type="number" min="0" step="1" value="'+str(weekly_runs)+'"><label>Errori/correzioni medi a settimana</label><input name="weekly_errors" type="number" min="0" step="1" value="'+str(weekly_errors)+'"><button type="submit">Genera audit MVP</button></form></section>'
-    if process:
+    if process and not str(payload.get("measurement_action") or "").strip():
         audit=run_pilot(process,family,minutes_each,weekly_runs,weekly_errors)
         _record_venture_metric(audit)
-        body+='<section class="card"><h2>Report SheetFlow MVP</h2><pre>'+html.escape(json.dumps(audit,ensure_ascii=False,indent=2))+'</pre><p class="muted">Le stime restano preliminari finche non vengono confrontate con misure reali prima/dopo.</p></section>'
-    return layout("SheetFlow Audit",body)
+        body+='<section class="card"><h2>Report '+html.escape(product_name)+'</h2><pre>'+html.escape(json.dumps(audit,ensure_ascii=False,indent=2))+'</pre><p class="muted">Le stime restano preliminari finche non vengono confrontate con misure reali prima/dopo.</p></section>'
+
+    if measurement_feedback is not None:
+        cls="tag" if measurement_feedback.get("ok") else "tag warn"
+        body+='<section class="card"><span class="'+cls+'">'+("SALVATO" if measurement_feedback.get("ok") else "NON SALVATO")+'</span><h3>Misurazione osservata</h3><pre>'+html.escape(json.dumps(measurement_feedback,ensure_ascii=False,indent=2))+'</pre></section>'
+
+    build=_active_build_for_family(family)
+    build_id=str(build.get("build_id") or "")
+    sessions=[x for x in (AUTOPILOT_STATE.get("venture_measurements") or []) if isinstance(x,dict) and str(x.get("family") or "")==family and (not build_id or str(x.get("build_id") or "")==build_id)]
+    body+=(
+        '<section class="card"><h2>Validazione reale prima/dopo</h2>'
+        '<p>Registra qui solo misure osservate sul processo reale. Le stime del report sopra non vengono copiate automaticamente.</p>'
+        '<form method="post" action="/venture">'
+        '<input type="hidden" name="family" value="'+html.escape(family,quote=True)+'">'
+        '<input type="hidden" name="measurement_action" value="start">'
+        '<input type="hidden" name="observed_confirmed" value="1">'
+        '<label>Processo misurato</label><textarea name="process_label" required placeholder="Esempio: importo manualmente righe CSV nel gestionale"></textarea>'
+        '<label>Minuti osservati per esecuzione</label><input name="baseline_minutes_each" type="number" min="0.01" step="0.01" required>'
+        '<label>Esecuzioni osservate a settimana</label><input name="baseline_weekly_runs" type="number" min="0.01" step="0.01" required>'
+        '<label>Errori/correzioni osservati a settimana</label><input name="baseline_weekly_errors" type="number" min="0" step="0.01" value="0">'
+        '<button type="submit">Registra baseline reale</button></form></section>'
+    )
+    for session in reversed(sessions[-10:]):
+        baseline=session.get("baseline") or {}
+        result=session.get("result") or {}
+        body+='<section class="card"><span class="tag">'+html.escape(str(session.get("status") or ""))+'</span><h3>'+html.escape(str(session.get("process_label") or ""))+'</h3>'
+        body+='<p class="muted">Baseline: '+html.escape(str(baseline.get("weekly_minutes") or 0))+' min/settimana · errori '+html.escape(str(baseline.get("weekly_errors") or 0))+'</p>'
+        if session.get("status")=="BASELINE_RECORDED":
+            body+=(
+                '<form method="post" action="/venture">'
+                '<input type="hidden" name="family" value="'+html.escape(family,quote=True)+'">'
+                '<input type="hidden" name="measurement_action" value="complete">'
+                '<input type="hidden" name="observed_confirmed" value="1">'
+                '<input type="hidden" name="measurement_id" value="'+html.escape(str(session.get("measurement_id") or ""),quote=True)+'">'
+                '<label>Minuti osservati per esecuzione dopo il pilot</label><input name="after_minutes_each" type="number" min="0" step="0.01" required>'
+                '<label>Esecuzioni a settimana dopo il pilot</label><input name="after_weekly_runs" type="number" min="0.01" step="0.01" value="'+html.escape(str(baseline.get("weekly_runs") or ""))+'" required>'
+                '<label>Errori/correzioni osservati a settimana dopo il pilot</label><input name="after_weekly_errors" type="number" min="0" step="0.01" value="0">'
+                '<button type="submit">Registra risultato reale</button></form>'
+            )
+        else:
+            body+='<p><b>Esito osservato:</b> '+html.escape(str(session.get("outcome") or ""))+'</p><pre>'+html.escape(json.dumps(result,ensure_ascii=False,indent=2))+'</pre>'
+        body+='</section>'
+    return layout(product_name,body)
+
+
+
+async def api_venture_measurement(request: Request):
+    if request.method=="GET":
+        payload=await _venture_payload(request)
+        family=str(payload.get("family") or "").strip()
+        build_id=str(payload.get("build_id") or "").strip()
+        sessions=[x for x in (AUTOPILOT_STATE.get("venture_measurements") or []) if isinstance(x,dict) and (not family or str(x.get("family") or "")==family) and (not build_id or str(x.get("build_id") or "")==build_id)]
+        return JSONResponse({
+            "ok":True,
+            "neo_version":VERSION,
+            "sessions":sessions[-50:],
+            "summary":measurement_summary(sessions,build_id=build_id,family=family),
+            "rule":"Only explicit observed before/after measurements count as outcome evidence.",
+        })
+    payload=await _venture_payload(request)
+    result=await _apply_venture_measurement_action(payload)
+    return JSONResponse({"neo_version":VERSION,**result},status_code=200 if result.get("ok") else 400)
 
 
 async def api_venture_audit(request: Request):
@@ -9088,6 +9274,7 @@ async def api_memory_status(request: Request):
         "build_history":list(AUTOPILOT_STATE.get("build_history") or [])[-10:],
         "measurement_history":list(AUTOPILOT_STATE.get("measurement_history") or [])[-10:],
         "venture_metrics":AUTOPILOT_STATE.get("venture_metrics") or {},
+        "venture_measurements":list(AUTOPILOT_STATE.get("venture_measurements") or [])[-20:],
     })
 
 
@@ -9260,6 +9447,7 @@ app = Starlette(
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
+        Route("/api/venture/measurement", api_venture_measurement, methods=["GET","POST"]),
         Route("/api/memory/status", api_memory_status, methods=["GET"]),
         Route("/api/agents/diagnostics", api_agents_diagnostics, methods=["GET"]),
         Route("/api/builder/status", api_builder_status, methods=["GET"]),
