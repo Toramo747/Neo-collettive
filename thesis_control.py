@@ -8,6 +8,9 @@ from __future__ import annotations
 import re
 
 
+GENERIC_CUSTOMER_SEGMENTS = {"buyers"}
+
+
 def thesis_seed_fingerprint(seed_problem_key: str) -> str:
     """Normalize mechanical seed drift without broad semantic guessing.
 
@@ -24,11 +27,16 @@ def thesis_seed_fingerprint(seed_problem_key: str) -> str:
     if not sep:
         family=""
         rest=raw
+    rest_parts=rest.split(":")
+    if len(rest_parts)>=2 and rest_parts[0] in GENERIC_CUSTOMER_SEGMENTS:
+        rest=":".join(rest_parts[1:])
     words=[x for x in re.split(r"[^a-z0-9]+",rest) if x]
     collapsed=[]
     for word in words:
         if not collapsed or collapsed[-1]!=word:
             collapsed.append(word)
+    while len(collapsed)>1 and collapsed[0] in GENERIC_CUSTOMER_SEGMENTS:
+        collapsed.pop(0)
     normalized=" ".join(collapsed)
     return (family+"|"+normalized) if family else normalized
 
@@ -60,7 +68,12 @@ def exhausted_seed_blocked(
             continue
         if str(raw.get("status") or "").upper()!="EXHAUSTED":
             continue
-        if thesis_seed_fingerprint(str(raw.get("seed_problem_key") or ""))!=fingerprint:
+        historical_fingerprints={
+            thesis_seed_fingerprint(str(raw.get("seed_problem_key") or "")),
+            thesis_seed_fingerprint(str(raw.get("problem_id") or "")),
+        }
+        historical_fingerprints.discard("")
+        if fingerprint not in historical_fingerprints:
             continue
         closed=max(0,int(raw.get("closed_at_cycle") or 0))
         if current < closed + cooldown:
