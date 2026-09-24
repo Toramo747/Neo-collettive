@@ -1,0 +1,21 @@
+name: MYCELIX SETI 0.96 Isolated Check
+on:
+  push:
+    branches: [fix/seti-096-slot-semantics]
+permissions:
+  contents: read
+concurrency:
+  group: mycelix-seti-096-isolated
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python -m py_compile cloud_mcp.py seti_radar.py a2a_peer.py
+      - name: Full regression
+        run: python -m unittest discover -v -p 'test_*.py'
+      - name: Docker build
+        run: docker build -t mycelix-seti-096-check .
