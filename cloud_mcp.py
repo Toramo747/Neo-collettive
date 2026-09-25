@@ -428,6 +428,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
                 reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
                 require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
                 reject_launch=SELLER_LAUNCH_GUARD_ENABLED,
+                reject_vendor_content=VENDOR_CONTENT_GUARD_ENABLED,
+                require_web_buyer_voice=WEB_BUYER_VOICE_GUARD_ENABLED,
             )
             if valid:
                 kept.append(candidate)
@@ -7734,6 +7736,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
         require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
         reject_seller_launch=SELLER_LAUNCH_GUARD_ENABLED,
+        reject_vendor_content=VENDOR_CONTENT_GUARD_ENABLED,
+        require_web_buyer_voice=WEB_BUYER_VOICE_GUARD_ENABLED,
     )
     existing=[
         x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
@@ -7751,6 +7755,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
             require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
             reject_launch=SELLER_LAUNCH_GUARD_ENABLED,
+            reject_vendor_content=VENDOR_CONTENT_GUARD_ENABLED,
+            require_web_buyer_voice=WEB_BUYER_VOICE_GUARD_ENABLED,
         )
         if valid:
             validated_existing.append(candidate)
