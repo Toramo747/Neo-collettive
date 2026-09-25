@@ -619,6 +619,8 @@ def migrate_evidence_row(
     seller_launch_guard: bool = False,
     vendor_content_guard: bool = False,
     web_buyer_voice_guard: bool = False,
+    supply_offer_guard: bool = False,
+    query_echo_guard: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Idempotently quarantine pre-v2 evidence until it is re-observed by tagger v2."""
     out = dict(row or {})
@@ -705,8 +707,42 @@ def migrate_evidence_row(
             out["migration_v"] = EVIDENCE_SCHEMA_VERSION
             changed = True
 
+    supply_offer=bool(
+        supply_offer_guard
+        and is_supply_offer(
+            str(out.get("title") or ""),
+            str(out.get("snippet") or ""),
+            str(out.get("url") or ""),
+            str(out.get("source") or ""),
+        )
+    )
+    if supply_offer:
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
+        if out.get("signal_types") != signals:
+            out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
+            changed=True
+        if out.get("context_type") != "supply_offer":
+            out["context_type"]="supply_offer"
+            changed=True
+        if out.get("signal_reverted") != "supply_offer":
+            out["signal_reverted"]="supply_offer"
+            changed=True
+        if out.get("gate_eligible") is not False:
+            out["gate_eligible"]=False
+            changed=True
+        reason="disconfirm" if "DISCONFIRM" in set(signals) else "supply_offer"
+        if out.get("quarantine_reason") != reason:
+            out["quarantine_reason"]=reason
+            changed=True
+
     # Generic vendor-authored solution/SEO content is useful market context but is
-    # not buyer pain and must never contribute an independent gate domain.
+    # not buyer demand and must never contribute an independent gate domain.
     vendor_content=bool(
         vendor_content_guard
         and is_vendor_content(
@@ -716,10 +752,16 @@ def migrate_evidence_row(
             str(out.get("source") or ""),
         )
     )
-    if vendor_content:
-        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+    if vendor_content and not supply_offer:
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
         if out.get("signal_types") != signals:
             out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
             changed=True
         if out.get("context_type") != "vendor_content":
             out["context_type"]="vendor_content"
@@ -735,11 +777,11 @@ def migrate_evidence_row(
             out["quarantine_reason"]=reason
             changed=True
 
-    # Generic web PAIN requires buyer voice or a community/Q&A context.
+    # Generic web positive demand requires buyer voice or a community/Q&A context.
     buyer_voice_missing=bool(
         web_buyer_voice_guard
         and generic_web_source(str(out.get("source") or ""))
-        and "PAIN" in set(out.get("signal_types") or [])
+        and bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(out.get("signal_types") or []))
         and not generic_web_pain_allowed(
             str(out.get("title") or ""),
             str(out.get("snippet") or ""),
@@ -747,10 +789,16 @@ def migrate_evidence_row(
             str(out.get("source") or ""),
         )
     )
-    if buyer_voice_missing and not vendor_content:
-        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+    if buyer_voice_missing and not vendor_content and not supply_offer:
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
         if out.get("signal_types") != signals:
             out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
             changed=True
         if out.get("signal_reverted") != "web_buyer_voice_missing":
             out["signal_reverted"]="web_buyer_voice_missing"
@@ -763,13 +811,19 @@ def migrate_evidence_row(
             out["quarantine_reason"]=reason
             changed=True
 
-    # Seller-authored launches are supply-side context, never buyer pain. Preserve
-    # the row for market context/audit, but remove PAIN and exclude its domain from
+    # Seller-authored launches are supply-side context, never buyer demand. Preserve
+    # the row for market context/audit, but remove positive demand and exclude its domain from
     # every gate calculation. This migration is intentionally idempotent.
     if seller_launch_guard and is_launch_title(str(out.get("title") or "")):
-        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
         if out.get("signal_types") != signals:
             out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
             changed=True
         if out.get("context_type") != "product_launch":
             out["context_type"]="product_launch"
@@ -794,6 +848,8 @@ def migrate_evidence_memory(
     seller_launch_guard: bool = False,
     vendor_content_guard: bool = False,
     web_buyer_voice_guard: bool = False,
+    supply_offer_guard: bool = False,
+    query_echo_guard: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     source_rows=[row for row in (rows or []) if isinstance(row,dict)]
     sibling_problem_keys=[
@@ -813,6 +869,8 @@ def migrate_evidence_memory(
             seller_launch_guard=seller_launch_guard,
             vendor_content_guard=vendor_content_guard,
             web_buyer_voice_guard=web_buyer_voice_guard,
+            supply_offer_guard=supply_offer_guard,
+            query_echo_guard=query_echo_guard,
         )
         if row_changed:
             changed += 1
