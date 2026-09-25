@@ -109,6 +109,10 @@ class IngestionDiagnostics:
         self.rejected_by_class: dict[str, Counter] = defaultdict(Counter)
         self.observed_candidates_purged = 0
         self.observed_candidates_purged_by_reason = Counter()
+        self.new_signal_rows = 0
+        self.new_signal_rows_by_source = Counter()
+        self.new_signal_rows_by_query_class = Counter()
+        self.revalidation = {"attempted":0,"promoted":0,"failed":0,"unreachable":0}
         self.errors = 0
 
     def merge_web_research(self, groups: list[dict] | None) -> None:
@@ -156,6 +160,21 @@ class IngestionDiagnostics:
         self.observed_candidates_purged += n
         self.observed_candidates_purged_by_reason[reason] += n
 
+    def record_new_signal_row(self, source: str, query_class: str) -> None:
+        if not self.enabled:
+            return
+        source=canonical_source(source)
+        qclass=str(query_class or "unknown")
+        self.new_signal_rows += 1
+        self.new_signal_rows_by_source[source] += 1
+        self.new_signal_rows_by_query_class[qclass] += 1
+
+    def merge_revalidation(self, stats: dict | None) -> None:
+        if not self.enabled or not isinstance(stats,dict):
+            return
+        for key in ("attempted","promoted","failed","unreachable"):
+            self.revalidation[key] += max(0,int(stats.get(key) or 0))
+
     def snapshot(self) -> dict:
         if not self.enabled:
             return {"enabled": False}
@@ -184,5 +203,9 @@ class IngestionDiagnostics:
             },
             "observed_candidates_purged": self.observed_candidates_purged,
             "observed_candidates_purged_by_reason": dict(sorted(self.observed_candidates_purged_by_reason.items())),
+            "new_signal_rows": self.new_signal_rows,
+            "new_signal_rows_by_source": dict(sorted(self.new_signal_rows_by_source.items())),
+            "new_signal_rows_by_query_class": dict(sorted(self.new_signal_rows_by_query_class.items())),
+            "revalidation": dict(self.revalidation),
             "diagnostic_errors": self.errors,
         }
