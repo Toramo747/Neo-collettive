@@ -141,6 +141,23 @@ def evaluate_fetched_legacy_row(
         if not any(contains_term(title_low+" "+body_low,x) for x in GITHUB_DEMAND):
             return failed("github_no_buyer_problem_context")
 
+    if seller_launch_guard and is_launch_title(title):
+        launch_signals=demand_signal_type(
+            title,body,query_role,
+            strong_pain_only=strong_pain_only,
+            seller_launch_guard=True,
+            url=url,source=source,
+            vendor_content_guard=vendor_content_guard,
+            web_buyer_voice_guard=web_buyer_voice_guard,
+        )
+        return failed("seller_launch",{
+            "signal_types":[x for x in launch_signals if x!="PAIN"],
+            "gate_eligible":False,
+            "quarantine_reason":"seller_launch",
+            "context_type":"product_launch",
+            "signal_reverted":"seller_launch",
+        })
+
     if vendor_content_guard and is_vendor_content(title,body,url,source):
         vendor_signals=demand_signal_type(
             title,body,query_role,
@@ -162,23 +179,6 @@ def evaluate_fetched_legacy_row(
             "gate_eligible":False,
             "quarantine_reason":"web_buyer_voice_missing",
             "signal_reverted":"web_buyer_voice_missing",
-        })
-
-    if seller_launch_guard and is_launch_title(title):
-        launch_signals=demand_signal_type(
-            title,body,query_role,
-            strong_pain_only=strong_pain_only,
-            seller_launch_guard=True,
-            url=url,source=source,
-            vendor_content_guard=vendor_content_guard,
-            web_buyer_voice_guard=web_buyer_voice_guard,
-        )
-        return failed("seller_launch",{
-            "signal_types":[x for x in launch_signals if x!="PAIN"],
-            "gate_eligible":False,
-            "quarantine_reason":"seller_launch",
-            "context_type":"product_launch",
-            "signal_reverted":"seller_launch",
         })
 
     observed_family=commercial_family(text)
