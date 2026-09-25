@@ -1,7 +1,7 @@
 import time
 import unittest
 
-from evidence_integrity import demand_signal_type, migrate_evidence_memory
+from evidence_integrity import classify_intent_class, demand_signal_type, migrate_evidence_memory
 
 
 class DemandGuardTests(unittest.TestCase):
@@ -53,6 +53,35 @@ class DemandGuardTests(unittest.TestCase):
         )
         self.assertIn("BUY_INTENT",tags)
         self.assertIn("PAID_DEMAND",tags)
+
+    def test_intent_class_is_buyer_metadata_not_vendor_copy(self):
+        self.assertEqual(
+            classify_intent_class(
+                "Looking for Zapier alternatives? Try FlowCo free trial",
+                "Start a free trial today.",
+                "https://flowco.example/services/workflow-automation",
+                "brave-search",
+            ),
+            "",
+        )
+        self.assertEqual(
+            classify_intent_class(
+                "Is there a tool for invoice entry?",
+                "We are looking for software to automate invoice entry into our ERP.",
+                "https://community.example/forum/invoice-entry",
+                "brave-search",
+            ),
+            "solution_search",
+        )
+        self.assertEqual(
+            classify_intent_class(
+                "Need help automating invoice entry",
+                "We need to hire someone to automate invoice entry into our ERP, budget $2k.",
+                "https://community.example/forum/invoice-entry",
+                "brave-search",
+            ),
+            "paid_automation",
+        )
 
     def test_query_echo_does_not_create_buy_or_paid_demand(self):
         tags=self.common(
