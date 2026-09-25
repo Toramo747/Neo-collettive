@@ -90,6 +90,8 @@ def begin_cycle(state: dict | None, cycle_id: int, now: datetime | None = None) 
     if out.get("cycle_id") != int(cycle_id):
         out["cycle_id"]=int(cycle_id)
         out["calls_cycle"]=0
+        out["errors"]=0
+        out["fallbacks"]=0
     return out
 
 
