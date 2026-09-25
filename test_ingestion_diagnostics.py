@@ -97,5 +97,23 @@ class IngestionDiagnosticsTests(unittest.TestCase):
             {"attempted":3,"promoted":1,"failed":1,"unreachable":1},
         )
 
+
+    def test_search_provider_fallback_reasons_are_visible(self):
+        d=IngestionDiagnostics(True)
+        d.set_search_provider({
+            "name":"brave",
+            "calls_cycle":8,
+            "calls_day":8,
+            "errors":3,
+            "fallbacks":3,
+            "fallback_reasons":{"HTTPStatusError:429":2,"ReadTimeout":1},
+        })
+        snap=d.snapshot()
+        self.assertEqual(snap["search_provider"]["name"],"brave")
+        self.assertEqual(snap["search_provider"]["fallback_reasons"],{
+            "HTTPStatusError:429":2,
+            "ReadTimeout":1,
+        })
+
 if __name__ == "__main__":
     unittest.main()
