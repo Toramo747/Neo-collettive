@@ -318,6 +318,64 @@ class DiscoveryV3Tests(unittest.TestCase):
         self.assertEqual(observed_pain_candidates(groups,meta,limit=5),[])
 
 
+    def test_observed_pain_rejects_own_repository(self):
+        q="content repurposing tool need help manual workaround"
+        meta={q.lower():{"family":"content_tools","role":"discovery","search_alias_used":"content repurposing tool"}}
+        groups=[{"query":q,"results":[{
+            "title":"Define and falsify the paid-service differentiator before outreach",
+            "url":"https://github.com/Toramo747/Neo-collettive/issues/18",
+            "source":"github-issues-routed",
+            "snippet":"We need help because this manual content workflow is repetitive and time consuming.",
+        }]}]
+        self.assertEqual(
+            observed_pain_candidates(
+                groups,meta,limit=5,reject_self_contamination=True,require_family_in_pain=True
+            ),
+            [],
+        )
+
+    def test_observed_pain_rejects_mirrored_neo_text(self):
+        q="content repurposing tool need help manual workaround"
+        meta={q.lower():{"family":"content_tools","role":"discovery","search_alias_used":"content repurposing tool"}}
+        groups=[{"query":q,"results":[{
+            "title":"Define and falsify the paid-service differentiator before outreach",
+            "url":"https://github.com/example/external-repo/issues/18",
+            "source":"github-issues-routed",
+            "snippet":"Attempt to falsify one market-facing differentiator for the first paid AI-assisted content-operation offer before manual customer acquisition.",
+        }]}]
+        self.assertEqual(
+            observed_pain_candidates(groups,meta,limit=5,reject_self_contamination=True),
+            [],
+        )
+
+    def test_observed_pain_rejects_a2a_peer_text(self):
+        q="customer support repetitive workflow problem"
+        meta={q.lower():{"family":"customer_support","role":"discovery","search_alias_used":"customer support"}}
+        groups=[{"query":q,"results":[{
+            "title":"Peer report",
+            "url":"https://example.com/peer",
+            "source":"peer-a2a",
+            "snippet":"Need help with manual customer support ticket workflow because it is repetitive.",
+        }]}]
+        self.assertEqual(
+            observed_pain_candidates(groups,meta,limit=5,reject_self_contamination=True),
+            [],
+        )
+
+    def test_observed_pain_requires_family_term_in_pain(self):
+        q="HR workflow automation need help manual workaround"
+        meta={q.lower():{"family":"hr_tools","role":"discovery","search_alias_used":"HR workflow automation"}}
+        groups=[{"query":q,"results":[{
+            "title":"Windows UI automation",
+            "url":"https://stackoverflow.com/questions/80005249/windows-ui-automation",
+            "source":"stackexchange-routed",
+            "snippet":"I am specifically looking for a general Windows UI Automation approach rather than a workaround for one particular website.",
+        }]}]
+        self.assertEqual(
+            observed_pain_candidates(groups,meta,limit=5,require_family_in_pain=True),
+            [],
+        )
+
     def test_product_launch_feature_copy_is_not_observed_customer_pain(self):
         q="spreadsheet process automation need help manual workaround"
         meta={

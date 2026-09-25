@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from runtime_boundary import is_control_plane_text
+from evidence_integrity import family_text_matches, is_self_contamination
 
 PAIN_MARKERS = (
     "manual","manually","repetitive","time consuming","time-consuming","frustrat",
@@ -517,6 +518,8 @@ def observed_pain_candidates(
     web_research: list[dict],
     query_meta: dict[str,dict] | None = None,
     limit: int = 10,
+    reject_self_contamination: bool = False,
+    require_family_in_pain: bool = False,
 ) -> list[dict]:
     """Extract conservative, source-backed hypothesis candidates from observed results.
 
@@ -543,6 +546,12 @@ def observed_pain_candidates(
             body=str(item.get("snippet") or item.get("text") or "").strip()
             url=str(item.get("url") or "").strip()
             if not title or not url:
+                continue
+            if reject_self_contamination and is_self_contamination(
+                url,
+                str(item.get("source") or ""),
+                title+" "+body,
+            ):
                 continue
             rel=query_relevance(title,body,query,meta)
             if not rel["relevant"]:
@@ -578,6 +587,8 @@ def observed_pain_candidates(
             seen.add(key)
             source_fact=_first_operational_pain_sentence(clean_body)
             if not source_fact:
+                continue
+            if require_family_in_pain and not family_text_matches(family,source_fact):
                 continue
             # Ground actor and process in the local pain context, not unrelated words
             # elsewhere in a long search snippet or in the query that found it.

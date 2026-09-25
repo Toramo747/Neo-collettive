@@ -74,6 +74,7 @@ from evidence_integrity import (
     make_problem_id,
     make_thesis_id,
     migrate_evidence_memory,
+    is_self_contamination,
     problem_customer_segment,
     problem_job_tail,
     structured_paid_source,
@@ -91,7 +92,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.8"  # buyer-language query builder v2
+VERSION = "0.99.9"  # evidence integrity hardening
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -124,6 +125,11 @@ AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECO
 AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 INGESTION_DIAGNOSTICS_ENABLED = (os.getenv("NEO_INGESTION_DIAGNOSTICS", "1").strip().lower() in {"1","true","yes","on"})
 QUERY_BUILDER_V2_ENABLED = (os.getenv("NEO_QUERY_BUILDER_V2", "1").strip().lower() in {"1","true","yes","on"})
+ATTRIBUTION_FAMILY_GUARD_ENABLED = (os.getenv("NEO_ATTRIBUTION_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+STRONG_PAIN_GUARD_ENABLED = (os.getenv("NEO_STRONG_PAIN_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+SELF_CONTAMINATION_GUARD_ENABLED = (os.getenv("NEO_SELF_CONTAMINATION_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
 SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))))
@@ -413,7 +419,11 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
     migration_changed = False
     if isinstance(payload.get("commercial_evidence_memory"), list):
-        migrated, migration = migrate_evidence_memory(payload.get("commercial_evidence_memory")[-240:])
+        migrated, migration = migrate_evidence_memory(
+            payload.get("commercial_evidence_memory")[-240:],
+            enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
+            strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+        )
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
         migration_changed = bool(int(migration.get("changed") or 0) > 0)
@@ -5006,7 +5016,12 @@ def _commercial_family(text: str) -> str:
 
 def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str]:
     """Evidence Integrity v2: separate buyer-paid demand from supply-side pricing."""
-    return integrity_demand_signal_type(title, body, query_role)
+    return integrity_demand_signal_type(
+        title,
+        body,
+        query_role,
+        strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+    )
 
 
 def _gap_score(tags: list[str], domains: int, strong_domains: int) -> int:
@@ -5297,6 +5312,9 @@ def _commercial_evidence_quality(
         query_class=diagnostic_query_class(meta,query_role)
         raw_host=(urlparse(url or "").hostname or "").lower()
         host=canonical_domain(raw_host)
+        if SELF_CONTAMINATION_GUARD_ENABLED and is_self_contamination(url,source,title+" "+body):
+            reject("self_contamination_rejected",url,title,query_role,source,query_class)
+            return
         if not host or any(host==n or host.endswith("."+n) for n in noise):
             reject("noise_domain",url,title,query_role,source,query_class)
             return
@@ -5352,6 +5370,7 @@ def _commercial_evidence_quality(
             str(meta.get("thesis_id") or ""),
             int(relevance.get("score") or 0),
             len(relevance.get("overlap") or []),
+            require_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
         )
         thesis_bound=problem_key!=observed_problem_key
         if thesis_bound and str(meta.get("family") or ""):
@@ -5424,11 +5443,15 @@ def _commercial_evidence_quality(
 
     # Migrate legacy rows idempotently. v1 rows remain discovery-visible but are
     # quarantined from the gate until re-observed and re-tagged by v2.
-    memory,migration=migrate_evidence_memory([
-        dict(x) for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or [])
-        if isinstance(x,dict) and float(x.get("last_seen_epoch") or 0)
-        and now_epoch-float(x.get("last_seen_epoch") or 0)<=retention_seconds
-    ])
+    memory,migration=migrate_evidence_memory(
+        [
+            dict(x) for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or [])
+            if isinstance(x,dict) and float(x.get("last_seen_epoch") or 0)
+            and now_epoch-float(x.get("last_seen_epoch") or 0)<=retention_seconds
+        ],
+        enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
+        strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+    )
 
     index={}
     for i,row in enumerate(memory):
@@ -5657,19 +5680,39 @@ async def _github_issue_query_search(query: str, limit: int = 4) -> list[dict]:
         return []
 
 
-async def _stackexchange_query_search(query: str, limit: int = 4) -> list[dict]:
-    seed=natural_search_seed(query,{})
+async def _stackexchange_query_search(query: str, limit: int = 4, meta: dict | None = None) -> list[dict]:
+    meta=meta if isinstance(meta,dict) else {}
+    seed=natural_search_seed(query,meta)
     if not seed:
         return []
+    tag_map={
+        "developer_tools":"python;javascript;git",
+        "integration_api":"api;rest;webhooks",
+        "spreadsheet_process":"excel;google-sheets",
+        "document_processing":"pdf;ocr",
+        "manual_data_entry":"excel;forms",
+        "it_hygiene":"windows;active-directory",
+        "cybersecurity_tools":"security;authentication",
+        "data_cleanup":"python;pandas",
+        "analytics_tools":"sql;powerbi",
+    }
+    family=str(meta.get("family") or "")
+    explore_strict=bool(EXPLORE_STRICT_ENABLED and str(meta.get("class") or "")=="explore")
+    tags=tag_map.get(family,"")
+    if explore_strict and not tags:
+        return []
     try:
+        params={
+            "order":"desc","sort":"activity","q":seed,
+            "site":"stackoverflow","pagesize":max(1,min(limit,8)),
+            "filter":"withbody",
+        }
+        if explore_strict and tags:
+            params["tagged"]=tags
         async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=True) as client:
             r=await client.get(
                 "https://api.stackexchange.com/2.3/search/advanced",
-                params={
-                    "order":"desc","sort":"activity","q":seed,
-                    "site":"stackoverflow","pagesize":max(1,min(limit,8)),
-                    "filter":"withbody",
-                },
+                params=params,
             )
             if not r.is_success:
                 return []
@@ -6217,13 +6260,18 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     query_class=str(meta.get("class") or "")
     structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
     if structured_first:
-        tasks=[_hn_query_search(seed,3),_github_issue_query_search(seed,3),_stackexchange_query_search(seed,3),free_web_search(seed,2)]
+        tasks=[
+            _hn_query_search(seed,3),
+            _github_issue_query_search(seed,3),
+            _stackexchange_query_search(seed,3,meta),
+            free_web_search(seed,2),
+        ]
     else:
         tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
         if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
             tasks.append(_github_issue_query_search(seed,3))
         if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
-            tasks.append(_stackexchange_query_search(seed,3))
+            tasks.append(_stackexchange_query_search(seed,3,meta))
     batches=await asyncio.gather(*tasks,return_exceptions=True)
     ingestion_diagnostics=(
         routed_search_diagnostics(batches,query,meta,query_relevance)
@@ -7440,7 +7488,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             for q in searches
         ],
     }
-    observed_now=observed_pain_candidates(web_research,query_meta,limit=12)
+    observed_now=observed_pain_candidates(
+        web_research,
+        query_meta,
+        limit=12,
+        reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
+        require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+    )
     if observed_now:
         existing=[
             x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])

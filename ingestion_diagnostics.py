@@ -104,6 +104,7 @@ class IngestionDiagnostics:
         self.passed = Counter()
         self.passed_by_class: dict[str, Counter] = defaultdict(Counter)
         self.rejected_by_reason = Counter()
+        self.self_contamination_rejected = 0
         self.rejected_by_source: dict[str, Counter] = defaultdict(Counter)
         self.rejected_by_class: dict[str, Counter] = defaultdict(Counter)
         self.errors = 0
@@ -138,6 +139,8 @@ class IngestionDiagnostics:
         source = canonical_source(source)
         qclass = str(query_class or "unknown")
         self.rejected_by_reason[reason] += 1
+        if reason == "self_contamination_rejected":
+            self.self_contamination_rejected += 1
         self.rejected_by_source[source][reason] += 1
         self.rejected_by_class[qclass][reason] += 1
 
@@ -153,6 +156,7 @@ class IngestionDiagnostics:
             "enabled": True,
             "raw_results_by_source": dict(sorted(raw.items())),
             "rejected_by_reason": dict(sorted(self.rejected_by_reason.items())),
+            "self_contamination_rejected": self.self_contamination_rejected,
             "rejected_by_source": {
                 source: dict(sorted(counts.items()))
                 for source, counts in sorted(self.rejected_by_source.items())

@@ -67,8 +67,40 @@ FAMILY_TERMS = [
     ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow","back office","reporting automation")),
 ]
 
+FAMILY_RELEVANCE_TERMS = {
+    "spreadsheet_process": ("spreadsheet","excel","google sheets","csv","manual process"),
+    "workflow_automation": ("workflow automation","manual workflow","repetitive task","back office","automation"),
+    "crm_lead_ops": ("crm","lead management","sales ops","lead qualification","follow up"),
+    "website_audit": ("website audit","site audit","accessibility audit","website qa","broken link"),
+    "developer_tools": ("developer","developer tool","developer workflow","devops","deployment","ci/cd","code review","api debugging"),
+    "integration_api": ("api","api integration","webhook","integration platform","system integration"),
+    "ai_tools": ("ai assistant","ai tool","llm","generative ai","agentic"),
+    "micro_saas": ("micro saas","niche saas","vertical saas"),
+    "ecommerce_tools": ("ecommerce","shopify","woocommerce","catalog","order operations"),
+    "marketing_seo": ("seo","marketing automation","keyword research","ad campaign"),
+    "analytics_tools": ("analytics","business intelligence","reporting dashboard","data analytics"),
+    "compliance_tools": ("compliance","audit evidence","gdpr","iso 27001","regulatory reporting"),
+    "finance_ops": ("invoice","accounts payable","bookkeeping","expense reporting","finance operations"),
+    "hr_tools": ("hr ","human resources","employee","onboarding","recruiting","applicant tracking","payroll"),
+    "education_tools": ("education","teacher","learning platform","training platform","course workflow"),
+    "creator_tools": ("creator","newsletter","podcast","video creator"),
+    "productivity_tools": ("productivity","knowledge management","task workflow","note taking"),
+    "local_business_tools": ("appointment","booking","quote preparation","local business","service business"),
+    "document_processing": ("document","pdf","ocr","form","invoice"),
+    "manual_data_entry": ("manual data entry","data entry","rekey","re-key"),
+    "it_hygiene": ("it inventory","asset inventory","patch","endpoint inventory","security hygiene"),
+    "customer_support": ("customer support","support ticket","shared inbox","customer email"),
+    "data_cleanup": ("data cleanup","duplicate data","deduplication","csv cleanup"),
+    "content_tools": ("content repurposing","content workflow","catalog description","localization"),
+    "cybersecurity_tools": ("cybersecurity","security assessment","vulnerability","phishing","soc","security automation"),
+}
+
 PAIN_TERMS = (
     "pain","problem","manual","repetitive","time consuming","time-consuming",
+    "frustrat","tired of","waste time","workaround","backlog",
+)
+STRONG_PAIN_TERMS = (
+    "pain","manual","repetitive","time consuming","time-consuming",
     "frustrat","tired of","waste time","workaround","backlog",
 )
 BUY_INTENT_TERMS = (
@@ -130,7 +162,54 @@ def commercial_family(text: str) -> str:
     return "other"
 
 
-def demand_signal_type(title: str, body: str, query_role: str = "") -> list[str]:
+def family_relevance_terms(family: str) -> tuple[str, ...]:
+    family=str(family or "").strip()
+    base=next((terms for name,terms in FAMILY_TERMS if name==family),())
+    extra=FAMILY_RELEVANCE_TERMS.get(family,())
+    return tuple(dict.fromkeys(tuple(base)+tuple(extra)))
+
+
+def family_text_matches(family: str, text: str) -> bool:
+    return contains_any((text or "").lower(), family_relevance_terms(family))
+
+
+def is_self_contamination(url: str, source: str = "", text: str = "") -> bool:
+    try:
+        parts=urlsplit(str(url or ""))
+        host=(parts.hostname or "").lower().strip(".")
+        path=(parts.path or "").strip("/")
+    except Exception:
+        host=""
+        path=""
+    if host=="neo-collettive.onrender.com" or host.endswith(".neo-collettive.onrender.com"):
+        return True
+    if host=="github.com" and path:
+        owner=path.split("/",1)[0].lower()
+        if owner=="toramo747":
+            return True
+    source_low=str(source or "").lower()
+    source_markers=("peer-a2a","peer_a2a","a2a-peer","a2a_peer","agent-chat","agent_chat","agent-dialogue","agent_dialogue","jarvis-dialogue","jarvis_dialogue")
+    if any(marker in source_low for marker in source_markers):
+        return True
+    text_low=str(text or "").lower()
+    self_text_markers=(
+        "identity: chatgpt-research-session-",
+        "round 2/3 — methodology",
+        "falsify one market-facing differentiator",
+        "first paid ai-assisted content-operation offer",
+        "mycelix runtime snapshot",
+    )
+    if any(marker in text_low for marker in self_text_markers):
+        return True
+    return False
+
+
+def demand_signal_type(
+    title: str,
+    body: str,
+    query_role: str = "",
+    strong_pain_only: bool = False,
+) -> list[str]:
     """Tag buyer-side demand separately from vendor/supply pricing.
 
     A disconfirm search result is never turned into positive commercial evidence.
@@ -141,7 +220,7 @@ def demand_signal_type(title: str, body: str, query_role: str = "") -> list[str]
         return ["DISCONFIRM"]
 
     tags: list[str] = []
-    pain = contains_any(text, PAIN_TERMS)
+    pain = contains_any(text, STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS)
     intent = contains_any(text, BUY_INTENT_TERMS)
     buyer_paid = contains_any(text, BUYER_PAID_TERMS)
     supply = contains_any(text, SUPPLY_TERMS)
@@ -273,6 +352,7 @@ def thesis_attributed_problem_key(
     thesis_id: str = "",
     relevance_score: int = 0,
     overlap_count: int = 0,
+    require_family_match: bool = False,
 ) -> str:
     """Use thesis identity only for strongly relevant results from an internal thesis probe.
 
@@ -288,6 +368,11 @@ def thesis_attributed_problem_key(
         return observed
     if pid.count(":") < 2:
         return observed
+    if require_family_match:
+        observed_family=observed.split(":",1)[0].strip().lower()
+        thesis_family=pid.split(":",1)[0].strip().lower()
+        if observed_family and thesis_family and observed_family!=thesis_family:
+            return observed
     return canonical_problem_key("",pid)
 
 
@@ -323,14 +408,39 @@ def _legacy_derived_problem_remap(problem_key: str, sibling_problem_keys: list[s
 def migrate_evidence_row(
     row: dict[str, Any],
     sibling_problem_keys: list[str] | tuple[str,...] | set[str] = (),
+    enforce_family_match: bool = False,
+    strong_pain_only: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Idempotently quarantine pre-v2 evidence until it is re-observed by tagger v2."""
     out = dict(row or {})
     changed = False
     family = str(out.get("family") or "")
     raw_key = str(out.get("problem_key_raw") or out.get("problem_key") or (family + ":general" if family else ""))
-    canonical = canonical_problem_key(family, str(out.get("problem_key") or raw_key))
-    canonical = _legacy_derived_problem_remap(canonical, sibling_problem_keys)
+    raw_canonical = canonical_problem_key(raw_key.split(":",1)[0] if ":" in raw_key else family, raw_key)
+    current = canonical_problem_key(family, str(out.get("problem_key") or raw_key))
+    raw_family = raw_canonical.split(":",1)[0].strip().lower() if raw_canonical else ""
+    current_family = current.split(":",1)[0].strip().lower() if current else ""
+    reverted = bool(
+        enforce_family_match
+        and out.get("thesis_bound")
+        and raw_family
+        and current_family
+        and raw_family != current_family
+    )
+    if reverted:
+        family=raw_family
+        canonical=raw_canonical
+        if out.get("family") != family:
+            out["family"]=family
+            changed=True
+        if out.get("thesis_bound") is not False:
+            out["thesis_bound"]=False
+            changed=True
+        if out.get("attribution_reverted") != "family_mismatch":
+            out["attribution_reverted"]="family_mismatch"
+            changed=True
+    else:
+        canonical = _legacy_derived_problem_remap(current, sibling_problem_keys)
     if out.get("problem_key_raw") != raw_key:
         out["problem_key_raw"] = raw_key
         changed = True
@@ -341,6 +451,11 @@ def migrate_evidence_row(
     schema_v = int(out.get("schema_v") or 1)
     tagger_v = int(out.get("tagger_v") or 1)
     migration_v = int(out.get("migration_v") or 0)
+    if strong_pain_only and "PAIN" in set(out.get("signal_types") or []):
+        text=(str(out.get("title") or "")+" "+str(out.get("snippet") or "")).lower()
+        if not contains_any(text,STRONG_PAIN_TERMS):
+            out["signal_types"]=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+            changed=True
     if schema_v < EVIDENCE_SCHEMA_VERSION or tagger_v < TAGGER_VERSION:
         # Preserve the original tagger version: quarantine means "not revalidated".
         if migration_v < EVIDENCE_SCHEMA_VERSION or out.get("quarantine_reason") != "legacy_unverified_tagger_v1":
@@ -351,7 +466,25 @@ def migrate_evidence_row(
             out["migration_v"] = EVIDENCE_SCHEMA_VERSION
             changed = True
     else:
-        if "gate_eligible" not in out:
+        if reverted:
+            signals=set(out.get("signal_types") or [])
+            eligible=bool(
+                gate_eligible_problem_key(canonical)
+                and bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & signals)
+                and "DISCONFIRM" not in signals
+            )
+            reason=None if eligible else (
+                "disconfirm" if "DISCONFIRM" in signals
+                else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(canonical)
+                else "nonpositive_signal"
+            )
+            if out.get("gate_eligible") != eligible:
+                out["gate_eligible"]=eligible
+                changed=True
+            if out.get("quarantine_reason") != reason:
+                out["quarantine_reason"]=reason
+                changed=True
+        elif "gate_eligible" not in out:
             out["gate_eligible"] = gate_eligible_problem_key(canonical)
             changed = True
         if "DISCONFIRM" in set(out.get("signal_types") or []):
@@ -365,7 +498,11 @@ def migrate_evidence_row(
     return out, changed
 
 
-def migrate_evidence_memory(rows: list[dict[str, Any]] | None) -> tuple[list[dict[str, Any]], dict[str, int]]:
+def migrate_evidence_memory(
+    rows: list[dict[str, Any]] | None,
+    enforce_family_match: bool = False,
+    strong_pain_only: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     source_rows=[row for row in (rows or []) if isinstance(row,dict)]
     sibling_problem_keys=[
         canonical_problem_key(str(row.get("family") or ""),str(row.get("problem_key") or ""))
@@ -376,7 +513,12 @@ def migrate_evidence_memory(rows: list[dict[str, Any]] | None) -> tuple[list[dic
     changed = 0
     quarantined = 0
     for row in source_rows:
-        new_row, row_changed = migrate_evidence_row(row,sibling_problem_keys)
+        new_row, row_changed = migrate_evidence_row(
+            row,
+            sibling_problem_keys,
+            enforce_family_match=enforce_family_match,
+            strong_pain_only=strong_pain_only,
+        )
         if row_changed:
             changed += 1
         if not bool(new_row.get("gate_eligible")):

@@ -53,6 +53,20 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertTrue(queries)
         self.assertNotIn("AI SaaS",queries)
 
+    def test_observed_phrase_keeps_family_anchor(self):
+        rows=[{
+            "tagger_v":3,
+            "quarantine_reason":None,
+            "family":"hr_tools",
+            "signal_types":["PAIN","BUY_INTENT"],
+            "title":"Looking for help with a repetitive employee onboarding process",
+            "snippet":"We need help because onboarding is manual and repetitive.",
+            "seen_count":1,
+        }]
+        q=discovery_query("hr_tools",["HR workflow automation"],"explore",rows)
+        self.assertTrue(q.startswith("HR workflow automation "))
+        self.assertIn("Looking for help",q)
+
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")
         self.assertEqual(queries,[

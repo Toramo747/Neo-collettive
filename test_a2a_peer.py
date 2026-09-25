@@ -285,13 +285,25 @@ class PeerQualityIntegrationTests(unittest.TestCase):
         self.assertIn('free_web_search(seed, 2)',source)
         self.assertIn('_hn_query_search(seed, 3)',source)
         self.assertIn('_github_issue_query_search(seed, 3)',source)
-        self.assertIn('_stackexchange_query_search(seed, 3)',source)
+        self.assertIn('_stackexchange_query_search(seed, 3, meta)',source)
 
     def test_query_builder_v2_does_not_change_thesis_generation(self):
         source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
         self.assertNotIn('build_discovery_query',source)
         self.assertNotIn('build_scout_queries',source)
         self.assertNotIn('build_breakout_queries',source)
+
+    def test_v0999_integrity_guards_are_wired(self):
+        quality=IntegratedRoutingTests().function('_commercial_evidence_quality')
+        routed=IntegratedRoutingTests().function('routed_public_search')
+        stack=IntegratedRoutingTests().function('_stackexchange_query_search')
+        self.assertIn('SELF_CONTAMINATION_GUARD_ENABLED',quality)
+        self.assertIn('ATTRIBUTION_FAMILY_GUARD_ENABLED',quality)
+        self.assertIn('STRONG_PAIN_GUARD_ENABLED',quality)
+        self.assertIn('self_contamination_rejected',quality)
+        self.assertIn('_stackexchange_query_search(seed, 3, meta)',routed)
+        self.assertIn("'tagged'",stack)
+        self.assertIn('EXPLORE_STRICT_ENABLED',stack)
 
     def test_problem_snapshot_canonicalizes_input_key(self):
         source=IntegratedRoutingTests().function('_problem_snapshot')

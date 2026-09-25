@@ -201,6 +201,91 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertFalse(structured_paid_source("remotive-api","buyer"))
         self.assertFalse(structured_paid_source("web","paid_market"))
 
+    def test_problem_marker_alone_is_not_pain_when_strong_guard_enabled(self):
+        tags=demand_signal_type(
+            "SEO issue",
+            "Problem: fabricated pedal model across multiple locations.",
+            strong_pain_only=True,
+        )
+        self.assertNotIn("PAIN",tags)
+
+    def test_thesis_attribution_rejects_cross_family_match(self):
+        observed="marketing_seo:general"
+        problem_id="manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry"
+        self.assertEqual(
+            thesis_attributed_problem_key(
+                observed,
+                problem_id,
+                "th-real",
+                100,
+                3,
+                require_family_match=True,
+            ),
+            observed,
+        )
+
+    def test_metaldrummergear_reverts_cross_family_attribution(self):
+        target="manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry"
+        rows=[
+            {
+                "schema_v":2,"tagger_v":3,"migration_v":2,
+                "gate_eligible":True,"quarantine_reason":None,
+                "domain":"remoteok.com","source":"remoteok-api",
+                "family":"manual_data_entry",
+                "problem_key_raw":"manual_data_entry:general",
+                "problem_key":target,
+                "thesis_bound":True,
+                "problem_id":target,
+                "thesis_id":"th-good",
+                "title":"Data Entry Administrator",
+                "snippet":"Hiring contractor for manual data entry.",
+                "strong_markers":["hiring"],
+                "weak_markers":["manual"],
+                "signal_types":["BUY_INTENT","PAID_DEMAND"],
+                "url":"https://remoteok.com/example",
+                "last_seen_epoch":1,
+            },
+            {
+                "schema_v":2,"tagger_v":3,"migration_v":2,
+                "gate_eligible":True,"quarantine_reason":None,
+                "domain":"github.com","source":"github-issues-routed",
+                "family":"manual_data_entry",
+                "problem_key_raw":"marketing_seo:general",
+                "problem_key":target,
+                "thesis_bound":True,
+                "problem_id":target,
+                "thesis_id":"th-b8504bf91dd2",
+                "title":"SEO: Charlie Benante's albumArticles.js fabricates a nonexistent 'Tama HP35 Camco' pedal",
+                "snippet":"Problem: fabricated pedal model across 10+ locations.",
+                "strong_markers":[],
+                "weak_markers":["problem"],
+                "signal_types":["PAIN"],
+                "url":"https://github.com/ricardoparro/MetalDrummerGear/issues/8045",
+                "last_seen_epoch":1,
+            },
+        ]
+        migrated,_=migrate_evidence_memory(
+            rows,
+            enforce_family_match=True,
+            strong_pain_only=True,
+        )
+        bad=next(x for x in migrated if "MetalDrummerGear" in x.get("url",""))
+        self.assertEqual(bad["problem_key"],"marketing_seo:general")
+        self.assertEqual(bad["family"],"marketing_seo")
+        self.assertEqual(bad["attribution_reverted"],"family_mismatch")
+        self.assertFalse(bad["gate_eligible"])
+        self.assertNotIn("PAIN",bad["signal_types"])
+        manual_domains={
+            x["domain"] for x in migrated
+            if x.get("problem_key")==target and x.get("gate_eligible")
+        }
+        manual_signals=set()
+        for x in migrated:
+            if x.get("problem_key")==target and x.get("gate_eligible"):
+                manual_signals.update(x.get("signal_types") or [])
+        self.assertEqual(manual_domains,{"remoteok.com"})
+        self.assertEqual(manual_signals,{"BUY_INTENT","PAID_DEMAND"})
+
     def test_thesis_attribution_requires_strong_relevance(self):
         observed="spreadsheet_process:general"
         problem_id="ai_tools:small_businesses:produce_recurring_client_and_management_reports"

@@ -53,6 +53,16 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(snap["rejected_by_source"]["bing-rss"], {"no_family": 1})
         self.assertEqual(snap["rejected_by_query_class"]["explore"], {"no_family": 1})
 
+    def test_self_contamination_counter_is_explicit(self):
+        diag=IngestionDiagnostics(True)
+        diag.record_rejection("self_contamination_rejected","github-issues-routed","explore")
+        snap=diag.snapshot()
+        self.assertEqual(snap["self_contamination_rejected"],1)
+        self.assertEqual(
+            snap["rejected_by_reason"]["self_contamination_rejected"],
+            1,
+        )
+
     def test_disabled_diagnostics_are_noop(self):
         diag = IngestionDiagnostics(False)
         diag.add_raw_rows([{"source": "hackernews"}])

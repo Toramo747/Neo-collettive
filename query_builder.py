@@ -75,10 +75,10 @@ def discovery_query(
 ) -> str:
     """Prefer observed buyer language; use a deterministic family-specific fallback."""
     phrases=observed_buyer_phrases(evidence_rows,family,4)
-    if phrases:
-        return phrases[0]
     terms=[_clean(x,100) for x in (sector_terms or []) if _clean(x,100)]
     anchor=terms[0] if terms else str(family or "").replace("_"," ")
+    if phrases:
+        return _clean(f"{anchor} {phrases[0]}",220)
     suffix="need help manual workaround" if query_class=="explore" else "hiring contractor manual workflow"
     return _clean(f"{anchor} {suffix}",220)
 
