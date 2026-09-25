@@ -7602,6 +7602,24 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             for q in searches
         ],
     }
+    revalidation_stats={"attempted":0,"promoted":0,"failed":0,"unreachable":0}
+    if QUARANTINE_REVALIDATION_ENABLED and REVALIDATE_PER_CYCLE>0:
+        try:
+            revalidated_memory,revalidation_stats=await revalidate_quarantined_rows(
+                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                _revalidation_fetch_url,
+                limit=REVALIDATE_PER_CYCLE,
+                max_fetch_attempts=3,
+                self_contamination_guard=SELF_CONTAMINATION_GUARD_ENABLED,
+                seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+                family_match_guard=ATTRIBUTION_FAMILY_GUARD_ENABLED,
+                strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+            )
+            AUTOPILOT_STATE["commercial_evidence_memory"]=revalidated_memory
+        except Exception:
+            # Revalidation is opportunistic maintenance and must never abort a cycle.
+            revalidation_stats={"attempted":0,"promoted":0,"failed":0,"unreachable":0}
+
     observed_now=observed_pain_candidates(
         web_research,
         query_meta,
@@ -7661,7 +7679,12 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "observed_candidates_purged_by_reason":{},
     }
 
-    evidence_quality = _commercial_evidence_quality(web_research, demand_evidence, query_meta)
+    evidence_quality = _commercial_evidence_quality(
+        web_research,
+        demand_evidence,
+        query_meta,
+        revalidation_stats=revalidation_stats,
+    )
     ingestion_diag=dict(evidence_quality.get("ingestion_diagnostics") or {})
     ingestion_diag.update(candidate_purge_diagnostics)
     evidence_quality["ingestion_diagnostics"]=ingestion_diag
