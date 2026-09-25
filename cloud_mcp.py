@@ -395,7 +395,28 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(payload.get("hypothesis_queue"), list):
         AUTOPILOT_STATE["hypothesis_queue"] = payload.get("hypothesis_queue")[-40:]
     if isinstance(payload.get("observed_pain_candidates"), list):
-        AUTOPILOT_STATE["observed_pain_candidates"] = payload.get("observed_pain_candidates")[-30:]
+        restored=[x for x in payload.get("observed_pain_candidates")[-30:] if isinstance(x,dict)]
+        purge_reasons={}
+        kept=[]
+        for candidate in restored:
+            if not OBSERVED_CANDIDATE_REVALIDATION_ENABLED:
+                kept.append(candidate)
+                continue
+            valid,reason=validate_observed_candidate(
+                candidate,
+                reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
+                require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+                reject_launch=SELLER_LAUNCH_GUARD_ENABLED,
+            )
+            if valid:
+                kept.append(candidate)
+            else:
+                purge_reasons[reason]=int(purge_reasons.get(reason) or 0)+1
+        AUTOPILOT_STATE["observed_pain_candidates"] = kept
+        AUTOPILOT_STATE["observed_candidate_purge_diagnostics"] = {
+            "observed_candidates_purged":sum(purge_reasons.values()),
+            "observed_candidates_purged_by_reason":purge_reasons,
+        }
     if isinstance(payload.get("exploration_history"), list):
         AUTOPILOT_STATE["exploration_history"] = payload.get("exploration_history")[-40:]
     if isinstance(payload.get("inbound_messages"), list):
@@ -429,6 +450,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
             payload.get("commercial_evidence_memory")[-240:],
             enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
             strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+            seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
         )
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
