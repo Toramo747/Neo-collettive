@@ -104,8 +104,9 @@ STRONG_PAIN_TERMS = (
     "frustrat","tired of","waste time","workaround","backlog",
 )
 BUY_INTENT_TERMS = (
-    "looking for","need help","need a","seeking","want someone","recommend a",
-    "how can i automate","request:","rfp","request for proposal",
+    "looking for","need help","need a","need to hire","looking to hire","hire someone",
+    "seeking","want someone","recommend a","how can i automate",
+    "request:","rfp","request for proposal",
 )
 BUYER_PAID_TERMS = (
     "budget","will pay","paid job","fixed-price","fixed price","hourly",
@@ -123,6 +124,15 @@ LAUNCH_TITLE_MARKERS = (
 
 GENERIC_WEB_SOURCES = {"brave-search","google-pse","bing-rss-free","web"}
 VENDOR_PATH_MARKERS = ("/blog/","/solutions/","/challenges/","/services/","/resources/")
+SUPPLY_OFFER_PATH_MARKERS = ("/services/","/hire/","/freelancers/","/experts/","/talent/")
+SUPPLY_OFFER_TERMS = (
+    "hire our","hire one of our","our freelancers","our freelancer","our experts",
+    "our expert","we offer","we provide","book a call","book a demo",
+    "get a quote from us","start a free trial","start free trial","try us free",
+)
+GIG_MARKET_DOMAINS = (
+    "fiverr.com","upwork.com","freelancer.com","guru.com","peopleperhour.com","toptal.com",
+)
 COMMUNITY_DOMAINS = (
     "reddit.com","news.ycombinator.com","stackoverflow.com","serverfault.com",
     "superuser.com","stackexchange.com",
@@ -171,6 +181,28 @@ def buyer_voice_present(title: str, body: str) -> bool:
     ))
 
 
+def first_person_buyer_voice_present(title: str, body: str) -> bool:
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    if not re.search(r"\b(?:i|we|our|my)\b",text):
+        return False
+    return bool(re.search(
+        r"\b(?:i|we|our|my)\b[^.!?]{0,140}\b(?:need|looking|seeking|want|hire|pay|budget|replace|switch|automate)\b",
+        text,
+        flags=re.I,
+    ))
+
+
+def _marker_survives_query_echo(marker: str, title: str, body: str, query: str) -> bool:
+    if not contains_term(query or "",marker):
+        return True
+    if contains_term(title or "",marker):
+        return True
+    for sentence in re.split(r"(?<=[.!?])\s+",str(body or "")):
+        if contains_term(sentence,marker) and first_person_buyer_voice_present("",sentence):
+            return True
+    return False
+
+
 def community_context(url: str, source: str = "") -> bool:
     source_low=(source or "").strip().lower()
     if source_low in {"hn-algolia-routed","hackernews","stackexchange-routed","github-issues-routed","github-issues"}:
@@ -216,6 +248,38 @@ def is_vendor_content(title: str, body: str, url: str, source: str = "") -> bool
         return False
     score=int(flags["marketing_title"])+int(flags["marketing_path"])+int(not flags["buyer_voice"])
     return score>=2
+
+
+def is_supply_offer(title: str, body: str, url: str, source: str = "") -> bool:
+    """Detect seller-side service/product offers returned by generic web search."""
+    if not generic_web_source(source):
+        return False
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    try:
+        parts=urlsplit(str(url or ""))
+        host=(parts.hostname or "").lower().strip(".")
+        path=(parts.path or "").lower()
+    except Exception:
+        host=""
+        path=""
+    strong_phrase=(
+        any(contains_term(text,term) for term in SUPPLY_OFFER_TERMS)
+        or bool(re.search(r"\btry\s+[a-z0-9][a-z0-9 .+_-]{0,60}\s+(?:for\s+)?free(?:\s+trial)?\b",text,re.I))
+    )
+    path_offer=any(marker in path for marker in SUPPLY_OFFER_PATH_MARKERS)
+    gig_market=any(host==d or host.endswith("."+d) for d in GIG_MARKET_DOMAINS)
+    first_person=first_person_buyer_voice_present(title,body)
+    if strong_phrase:
+        return True
+    if path_offer and not first_person:
+        return True
+    if gig_market and not first_person and (
+        contains_term(text,"hire")
+        or contains_term(text,"freelancer")
+        or contains_term(text,"expert")
+    ):
+        return True
+    return False
 
 
 def generic_web_pain_allowed(title: str, body: str, url: str, source: str = "") -> bool:
