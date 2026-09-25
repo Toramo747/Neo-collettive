@@ -400,10 +400,10 @@ def validate_observed_candidate(
         title+" "+pain,
     ):
         return False,"self_contamination"
-    if require_family_in_pain and not family_text_matches(family,pain):
-        return False,"family_term_missing_in_pain"
     if reject_launch and _is_launch_title(title):
         return False,"seller_launch"
+    if require_family_in_pain and not family_text_matches(family,pain):
+        return False,"family_term_missing_in_pain"
     return True,"valid"
 
 
