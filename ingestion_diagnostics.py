@@ -113,7 +113,7 @@ class IngestionDiagnostics:
         self.new_signal_rows_by_source = Counter()
         self.new_signal_rows_by_query_class = Counter()
         self.new_signal_rows_by_provider = Counter()
-        self.search_provider = {"name":"bing","calls_cycle":0,"calls_day":0,"errors":0,"fallbacks":0}
+        self.search_provider = {"name":"bing","calls_cycle":0,"calls_day":0,"errors":0,"fallbacks":0,"fallback_reasons":{}}
         self.revalidation = {"attempted":0,"promoted":0,"failed":0,"unreachable":0}
         self.errors = 0
 
@@ -182,6 +182,11 @@ class IngestionDiagnostics:
             "calls_day":max(0,int(payload.get("calls_day") or 0)),
             "errors":max(0,int(payload.get("errors") or 0)),
             "fallbacks":max(0,int(payload.get("fallbacks") or 0)),
+            "fallback_reasons":{
+                str(k)[:80]:max(0,int(v or 0))
+                for k,v in (payload.get("fallback_reasons") or {}).items()
+                if str(k).strip()
+            } if isinstance(payload.get("fallback_reasons"),dict) else {},
         }
 
     def merge_revalidation(self, stats: dict | None) -> None:
