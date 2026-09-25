@@ -474,6 +474,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
             enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
             strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
             seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+            vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
+            web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
         )
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
@@ -5073,6 +5075,8 @@ def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str
         query_role,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+        vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
+        web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
     )
 
 
@@ -5417,7 +5421,21 @@ def _commercial_evidence_quality(
 
         weak=[t for t in weak_terms if contains_term(context,t)]
         seller_launch=bool(SELLER_LAUNCH_GUARD_ENABLED and is_launch_title(title))
-        signal_types=_demand_signal_type(title,context,query_role)
+        vendor_content=bool(VENDOR_CONTENT_GUARD_ENABLED and is_vendor_content(title,body,url,source))
+        web_buyer_voice_missing=bool(
+            WEB_BUYER_VOICE_GUARD_ENABLED
+            and generic_web_source(source)
+            and not generic_web_pain_allowed(title,body,url,source)
+        )
+        signal_types=integrity_demand_signal_type(
+            title,context,query_role,
+            strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+            seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+            url=url,
+            source=source,
+            vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
+            web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+        )
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
         if not signal_types:
@@ -5444,6 +5462,8 @@ def _commercial_evidence_quality(
             query_role!="disconfirm"
             and "DISCONFIRM" not in signal_types
             and not seller_launch
+            and not vendor_content
+            and not web_buyer_voice_missing
             and gate_eligible_problem_key(problem_key)
             and positive
         )
@@ -5455,11 +5475,13 @@ def _commercial_evidence_quality(
             "quarantine_reason":None if gate_eligible else (
                 "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
                 else "seller_launch" if seller_launch
+                else "vendor_content" if vendor_content
+                else "web_buyer_voice_missing" if web_buyer_voice_missing
                 else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
                 else "nonpositive_signal"
             ),
-            "context_type":"product_launch" if seller_launch else "observed",
-            "signal_reverted":"seller_launch" if seller_launch else None,
+            "context_type":"product_launch" if seller_launch else "vendor_content" if vendor_content else "observed",
+            "signal_reverted":"seller_launch" if seller_launch else "vendor_content" if vendor_content else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
             "domain":host,
             "source":source,
             "family":family,
@@ -5517,6 +5539,8 @@ def _commercial_evidence_quality(
         enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+        vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
+        web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
     )
 
     index={}
@@ -6550,6 +6574,7 @@ async def free_web_search(query: str, limit: int = 6) -> dict:
             max_calls_day=SEARCH_MAX_CALLS_PER_DAY,
             timeout_seconds=min(TIMEOUT,6),
             http_get=_provider_http_get,
+            min_interval_ms=SEARCH_MIN_INTERVAL_MS,
         )
         AUTOPILOT_STATE["search_provider_state"]=new_state
     safe_rows=[]
