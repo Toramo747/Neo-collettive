@@ -19,9 +19,11 @@ provider is retained for compatibility, not recommended for new deployments.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -108,7 +110,9 @@ def new_search_state() -> dict[str, Any]:
         "calls_cycle":0,
         "errors":0,
         "fallbacks":0,
+        "fallback_reasons":{},
         "last_provider":"bing",
+        "last_call_monotonic":0.0,
     }
 
 
@@ -125,6 +129,15 @@ def normalize_search_state(state: dict | None) -> dict[str, Any]:
             out[key]=0
     out["day_utc"]=str(out.get("day_utc") or "")
     out["last_provider"]=str(out.get("last_provider") or "bing")
+    out["fallback_reasons"]={
+        str(k)[:80]:max(0,int(v or 0))
+        for k,v in (out.get("fallback_reasons") or {}).items()
+        if str(k).strip()
+    } if isinstance(out.get("fallback_reasons"),dict) else {}
+    try:
+        out["last_call_monotonic"]=float(out.get("last_call_monotonic") or 0.0)
+    except Exception:
+        out["last_call_monotonic"]=0.0
     return out
 
 
@@ -140,6 +153,7 @@ def begin_cycle(state: dict | None, cycle_id: int, now: datetime | None = None) 
         out["calls_cycle"]=0
         out["errors"]=0
         out["fallbacks"]=0
+        out["fallback_reasons"]={}
     return out
 
 
@@ -151,7 +165,18 @@ def provider_diagnostics(state: dict | None, provider_name: str | None = None) -
         "calls_day":int(st.get("calls_day") or 0),
         "errors":int(st.get("errors") or 0),
         "fallbacks":int(st.get("fallbacks") or 0),
+        "fallback_reasons":dict(sorted((st.get("fallback_reasons") or {}).items())),
     }
+
+
+def _record_fallback(state: dict[str, Any], reason: str, error: bool = False) -> None:
+    reason=str(reason or "fallback")[:80]
+    state["fallbacks"]=int(state.get("fallbacks") or 0)+1
+    if error:
+        state["errors"]=int(state.get("errors") or 0)+1
+    reasons=dict(state.get("fallback_reasons") or {})
+    reasons[reason]=int(reasons.get(reason) or 0)+1
+    state["fallback_reasons"]=reasons
 
 
 def _budget_available(state: dict[str, Any], max_cycle: int, max_day: int) -> bool:
@@ -171,6 +196,9 @@ async def search(
     max_calls_day: int = 150,
     timeout_seconds: float = 6.0,
     http_get: Any = None,
+    min_interval_ms: int = 0,
+    sleep_fn: Any = asyncio.sleep,
+    monotonic_fn: Any = time.monotonic,
 ) -> tuple[list[dict[str,str]], dict[str,Any], dict[str,Any]]:
     """Search one configured provider with an injected HTTP transport.
 
@@ -188,20 +216,27 @@ async def search(
     if provider=="bing":
         return [],st,{"provider":"bing","fallback":True,"reason":"provider_unconfigured_or_bing"}
     if not _budget_available(st,max_calls_cycle,max_calls_day):
-        st["fallbacks"]+=1
+        _record_fallback(st,"budget_exhausted")
         return [],st,{"provider":provider,"fallback":True,"reason":"budget_exhausted"}
     if http_get is None:
-        st["errors"]+=1
-        st["fallbacks"]+=1
+        _record_fallback(st,"transport_unavailable",error=True)
         return [],st,{"provider":provider,"fallback":True,"reason":"transport_unavailable"}
 
+    interval=max(0,int(min_interval_ms or 0))/1000.0
+    if interval>0:
+        last=float(st.get("last_call_monotonic") or 0.0)
+        now=float(monotonic_fn())
+        remaining=interval-(now-last) if last>0 else 0.0
+        if remaining>0:
+            await sleep_fn(remaining)
+        st["last_call_monotonic"]=float(monotonic_fn())
     st["calls_cycle"]+=1
     st["calls_day"]+=1
     try:
         if provider=="brave":
             key=(os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()
             if not key:
-                st["fallbacks"]+=1
+                _record_fallback(st,"not_configured")
                 return [],st,{"provider":"brave","fallback":True,"reason":"not_configured"}
             response=await http_get(
                 BRAVE_ENDPOINT,
@@ -234,7 +269,7 @@ async def search(
         key=(os.getenv("GOOGLE_PSE_KEY") or "").strip()
         cx=(os.getenv("GOOGLE_PSE_CX") or "").strip()
         if not key or not cx:
-            st["fallbacks"]+=1
+            _record_fallback(st,"not_configured")
             return [],st,{"provider":"google","fallback":True,"reason":"not_configured"}
         response=await http_get(
             GOOGLE_ENDPOINT,
@@ -264,13 +299,13 @@ async def search(
             })
         return rows,st,{"provider":"google","fallback":False,"reason":"ok"}
     except SearchProviderError as exc:
-        st["errors"]+=1
-        st["fallbacks"]+=1
-        return [],st,{"provider":provider,"fallback":True,"reason":str(exc)[:80]}
+        reason=str(exc)[:80]
+        _record_fallback(st,reason,error=True)
+        return [],st,{"provider":provider,"fallback":True,"reason":reason}
     except Exception as exc:
-        st["errors"]+=1
-        st["fallbacks"]+=1
-        return [],st,{"provider":provider,"fallback":True,"reason":type(exc).__name__}
+        reason=type(exc).__name__
+        _record_fallback(st,reason,error=True)
+        return [],st,{"provider":provider,"fallback":True,"reason":reason}
 
 
 async def search_with_fallback(
@@ -284,6 +319,9 @@ async def search_with_fallback(
     max_calls_day: int = 150,
     timeout_seconds: float = 6.0,
     http_get: Any = None,
+    min_interval_ms: int = 0,
+    sleep_fn: Any = asyncio.sleep,
+    monotonic_fn: Any = time.monotonic,
 ) -> tuple[dict[str,Any], dict[str,Any]]:
     """Run configured provider and use Bing callback only when fallback is required."""
     rows,new_state,meta=await search(
@@ -295,6 +333,9 @@ async def search_with_fallback(
         max_calls_day=max_calls_day,
         timeout_seconds=timeout_seconds,
         http_get=http_get,
+        min_interval_ms=min_interval_ms,
+        sleep_fn=sleep_fn,
+        monotonic_fn=monotonic_fn,
     )
     if not meta.get("fallback"):
         return {
