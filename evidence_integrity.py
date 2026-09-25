@@ -192,7 +192,7 @@ def first_person_buyer_voice_present(title: str, body: str) -> bool:
     ))
 
 
-def _marker_survives_query_echo(marker: str, title: str, body: str, query: str) -> bool:
+def marker_survives_query_echo(marker: str, title: str, body: str, query: str) -> bool:
     if not contains_term(query or "",marker):
         return True
     if contains_term(title or "",marker):
@@ -415,7 +415,7 @@ def demand_signal_type(
         and (
             not query_echo_guard
             or not generic_web
-            or _marker_survives_query_echo(marker,title,body,query)
+            or marker_survives_query_echo(marker,title,body,query)
         )
     ]
     paid_markers=[
@@ -424,7 +424,7 @@ def demand_signal_type(
         and (
             not query_echo_guard
             or not generic_web
-            or _marker_survives_query_echo(marker,title,body,query)
+            or marker_survives_query_echo(marker,title,body,query)
         )
     ]
     intent=bool(intent_markers)
@@ -844,7 +844,7 @@ def migrate_evidence_row(
         elif "PAID_DEMAND" in set(recomputed) and out.get("strong_markers"):
             filtered=[
                 marker for marker in (out.get("strong_markers") or [])
-                if _marker_survives_query_echo(
+                if marker_survives_query_echo(
                     str(marker),
                     str(out.get("title") or ""),
                     str(out.get("snippet") or ""),
