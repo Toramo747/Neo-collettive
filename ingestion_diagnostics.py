@@ -107,6 +107,8 @@ class IngestionDiagnostics:
         self.self_contamination_rejected = 0
         self.rejected_by_source: dict[str, Counter] = defaultdict(Counter)
         self.rejected_by_class: dict[str, Counter] = defaultdict(Counter)
+        self.observed_candidates_purged = 0
+        self.observed_candidates_purged_by_reason = Counter()
         self.errors = 0
 
     def merge_web_research(self, groups: list[dict] | None) -> None:
@@ -144,6 +146,16 @@ class IngestionDiagnostics:
         self.rejected_by_source[source][reason] += 1
         self.rejected_by_class[qclass][reason] += 1
 
+    def record_observed_candidate_purge(self, reason: str, count: int = 1) -> None:
+        if not self.enabled:
+            return
+        n=max(0,int(count or 0))
+        if not n:
+            return
+        reason=str(reason or "unknown")
+        self.observed_candidates_purged += n
+        self.observed_candidates_purged_by_reason[reason] += n
+
     def snapshot(self) -> dict:
         if not self.enabled:
             return {"enabled": False}
@@ -170,5 +182,7 @@ class IngestionDiagnostics:
                 source: dict(sorted(classes.items()))
                 for source, classes in sorted(self.passed_by_class.items())
             },
+            "observed_candidates_purged": self.observed_candidates_purged,
+            "observed_candidates_purged_by_reason": dict(sorted(self.observed_candidates_purged_by_reason.items())),
             "diagnostic_errors": self.errors,
         }

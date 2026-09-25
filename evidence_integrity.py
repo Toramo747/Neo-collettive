@@ -117,12 +117,26 @@ SUPPLY_TERMS = (
     "enterprise","free trial","one-time purchase","per month","per year",
 )
 
+LAUNCH_TITLE_MARKERS = (
+    "show hn:","launch hn:","introducing ","announcing ","we built ","i built ",
+)
+
 STRUCTURED_PAID_SOURCES = {
     "remotive-api",
     "remoteok-api",
     "arbeitnow-api",
     "hn-jobs",
 }
+
+
+def is_launch_title(title: str) -> bool:
+    """Return True for seller-authored product launch titles.
+
+    Launch copy is useful market context, but it is supply-side evidence and must
+    never be treated as buyer pain by the commercial gate.
+    """
+    low=" ".join(str(title or "").split()).strip().lower()
+    return any(low.startswith(marker) for marker in LAUNCH_TITLE_MARKERS)
 
 
 def structured_paid_source(source: str, query_role: str = "") -> bool:
@@ -209,6 +223,7 @@ def demand_signal_type(
     body: str,
     query_role: str = "",
     strong_pain_only: bool = False,
+    seller_launch_guard: bool = False,
 ) -> list[str]:
     """Tag buyer-side demand separately from vendor/supply pricing.
 
@@ -220,12 +235,13 @@ def demand_signal_type(
         return ["DISCONFIRM"]
 
     tags: list[str] = []
+    seller_launch = bool(seller_launch_guard and is_launch_title(title))
     pain = contains_any(text, STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS)
     intent = contains_any(text, BUY_INTENT_TERMS)
     buyer_paid = contains_any(text, BUYER_PAID_TERMS)
     supply = contains_any(text, SUPPLY_TERMS)
 
-    if pain:
+    if pain and not seller_launch:
         tags.append("PAIN")
     if intent:
         tags.append("BUY_INTENT")
@@ -410,6 +426,7 @@ def migrate_evidence_row(
     sibling_problem_keys: list[str] | tuple[str,...] | set[str] = (),
     enforce_family_match: bool = False,
     strong_pain_only: bool = False,
+    seller_launch_guard: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Idempotently quarantine pre-v2 evidence until it is re-observed by tagger v2."""
     out = dict(row or {})
@@ -495,6 +512,28 @@ def migrate_evidence_row(
         if out.get("migration_v") != EVIDENCE_SCHEMA_VERSION:
             out["migration_v"] = EVIDENCE_SCHEMA_VERSION
             changed = True
+
+    # Seller-authored launches are supply-side context, never buyer pain. Preserve
+    # the row for market context/audit, but remove PAIN and exclude its domain from
+    # every gate calculation. This migration is intentionally idempotent.
+    if seller_launch_guard and is_launch_title(str(out.get("title") or "")):
+        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+        if out.get("signal_types") != signals:
+            out["signal_types"]=signals
+            changed=True
+        if out.get("context_type") != "product_launch":
+            out["context_type"]="product_launch"
+            changed=True
+        if out.get("signal_reverted") != "seller_launch":
+            out["signal_reverted"]="seller_launch"
+            changed=True
+        if out.get("gate_eligible") is not False:
+            out["gate_eligible"]=False
+            changed=True
+        launch_reason="disconfirm" if "DISCONFIRM" in set(signals) else "seller_launch"
+        if out.get("quarantine_reason") != launch_reason:
+            out["quarantine_reason"]=launch_reason
+            changed=True
     return out, changed
 
 
@@ -502,6 +541,7 @@ def migrate_evidence_memory(
     rows: list[dict[str, Any]] | None,
     enforce_family_match: bool = False,
     strong_pain_only: bool = False,
+    seller_launch_guard: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     source_rows=[row for row in (rows or []) if isinstance(row,dict)]
     sibling_problem_keys=[
@@ -518,6 +558,7 @@ def migrate_evidence_memory(
             sibling_problem_keys,
             enforce_family_match=enforce_family_match,
             strong_pain_only=strong_pain_only,
+            seller_launch_guard=seller_launch_guard,
         )
         if row_changed:
             changed += 1

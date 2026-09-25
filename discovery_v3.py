@@ -379,6 +379,34 @@ def _is_launch_title(title: str) -> bool:
     return any(low.startswith(x) for x in LAUNCH_TITLE_MARKERS)
 
 
+def validate_observed_candidate(
+    candidate: dict[str, Any],
+    reject_self_contamination: bool = True,
+    require_family_in_pain: bool = True,
+    reject_launch: bool = True,
+) -> tuple[bool, str]:
+    """Revalidate one persisted observed-pain candidate with current rules."""
+    if not isinstance(candidate,dict):
+        return False,"invalid_candidate"
+    title=_clean_source_text(str(candidate.get("source_title") or ""))
+    pain=_clean_source_text(str(candidate.get("pain") or ""))
+    url=str(candidate.get("source_url") or "").strip()
+    family=str(candidate.get("family") or "").strip()
+    if not title or not pain or not url or not family:
+        return False,"missing_required_field"
+    if reject_self_contamination and is_self_contamination(
+        url,
+        str(candidate.get("source_role") or ""),
+        title+" "+pain,
+    ):
+        return False,"self_contamination"
+    if reject_launch and _is_launch_title(title):
+        return False,"seller_launch"
+    if require_family_in_pain and not family_text_matches(family,pain):
+        return False,"family_term_missing_in_pain"
+    return True,"valid"
+
+
 def _is_maker_self_report(body: str) -> bool:
     low=_clean_source_text(body).lower()
     return any(x in low for x in MAKER_SELF_REPORT_MARKERS)
@@ -520,6 +548,7 @@ def observed_pain_candidates(
     limit: int = 10,
     reject_self_contamination: bool = False,
     require_family_in_pain: bool = False,
+    reject_seller_launch: bool = False,
 ) -> list[dict]:
     """Extract conservative, source-backed hypothesis candidates from observed results.
 
@@ -576,8 +605,10 @@ def observed_pain_candidates(
             # "hire", "problem") without describing an operational workflow pain.
             if _is_recruiting_or_interview_context(clean_title,clean_body) and not _has_explicit_operational_pain(clean_title,clean_body):
                 continue
-            # Product-launch posts describing the maker's own build pain are useful
-            # technical anecdotes, but not a source-backed customer problem.
+            # Seller-authored launches are market context, never buyer pain.
+            if reject_seller_launch and _is_launch_title(clean_title):
+                continue
+            # Legacy compatibility when the seller-launch guard is disabled.
             if _is_launch_title(clean_title) and _is_maker_self_report(clean_body) and not buy and not paid:
                 continue
             host=(urlparse(url).hostname or "").lower()

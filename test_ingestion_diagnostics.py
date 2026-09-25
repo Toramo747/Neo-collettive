@@ -70,5 +70,17 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(diag.snapshot(), {"enabled": False})
 
 
+
+    def test_observed_candidate_purge_is_counted_with_reason(self):
+        d=IngestionDiagnostics(True)
+        d.record_observed_candidate_purge("seller_launch")
+        d.record_observed_candidate_purge("family_term_missing_in_pain",2)
+        snap=d.snapshot()
+        self.assertEqual(snap["observed_candidates_purged"],3)
+        self.assertEqual(
+            snap["observed_candidates_purged_by_reason"],
+            {"family_term_missing_in_pain":2,"seller_launch":1},
+        )
+
 if __name__ == "__main__":
     unittest.main()

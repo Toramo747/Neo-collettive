@@ -1,0 +1,105 @@
+name: MYCELIX v0.99.10 validation
+# Branch-only validation; never deploys or merges.
+
+on:
+  push:
+    branches: [mycelix-candidate-revalidation-v09910]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile changed modules
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py discovery_v3.py evidence_integrity.py ingestion_diagnostics.py
+
+      - name: Run full unit suite with network blocked
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import socket
+          import unittest
+
+          def blocked(*args, **kwargs):
+              raise RuntimeError("network disabled during unit tests")
+
+          socket.create_connection = blocked
+          socket.socket.connect = blocked
+
+          suite = unittest.defaultTestLoader.discover(".", pattern="test_*.py")
+          count = suite.countTestCases()
+          print("discovered_tests="+str(count))
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful():
+              raise SystemExit(1)
+          print("all_tests_green="+str(count))
+          PY
+
+      - name: Validate cycle 338 migration snapshot
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import Counter, defaultdict
+          from discovery_v3 import validate_observed_candidate
+          from evidence_integrity import migrate_evidence_memory
+
+          data=json.load(open("neo_latest_result.json",encoding="utf-8"))
+          candidates=(data.get("latest_result") or {}).get("observed_pain_candidates") or []
+          verdicts=[
+              validate_observed_candidate(
+                  row,
+                  reject_self_contamination=True,
+                  require_family_in_pain=True,
+                  reject_launch=True,
+              )
+              for row in candidates
+          ]
+          kept=sum(1 for ok,_ in verdicts if ok)
+          reasons=Counter(reason for ok,reason in verdicts if not ok)
+          if len(candidates)!=5 or kept!=0:
+              raise SystemExit(f"cycle338 candidate expectation failed: total={len(candidates)} kept={kept} reasons={dict(reasons)}")
+
+          before=(data.get("autopilot") or {}).get("commercial_evidence_memory") or []
+          migrated,meta=migrate_evidence_memory(
+              before,
+              enforce_family_match=True,
+              strong_pain_only=True,
+              seller_launch_guard=True,
+          )
+          before_domains=defaultdict(set)
+          after_domains=defaultdict(set)
+          for row in before:
+              if row.get("gate_eligible"):
+                  before_domains[str(row.get("problem_key") or "")].add(str(row.get("domain") or ""))
+          for row in migrated:
+              if row.get("gate_eligible"):
+                  after_domains[str(row.get("problem_key") or "")].add(str(row.get("domain") or ""))
+          losses={}
+          for problem,domains in before_domains.items():
+              lost=sorted(domains-after_domains.get(problem,set()))
+              if lost:
+                  losses[problem]=lost
+
+          tiny=next(x for x in migrated if x.get("domain")=="tinyopsstudio.com")
+          if "PAIN" in set(tiny.get("signal_types") or []):
+              raise SystemExit("tinyopsstudio still has PAIN")
+          if tiny.get("gate_eligible"):
+              raise SystemExit("tinyopsstudio still gate eligible")
+          if tiny.get("signal_reverted")!="seller_launch":
+              raise SystemExit("tinyopsstudio migration marker missing")
+
+          print("cycle338_candidates_total="+str(len(candidates)))
+          print("cycle338_candidates_kept="+str(kept))
+          print("cycle338_purge_reasons="+json.dumps(dict(sorted(reasons.items())),sort_keys=True))
+          print("migration_changed_rows="+str(meta.get("changed")))
+          print("gate_domain_losses="+json.dumps(losses,sort_keys=True))
+          PY
