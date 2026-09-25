@@ -215,3 +215,41 @@ async def search(
         st["errors"]+=1
         st["fallbacks"]+=1
         return [],st,{"provider":provider,"fallback":True,"reason":type(exc).__name__}
+
+
+async def search_with_fallback(
+    query: str,
+    limit: int,
+    *,
+    bing_search: Any,
+    state: dict | None = None,
+    provider_mode: str | None = None,
+    max_calls_cycle: int = 10,
+    max_calls_day: int = 150,
+    timeout_seconds: float = 6.0,
+    http_get: Any = None,
+) -> tuple[dict[str,Any], dict[str,Any]]:
+    """Run configured provider and use Bing callback only when fallback is required."""
+    rows,new_state,meta=await search(
+        query,
+        limit,
+        state=state,
+        provider_mode=provider_mode,
+        max_calls_cycle=max_calls_cycle,
+        max_calls_day=max_calls_day,
+        timeout_seconds=timeout_seconds,
+        http_get=http_get,
+    )
+    if not meta.get("fallback"):
+        return {
+            "ok":True,
+            "query":" ".join(str(query or "").split()),
+            "results":rows,
+            "count":len(rows),
+            "provider":str(meta.get("provider") or "unknown"),
+        },new_state
+    fallback=await bing_search(query,limit)
+    fallback=dict(fallback or {})
+    fallback["provider_fallback_from"]=str(meta.get("provider") or "bing")
+    fallback["provider_fallback_reason"]=str(meta.get("reason") or "fallback")[:80]
+    return fallback,new_state
