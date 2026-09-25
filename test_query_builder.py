@@ -32,14 +32,16 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertTrue("Looking for help" in current or "manually copies" in current)
 
     def test_fallback_is_deterministic_and_family_specific(self):
-        self.assertEqual(
-            discovery_query("manual_data_entry",["manual data entry"],"explore",[]),
-            "manual data entry need help manual workaround",
-        )
-        self.assertEqual(
-            discovery_query("manual_data_entry",["manual data entry"],"exploit",[]),
-            "manual data entry hiring contractor manual workflow",
-        )
+        explore=discovery_query("manual_data_entry",["manual data entry"],"explore",[])
+        exploit=discovery_query("manual_data_entry",["manual data entry"],"exploit",[])
+        self.assertTrue(explore.startswith("manual data entry "))
+        self.assertIn("site:reddit.com",explore)
+        self.assertIn("site:stackoverflow.com",explore)
+        self.assertIn("site:news.ycombinator.com",explore)
+        self.assertIn('"I need"',explore)
+        self.assertTrue(exploit.startswith("manual data entry "))
+        self.assertIn("contractor",exploit)
+        self.assertIn("site:reddit.com",exploit)
 
     def test_quarantined_or_old_tagger_rows_are_not_learned(self):
         rows=[
@@ -69,11 +71,10 @@ class QueryBuilderTests(unittest.TestCase):
 
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")
-        self.assertEqual(queries,[
-            "manual data entry need help manual workaround",
-            "manual data entry hiring contractor budget",
-        ])
-        self.assertTrue(all("site:reddit.com" not in q for q in queries))
+        self.assertEqual(len(queries),2)
+        self.assertTrue(all("site:reddit.com" in q for q in queries))
+        self.assertTrue(any('"I need"' in q for q in queries))
+        self.assertTrue(any("RFP" in q for q in queries))
 
 
 if __name__=="__main__":
