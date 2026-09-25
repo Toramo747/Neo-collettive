@@ -5,20 +5,76 @@ persisted, logged, or interpolated into error messages.
 
 Official provider contracts implemented:
 - Brave Search API: GET https://api.search.brave.com/res/v1/web/search
-  header X-Subscription-Token, query params q/count.
+  header X-Subscription-Token, query params q/count. Brave is the recommended
+  provider for new MYCELIX deployments.
 - Google Programmable Search JSON API:
   GET https://www.googleapis.com/customsearch/v1
   query params key/cx/q/num.
+
+Google's current documentation says Custom Search JSON API is closed to new
+customers and existing customers must transition by January 1, 2027. New
+Programmable Search Engines are limited to Sites to Search across up to 50
+distinct domains. Google support remains for existing customers only here; the
+provider is retained for compatibility, not recommended for new deployments.
 """
 from __future__ import annotations
 
+import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
 GOOGLE_ENDPOINT = "https://www.googleapis.com/customsearch/v1"
 PROVIDER_VALUES = {"auto", "brave", "google", "bing"}
+
+_SENSITIVE_QUERY_RE = re.compile(
+    r"(?i)([?&](?:key|cx)=)([^&\s]+)"
+)
+
+
+def _redact_search_log_text(value: str) -> str:
+    text=_SENSITIVE_QUERY_RE.sub(r"\1[REDACTED]",str(value or ""))
+    for env_name in ("BRAVE_SEARCH_API_KEY","GOOGLE_PSE_KEY","GOOGLE_PSE_CX"):
+        secret=(os.getenv(env_name) or "").strip()
+        if secret:
+            text=text.replace(secret,"[REDACTED]")
+    return text
+
+
+class SearchSecretFilter(logging.Filter):
+    """Redact search credentials from any HTTP client record that reaches logging."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            rendered=record.getMessage()
+            sanitized=_redact_search_log_text(rendered)
+            if sanitized != rendered:
+                record.msg=sanitized
+                record.args=()
+        except Exception:
+            pass
+        return True
+
+
+_SEARCH_SECRET_FILTER=SearchSecretFilter()
+
+
+def configure_http_client_logging() -> None:
+    """Reduce HTTP client verbosity and attach credential redaction at startup."""
+    for name in ("httpx","httpcore"):
+        logger=logging.getLogger(name)
+        logger.setLevel(logging.WARNING)
+        if _SEARCH_SECRET_FILTER not in logger.filters:
+            logger.addFilter(_SEARCH_SECRET_FILTER)
+    root=logging.getLogger()
+    for handler in root.handlers:
+        if _SEARCH_SECRET_FILTER not in handler.filters:
+            handler.addFilter(_SEARCH_SECRET_FILTER)
+
+
+configure_http_client_logging()
 
 
 class SearchProviderError(RuntimeError):
