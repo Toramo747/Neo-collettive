@@ -30,6 +30,12 @@ from outcome_control import outcome_council
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
 from query_builder import breakout_queries as build_breakout_queries, discovery_query as build_discovery_query, scout_queries as build_scout_queries
 from quarantine_revalidation import revalidate_quarantined_rows
+from search_providers import (
+    begin_cycle as begin_search_provider_cycle,
+    configured_provider,
+    provider_diagnostics,
+    search as provider_search,
+)
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -95,7 +101,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.11"  # bounded legacy quarantine revalidation and ingestion yield metrics
+VERSION = "0.99.12"  # optional search providers with persistent cost budgets
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -136,6 +142,9 @@ OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REV
 SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 QUARANTINE_REVALIDATION_ENABLED = (os.getenv("NEO_QUARANTINE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 REVALIDATE_PER_CYCLE = max(0,min(20,int(os.getenv("NEO_REVALIDATE_PER_CYCLE", "3"))))
+SEARCH_PROVIDER_MODE = (os.getenv("NEO_SEARCH_PROVIDER") or "auto").strip().lower()
+SEARCH_MAX_CALLS_PER_CYCLE = max(0,min(100,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_CYCLE","10"))))
+SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_DAY","150"))))
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
@@ -251,6 +260,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "search_provider_state": {},
     "evidence_integrity": {
         "schema_v": EVIDENCE_SCHEMA_VERSION,
         "tagger_v": TAGGER_VERSION,
@@ -346,6 +356,7 @@ def _state_payload() -> dict:
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
+        "search_provider_state": AUTOPILOT_STATE.get("search_provider_state") or {},
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
         "active_thesis": AUTOPILOT_STATE.get("active_thesis"),
         "thesis_history": list(AUTOPILOT_STATE.get("thesis_history") or [])[-30:],
@@ -448,6 +459,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(payload.get("jarvis_dialogue_history"), list):
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
     migration_changed = False
+    if isinstance(payload.get("search_provider_state"), dict):
+        AUTOPILOT_STATE["search_provider_state"] = dict(payload.get("search_provider_state") or {})
     if isinstance(payload.get("commercial_evidence_memory"), list):
         migrated, migration = migrate_evidence_memory(
             payload.get("commercial_evidence_memory")[-240:],
