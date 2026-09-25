@@ -377,6 +377,9 @@ def demand_signal_type(
     source: str = "",
     vendor_content_guard: bool = False,
     web_buyer_voice_guard: bool = False,
+    supply_offer_guard: bool = False,
+    query_echo_guard: bool = False,
+    query: str = "",
 ) -> list[str]:
     """Tag buyer-side demand separately from vendor/supply pricing.
 
@@ -390,23 +393,52 @@ def demand_signal_type(
     tags: list[str] = []
     seller_launch = bool(seller_launch_guard and is_launch_title(title))
     vendor_content = bool(vendor_content_guard and is_vendor_content(title,body,url,source))
+    supply_offer = bool(supply_offer_guard and is_supply_offer(title,body,url,source))
+    generic_web = generic_web_source(source)
     buyer_voice_ok = bool(
         not web_buyer_voice_guard
+        or not generic_web
         or generic_web_pain_allowed(title,body,url,source)
     )
-    pain = contains_any(text, STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS)
-    intent = contains_any(text, BUY_INTENT_TERMS)
-    buyer_paid = contains_any(text, BUYER_PAID_TERMS)
+    positive_guard_ok = bool(
+        not seller_launch
+        and not vendor_content
+        and not supply_offer
+        and buyer_voice_ok
+    )
+
+    pain_markers = STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS
+    pain = contains_any(text,pain_markers)
+    intent_markers=[
+        marker for marker in BUY_INTENT_TERMS
+        if contains_term(text,marker)
+        and (
+            not query_echo_guard
+            or not generic_web
+            or _marker_survives_query_echo(marker,title,body,query)
+        )
+    ]
+    paid_markers=[
+        marker for marker in BUYER_PAID_TERMS
+        if contains_term(text,marker)
+        and (
+            not query_echo_guard
+            or not generic_web
+            or _marker_survives_query_echo(marker,title,body,query)
+        )
+    ]
+    intent=bool(intent_markers)
+    buyer_paid=bool(paid_markers)
     supply = contains_any(text, SUPPLY_TERMS)
 
-    if pain and not seller_launch and not vendor_content and buyer_voice_ok:
+    if pain and positive_guard_ok:
         tags.append("PAIN")
-    if intent:
+    if intent and positive_guard_ok:
         tags.append("BUY_INTENT")
 
-    # Buyer-side payment must have a buyer/hiring context. Generic vendor pricing
-    # is supply/competition, not proof that a buyer is currently willing to pay.
-    if buyer_paid and (intent or pain or role in {"buyer", "paid_market", "practitioner"}):
+    # Buyer-side payment must have a buyer/hiring context and survive all generic-web guards.
+    # Generic vendor pricing remains COMPETITION only.
+    if buyer_paid and positive_guard_ok and (intent or pain or role in {"buyer","paid_market","practitioner"}):
         tags.append("PAID_DEMAND")
     if supply:
         tags.append("COMPETITION")
