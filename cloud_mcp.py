@@ -6116,6 +6116,70 @@ def _strip_html_text(value: str, limit: int = 5000) -> str:
     return " ".join(text.split())[:limit]
 
 
+async def _revalidation_fetch_url(url: str, row: dict[str, Any]) -> dict:
+    """Fresh bounded fetch for legacy evidence revalidation.
+
+    Redirects are followed manually so each hop is checked by the public-HTTPS guard.
+    Any error is returned as data; callers must never let it abort an autopilot cycle.
+    """
+    current=str(url or "").strip()
+    if not current:
+        return {"ok":False,"error":"missing_url"}
+    headers={
+        "Accept":"text/html,text/plain,application/json;q=0.9,*/*;q=0.1",
+        "User-Agent":"Mozilla/5.0 MYCELIX/"+VERSION+" quarantine-revalidation",
+    }
+    try:
+        for _ in range(4):
+            safe,why=_safe_public_https(current)
+            if not safe:
+                return {"ok":False,"error":"unsafe_url: "+why}
+            async with httpx.AsyncClient(
+                timeout=min(TIMEOUT,10),
+                follow_redirects=False,
+                headers=headers,
+            ) as client:
+                response=await client.get(current)
+            if response.status_code in {301,302,303,307,308}:
+                location=str(response.headers.get("location") or "").strip()
+                if not location:
+                    return {"ok":False,"error":"redirect_without_location"}
+                current=urljoin(current,location)
+                continue
+            if not response.is_success:
+                return {"ok":False,"error":"http_"+str(response.status_code)}
+
+            ctype=(response.headers.get("content-type") or "").lower()
+            raw=(response.text or "")[:200000]
+            title=""
+            body=""
+            if "html" in ctype or "<html" in raw[:1000].lower():
+                m=re.search(r"<title[^>]*>(.*?)</title>",raw,flags=re.I|re.S)
+                if m:
+                    title=_strip_html_text(m.group(1),300)
+                body=_strip_html_text(raw,12000)
+            elif "json" in ctype:
+                body=_strip_html_text(raw,12000)
+            else:
+                body=" ".join(raw.split())[:12000]
+
+            if not title:
+                title=str(row.get("title") or "")[:300]
+            if not body:
+                return {"ok":False,"error":"empty_body"}
+            return {
+                "ok":True,
+                "url":current,
+                "title":title,
+                "body":body,
+                "status":response.status_code,
+                "content_type":ctype[:120],
+            }
+        return {"ok":False,"error":"too_many_redirects"}
+    except Exception as exc:
+        return {"ok":False,"error":type(exc).__name__+": "+str(exc)[:220]}
+
+
 async def _remotive_paid_search(query: str, meta: dict | None = None, limit: int = 5) -> list[dict]:
     """Public Remotive jobs feed used only for paid-market discovery."""
     seed=natural_search_seed(query,meta or {})
