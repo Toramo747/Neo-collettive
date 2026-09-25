@@ -82,5 +82,20 @@ class IngestionDiagnosticsTests(unittest.TestCase):
             {"family_term_missing_in_pain":2,"seller_launch":1},
         )
 
+
+    def test_yield_and_revalidation_metrics_are_visible(self):
+        d=IngestionDiagnostics(True)
+        d.record_new_signal_row("hn-algolia-routed","explore")
+        d.record_new_signal_row("remoteok-api","paid_market")
+        d.merge_revalidation({"attempted":3,"promoted":1,"failed":1,"unreachable":1})
+        snap=d.snapshot()
+        self.assertEqual(snap["new_signal_rows"],2)
+        self.assertEqual(snap["new_signal_rows_by_source"],{"hn":1,"remoteok-api":1})
+        self.assertEqual(snap["new_signal_rows_by_query_class"],{"explore":1,"paid_market":1})
+        self.assertEqual(
+            snap["revalidation"],
+            {"attempted":3,"promoted":1,"failed":1,"unreachable":1},
+        )
+
 if __name__ == "__main__":
     unittest.main()
