@@ -56,6 +56,7 @@ from discovery_v3 import (
     OBSERVED_HYPOTHESIS_SCHEMA_VERSION,
     natural_search_seed,
     observed_pain_candidates,
+    validate_observed_candidate,
     query_relevance,
     structured_job_relevance,
 )
@@ -75,6 +76,7 @@ from evidence_integrity import (
     make_thesis_id,
     migrate_evidence_memory,
     is_self_contamination,
+    is_launch_title,
     problem_customer_segment,
     problem_job_tail,
     structured_paid_source,
@@ -92,7 +94,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.9"  # evidence integrity hardening
+VERSION = "0.99.10"  # candidate revalidation and seller-launch evidence guard
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -129,6 +131,8 @@ ATTRIBUTION_FAMILY_GUARD_ENABLED = (os.getenv("NEO_ATTRIBUTION_FAMILY_GUARD", "1
 STRONG_PAIN_GUARD_ENABLED = (os.getenv("NEO_STRONG_PAIN_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 SELF_CONTAMINATION_GUARD_ENABLED = (os.getenv("NEO_SELF_CONTAMINATION_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
+SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
@@ -192,6 +196,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "knowledge_ledger": [],
     "hypothesis_queue": [],
     "observed_pain_candidates": [],
+    "observed_candidate_purge_diagnostics": {"observed_candidates_purged":0,"observed_candidates_purged_by_reason":{}},
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
@@ -324,6 +329,7 @@ def _state_payload() -> dict:
         "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
         "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-40:],
         "observed_pain_candidates": list(AUTOPILOT_STATE.get("observed_pain_candidates") or [])[-30:],
+        "observed_candidate_purge_diagnostics": AUTOPILOT_STATE.get("observed_candidate_purge_diagnostics") or {},
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
@@ -389,7 +395,28 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(payload.get("hypothesis_queue"), list):
         AUTOPILOT_STATE["hypothesis_queue"] = payload.get("hypothesis_queue")[-40:]
     if isinstance(payload.get("observed_pain_candidates"), list):
-        AUTOPILOT_STATE["observed_pain_candidates"] = payload.get("observed_pain_candidates")[-30:]
+        restored=[x for x in payload.get("observed_pain_candidates")[-30:] if isinstance(x,dict)]
+        purge_reasons={}
+        kept=[]
+        for candidate in restored:
+            if not OBSERVED_CANDIDATE_REVALIDATION_ENABLED:
+                kept.append(candidate)
+                continue
+            valid,reason=validate_observed_candidate(
+                candidate,
+                reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
+                require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+                reject_launch=SELLER_LAUNCH_GUARD_ENABLED,
+            )
+            if valid:
+                kept.append(candidate)
+            else:
+                purge_reasons[reason]=int(purge_reasons.get(reason) or 0)+1
+        AUTOPILOT_STATE["observed_pain_candidates"] = kept
+        AUTOPILOT_STATE["observed_candidate_purge_diagnostics"] = {
+            "observed_candidates_purged":sum(purge_reasons.values()),
+            "observed_candidates_purged_by_reason":purge_reasons,
+        }
     if isinstance(payload.get("exploration_history"), list):
         AUTOPILOT_STATE["exploration_history"] = payload.get("exploration_history")[-40:]
     if isinstance(payload.get("inbound_messages"), list):
@@ -423,6 +450,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
             payload.get("commercial_evidence_memory")[-240:],
             enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
             strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+            seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
         )
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
@@ -5021,6 +5049,7 @@ def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str
         body,
         query_role,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+        seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
     )
 
 
@@ -5356,6 +5385,7 @@ def _commercial_evidence_quality(
             return
 
         weak=[t for t in weak_terms if contains_term(context,t)]
+        seller_launch=bool(SELLER_LAUNCH_GUARD_ENABLED and is_launch_title(title))
         signal_types=_demand_signal_type(title,context,query_role)
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
@@ -5382,6 +5412,7 @@ def _commercial_evidence_quality(
         gate_eligible=bool(
             query_role!="disconfirm"
             and "DISCONFIRM" not in signal_types
+            and not seller_launch
             and gate_eligible_problem_key(problem_key)
             and positive
         )
@@ -5392,9 +5423,12 @@ def _commercial_evidence_quality(
             "gate_eligible":gate_eligible,
             "quarantine_reason":None if gate_eligible else (
                 "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
+                else "seller_launch" if seller_launch
                 else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
                 else "nonpositive_signal"
             ),
+            "context_type":"product_launch" if seller_launch else "observed",
+            "signal_reverted":"seller_launch" if seller_launch else None,
             "domain":host,
             "source":source,
             "family":family,
@@ -5451,6 +5485,7 @@ def _commercial_evidence_quality(
         ],
         enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+        seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
     )
 
     index={}
@@ -7494,34 +7529,63 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         limit=12,
         reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
         require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+        reject_seller_launch=SELLER_LAUNCH_GUARD_ENABLED,
     )
-    if observed_now:
-        existing=[
-            x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
-            if isinstance(x,dict)
-        ]
-        merged={}
-        for row in existing+observed_now:
-            key=str(row.get("source_url") or "")+"|"+str(row.get("source_title") or "")
-            if not key.strip("|"):
-                continue
-            prev=merged.get(key)
-            if (
-                not prev
-                or int(row.get("hypothesis_schema_v") or 1)>int(prev.get("hypothesis_schema_v") or 1)
-                or (
-                    int(row.get("hypothesis_schema_v") or 1)==int(prev.get("hypothesis_schema_v") or 1)
-                    and int(row.get("priority") or 0)>int(prev.get("priority") or 0)
-                )
-            ):
-                merged[key]=row
-        AUTOPILOT_STATE["observed_pain_candidates"]=sorted(
-            merged.values(),
-            key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),
-            reverse=True,
-        )[:30]
+    existing=[
+        x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
+        if isinstance(x,dict)
+    ]
+    pending_purge=dict(AUTOPILOT_STATE.get("observed_candidate_purge_diagnostics") or {})
+    purge_reasons=dict(pending_purge.get("observed_candidates_purged_by_reason") or {})
+    validated_existing=[]
+    for candidate in existing:
+        if not OBSERVED_CANDIDATE_REVALIDATION_ENABLED:
+            validated_existing.append(candidate)
+            continue
+        valid,reason=validate_observed_candidate(
+            candidate,
+            reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
+            require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+            reject_launch=SELLER_LAUNCH_GUARD_ENABLED,
+        )
+        if valid:
+            validated_existing.append(candidate)
+        else:
+            purge_reasons[reason]=int(purge_reasons.get(reason) or 0)+1
+
+    merged={}
+    for row in validated_existing+observed_now:
+        key=str(row.get("source_url") or "")+"|"+str(row.get("source_title") or "")
+        if not key.strip("|"):
+            continue
+        prev=merged.get(key)
+        if (
+            not prev
+            or int(row.get("hypothesis_schema_v") or 1)>int(prev.get("hypothesis_schema_v") or 1)
+            or (
+                int(row.get("hypothesis_schema_v") or 1)==int(prev.get("hypothesis_schema_v") or 1)
+                and int(row.get("priority") or 0)>int(prev.get("priority") or 0)
+            )
+        ):
+            merged[key]=row
+    AUTOPILOT_STATE["observed_pain_candidates"]=sorted(
+        merged.values(),
+        key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),
+        reverse=True,
+    )[:30]
+    candidate_purge_diagnostics={
+        "observed_candidates_purged":sum(int(v or 0) for v in purge_reasons.values()),
+        "observed_candidates_purged_by_reason":purge_reasons,
+    }
+    AUTOPILOT_STATE["observed_candidate_purge_diagnostics"]={
+        "observed_candidates_purged":0,
+        "observed_candidates_purged_by_reason":{},
+    }
 
     evidence_quality = _commercial_evidence_quality(web_research, demand_evidence, query_meta)
+    ingestion_diag=dict(evidence_quality.get("ingestion_diagnostics") or {})
+    ingestion_diag.update(candidate_purge_diagnostics)
+    evidence_quality["ingestion_diagnostics"]=ingestion_diag
     family_performance = _update_family_performance(evidence_quality)
     product_candidate = build_candidate(evidence_quality)
 
