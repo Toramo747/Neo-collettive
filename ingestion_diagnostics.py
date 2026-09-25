@@ -112,6 +112,8 @@ class IngestionDiagnostics:
         self.new_signal_rows = 0
         self.new_signal_rows_by_source = Counter()
         self.new_signal_rows_by_query_class = Counter()
+        self.new_signal_rows_by_provider = Counter()
+        self.search_provider = {"name":"bing","calls_cycle":0,"calls_day":0,"errors":0,"fallbacks":0}
         self.revalidation = {"attempted":0,"promoted":0,"failed":0,"unreachable":0}
         self.errors = 0
 
@@ -160,14 +162,27 @@ class IngestionDiagnostics:
         self.observed_candidates_purged += n
         self.observed_candidates_purged_by_reason[reason] += n
 
-    def record_new_signal_row(self, source: str, query_class: str) -> None:
+    def record_new_signal_row(self, source: str, query_class: str, provider: str = "") -> None:
         if not self.enabled:
             return
         source=canonical_source(source)
         qclass=str(query_class or "unknown")
+        provider=str(provider or source or "unknown")
         self.new_signal_rows += 1
         self.new_signal_rows_by_source[source] += 1
         self.new_signal_rows_by_query_class[qclass] += 1
+        self.new_signal_rows_by_provider[provider] += 1
+
+    def set_search_provider(self, payload: dict | None) -> None:
+        if not self.enabled or not isinstance(payload,dict):
+            return
+        self.search_provider = {
+            "name":str(payload.get("name") or "bing"),
+            "calls_cycle":max(0,int(payload.get("calls_cycle") or 0)),
+            "calls_day":max(0,int(payload.get("calls_day") or 0)),
+            "errors":max(0,int(payload.get("errors") or 0)),
+            "fallbacks":max(0,int(payload.get("fallbacks") or 0)),
+        }
 
     def merge_revalidation(self, stats: dict | None) -> None:
         if not self.enabled or not isinstance(stats,dict):
@@ -206,6 +221,8 @@ class IngestionDiagnostics:
             "new_signal_rows": self.new_signal_rows,
             "new_signal_rows_by_source": dict(sorted(self.new_signal_rows_by_source.items())),
             "new_signal_rows_by_query_class": dict(sorted(self.new_signal_rows_by_query_class.items())),
+            "new_signal_rows_by_provider": dict(sorted(self.new_signal_rows_by_provider.items())),
+            "search_provider": dict(self.search_provider),
             "revalidation": dict(self.revalidation),
             "diagnostic_errors": self.errors,
         }
