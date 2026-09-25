@@ -1,0 +1,105 @@
+name: inferGONKA trial key smoke test
+
+on:
+  push:
+    branches: [ops-infergonka-trial-test]
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Request trial key without logging secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          HTTP_CODE="$(curl -sS -o /tmp/gonka_trial.json -w '%{http_code}' \
+            -X POST 'https://a2a.gogonka.com/agent/trial' \
+            -H 'Content-Type: application/json' \
+            --data '{"agent_id":"mycelix-neo-collettive"}')"
+          echo "trial_http_status=$HTTP_CODE"
+          test "$HTTP_CODE" -ge 200
+          test "$HTTP_CODE" -lt 300
+
+          python - <<'PY'
+          import json, pathlib, re
+          p=pathlib.Path("/tmp/gonka_trial.json")
+          obj=json.loads(p.read_text(encoding="utf-8"))
+          found=[]
+          def walk(v):
+              if isinstance(v,dict):
+                  for x in v.values(): walk(x)
+              elif isinstance(v,list):
+                  for x in v: walk(x)
+              elif isinstance(v,str) and re.match(r"^(?:gc|jg)-",v):
+                  found.append(v)
+          walk(obj)
+          if not found:
+              raise SystemExit("trial_key_not_found")
+          key=found[0]
+          pathlib.Path("/tmp/gonka_key").write_text(key,encoding="utf-8")
+          print("trial_key_found=true")
+          print("trial_key_prefix="+key.split("-",1)[0]+"-")
+          print("trial_key_length="+str(len(key)))
+          PY
+
+          KEY="$(cat /tmp/gonka_key)"
+          echo "::add-mask::$KEY"
+
+      - name: Verify key against Gonka API
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY="$(cat /tmp/gonka_key)"
+          echo "::add-mask::$KEY"
+          HTTP_CODE="$(curl -sS -o /tmp/gonka_models.json -w '%{http_code}' \
+            'https://gate.joingonka.ai/v1/models' \
+            -H "Authorization: Bearer $KEY")"
+          echo "models_http_status=$HTTP_CODE"
+          test "$HTTP_CODE" -ge 200
+          test "$HTTP_CODE" -lt 300
+          python - <<'PY'
+          import json
+          obj=json.load(open("/tmp/gonka_models.json",encoding="utf-8"))
+          rows=obj.get("data") if isinstance(obj,dict) else None
+          print("models_response_valid="+str(isinstance(rows,list)).lower())
+          print("model_count="+str(len(rows) if isinstance(rows,list) else 0))
+          if not isinstance(rows,list):
+              raise SystemExit("unexpected_models_response")
+          PY
+
+      - name: Minimal inference smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY="$(cat /tmp/gonka_key)"
+          echo "::add-mask::$KEY"
+          HTTP_CODE="$(curl -sS -o /tmp/gonka_chat.json -w '%{http_code}' \
+            -X POST 'https://gate.joingonka.ai/v1/chat/completions' \
+            -H "Authorization: Bearer $KEY" \
+            -H 'Content-Type: application/json' \
+            --data '{"model":"MiniMaxAI/MiniMax-M2.7","messages":[{"role":"user","content":"Reply with exactly OK"}],"temperature":0,"max_tokens":8}')"
+          echo "chat_http_status=$HTTP_CODE"
+          test "$HTTP_CODE" -ge 200
+          test "$HTTP_CODE" -lt 300
+          python - <<'PY'
+          import json
+          obj=json.load(open("/tmp/gonka_chat.json",encoding="utf-8"))
+          choices=obj.get("choices") if isinstance(obj,dict) else None
+          ok=isinstance(choices,list) and len(choices)>0
+          print("chat_response_valid="+str(ok).lower())
+          if not ok:
+              raise SystemExit("unexpected_chat_response")
+          PY
+
+      - name: Remove secret files
+        if: always()
+        shell: bash
+        run: |
+          rm -f /tmp/gonka_key /tmp/gonka_trial.json /tmp/gonka_models.json /tmp/gonka_chat.json
