@@ -79,8 +79,11 @@ def discovery_query(
     anchor=terms[0] if terms else str(family or "").replace("_"," ")
     if phrases:
         return _clean(f"{anchor} {phrases[0]}",220)
-    suffix="need help manual workaround" if query_class=="explore" else "hiring contractor manual workflow"
-    return _clean(f"{anchor} {suffix}",220)
+    if query_class=="explore":
+        suffix='("I need" OR "we are struggling" OR "looking for help") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
+    else:
+        suffix='("looking for help" OR hiring OR contractor OR RFP) (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
+    return _clean(f"{anchor} {suffix}",260)
 
 
 def scout_queries(evidence_rows: Iterable[dict] | None, limit: int = 7) -> list[str]:
@@ -88,14 +91,15 @@ def scout_queries(evidence_rows: Iterable[dict] | None, limit: int = 7) -> list[
     phrases=observed_buyer_phrases(evidence_rows,"",max(limit*2,8))
     if phrases:
         return phrases[:max(1,limit)]
+    community='(site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
     fallbacks=[
-        "manual data entry hiring contractor",
-        "API integration need help workaround",
-        "spreadsheet automation manual repetitive workflow",
-        "reporting dashboard need help workflow",
-        "customer support repetitive workflow problem",
-        "document processing manual workaround",
-        "CRM lead qualification hiring contractor",
+        f'manual data entry ("I need" OR "we are struggling" OR "looking for help") {community}',
+        f'API integration ("I need" OR "looking for help" OR contractor) {community}',
+        f'spreadsheet automation ("our team spends" OR "we manually" OR "how do I") {community}',
+        f'reporting dashboard ("I need" OR "we are struggling" OR RFP) {community}',
+        f'customer support ("our team spends" OR "we manually" OR "looking for help") {community}',
+        f'document processing ("I need" OR "we manually" OR contractor) {community}',
+        f'CRM lead qualification ("we manually" OR hiring OR contractor) {community}',
     ]
     return fallbacks[:max(1,limit)]
 
@@ -110,9 +114,10 @@ def breakout_queries(marker: str, evidence_rows: Iterable[dict] | None, family: 
         if len(out)>=limit:
             return out
     marker=_clean(marker,120)
+    community='(site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
     fallbacks=[
-        f"{marker} need help manual workaround",
-        f"{marker} hiring contractor budget",
+        f'{marker} ("I need" OR "we are struggling" OR "looking for help") {community}',
+        f'{marker} (hiring OR contractor OR RFP OR "request for proposal") {community}',
     ]
     for query in fallbacks:
         query=_clean(query,220)
