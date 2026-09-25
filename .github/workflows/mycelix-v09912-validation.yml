@@ -23,6 +23,11 @@ jobs:
           set -euo pipefail
           python -m py_compile cloud_mcp.py ingestion_diagnostics.py search_providers.py
 
+      - name: Install HTTP test dependency
+        run: |
+          set -euo pipefail
+          python -m pip install "httpx>=0.28,<1"
+
       - name: Run full unit suite with network blocked
         run: |
           set -euo pipefail
