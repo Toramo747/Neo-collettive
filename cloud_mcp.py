@@ -28,7 +28,12 @@ from peer_quality import classify_peer_response, classify_stored_interviews, col
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
-from query_builder import breakout_queries as build_breakout_queries, discovery_query as build_discovery_query, scout_queries as build_scout_queries
+from query_builder import (
+    breakout_queries as build_breakout_queries,
+    discovery_query as build_discovery_query,
+    scout_queries as build_scout_queries,
+    desire_experiment_entries as build_desire_experiment_entries,
+)
 from quarantine_revalidation import revalidate_quarantined_rows
 from search_providers import (
     begin_cycle as begin_search_provider_cycle,
@@ -75,6 +80,7 @@ from evidence_integrity import (
     canonical_problem_key,
     canonical_url,
     commercial_family as integrity_commercial_family,
+    classify_intent_class,
     contains_any,
     contains_term,
     demand_signal_type as integrity_demand_signal_type,
@@ -4893,6 +4899,13 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
                 break
 
     planned=planned[:count]
+    for row in planned:
+        row.setdefault("query_intent","pain")
+        row.setdefault("intent_class","")
+    if DESIRE_EXPERIMENT_ENABLED and count>=2 and len(planned)>=2:
+        desire_entries=build_desire_experiment_entries(planned,2)
+        if len(desire_entries)==2:
+            planned=planned[:-2]+desire_entries
     executed_sectors=[str(x.get("sector")) for x in planned if x.get("sector")]
     AUTOPILOT_STATE["recent_sectors"]=(recent+executed_sectors)[-12:]
     AUTOPILOT_STATE["query_execution"]={"planned":planned,"executed":[]}
