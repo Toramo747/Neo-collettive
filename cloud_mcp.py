@@ -5567,6 +5567,8 @@ def _commercial_evidence_quality(
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
         vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
         web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+        supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+        query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
     )
 
     index={}
@@ -5583,14 +5585,28 @@ def _commercial_evidence_quality(
         if key in index:
             old=memory[index[key]]
             first=min(float(old.get("first_seen_epoch") or now_epoch),float(row.get("first_seen_epoch") or now_epoch))
-            # A current v2 observation supersedes an old generic/quarantined classification;
-            # a generic observation never demotes an existing concrete v2 classification.
-            preserve_concrete=bool(old.get("gate_eligible")) and not bool(row.get("gate_eligible"))
+            # Current guarded classification is authoritative for positive demand.
+            # Never resurrect BUY_INTENT/PAID_DEMAND/PAIN from a pre-guard observation.
+            protected_rejection=str(row.get("quarantine_reason") or "") in {
+                "supply_offer","vendor_content","web_buyer_voice_missing","seller_launch","disconfirm"
+            }
+            preserve_concrete=(
+                bool(old.get("gate_eligible"))
+                and not bool(row.get("gate_eligible"))
+                and not protected_rejection
+            )
             merged=dict(old if preserve_concrete else row)
             merged["first_seen_epoch"]=first
             merged["last_seen_epoch"]=now_epoch
             merged["seen_count"]=int(old.get("seen_count") or 1)+1
-            merged["signal_types"]=sorted(set(old.get("signal_types") or []) | set(row.get("signal_types") or []))
+            if preserve_concrete:
+                merged["signal_types"]=sorted(set(old.get("signal_types") or []))
+            else:
+                old_context={
+                    x for x in (old.get("signal_types") or [])
+                    if x in {"COMPETITION","DISCONFIRM"}
+                }
+                merged["signal_types"]=sorted(set(row.get("signal_types") or []) | old_context)
             if row.get("query_role")=="disconfirm" or "DISCONFIRM" in set(merged.get("signal_types") or []):
                 merged["gate_eligible"]=False
                 merged["quarantine_reason"]="disconfirm"
