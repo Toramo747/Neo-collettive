@@ -11,7 +11,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from runtime_boundary import is_control_plane_text
-from evidence_integrity import family_text_matches, is_self_contamination
+from evidence_integrity import (
+    family_text_matches,
+    generic_web_pain_allowed,
+    is_self_contamination,
+    is_vendor_content,
+)
 
 PAIN_MARKERS = (
     "manual","manually","repetitive","time consuming","time-consuming","frustrat",
@@ -384,6 +389,8 @@ def validate_observed_candidate(
     reject_self_contamination: bool = True,
     require_family_in_pain: bool = True,
     reject_launch: bool = True,
+    reject_vendor_content: bool = True,
+    require_web_buyer_voice: bool = True,
 ) -> tuple[bool, str]:
     """Revalidate one persisted observed-pain candidate with current rules."""
     if not isinstance(candidate,dict):
@@ -402,6 +409,12 @@ def validate_observed_candidate(
         return False,"self_contamination"
     if reject_launch and _is_launch_title(title):
         return False,"seller_launch"
+    source=str(candidate.get("source") or candidate.get("source_kind") or "")
+    body=str(candidate.get("source_snippet") or pain)
+    if reject_vendor_content and is_vendor_content(title,body,url,source):
+        return False,"vendor_content"
+    if require_web_buyer_voice and not generic_web_pain_allowed(title,body,url,source):
+        return False,"web_buyer_voice_missing"
     if require_family_in_pain and not family_text_matches(family,pain):
         return False,"family_term_missing_in_pain"
     return True,"valid"
@@ -549,6 +562,8 @@ def observed_pain_candidates(
     reject_self_contamination: bool = False,
     require_family_in_pain: bool = False,
     reject_seller_launch: bool = False,
+    reject_vendor_content: bool = False,
+    require_web_buyer_voice: bool = False,
 ) -> list[dict]:
     """Extract conservative, source-backed hypothesis candidates from observed results.
 
@@ -605,8 +620,14 @@ def observed_pain_candidates(
             # "hire", "problem") without describing an operational workflow pain.
             if _is_recruiting_or_interview_context(clean_title,clean_body) and not _has_explicit_operational_pain(clean_title,clean_body):
                 continue
-            # Seller-authored launches are market context, never buyer pain.
+            source=str(item.get("source") or "")
+            # Seller-authored launches and vendor-authored solution/SEO pages are
+            # market context, never buyer pain.
             if reject_seller_launch and _is_launch_title(clean_title):
+                continue
+            if reject_vendor_content and is_vendor_content(clean_title,clean_body,url,source):
+                continue
+            if require_web_buyer_voice and not generic_web_pain_allowed(clean_title,clean_body,url,source):
                 continue
             # Legacy compatibility when the seller-launch guard is disabled.
             if _is_launch_title(clean_title) and _is_maker_self_report(clean_body) and not buy and not paid:
@@ -648,6 +669,8 @@ def observed_pain_candidates(
                 "source_title":title[:220],
                 "source_query":query[:500],
                 "source_role":role,
+                "source":source,
+                "source_snippet":clean_body[:300],
                 "relevance_score":rel["score"],
                 "pain_markers":pain[:8],
                 "buy_markers":buy[:8],
