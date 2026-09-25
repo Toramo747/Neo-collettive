@@ -78,6 +78,9 @@ from evidence_integrity import (
     contains_any,
     contains_term,
     demand_signal_type as integrity_demand_signal_type,
+    generic_web_source,
+    generic_web_pain_allowed,
+    is_vendor_content,
     gate_eligible_problem_key,
     make_problem_id,
     make_thesis_id,
@@ -101,7 +104,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.12"  # optional search providers with persistent cost budgets
+VERSION = "0.99.13"  # vendor-content gate integrity and Brave fallback diagnostics
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -140,11 +143,14 @@ SELF_CONTAMINATION_GUARD_ENABLED = (os.getenv("NEO_SELF_CONTAMINATION_GUARD", "1
 OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+VENDOR_CONTENT_GUARD_ENABLED = (os.getenv("NEO_VENDOR_CONTENT_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+WEB_BUYER_VOICE_GUARD_ENABLED = (os.getenv("NEO_WEB_BUYER_VOICE_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 QUARANTINE_REVALIDATION_ENABLED = (os.getenv("NEO_QUARANTINE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 REVALIDATE_PER_CYCLE = max(0,min(20,int(os.getenv("NEO_REVALIDATE_PER_CYCLE", "3"))))
 SEARCH_PROVIDER_MODE = (os.getenv("NEO_SEARCH_PROVIDER") or "auto").strip().lower()
 SEARCH_MAX_CALLS_PER_CYCLE = max(0,min(100,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_CYCLE","10"))))
 SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_DAY","150"))))
+SEARCH_MIN_INTERVAL_MS = max(0,min(5000,int(os.getenv("NEO_SEARCH_MIN_INTERVAL_MS","0"))))
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
