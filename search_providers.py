@@ -16,17 +16,9 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-import httpx
-
 BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
 GOOGLE_ENDPOINT = "https://www.googleapis.com/customsearch/v1"
 PROVIDER_VALUES = {"auto", "brave", "google", "bing"}
-
-SECRET_ENV_NAMES = (
-    "BRAVE_SEARCH_API_KEY",
-    "GOOGLE_PSE_KEY",
-    "GOOGLE_PSE_CX",
-)
 
 
 class SearchProviderError(RuntimeError):
@@ -106,15 +98,6 @@ def provider_diagnostics(state: dict | None, provider_name: str | None = None) -
     }
 
 
-def _sanitize_exception(exc: BaseException) -> str:
-    if isinstance(exc,httpx.HTTPStatusError):
-        status=getattr(exc.response,"status_code",None)
-        return "HTTPStatusError"+((":"+str(status)) if status is not None else "")
-    if isinstance(exc,httpx.TimeoutException):
-        return type(exc).__name__
-    return type(exc).__name__
-
-
 def _budget_available(state: dict[str, Any], max_cycle: int, max_day: int) -> bool:
     return (
         int(state.get("calls_cycle") or 0) < max(0,int(max_cycle))
@@ -131,11 +114,13 @@ async def search(
     max_calls_cycle: int = 10,
     max_calls_day: int = 150,
     timeout_seconds: float = 6.0,
+    http_get: Any = None,
 ) -> tuple[list[dict[str,str]], dict[str,Any], dict[str,Any]]:
-    """Search one configured provider.
+    """Search one configured provider with an injected HTTP transport.
 
-    Returns rows, updated state, and sanitized metadata. The fallback flag tells
-    the caller to use Bing instead. No secret value is ever returned.
+    The transport receives endpoint, params, headers and timeout_seconds, and
+    returns {"status": int, "json": dict}. This keeps provider logic pure and
+    testable without network access.
     """
     st=normalize_search_state(state)
     provider=configured_provider(provider_mode)
@@ -149,81 +134,84 @@ async def search(
     if not _budget_available(st,max_calls_cycle,max_calls_day):
         st["fallbacks"]+=1
         return [],st,{"provider":provider,"fallback":True,"reason":"budget_exhausted"}
+    if http_get is None:
+        st["errors"]+=1
+        st["fallbacks"]+=1
+        return [],st,{"provider":provider,"fallback":True,"reason":"transport_unavailable"}
 
     st["calls_cycle"]+=1
     st["calls_day"]+=1
     try:
-        async with httpx.AsyncClient(
-            timeout=max(1.0,min(float(timeout_seconds),10.0)),
-            follow_redirects=False,
-        ) as client:
-            if provider=="brave":
-                key=(os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()
-                if not key:
-                    st["fallbacks"]+=1
-                    return [],st,{"provider":"brave","fallback":True,"reason":"not_configured"}
-                response=await client.get(
-                    BRAVE_ENDPOINT,
-                    params={"q":q,"count":count},
-                    headers={
-                        "Accept":"application/json",
-                        "X-Subscription-Token":key,
-                    },
-                )
-                response.raise_for_status()
-                data=response.json()
-                results=((data.get("web") or {}).get("results") or []) if isinstance(data,dict) else []
-                if not isinstance(results,list):
-                    raise ValueError("unexpected_response_shape")
-                rows=[]
-                for item in results[:count]:
-                    if not isinstance(item,dict):
-                        continue
-                    url=str(item.get("url") or "").strip()
-                    if not url:
-                        continue
-                    rows.append({
-                        "title":str(item.get("title") or "")[:300],
-                        "url":url,
-                        "snippet":str(item.get("description") or "")[:1200],
-                        "source":"brave-search",
-                    })
-                return rows,st,{"provider":"brave","fallback":False,"reason":"ok"}
-
-            key=(os.getenv("GOOGLE_PSE_KEY") or "").strip()
-            cx=(os.getenv("GOOGLE_PSE_CX") or "").strip()
-            if not key or not cx:
+        if provider=="brave":
+            key=(os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()
+            if not key:
                 st["fallbacks"]+=1
-                return [],st,{"provider":"google","fallback":True,"reason":"not_configured"}
-            response=await client.get(
-                GOOGLE_ENDPOINT,
-                params={"key":key,"cx":cx,"q":q,"num":count},
-                headers={"Accept":"application/json"},
+                return [],st,{"provider":"brave","fallback":True,"reason":"not_configured"}
+            response=await http_get(
+                BRAVE_ENDPOINT,
+                params={"q":q,"count":count},
+                headers={"Accept":"application/json","X-Subscription-Token":key},
+                timeout_seconds=max(1.0,min(float(timeout_seconds),10.0)),
             )
-            response.raise_for_status()
-            data=response.json()
-            items=data.get("items") or [] if isinstance(data,dict) else []
-            if not isinstance(items,list):
-                raise ValueError("unexpected_response_shape")
+            status=int((response or {}).get("status") or 0)
+            if status<200 or status>=300:
+                raise SearchProviderError("HTTPStatusError:"+str(status))
+            data=(response or {}).get("json")
+            results=((data.get("web") or {}).get("results") or []) if isinstance(data,dict) else []
+            if not isinstance(results,list):
+                raise SearchProviderError("unexpected_response_shape")
             rows=[]
-            for item in items[:count]:
+            for item in results[:count]:
                 if not isinstance(item,dict):
                     continue
-                url=str(item.get("link") or "").strip()
+                url=str(item.get("url") or "").strip()
                 if not url:
                     continue
                 rows.append({
                     "title":str(item.get("title") or "")[:300],
                     "url":url,
-                    "snippet":str(item.get("snippet") or "")[:1200],
-                    "source":"google-pse",
+                    "snippet":str(item.get("description") or "")[:1200],
+                    "source":"brave-search",
                 })
-            return rows,st,{"provider":"google","fallback":False,"reason":"ok"}
+            return rows,st,{"provider":"brave","fallback":False,"reason":"ok"}
+
+        key=(os.getenv("GOOGLE_PSE_KEY") or "").strip()
+        cx=(os.getenv("GOOGLE_PSE_CX") or "").strip()
+        if not key or not cx:
+            st["fallbacks"]+=1
+            return [],st,{"provider":"google","fallback":True,"reason":"not_configured"}
+        response=await http_get(
+            GOOGLE_ENDPOINT,
+            params={"key":key,"cx":cx,"q":q,"num":count},
+            headers={"Accept":"application/json"},
+            timeout_seconds=max(1.0,min(float(timeout_seconds),10.0)),
+        )
+        status=int((response or {}).get("status") or 0)
+        if status<200 or status>=300:
+            raise SearchProviderError("HTTPStatusError:"+str(status))
+        data=(response or {}).get("json")
+        items=(data.get("items") or []) if isinstance(data,dict) else []
+        if not isinstance(items,list):
+            raise SearchProviderError("unexpected_response_shape")
+        rows=[]
+        for item in items[:count]:
+            if not isinstance(item,dict):
+                continue
+            url=str(item.get("link") or "").strip()
+            if not url:
+                continue
+            rows.append({
+                "title":str(item.get("title") or "")[:300],
+                "url":url,
+                "snippet":str(item.get("snippet") or "")[:1200],
+                "source":"google-pse",
+            })
+        return rows,st,{"provider":"google","fallback":False,"reason":"ok"}
+    except SearchProviderError as exc:
+        st["errors"]+=1
+        st["fallbacks"]+=1
+        return [],st,{"provider":provider,"fallback":True,"reason":str(exc)[:80]}
     except Exception as exc:
         st["errors"]+=1
         st["fallbacks"]+=1
-        return [],st,{
-            "provider":provider,
-            "fallback":True,
-            "reason":_sanitize_exception(exc),
-        }
+        return [],st,{"provider":provider,"fallback":True,"reason":type(exc).__name__}
