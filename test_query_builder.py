@@ -1,6 +1,6 @@
 import unittest
 
-from query_builder import breakout_queries, discovery_query, observed_buyer_phrases, scout_queries
+from query_builder import breakout_queries, discovery_query, observed_buyer_phrases, scout_queries, desire_experiment_entries
 
 
 class QueryBuilderTests(unittest.TestCase):
@@ -68,6 +68,19 @@ class QueryBuilderTests(unittest.TestCase):
         q=discovery_query("hr_tools",["HR workflow automation"],"explore",rows)
         self.assertTrue(q.startswith("HR workflow automation "))
         self.assertIn("Looking for help",q)
+
+    def test_desire_experiment_reserves_two_bounded_entries(self):
+        base=[
+            {"query":"q1","class":"explore","family":"manual_data_entry","sector":"ops"},
+            {"query":"q2","class":"explore","family":"workflow_automation","sector":"ops2"},
+            {"query":"q3","class":"explore","family":"integration_api","sector":"ops3"},
+        ]
+        rows=desire_experiment_entries(base,2)
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(r["query_intent"]=="desire" for r in rows))
+        self.assertEqual({r["intent_class"] for r in rows},{"solution_search","paid_automation"})
+        self.assertTrue(any('"is there a tool"' in r["query"] for r in rows))
+        self.assertTrue(any('"hire someone to automate"' in r["query"] for r in rows))
 
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")
