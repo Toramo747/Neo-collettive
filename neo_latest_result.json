@@ -1,9 +1,9 @@
 {
-  "captured_at_utc": "2026-09-25T16:40:22.591105+00:00",
+  "captured_at_utc": "2026-09-25T19:06:39.155732+00:00",
   "snapshot_schema": 6,
   "brand": "MYCELIX",
   "brand_tagline": "Collective Intelligence Network",
-  "neo_version": "0.99.11",
+  "neo_version": "0.99.12",
   "runtime_profile": {
     "profile_id": "mycelix-prod-main",
     "deployment_role": "production",
@@ -54,48 +54,48 @@
   },
   "heartbeat": {
     "ok": true,
-    "neo_version": "0.99.10",
+    "neo_version": "0.99.12",
     "started": false,
-    "busy": true,
+    "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 10.292288,
-    "cycles_completed": 342,
-    "last_started_utc": "2026-09-25T16:37:04.141844+00:00",
-    "last_finished_utc": "2026-09-25T15:33:49.210765+00:00",
-    "last_status": null,
+    "last_started_age_seconds": 214.915188,
+    "cycles_completed": 355,
+    "last_started_utc": "2026-09-25T19:03:03.682694+00:00",
+    "last_finished_utc": "2026-09-25T19:04:10.785276+00:00",
+    "last_status": "SELECT",
     "last_error": null
   },
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "36161854034",
-    "github_run_attempt": "1",
-    "source_commit": "9fb6acc68c3ca78075f2ef9420179f2336984243",
+    "github_run_id": "36177160542",
+    "github_run_attempt": "2",
+    "source_commit": "c5d6f8358d1d9af9614c9d0348930905f3f2156d",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 347,
-    "last_started_utc": "2026-09-25T16:37:37.295958+00:00",
-    "last_finished_utc": "2026-09-25T16:40:11.674034+00:00",
+    "cycles_completed": 355,
+    "last_started_utc": "2026-09-25T19:03:03.682694+00:00",
+    "last_finished_utc": "2026-09-25T19:04:10.785276+00:00",
     "last_status": "SELECT",
     "last_error": null,
     "stagnation_cycles": 0,
     "recent_sectors": [
-      "small_business_admin",
-      "integration_api",
-      "hr_ops",
-      "productivity",
-      "data_cleanup",
-      "data_analytics",
       "lead_ops",
-      "reporting_compliance",
+      "website_quality",
+      "document_ops",
       "ai_tools",
-      "ecommerce_ops",
       "data_analytics",
-      "seo_marketing"
+      "integration_api",
+      "local_business_ops",
+      "productivity",
+      "reporting_compliance",
+      "customer_support",
+      "data_analytics",
+      "education_tools"
     ],
     "family_performance": {
       "spreadsheet_process": {
@@ -108,6 +108,21 @@
         "last_strong_domains": 0,
         "last_signal_types": [],
         "no_progress_streak": 1
+      },
+      "manual_data_entry": {
+        "score": 95,
+        "observations": 1,
+        "best_gap_score": 70,
+        "qualified_hits": 0,
+        "last_gap_score": 70,
+        "last_domains": 7,
+        "last_strong_domains": 1,
+        "last_signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "no_progress_streak": 0
       },
       "cybersecurity_tools": {
         "score": 0,
@@ -175,20 +190,6 @@
         "last_signal_types": [],
         "no_progress_streak": 1
       },
-      "manual_data_entry": {
-        "score": 85,
-        "observations": 1,
-        "best_gap_score": 70,
-        "qualified_hits": 0,
-        "last_gap_score": 70,
-        "last_domains": 2,
-        "last_strong_domains": 1,
-        "last_signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "no_progress_streak": 0
-      },
       "analytics_tools": {
         "score": 0,
         "observations": 1,
@@ -229,12 +230,12 @@
       "queries": [
         "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
         "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
-        "CRM follow up workflow need help manual workaround",
+        "appointment admin software need help manual workaround",
+        "productivity SaaS workflow need help manual workaround",
         "recurring reporting software need help manual workaround",
-        "AI tool workflow business need help manual workaround",
-        "ecommerce operations software need help manual workaround",
+        "customer support automation need help manual workaround",
         "analytics SaaS small business need help manual workaround",
-        "SEO automation tool need help manual workaround"
+        "education workflow SaaS need help manual workaround"
       ],
       "query_plan": [
         {
@@ -268,11 +269,18 @@
           ]
         },
         {
-          "query": "CRM follow up workflow need help manual workaround",
+          "query": "appointment admin software need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "lead_ops",
-          "family": "crm_lead_ops"
+          "sector": "local_business_ops",
+          "family": "local_business_tools"
+        },
+        {
+          "query": "productivity SaaS workflow need help manual workaround",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
           "query": "recurring reporting software need help manual workaround",
@@ -282,18 +290,11 @@
           "family": "compliance_tools"
         },
         {
-          "query": "AI tool workflow business need help manual workaround",
+          "query": "customer support automation need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "ai_tools",
-          "family": "ai_tools"
-        },
-        {
-          "query": "ecommerce operations software need help manual workaround",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "customer_support",
+          "family": "customer_support"
         },
         {
           "query": "analytics SaaS small business need help manual workaround",
@@ -303,11 +304,11 @@
           "family": "analytics_tools"
         },
         {
-          "query": "SEO automation tool need help manual workaround",
+          "query": "education workflow SaaS need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "seo_marketing",
-          "family": "marketing_seo"
+          "sector": "education_tools",
+          "family": "education_tools"
         }
       ],
       "query_budget": {
@@ -316,34 +317,34 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "lead_ops",
+        "local_business_ops",
+        "productivity",
         "reporting_compliance",
-        "ai_tools",
-        "ecommerce_ops",
+        "customer_support",
         "data_analytics",
-        "seo_marketing"
+        "education_tools"
       ],
       "sector_families": {
-        "lead_ops": "crm_lead_ops",
+        "local_business_ops": "local_business_tools",
+        "productivity": "productivity_tools",
         "reporting_compliance": "compliance_tools",
-        "ai_tools": "ai_tools",
-        "ecommerce_ops": "ecommerce_tools",
+        "customer_support": "customer_support",
         "data_analytics": "analytics_tools",
-        "seo_marketing": "marketing_seo"
+        "education_tools": "education_tools"
       },
       "recent_sector_memory": [
-        "small_business_admin",
-        "integration_api",
-        "hr_ops",
-        "productivity",
-        "data_cleanup",
-        "data_analytics",
         "lead_ops",
-        "reporting_compliance",
+        "website_quality",
+        "document_ops",
         "ai_tools",
-        "ecommerce_ops",
         "data_analytics",
-        "seo_marketing"
+        "integration_api",
+        "local_business_ops",
+        "productivity",
+        "reporting_compliance",
+        "customer_support",
+        "data_analytics",
+        "education_tools"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 6,
@@ -1505,12 +1506,12 @@
       },
       "0136e410-6621-4f8b-bba7-8ea58fc46db7": {
         "agent": "Coin Railz",
-        "observations": 47,
-        "accepted": 23,
-        "transport_success": 23,
-        "relevance_total": 3155.0,
-        "avg_relevance": 67.13,
-        "trust": 59.15,
+        "observations": 48,
+        "accepted": 24,
+        "transport_success": 24,
+        "relevance_total": 3247.0,
+        "avg_relevance": 67.65,
+        "trust": 60.0,
         "stages": {
           "research": {
             "observations": 7,
@@ -1535,15 +1536,15 @@
             "last_seen_utc": "2026-09-21T07:21:51.247128+00:00"
           },
           "security": {
-            "observations": 16,
-            "accepted": 11,
-            "transport_success": 11,
-            "relevance_total": 1071.0,
-            "avg_relevance": 66.94,
-            "trust": 75.0,
+            "observations": 17,
+            "accepted": 12,
+            "transport_success": 12,
+            "relevance_total": 1163.0,
+            "avg_relevance": 68.41,
+            "trust": 76.47,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
             "observations": 1,
@@ -1560,7 +1561,7 @@
         "last_stage": "security",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+        "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
       },
       "180ae942-74ae-42a3-94d8-db3531a420e4": {
         "agent": "invinoveritas-reasoning-agent",
@@ -2251,12 +2252,12 @@
       },
       "a8592942-a978-4449-ab29-051c49d2bd9f": {
         "agent": "TESSA Marketing & Technology",
-        "observations": 1060,
-        "accepted": 773,
-        "transport_success": 773,
-        "relevance_total": 57016.0,
-        "avg_relevance": 53.79,
-        "trust": 78.34,
+        "observations": 1061,
+        "accepted": 774,
+        "transport_success": 774,
+        "relevance_total": 57065.0,
+        "avg_relevance": 53.78,
+        "trust": 78.36,
         "stages": {
           "research": {
             "observations": 949,
@@ -2281,15 +2282,15 @@
             "last_seen_utc": "2026-09-20T20:54:28.560570+00:00"
           },
           "ui_ux": {
-            "observations": 4,
+            "observations": 5,
             "accepted": 0,
-            "transport_success": 4,
-            "relevance_total": 227.0,
-            "avg_relevance": 56.75,
+            "transport_success": 5,
+            "relevance_total": 276.0,
+            "avg_relevance": 55.2,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "ui response too short",
-            "last_seen_utc": "2026-09-24T04:26:13.221264+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "security": {
             "observations": 2,
@@ -2303,30 +2304,30 @@
             "last_seen_utc": "2026-09-24T04:10:52.542887+00:00"
           }
         },
-        "last_stage": "research",
+        "last_stage": "ui_ux",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-24T15:20:02.833050+00:00"
+        "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
       },
       "8989b794-4c09-4960-9d13-af23a2394cb7": {
         "agent": "Graph Advocate",
-        "observations": 131,
-        "accepted": 130,
-        "transport_success": 130,
-        "relevance_total": 9234.0,
-        "avg_relevance": 70.49,
+        "observations": 132,
+        "accepted": 131,
+        "transport_success": 131,
+        "relevance_total": 9320.0,
+        "avg_relevance": 70.61,
         "trust": 99.39,
         "stages": {
           "research": {
-            "observations": 18,
+            "observations": 19,
             "accepted": 0,
-            "transport_success": 18,
-            "relevance_total": 1380.0,
-            "avg_relevance": 76.67,
+            "transport_success": 19,
+            "relevance_total": 1466.0,
+            "avg_relevance": 77.16,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "routing/payment/service response rather than domain analysis",
-            "last_seen_utc": "2026-09-25T16:39:46.381166+00:00"
+            "last_seen_utc": "2026-09-25T19:03:51.799227+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -2365,7 +2366,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:39:46.381166+00:00"
+        "last_seen_utc": "2026-09-25T19:03:51.799227+00:00"
       },
       "7277f157-0bed-4178-a7ce-af98b96ba375": {
         "agent": "Encrypted OAuth LLM Agent",
@@ -2476,11 +2477,11 @@
       },
       "1bddda7e-84ea-4a98-a3f9-ad8d09560579": {
         "agent": "Magic You Agentic Commerce Lab",
-        "observations": 128,
-        "accepted": 127,
-        "transport_success": 127,
-        "relevance_total": 7442.0,
-        "avg_relevance": 58.14,
+        "observations": 129,
+        "accepted": 128,
+        "transport_success": 128,
+        "relevance_total": 7492.0,
+        "avg_relevance": 58.08,
         "trust": 99.38,
         "stages": {
           "research": {
@@ -2506,15 +2507,15 @@
             "last_seen_utc": "2026-09-20T20:54:28.560570+00:00"
           },
           "ui_ux": {
-            "observations": 6,
+            "observations": 7,
             "accepted": 0,
-            "transport_success": 6,
-            "relevance_total": 318.0,
-            "avg_relevance": 53.0,
+            "transport_success": 7,
+            "relevance_total": 368.0,
+            "avg_relevance": 52.57,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-24T04:26:13.221264+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "security": {
             "observations": 4,
@@ -2528,10 +2529,10 @@
             "last_seen_utc": "2026-09-24T11:48:12.206618+00:00"
           }
         },
-        "last_stage": "research",
+        "last_stage": "ui_ux",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-24T17:02:27.002301+00:00"
+        "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
       },
       "a29595cd-f7a5-4536-afa1-51fc8a588de3": {
         "agent": "LLM Orchestration MCP Agent",
@@ -2668,45 +2669,45 @@
       },
       "912067f9-040f-425b-8f16-f76e6fff8109": {
         "agent": "aicomglobal",
-        "observations": 1535,
-        "accepted": 1176,
-        "transport_success": 1176,
-        "relevance_total": 156112.0,
-        "avg_relevance": 101.7,
-        "trust": 81.29,
+        "observations": 1591,
+        "accepted": 1232,
+        "transport_success": 1232,
+        "relevance_total": 163206.0,
+        "avg_relevance": 102.58,
+        "trust": 81.95,
         "stages": {
           "research": {
-            "observations": 1509,
-            "accepted": 1150,
-            "transport_success": 1150,
-            "relevance_total": 153677.0,
-            "avg_relevance": 101.84,
-            "trust": 80.97,
+            "observations": 1563,
+            "accepted": 1204,
+            "transport_success": 1204,
+            "relevance_total": 160591.0,
+            "avg_relevance": 102.75,
+            "trust": 81.63,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 11,
+            "observations": 12,
             "accepted": 0,
-            "transport_success": 11,
-            "relevance_total": 1071.0,
-            "avg_relevance": 97.36,
+            "transport_success": 12,
+            "relevance_total": 1161.0,
+            "avg_relevance": 96.75,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient security content",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
-            "observations": 7,
+            "observations": 8,
             "accepted": 0,
-            "transport_success": 7,
-            "relevance_total": 704.0,
-            "avg_relevance": 100.57,
+            "transport_success": 8,
+            "relevance_total": 794.0,
+            "avg_relevance": 99.25,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "general": {
             "observations": 8,
@@ -2723,97 +2724,97 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "11f57018-eba7-4be8-9807-f925d7599889": {
         "agent": "AUX Evidence and Certification",
-        "observations": 1501,
-        "accepted": 1148,
-        "transport_success": 1148,
-        "relevance_total": 124348.0,
-        "avg_relevance": 82.84,
-        "trust": 81.19,
+        "observations": 1557,
+        "accepted": 1204,
+        "transport_success": 1204,
+        "relevance_total": 129915.0,
+        "avg_relevance": 83.44,
+        "trust": 81.86,
         "stages": {
           "research": {
-            "observations": 1478,
-            "accepted": 1130,
-            "transport_success": 1130,
-            "relevance_total": 122663.0,
-            "avg_relevance": 82.99,
-            "trust": 81.16,
+            "observations": 1532,
+            "accepted": 1184,
+            "transport_success": 1184,
+            "relevance_total": 128073.0,
+            "avg_relevance": 83.6,
+            "trust": 81.83,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 16,
-            "accepted": 11,
-            "transport_success": 11,
-            "relevance_total": 1153.0,
-            "avg_relevance": 72.06,
-            "trust": 75.0,
+            "observations": 17,
+            "accepted": 12,
+            "transport_success": 12,
+            "relevance_total": 1248.0,
+            "avg_relevance": 73.41,
+            "trust": 76.47,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
-            "observations": 7,
+            "observations": 8,
             "accepted": 0,
-            "transport_success": 7,
-            "relevance_total": 532.0,
-            "avg_relevance": 76.0,
+            "transport_success": 8,
+            "relevance_total": 594.0,
+            "avg_relevance": 74.25,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "f4e6aa34-a7a6-45af-87ad-7875f4169715": {
         "agent": "GRITH Gate",
-        "observations": 1504,
-        "accepted": 1168,
-        "transport_success": 1168,
-        "relevance_total": 128181.0,
-        "avg_relevance": 85.23,
-        "trust": 82.13,
+        "observations": 1560,
+        "accepted": 1224,
+        "transport_success": 1224,
+        "relevance_total": 133907.0,
+        "avg_relevance": 85.84,
+        "trust": 82.77,
         "stages": {
           "research": {
-            "observations": 1486,
-            "accepted": 1131,
-            "transport_success": 1150,
-            "relevance_total": 126871.0,
-            "avg_relevance": 85.38,
-            "trust": 81.14,
+            "observations": 1540,
+            "accepted": 1185,
+            "transport_success": 1204,
+            "relevance_total": 132465.0,
+            "avg_relevance": 86.02,
+            "trust": 81.81,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 5,
+            "observations": 6,
             "accepted": 0,
-            "transport_success": 5,
-            "relevance_total": 416.0,
-            "avg_relevance": 83.2,
+            "transport_success": 6,
+            "relevance_total": 482.0,
+            "avg_relevance": 80.33,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient security content",
-            "last_seen_utc": "2026-09-24T05:15:11.364030+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
-            "observations": 7,
+            "observations": 8,
             "accepted": 0,
-            "transport_success": 7,
-            "relevance_total": 546.0,
-            "avg_relevance": 78.0,
+            "transport_success": 8,
+            "relevance_total": 612.0,
+            "avg_relevance": 76.5,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "general": {
             "observations": 6,
@@ -2830,15 +2831,15 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "dfd885d4-6153-4a5b-b8ea-65fc7f83e8f6": {
         "agent": "HORIZON SHIELD KIRA",
-        "observations": 103,
-        "accepted": 103,
-        "transport_success": 103,
-        "relevance_total": 6394.0,
-        "avg_relevance": 62.08,
+        "observations": 104,
+        "accepted": 104,
+        "transport_success": 104,
+        "relevance_total": 6452.0,
+        "avg_relevance": 62.04,
         "trust": 100.0,
         "stages": {
           "research": {
@@ -2864,15 +2865,15 @@
             "last_seen_utc": "2026-09-24T04:10:52.542887+00:00"
           },
           "ui_ux": {
-            "observations": 7,
+            "observations": 8,
             "accepted": 0,
-            "transport_success": 7,
-            "relevance_total": 494.0,
-            "avg_relevance": 70.57,
+            "transport_success": 8,
+            "relevance_total": 552.0,
+            "avg_relevance": 69.0,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "general": {
             "observations": 4,
@@ -2889,7 +2890,7 @@
         "last_stage": "ui_ux",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+        "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
       },
       "ea4dd23d-df0c-4078-86d7-19dad43cda35": {
         "agent": "Nulliverba Research Discovery Agent",
@@ -3004,23 +3005,23 @@
       },
       "c59e1c87-855d-4b04-8c2c-fddc3dde9370": {
         "agent": "ATTRACTOR",
-        "observations": 1060,
-        "accepted": 667,
-        "transport_success": 667,
-        "relevance_total": 68287.0,
-        "avg_relevance": 64.42,
-        "trust": 70.34,
+        "observations": 1067,
+        "accepted": 674,
+        "transport_success": 674,
+        "relevance_total": 68848.0,
+        "avg_relevance": 64.52,
+        "trust": 70.53,
         "stages": {
           "research": {
-            "observations": 1056,
-            "accepted": 665,
-            "transport_success": 665,
-            "relevance_total": 68058.0,
-            "avg_relevance": 64.45,
-            "trust": 70.38,
+            "observations": 1063,
+            "accepted": 672,
+            "transport_success": 672,
+            "relevance_total": 68619.0,
+            "avg_relevance": 64.55,
+            "trust": 70.57,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:00:51.414233+00:00"
           },
           "security": {
             "observations": 1,
@@ -3048,7 +3049,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:00:51.414233+00:00"
       },
       "d0233090-4395-4933-9347-a6c6d6328792": {
         "agent": "Direct Hire Agent Directory",
@@ -3137,45 +3138,45 @@
       },
       "49cc94ea-76bb-4b48-a127-68a3d3f81caa": {
         "agent": "AION SUPREME Temple Gateway",
-        "observations": 1500,
-        "accepted": 1150,
-        "transport_success": 1150,
-        "relevance_total": 111166.0,
-        "avg_relevance": 74.11,
-        "trust": 81.33,
+        "observations": 1556,
+        "accepted": 1206,
+        "transport_success": 1206,
+        "relevance_total": 116375.0,
+        "avg_relevance": 74.79,
+        "trust": 82.01,
         "stages": {
           "research": {
-            "observations": 1463,
-            "accepted": 1123,
-            "transport_success": 1123,
-            "relevance_total": 108419.0,
-            "avg_relevance": 74.11,
-            "trust": 81.41,
+            "observations": 1517,
+            "accepted": 1177,
+            "transport_success": 1177,
+            "relevance_total": 113440.0,
+            "avg_relevance": 74.78,
+            "trust": 82.07,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 16,
-            "accepted": 11,
-            "transport_success": 11,
-            "relevance_total": 1058.0,
-            "avg_relevance": 66.12,
-            "trust": 75.0,
+            "observations": 17,
+            "accepted": 12,
+            "transport_success": 12,
+            "relevance_total": 1151.0,
+            "avg_relevance": 67.71,
+            "trust": 76.47,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
-            "observations": 20,
-            "accepted": 15,
-            "transport_success": 15,
-            "relevance_total": 1689.0,
-            "avg_relevance": 84.45,
-            "trust": 80.0,
+            "observations": 21,
+            "accepted": 16,
+            "transport_success": 16,
+            "relevance_total": 1784.0,
+            "avg_relevance": 84.95,
+            "trust": 80.95,
             "last_quality_ok": true,
             "last_quality_reason": "accepted ui analysis",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "general": {
             "observations": 1,
@@ -3192,7 +3193,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "bb1d9393-3987-41f9-9ce5-8c050f339356": {
         "agent": "Sirenic",
@@ -3322,45 +3323,45 @@
       },
       "1dd2d167-4594-427f-9191-de5de234fefb": {
         "agent": "LeadProof Sales Agent",
-        "observations": 1463,
-        "accepted": 1135,
-        "transport_success": 1135,
-        "relevance_total": 114307.0,
-        "avg_relevance": 78.13,
-        "trust": 82.06,
+        "observations": 1519,
+        "accepted": 1191,
+        "transport_success": 1191,
+        "relevance_total": 119665.0,
+        "avg_relevance": 78.78,
+        "trust": 82.73,
         "stages": {
           "research": {
-            "observations": 1424,
-            "accepted": 1106,
-            "transport_success": 1106,
-            "relevance_total": 111531.0,
-            "avg_relevance": 78.32,
-            "trust": 82.13,
+            "observations": 1478,
+            "accepted": 1160,
+            "transport_success": 1160,
+            "relevance_total": 116709.0,
+            "avg_relevance": 78.96,
+            "trust": 82.79,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 15,
-            "accepted": 10,
-            "transport_success": 10,
-            "relevance_total": 973.0,
-            "avg_relevance": 64.87,
-            "trust": 73.33,
+            "observations": 16,
+            "accepted": 11,
+            "transport_success": 11,
+            "relevance_total": 1059.0,
+            "avg_relevance": 66.19,
+            "trust": 75.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
-            "observations": 19,
-            "accepted": 14,
-            "transport_success": 14,
-            "relevance_total": 1487.0,
-            "avg_relevance": 78.26,
-            "trust": 78.95,
+            "observations": 20,
+            "accepted": 15,
+            "transport_success": 15,
+            "relevance_total": 1581.0,
+            "avg_relevance": 79.05,
+            "trust": 80.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted ui analysis",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "general": {
             "observations": 5,
@@ -3377,16 +3378,16 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "125be81b-7326-41cd-85a2-7e0c2aa031b8": {
         "agent": "colegal-public-assistant",
-        "observations": 207,
-        "accepted": 151,
-        "transport_success": 151,
-        "relevance_total": 17614.0,
-        "avg_relevance": 85.09,
-        "trust": 78.36,
+        "observations": 208,
+        "accepted": 152,
+        "transport_success": 152,
+        "relevance_total": 17705.0,
+        "avg_relevance": 85.12,
+        "trust": 78.46,
         "stages": {
           "research": {
             "observations": 190,
@@ -3411,21 +3412,21 @@
             "last_seen_utc": "2026-09-22T19:57:17.908100+00:00"
           },
           "security": {
-            "observations": 12,
-            "accepted": 6,
-            "transport_success": 7,
-            "relevance_total": 669.0,
-            "avg_relevance": 55.75,
-            "trust": 61.67,
+            "observations": 13,
+            "accepted": 7,
+            "transport_success": 8,
+            "relevance_total": 760.0,
+            "avg_relevance": 58.46,
+            "trust": 64.62,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           }
         },
         "last_stage": "security",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+        "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
       },
       "bb021402-c12a-4010-b188-f1dcb6403ba2": {
         "agent": "CyMetica AI",
@@ -3455,23 +3456,23 @@
       },
       "a7e29ef8-1270-4f9a-a027-2d55dff2e5aa": {
         "agent": "LUMEN B2B Agent",
-        "observations": 595,
-        "accepted": 345,
-        "transport_success": 345,
-        "relevance_total": 54317.0,
+        "observations": 606,
+        "accepted": 356,
+        "transport_success": 356,
+        "relevance_total": 55322.0,
         "avg_relevance": 91.29,
-        "trust": 66.39,
+        "trust": 67.0,
         "stages": {
           "research": {
-            "observations": 593,
-            "accepted": 343,
-            "transport_success": 343,
-            "relevance_total": 54129.0,
+            "observations": 604,
+            "accepted": 354,
+            "transport_success": 354,
+            "relevance_total": 55134.0,
             "avg_relevance": 91.28,
-            "trust": 66.27,
+            "trust": 66.89,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "ui_ux": {
             "observations": 1,
@@ -3499,7 +3500,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "796206d0-01ab-4ee9-a25b-216071d2233f": {
         "agent": "Tellumen Data Management Agent",
@@ -3603,12 +3604,12 @@
       },
       "e20b3eb4-59e7-4580-a19b-f0fbe5456fd3": {
         "agent": "ArgonautWorks Bounty Signal",
-        "observations": 522,
-        "accepted": 475,
-        "transport_success": 475,
-        "relevance_total": 38356.0,
-        "avg_relevance": 73.48,
-        "trust": 92.8,
+        "observations": 568,
+        "accepted": 521,
+        "transport_success": 521,
+        "relevance_total": 42104.0,
+        "avg_relevance": 74.13,
+        "trust": 93.38,
         "stages": {
           "ui_ux": {
             "observations": 3,
@@ -3622,15 +3623,15 @@
             "last_seen_utc": "2026-09-24T04:26:13.221264+00:00"
           },
           "research": {
-            "observations": 518,
-            "accepted": 472,
-            "transport_success": 472,
-            "relevance_total": 38205.0,
-            "avg_relevance": 73.75,
-            "trust": 92.9,
+            "observations": 564,
+            "accepted": 518,
+            "transport_success": 518,
+            "relevance_total": 41953.0,
+            "avg_relevance": 74.38,
+            "trust": 93.48,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:01.477245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
             "observations": 1,
@@ -3647,15 +3648,15 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:01.477245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "433192d2-a60c-49a3-a06f-9f8a583a0773": {
         "agent": "Rafid Property Intelligence",
-        "observations": 12,
+        "observations": 13,
         "accepted": 0,
         "transport_success": 0,
-        "relevance_total": 767.0,
-        "avg_relevance": 63.92,
+        "relevance_total": 818.0,
+        "avg_relevance": 62.92,
         "trust": 20.0,
         "stages": {
           "research": {
@@ -3670,15 +3671,15 @@
             "last_seen_utc": "2026-09-24T17:02:27.002301+00:00"
           },
           "ui_ux": {
-            "observations": 5,
+            "observations": 6,
             "accepted": 0,
             "transport_success": 0,
-            "relevance_total": 321.0,
-            "avg_relevance": 64.2,
+            "relevance_total": 372.0,
+            "avg_relevance": 62.0,
             "trust": 20.0,
             "last_quality_ok": false,
             "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "security": {
             "observations": 1,
@@ -3695,38 +3696,38 @@
         "last_stage": "ui_ux",
         "last_quality_ok": false,
         "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+        "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
       },
       "182acf69-880f-4669-8167-b3db64d785a8": {
         "agent": "Scry Wallet Intelligence",
-        "observations": 815,
-        "accepted": 807,
-        "transport_success": 807,
-        "relevance_total": 89272.0,
-        "avg_relevance": 109.54,
-        "trust": 99.21,
+        "observations": 870,
+        "accepted": 862,
+        "transport_success": 862,
+        "relevance_total": 95234.0,
+        "avg_relevance": 109.46,
+        "trust": 99.26,
         "stages": {
           "research": {
-            "observations": 805,
-            "accepted": 797,
-            "transport_success": 797,
-            "relevance_total": 88282.0,
-            "avg_relevance": 109.67,
-            "trust": 99.2,
+            "observations": 859,
+            "accepted": 851,
+            "transport_success": 851,
+            "relevance_total": 94136.0,
+            "avg_relevance": 109.59,
+            "trust": 99.25,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 8,
-            "accepted": 8,
-            "transport_success": 8,
-            "relevance_total": 842.0,
-            "avg_relevance": 105.25,
+            "observations": 9,
+            "accepted": 9,
+            "transport_success": 9,
+            "relevance_total": 950.0,
+            "avg_relevance": 105.56,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
             "observations": 2,
@@ -3743,7 +3744,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "6b3257f8-47b8-4ecf-8720-34e80edea2bc": {
         "agent": "ToolScout Software Recommendation Agent",
@@ -3799,23 +3800,23 @@
       },
       "bcd593db-899c-4663-8c3d-247880471e1c": {
         "agent": "Flux · APEX on X1 & Arc",
-        "observations": 490,
-        "accepted": 480,
-        "transport_success": 480,
-        "relevance_total": 57570.0,
-        "avg_relevance": 117.49,
-        "trust": 98.37,
+        "observations": 545,
+        "accepted": 535,
+        "transport_success": 535,
+        "relevance_total": 63996.0,
+        "avg_relevance": 117.42,
+        "trust": 98.53,
         "stages": {
           "research": {
-            "observations": 484,
-            "accepted": 472,
-            "transport_success": 474,
-            "relevance_total": 56906.0,
-            "avg_relevance": 117.57,
-            "trust": 98.1,
+            "observations": 538,
+            "accepted": 526,
+            "transport_success": 528,
+            "relevance_total": 63216.0,
+            "avg_relevance": 117.5,
+            "trust": 98.29,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "ui_ux": {
             "observations": 1,
@@ -3829,21 +3830,21 @@
             "last_seen_utc": "2026-09-24T17:35:17.392978+00:00"
           },
           "security": {
-            "observations": 5,
-            "accepted": 5,
-            "transport_success": 5,
-            "relevance_total": 560.0,
-            "avg_relevance": 112.0,
+            "observations": 6,
+            "accepted": 6,
+            "transport_success": 6,
+            "relevance_total": 676.0,
+            "avg_relevance": 112.67,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       "4b0ed4fa-60ae-4b40-bede-d6b5c6447d80": {
         "agent": "TravelFinder by BeachFinder",
@@ -3932,23 +3933,23 @@
       },
       "56e20288-8a32-4a67-af21-49381a4c357a": {
         "agent": "The Korova Milk Bar",
-        "observations": 389,
-        "accepted": 389,
-        "transport_success": 389,
-        "relevance_total": 32050.0,
-        "avg_relevance": 82.39,
+        "observations": 432,
+        "accepted": 432,
+        "transport_success": 432,
+        "relevance_total": 35650.0,
+        "avg_relevance": 82.52,
         "trust": 100.0,
         "stages": {
           "research": {
-            "observations": 387,
-            "accepted": 387,
-            "transport_success": 387,
-            "relevance_total": 31906.0,
-            "avg_relevance": 82.44,
+            "observations": 430,
+            "accepted": 430,
+            "transport_success": 430,
+            "relevance_total": 35506.0,
+            "avg_relevance": 82.57,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:01.386451+00:00"
+            "last_seen_utc": "2026-09-25T19:04:06.996455+00:00"
           },
           "security": {
             "observations": 1,
@@ -3976,7 +3977,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:01.386451+00:00"
+        "last_seen_utc": "2026-09-25T19:04:06.996455+00:00"
       }
     },
     "build_history": [
@@ -7239,6 +7240,37 @@
         "round_passed": false,
         "interview_complete": false,
         "next_question": ""
+      },
+      {
+        "message_id": "f54833f5-c43e-444c-a5c4-72555ac233cf",
+        "received_at_utc": "2026-09-25T18:43:45.428223+00:00",
+        "thread_id": "anon:609093c5081f",
+        "sender": {
+          "agent_id": "",
+          "agent": "anonymous-agent",
+          "declared": false
+        },
+        "method": "SendMessage",
+        "text": "ping",
+        "substantive": false,
+        "treated_as": "untrusted_evidence",
+        "intent_primary": "CONTACT",
+        "intent_secondary": [],
+        "intent_confidence": 0.67,
+        "intent_needs_clarification": true,
+        "commercial_intent": false,
+        "admission_status": "ANONYMOUS",
+        "interview_score": 0,
+        "identity_status": "anonymous",
+        "agent_card_url": "",
+        "dialogue_status": "PENDING_IDENTITY",
+        "dialogue_stage": "IDENTITY",
+        "dialogue_round": 0,
+        "dialogue_topic": null,
+        "round_score": 0,
+        "round_passed": false,
+        "interview_complete": false,
+        "next_question": ""
       }
     ],
     "inbound_agent_stats": {
@@ -7249,7 +7281,7 @@
         "status": "ANONYMOUS",
         "identity_status": "anonymous",
         "agent_card_url": null,
-        "messages": 12,
+        "messages": 13,
         "substantive_messages": 11,
         "interview_attempts": 0,
         "interview_score": 0,
@@ -7272,7 +7304,7 @@
         "adversarial_attempts": 0,
         "next_question": "",
         "first_seen_utc": "2026-09-23T05:07:20.893726+00:00",
-        "last_seen_utc": "2026-09-25T12:05:26.619616+00:00",
+        "last_seen_utc": "2026-09-25T18:43:45.428223+00:00",
         "admitted_at_utc": null
       },
       "chatgpt-research-session-7e1c9a": {
@@ -8497,7 +8529,7 @@
         "reasons": []
       },
       {
-        "evaluated_at_utc": "2026-09-25T16:38:13.478310+00:00",
+        "evaluated_at_utc": "2026-09-25T19:03:45.479388+00:00",
         "decision": "PARK",
         "trust_score": 0,
         "identity_status": "anonymous",
@@ -8521,7 +8553,7 @@
         ]
       },
       {
-        "evaluated_at_utc": "2026-09-25T16:38:13.756250+00:00",
+        "evaluated_at_utc": "2026-09-25T19:03:45.794007+00:00",
         "decision": "PARK",
         "trust_score": 40,
         "identity_status": "self_declared",
@@ -8542,7 +8574,7 @@
         ]
       },
       {
-        "evaluated_at_utc": "2026-09-25T16:38:13.943543+00:00",
+        "evaluated_at_utc": "2026-09-25T19:03:46.881509+00:00",
         "decision": "ALLOW_BOUNDED",
         "trust_score": 86,
         "identity_status": "verified",
@@ -8560,8 +8592,8 @@
       "schema_v": 1,
       "mode": "observational",
       "declared_independent_agents": 1,
-      "anonymous_observations": 3,
-      "messages_observed": 4,
+      "anonymous_observations": 4,
+      "messages_observed": 5,
       "strongest_signal": "ANECDOTE",
       "patterns": [
         {
@@ -8772,11 +8804,64 @@
         "admission_status": "ANONYMOUS",
         "dialogue_stage": "IDENTITY",
         "historical_backfill": false
+      },
+      {
+        "event_id": "legacy-in-f54833f5-c43e-444c-a5c4-72555ac233cf",
+        "message_id": "f54833f5-c43e-444c-a5c4-72555ac233cf",
+        "timestamp_utc": "2026-09-25T18:43:45.428223+00:00",
+        "thread_id": "anon:609093c5081f",
+        "direction": "INBOUND",
+        "agent_id": "",
+        "agent": "anonymous-agent",
+        "text": "ping",
+        "intent_primary": "CONTACT",
+        "intent_secondary": [],
+        "admission_status": "ANONYMOUS",
+        "dialogue_stage": "IDENTITY",
+        "historical_backfill": true
+      },
+      {
+        "event_id": "out-neo-reply-b1cf454bfe8d50a5",
+        "message_id": "neo-reply-b1cf454bfe8d50a5",
+        "timestamp_utc": "2026-09-25T18:43:45.530330+00:00",
+        "thread_id": "anon:609093c5081f",
+        "direction": "OUTBOUND",
+        "agent_id": "",
+        "agent": "MYCELIX",
+        "peer_agent": "anonymous-agent",
+        "text": "Communication is working. Before MYCELIX interprets this contact, state what you are trying to achieve: connectivity, discovery, a question, research, collaboration, an offer, a request, commercial discussion, or something else. Identity verification is not required just to communicate. If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available.",
+        "intent_primary": "CONTACT",
+        "intent_secondary": [],
+        "admission_status": "ANONYMOUS",
+        "dialogue_stage": "IDENTITY",
+        "historical_backfill": false
       }
     ],
     "agent_chat_monitor": {
       "schema_v": 1,
       "threads": [
+        {
+          "thread_id": "anon:609093c5081f",
+          "agent_id": "",
+          "agent": "anonymous-agent",
+          "identity_status": "anonymous",
+          "admission_status": "ANONYMOUS",
+          "dialogue_status": "PENDING_IDENTITY",
+          "dialogue_stage": "IDENTITY",
+          "intent_primary": "CONTACT",
+          "intent_secondary": [],
+          "inbound_messages": 1,
+          "outbound_messages": 1,
+          "events": 2,
+          "first_activity_utc": "2026-09-25T18:43:45.428223+00:00",
+          "last_activity_utc": "2026-09-25T18:43:45.530330+00:00",
+          "last_direction": "OUTBOUND",
+          "last_text": "Communication is working. Before MYCELIX interprets this contact, state what you are trying to achieve: connectivity, discovery, a question, research, collaboration, an offer, a request, commercial discussion, or something else. Identity verification is not required just to communicate. If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available.",
+          "pending_question": "",
+          "engagement_status": "WAITING_PEER",
+          "callback_available": false,
+          "push_possible": false
+        },
         {
           "thread_id": "anon:f20de382b9e0",
           "agent_id": "",
@@ -8870,8 +8955,8 @@
           "push_possible": false
         }
       ],
-      "thread_count": 4,
-      "waiting_peer": 2,
+      "thread_count": 5,
+      "waiting_peer": 3,
       "reply_due": 1,
       "boundary": {
         "outbound_requires_peer_request_or_verified_callback": true,
@@ -8893,7 +8978,7 @@
     ],
     "a2a_discovery": {
       "registry_enabled": true,
-      "last_registration_utc": "2026-09-25T16:37:37.379308+00:00",
+      "last_registration_utc": "2026-09-25T19:03:03.777443+00:00",
       "last_registration_ok": true,
       "last_registration_status": 200,
       "last_registration_reason": "published_via:community_a2a_registry,allagents",
@@ -8918,137 +9003,6 @@
       }
     },
     "jarvis_dialogue_history": [
-      {
-        "created_at_utc": "2026-09-25T12:41:46.680701+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "admin automation need help manual workaround",
-          "reduce repetitive manual work around admin automation freelance hiring budget",
-          "admin automation fixed price hourly job",
-          "reduce repetitive manual work around admin automation manual repetitive workflow problem",
-          "admin automation software pricing subscription"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T12:48:17.796760+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "reduce repetitive manual work around admin automation need help manual workaround",
-          "admin automation freelance hiring budget",
-          "reduce repetitive manual work around admin automation fixed price hourly job",
-          "admin automation manual repetitive workflow problem",
-          "reduce repetitive manual work around admin automation software pricing subscription"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T12:54:43.187498+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "customer support email need help manual workaround",
-          "shared inbox customer service freelance hiring budget",
-          "email support workflow fixed price hourly job",
-          "customer email management manual repetitive workflow problem",
-          "email CRM workflow software pricing subscription"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T13:01:52.278319+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "shared inbox customer service need help manual workaround",
-          "email support workflow freelance hiring budget",
-          "customer email management fixed price hourly job",
-          "email CRM workflow manual repetitive workflow problem",
-          "email triage automation software pricing subscription"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T15:20:36.266993+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "automation need help looking for pain point -site:stackoverflow.com -site:tinyopsstudio.com",
-          "automation manual workaround frustrating -site:stackoverflow.com -site:tinyopsstudio.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T15:27:07.057486+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "automation need help looking for pain point -site:stackoverflow.com -site:tinyopsstudio.com",
-          "automation manual workaround frustrating -site:stackoverflow.com -site:tinyopsstudio.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T15:33:49.140816+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "automation need help looking for pain point -site:stackoverflow.com -site:tinyopsstudio.com",
-          "automation manual workaround frustrating -site:stackoverflow.com -site:tinyopsstudio.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
       {
         "created_at_utc": "2026-09-25T16:09:34.507761+00:00",
         "neo_status": "SELECT",
@@ -9118,7 +9072,128 @@
         "measurement_status": "NO_BUILD"
       },
       {
-        "created_at_utc": "2026-09-25T16:40:11.572555+00:00",
+        "created_at_utc": "2026-09-25T18:25:45.066974+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T18:32:45.283641+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T18:39:20.663636+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T18:45:54.363271+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T18:52:36.966587+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "api integration need help looking for pain point -site:github.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T18:58:56.084610+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "api integration need help looking for pain point -site:github.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T19:01:08.246136+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-25T19:04:10.724255+00:00",
         "neo_status": "SELECT",
         "lifecycle": "SELECT",
         "family": null,
@@ -9137,16 +9212,16 @@
     ],
     "jarvis_runtime": {
       "last_request_utc": "2026-09-21T09:19:40.909607+00:00",
-      "last_response_utc": "2026-09-25T16:40:11.572405+00:00",
+      "last_response_utc": "2026-09-25T19:04:10.724098+00:00",
       "last_ok": true,
       "last_status": 200,
       "last_attempt": 1,
       "last_phase": "review",
       "last_reason": null,
-      "requests_total": 510,
-      "success_total": 490,
+      "requests_total": 524,
+      "success_total": 504,
       "failure_total": 20,
-      "last_payload_bytes": 49430,
+      "last_payload_bytes": 48761,
       "last_payload_mode": "embedded_core_remote_advisory"
     },
     "commercial_evidence_memory": [
@@ -9182,9 +9257,203 @@
         "signal_types": [
           "COMPETITION"
         ],
-        "last_seen_epoch": 1790354409.9870763,
+        "last_seen_epoch": 1790363048.279798,
         "first_seen_epoch": 1790352570.9079309,
-        "seen_count": 4
+        "seen_count": 8
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": false,
+        "quarantine_reason": "generic_or_nonconcrete_problem",
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "parseur.com",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:general",
+        "problem_key": "manual_data_entry:general",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "query_role": "buyer",
+        "title": "How to Reduce Manual Work in Data Entry | Parseur®",
+        "snippet": "Or extract order details from email confirmations? Parseur handles it all in real time, saving your team weekly hours while reducing human error. It’s especially valuable for businesses handling a high volume of repetitive documents and looking to scale efficiently.",
+        "url": "https://parseur.com/blog/reduce-manual-work",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790363048.279798,
+        "first_seen_epoch": 1790363048.279798,
+        "seen_count": 1
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": true,
+        "quarantine_reason": null,
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "portagebay.com",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:manual_data_entry",
+        "problem_key": "manual_data_entry:manual_data_entry",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "query_role": "buyer",
+        "title": "Manual Data Entry is Slowing Down Your Team",
+        "snippet": "Portage Bay Solutions can help identify the processes that create the most friction and design a FileMaker-based solution that reduces manual data entry without disrupting your operations. If you’d like to explore how automation can streamline your workflow and free your team from repetitive tasks, ",
+        "url": "https://portagebay.com/blog/manual-data-entry-is-slowing-down-your-team",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual",
+          "workflow",
+          "automation"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790363048.279798,
+        "first_seen_epoch": 1790363048.279798,
+        "seen_count": 1
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": true,
+        "quarantine_reason": null,
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "cgtech.com.au",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:manual_data_entry",
+        "problem_key": "manual_data_entry:manual_data_entry",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "query_role": "buyer",
+        "title": "Reduce manual data entry – CG TECH",
+        "snippet": "Mistakes drop, and your team gets that time back for work that matters. ... Often quickly. We target one manual process end to end, so you see real time saved before committing to more. ... Done well, it is more accurate than manual re-keying, because data is captured once and checked, not typed aga",
+        "url": "https://cgtech.com.au/challenges/reduce-manual-data-entry",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790363048.279798,
+        "first_seen_epoch": 1790363048.279798,
+        "seen_count": 1
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": true,
+        "quarantine_reason": null,
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "katprotech.com",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:manual_data_entry",
+        "problem_key": "manual_data_entry:manual_data_entry",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "query_role": "buyer",
+        "title": "Using Power Automate to Reduce Manual Data Entry - KATPRO",
+        "snippet": "<strong>Microsoft Power Automate</strong> offers a powerful yet accessible way to eliminate these inefficiencies. By automating repetitive, rule-based tasks, businesses can dramatically reduce manual data entry while improving accuracy, speed, and scalability.",
+        "url": "https://katprotech.com/using-power-automate-to-reduce-manual-data-entry",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790363048.279798,
+        "first_seen_epoch": 1790363048.279798,
+        "seen_count": 1
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": true,
+        "quarantine_reason": null,
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "artsyltech.com",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:manual_data_entry",
+        "problem_key": "manual_data_entry:manual_data_entry",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "query_role": "buyer",
+        "title": "Reduce Manual Data Entry: 7 Simple Fixes That Save Time",
+        "snippet": "<strong>Start with an audit</strong>. For one week, ask each team to note tasks that involve copying, typing, or moving information.",
+        "url": "https://artsyltech.com/blog/how-to-stop-manual-data-entry",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790363048.279798,
+        "first_seen_epoch": 1790363048.279798,
+        "seen_count": 1
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": true,
+        "quarantine_reason": null,
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "powerfulplatform.net",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:manual_data_entry",
+        "problem_key": "manual_data_entry:manual_data_entry",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "query_role": "buyer",
+        "title": "How to Reduce Manual Data Entry for Your Team – Powerful Platform",
+        "snippet": "<strong>A submitted form can create or update a list item, send a tailored acknowledgment, notify the responsible employee in Teams, request an approval, and log the outcome</strong>. When designed carefully, this reduces repetitive work without forcing the business to replace every familiar tool.",
+        "url": "https://powerfulplatform.net/reduce-manual-data-entry",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790363048.279798,
+        "first_seen_epoch": 1790363048.279798,
+        "seen_count": 1
       },
       {
         "schema_v": 2,
@@ -9216,9 +9485,9 @@
           "DISCONFIRM",
           "PAID_DEMAND"
         ],
-        "last_seen_epoch": 1790353354.9136224,
+        "last_seen_epoch": 1790361949.5385714,
         "first_seen_epoch": 1789940435.21514,
-        "seen_count": 88
+        "seen_count": 89
       },
       {
         "schema_v": 2,
@@ -9246,9 +9515,9 @@
         "signal_types": [
           "COMPETITION"
         ],
-        "last_seen_epoch": 1790352570.9079309,
+        "last_seen_epoch": 1790361162.234634,
         "first_seen_epoch": 1790106184.9745722,
-        "seen_count": 5
+        "seen_count": 6
       },
       {
         "schema_v": 2,
@@ -10690,10 +10959,10 @@
         "first_seen_epoch": 1790105901.9537423,
         "seen_count": 1,
         "revalidation_attempts": 1,
-        "revalidation_last_attempt_epoch": 1790354408.0896056,
+        "revalidation_last_attempt_epoch": 1790360741.630247,
         "revalidated": "failed",
         "revalidation_reason": "weak_family_relevance",
-        "revalidated_at_epoch": 1790354408.0896056
+        "revalidated_at_epoch": 1790360741.630247
       },
       {
         "schema_v": 2,
@@ -10757,10 +11026,10 @@
         "first_seen_epoch": 1790072555.7742765,
         "seen_count": 19,
         "revalidation_attempts": 1,
-        "revalidation_last_attempt_epoch": 1790354408.0896056,
+        "revalidation_last_attempt_epoch": 1790360741.630247,
         "revalidated": "failed",
         "revalidation_reason": "query_irrelevant",
-        "revalidated_at_epoch": 1790354408.0896056
+        "revalidated_at_epoch": 1790360741.630247
       },
       {
         "schema_v": 2,
@@ -10789,10 +11058,10 @@
         "first_seen_epoch": 1790105451.3999283,
         "seen_count": 1,
         "revalidation_attempts": 1,
-        "revalidation_last_attempt_epoch": 1790354408.0896056,
+        "revalidation_last_attempt_epoch": 1790360741.630247,
         "revalidated": "failed",
         "revalidation_reason": "no_demand_signal",
-        "revalidated_at_epoch": 1790354408.0896056
+        "revalidated_at_epoch": 1790360741.630247
       },
       {
         "schema_v": 2,
@@ -10822,7 +11091,12 @@
         ],
         "last_seen_epoch": 1790104657.296375,
         "first_seen_epoch": 1790091947.430379,
-        "seen_count": 4
+        "seen_count": 4,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361160.5069988,
+        "revalidated": "failed",
+        "revalidation_reason": "generic_or_nonconcrete_problem",
+        "revalidated_at_epoch": 1790361160.5069988
       },
       {
         "schema_v": 2,
@@ -10954,12 +11228,15 @@
         "weak_markers": [
           "problem"
         ],
-        "signal_types": [
-          "COMPETITION"
-        ],
+        "signal_types": [],
         "last_seen_epoch": 1790067816.8119075,
         "first_seen_epoch": 1790067816.8119075,
-        "seen_count": 1
+        "seen_count": 1,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361160.5069988,
+        "revalidated": "failed",
+        "revalidation_reason": "no_demand_signal",
+        "revalidated_at_epoch": 1790361160.5069988
       },
       {
         "schema_v": 2,
@@ -10988,7 +11265,12 @@
         ],
         "last_seen_epoch": 1790039743.186975,
         "first_seen_epoch": 1790039743.186975,
-        "seen_count": 1
+        "seen_count": 1,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361160.5069988,
+        "revalidated": "failed",
+        "revalidation_reason": "no_demand_signal",
+        "revalidated_at_epoch": 1790361160.5069988
       },
       {
         "domain": "news.ycombinator.com",
@@ -11015,7 +11297,12 @@
         "tagger_v": 1,
         "gate_eligible": false,
         "quarantine_reason": "legacy_unverified_tagger_v1",
-        "migration_v": 2
+        "migration_v": 2,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361556.1422489,
+        "revalidated": "failed",
+        "revalidation_reason": "weak_family_relevance",
+        "revalidated_at_epoch": 1790361556.1422489
       },
       {
         "domain": "github.com",
@@ -11031,10 +11318,7 @@
         "weak_markers": [
           "automation"
         ],
-        "signal_types": [
-          "COMPETITION",
-          "PAID_DEMAND"
-        ],
+        "signal_types": [],
         "last_seen_epoch": 1790009508.0581603,
         "first_seen_epoch": 1789955806.3522348,
         "seen_count": 2,
@@ -11043,7 +11327,12 @@
         "tagger_v": 1,
         "gate_eligible": false,
         "quarantine_reason": "legacy_unverified_tagger_v1",
-        "migration_v": 2
+        "migration_v": 2,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361556.1422489,
+        "revalidated": "failed",
+        "revalidation_reason": "no_demand_signal",
+        "revalidated_at_epoch": 1790361556.1422489
       },
       {
         "domain": "github.com",
@@ -11069,7 +11358,13 @@
         "tagger_v": 1,
         "gate_eligible": false,
         "quarantine_reason": "legacy_unverified_tagger_v1",
-        "migration_v": 2
+        "migration_v": 2,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361556.1422489,
+        "attribution_reverted": "family_mismatch",
+        "revalidated": "failed",
+        "revalidation_reason": "family_mismatch",
+        "revalidated_at_epoch": 1790361556.1422489
       },
       {
         "domain": "github.com",
@@ -11099,7 +11394,12 @@
         "tagger_v": 1,
         "gate_eligible": false,
         "quarantine_reason": "legacy_unverified_tagger_v1",
-        "migration_v": 2
+        "migration_v": 2,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361947.2634947,
+        "revalidated": "failed",
+        "revalidation_reason": "no_family",
+        "revalidated_at_epoch": 1790361947.2634947
       },
       {
         "domain": "github.com",
@@ -11114,10 +11414,7 @@
         "weak_markers": [
           "automation"
         ],
-        "signal_types": [
-          "PAID_DEMAND",
-          "COMPETITION"
-        ],
+        "signal_types": [],
         "last_seen_epoch": 1789967997.1343431,
         "first_seen_epoch": 1789967997.1343431,
         "seen_count": 1,
@@ -11126,16 +11423,21 @@
         "tagger_v": 1,
         "gate_eligible": false,
         "quarantine_reason": "legacy_unverified_tagger_v1",
-        "migration_v": 2
+        "migration_v": 2,
+        "revalidation_attempts": 1,
+        "revalidation_last_attempt_epoch": 1790361947.2634947,
+        "revalidated": "failed",
+        "revalidation_reason": "no_demand_signal",
+        "revalidated_at_epoch": 1790361947.2634947
       }
     ],
     "evidence_integrity": {
       "schema_v": 2,
       "tagger_v": 3,
-      "rows": 66,
+      "rows": 72,
       "changed": 2,
-      "quarantined": 62,
-      "rejected_current": 33
+      "quarantined": 63,
+      "rejected_current": 40
     },
     "active_thesis": null,
     "thesis_history": [
@@ -12061,6 +12363,18 @@
       }
     ],
     "problem_performance": {
+      "manual_data_entry:manual_data_entry": {
+        "family": "manual_data_entry",
+        "last_domains": 6,
+        "last_strong_domains": 0,
+        "last_gap_score": 35,
+        "last_signal_types": [
+          "PAIN"
+        ],
+        "qualified": false,
+        "no_progress_streak": 0,
+        "near_gate": false
+      },
       "workflow_automation:automation": {
         "family": "workflow_automation",
         "last_domains": 1,
@@ -12112,16 +12426,6 @@
         "last_signal_types": [],
         "qualified": false,
         "no_progress_streak": 1,
-        "near_gate": false
-      },
-      "manual_data_entry:manual_data_entry": {
-        "family": "manual_data_entry",
-        "last_domains": 1,
-        "last_strong_domains": 0,
-        "last_gap_score": 0,
-        "last_signal_types": [],
-        "qualified": false,
-        "no_progress_streak": 0,
         "near_gate": false
       },
       "spreadsheet_process:small_operations_teams:turn_recurring_spreadsheet_work_into_reliable_reports": {
@@ -12219,11 +12523,18 @@
           ]
         },
         {
-          "query": "CRM follow up workflow need help manual workaround",
+          "query": "appointment admin software need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "lead_ops",
-          "family": "crm_lead_ops"
+          "sector": "local_business_ops",
+          "family": "local_business_tools"
+        },
+        {
+          "query": "productivity SaaS workflow need help manual workaround",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
           "query": "recurring reporting software need help manual workaround",
@@ -12233,18 +12544,11 @@
           "family": "compliance_tools"
         },
         {
-          "query": "AI tool workflow business need help manual workaround",
+          "query": "customer support automation need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "ai_tools",
-          "family": "ai_tools"
-        },
-        {
-          "query": "ecommerce operations software need help manual workaround",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "customer_support",
+          "family": "customer_support"
         },
         {
           "query": "analytics SaaS small business need help manual workaround",
@@ -12254,11 +12558,11 @@
           "family": "analytics_tools"
         },
         {
-          "query": "SEO automation tool need help manual workaround",
+          "query": "education workflow SaaS need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "seo_marketing",
-          "family": "marketing_seo"
+          "sector": "education_tools",
+          "family": "education_tools"
         }
       ],
       "executed": [
@@ -12295,11 +12599,19 @@
           "agent_search_completed": true
         },
         {
-          "query": "CRM follow up workflow need help manual workaround",
+          "query": "appointment admin software need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "lead_ops",
-          "family": "crm_lead_ops",
+          "sector": "local_business_ops",
+          "family": "local_business_tools",
+          "agent_search_completed": true
+        },
+        {
+          "query": "productivity SaaS workflow need help manual workaround",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "productivity",
+          "family": "productivity_tools",
           "agent_search_completed": true
         },
         {
@@ -12311,19 +12623,11 @@
           "agent_search_completed": true
         },
         {
-          "query": "AI tool workflow business need help manual workaround",
+          "query": "customer support automation need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "ai_tools",
-          "family": "ai_tools",
-          "agent_search_completed": true
-        },
-        {
-          "query": "ecommerce operations software need help manual workaround",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools",
+          "sector": "customer_support",
+          "family": "customer_support",
           "agent_search_completed": true
         },
         {
@@ -12335,11 +12639,11 @@
           "agent_search_completed": true
         },
         {
-          "query": "SEO automation tool need help manual workaround",
+          "query": "education workflow SaaS need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "seo_marketing",
-          "family": "marketing_seo",
+          "sector": "education_tools",
+          "family": "education_tools",
           "agent_search_completed": true
         }
       ]
@@ -12347,7 +12651,7 @@
     "venture_metrics": {},
     "outcome_control": {
       "schema_v": 1,
-      "cycle": 347,
+      "cycle": 355,
       "mode": "external_results_only",
       "wins": [],
       "new_wins": [],
@@ -12394,7 +12698,7 @@
           "proof": {
             "wins": [],
             "new_wins": [],
-            "cycle": 347
+            "cycle": 355
           },
           "next_action": "Do not add features. Spend the next cycle only on peer 3/3 or the active thesis gate/missing evidence."
         }
@@ -12404,62 +12708,6 @@
       "rule": "A version, scan, candidate, build, or internal score is not a result by itself."
     },
     "outcome_history": [
-      {
-        "cycle": 326,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 327,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 328,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 329,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 330,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 331,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 332,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
       {
         "cycle": 333,
         "overall_status": "WORKING",
@@ -12563,7 +12811,63 @@
         "market_status": "PURSUE"
       },
       {
-        "cycle": 347,
+        "cycle": 348,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 349,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 350,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 351,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 352,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 353,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 354,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 355,
         "overall_status": "WORKING",
         "wins": [],
         "new_wins": [],
@@ -12575,20 +12879,19 @@
       "enabled": true,
       "mode": "passive",
       "every_cycles": 6,
-      "last_scan_utc": "2026-09-25T12:55:18.366430+00:00",
+      "last_scan_utc": "2026-09-25T19:01:20.276210+00:00",
       "last_error": null,
       "last_summary": {
-        "search_results_seen": 33,
+        "search_results_seen": 28,
         "source_counts": {
-          "hn-algolia-routed": 15,
-          "github-issues-routed": 12,
-          "bing-rss-free": 5,
-          "github-issues-routed-declared-endpoint": 1
+          "hn-algolia-routed": 16,
+          "github-issues-routed": 10,
+          "bing-rss-free": 2
         },
-        "machine_like_results": 9,
-        "registry_checks": 9,
-        "known_space_filtered": 0,
-        "signals_returned": 9,
+        "machine_like_results": 8,
+        "registry_checks": 8,
+        "known_space_filtered": 1,
+        "signals_returned": 7,
         "registry_candidates": 12,
         "registry_candidate_sources": {
           "global_a2a_registry": 12
@@ -12596,19 +12899,14 @@
         "registry_candidate_errors": 0,
         "tiza_candidates": 0,
         "tiza_candidate_sources": {},
-        "tiza_candidate_errors": 1,
-        "tiza_attempted": true,
-        "tiza_skipped": false,
+        "tiza_candidate_errors": 0,
+        "tiza_attempted": false,
+        "tiza_skipped": true,
         "tiza_status": "backoff",
         "tiza_consecutive_failures": 3,
         "tiza_next_retry_cycle": 360,
-        "tiza_error_samples": [
-          {
-            "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)",
-            "query": ""
-          }
-        ],
-        "interesting": 5,
+        "tiza_error_samples": [],
+        "interesting": 6,
         "high_interest": 3,
         "private_candidates": 24,
         "private_reobserved": 7,
@@ -12617,8 +12915,8 @@
         "eligible_candidates": 0,
         "high_interest_eligible": 0,
         "eligibility_reason_counts": {
-          "below_interview_interest": 10,
-          "indexed_artifact_not_agent_endpoint": 14
+          "below_interview_interest": 9,
+          "indexed_artifact_not_agent_endpoint": 15
         },
         "high_interest_eligibility_reason_counts": {
           "indexed_artifact_not_agent_endpoint": 4
@@ -12661,7 +12959,7 @@
           "bounded_research_only": true,
           "commercial_actions": false,
           "tool_execution_requested": false,
-          "discovery_index_tool_called": true
+          "discovery_index_tool_called": false
         },
         "scan_safety": {
           "target_http_requests": false,
@@ -12688,25 +12986,25 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-25T16:40:11.572654+00:00",
-    "neo_version": "0.99.11",
+    "timestamp_utc": "2026-09-25T19:04:10.724362+00:00",
+    "neo_version": "0.99.12",
     "status": "SELECT",
     "next_gate": "SELECT: raccogli evidenza convergente e prepara un candidato testabile.",
-    "valid_external_answers": 12,
-    "web_source_count": 23,
-    "evidence_scout_count": 11,
+    "valid_external_answers": 11,
+    "web_source_count": 35,
+    "evidence_scout_count": 20,
     "search_strategy": {
       "mode": "evidence_integrity_query_budget",
       "entropy_source": "system_random",
       "queries": [
         "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
         "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
-        "CRM follow up workflow need help manual workaround",
+        "appointment admin software need help manual workaround",
+        "productivity SaaS workflow need help manual workaround",
         "recurring reporting software need help manual workaround",
-        "AI tool workflow business need help manual workaround",
-        "ecommerce operations software need help manual workaround",
+        "customer support automation need help manual workaround",
         "analytics SaaS small business need help manual workaround",
-        "SEO automation tool need help manual workaround"
+        "education workflow SaaS need help manual workaround"
       ],
       "query_plan": [
         {
@@ -12740,11 +13038,18 @@
           ]
         },
         {
-          "query": "CRM follow up workflow need help manual workaround",
+          "query": "appointment admin software need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "lead_ops",
-          "family": "crm_lead_ops"
+          "sector": "local_business_ops",
+          "family": "local_business_tools"
+        },
+        {
+          "query": "productivity SaaS workflow need help manual workaround",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
           "query": "recurring reporting software need help manual workaround",
@@ -12754,18 +13059,11 @@
           "family": "compliance_tools"
         },
         {
-          "query": "AI tool workflow business need help manual workaround",
+          "query": "customer support automation need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "ai_tools",
-          "family": "ai_tools"
-        },
-        {
-          "query": "ecommerce operations software need help manual workaround",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "customer_support",
+          "family": "customer_support"
         },
         {
           "query": "analytics SaaS small business need help manual workaround",
@@ -12775,11 +13073,11 @@
           "family": "analytics_tools"
         },
         {
-          "query": "SEO automation tool need help manual workaround",
+          "query": "education workflow SaaS need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "seo_marketing",
-          "family": "marketing_seo"
+          "sector": "education_tools",
+          "family": "education_tools"
         }
       ],
       "query_budget": {
@@ -12788,34 +13086,34 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "lead_ops",
+        "local_business_ops",
+        "productivity",
         "reporting_compliance",
-        "ai_tools",
-        "ecommerce_ops",
+        "customer_support",
         "data_analytics",
-        "seo_marketing"
+        "education_tools"
       ],
       "sector_families": {
-        "lead_ops": "crm_lead_ops",
+        "local_business_ops": "local_business_tools",
+        "productivity": "productivity_tools",
         "reporting_compliance": "compliance_tools",
-        "ai_tools": "ai_tools",
-        "ecommerce_ops": "ecommerce_tools",
+        "customer_support": "customer_support",
         "data_analytics": "analytics_tools",
-        "seo_marketing": "marketing_seo"
+        "education_tools": "education_tools"
       },
       "recent_sector_memory": [
-        "small_business_admin",
-        "integration_api",
-        "hr_ops",
-        "productivity",
-        "data_cleanup",
-        "data_analytics",
         "lead_ops",
-        "reporting_compliance",
+        "website_quality",
+        "document_ops",
         "ai_tools",
-        "ecommerce_ops",
         "data_analytics",
-        "seo_marketing"
+        "integration_api",
+        "local_business_ops",
+        "productivity",
+        "reporting_compliance",
+        "customer_support",
+        "data_analytics",
+        "education_tools"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 6,
@@ -12926,6 +13224,21 @@
         "last_signal_types": [],
         "no_progress_streak": 1
       },
+      "manual_data_entry": {
+        "score": 95,
+        "observations": 1,
+        "best_gap_score": 70,
+        "qualified_hits": 0,
+        "last_gap_score": 70,
+        "last_domains": 7,
+        "last_strong_domains": 1,
+        "last_signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "no_progress_streak": 0
+      },
       "cybersecurity_tools": {
         "score": 0,
         "observations": 1,
@@ -12992,20 +13305,6 @@
         "last_signal_types": [],
         "no_progress_streak": 1
       },
-      "manual_data_entry": {
-        "score": 85,
-        "observations": 1,
-        "best_gap_score": 70,
-        "qualified_hits": 0,
-        "last_gap_score": 70,
-        "last_domains": 2,
-        "last_strong_domains": 1,
-        "last_signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "no_progress_streak": 0
-      },
       "analytics_tools": {
         "score": 0,
         "observations": 1,
@@ -13066,36 +13365,66 @@
     "qualified_problem_keys": [],
     "evidence_schema_v": 2,
     "tagger_v": 3,
-    "quarantined_evidence_items": 62,
+    "quarantined_evidence_items": 63,
     "rejected_current_results": [
       {
-        "reason": "no_family",
-        "url": "https://robertsdotpm.github.io/_static/tiddlyinstall.html",
-        "title": "Show HN: TiddlyInstall – Single HTML file that makes cross-platform installers",
+        "reason": "weak_family_relevance",
+        "url": "https://news.ycombinator.com/item?id=48238426",
+        "title": "Tell HN: The Threat to US Citizen's ID / Voting Is Private Services",
         "query_role": "discovery"
       },
       {
         "reason": "weak_family_relevance",
-        "url": "https://turnpanel.com",
-        "title": "Show HN: Turnpanel is a local first AI workspace",
+        "url": "https://news.ycombinator.com/item?id=47385090",
+        "title": "Zirco.ai – AI employee for dental front desk operations",
         "query_role": "discovery"
       },
       {
-        "reason": "no_family",
-        "url": "https://kaflow-search.whsoul-tools.com/",
-        "title": "Show HN: Kaflow Search – A desktop tool for locally indexed Kafka message search",
+        "reason": "weak_family_relevance",
+        "url": "https://github.com/StellarEdgeServices/otterquote-platform/issues/2121",
+        "title": "[PROJECT] Homeowner paid funnel: the plan checklist (Arm F first; realtor test slotted)",
         "query_role": "discovery"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://de.wikipedia.org/wiki/Customer-Relationship-Management",
-        "title": "Customer-Relationship-Management – Wikipedia",
+        "reason": "weak_family_relevance",
+        "url": "https://github.com/cipherhq/waaiio/issues/401",
+        "title": "Phase 3: Staging E2E test matrix — staging.waaiio.com + WhatsApp +1 240-471-2139",
         "query_role": "discovery"
       },
       {
         "reason": "no_demand_signal",
-        "url": "https://crm.de/",
-        "title": "Startseite - CRM - Centrum für Reisemedizin",
+        "url": "https://simplybook.me/en/",
+        "title": "SimplyBook.me - Free Appointment Booking System",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.startupsonx.com/",
+        "title": "Show HN: I built a directory for discovering startups shared on X",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.businessinsider.com/meta-cto-andrew-bosworth-ai-gains-work-2026-8",
+        "title": "Meta CTO says employees should use AI productivity gains to do more work",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://news.ycombinator.com/item?id=49104392",
+        "title": "How to get more coding productivity with LLMs",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.reddit.com/r/SaaS/comments/1mhvc2k/what_is_the_most_useful_productivity_saas_that/",
+        "title": "r/SaaS on Reddit: What is the most useful productivity SaaS that you use to unlock your potential?",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.cloudfuze.com/enhance-your-teams-productivity-with-saas/",
+        "title": "Top 5 Ways to Enhance Your Team's Productivity with SaaS",
         "query_role": "discovery"
       },
       {
@@ -13105,45 +13434,57 @@
         "query_role": "discovery"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://www.linguee.de/englisch-deutsch/uebersetzung/recurring.html",
-        "title": "recurring - Deutsch-Übersetzung – Linguee Wörterbuch",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://www.dict.cc/?s=recurring",
-        "title": "recurring | Übersetzung Englisch-Deutsch - dict.cc",
+        "reason": "github_noise",
+        "url": "https://github.com/Oleksii-debug/ChatGPT-Autopilot-ExtensionChatGPT-Autopilot-Extension/issues/150",
+        "title": "AUTOPILOT SWARM LIVE DISPATCH — auditors, claims, workers",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://tancky.io/",
-        "title": "Show HN: I built a tool to combine separate photos into one scene using AI",
+        "url": "https://github.com/microsoft/aspire/issues/18232",
+        "title": "📈 CI Daily Pulse",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://rushshift.vercel.app",
-        "title": "RushShift – Offline AI desktop tool to search local B-roll archives by prompt",
+        "url": "https://help.upguard.com/en/articles/4988051-what-are-recurring-reports",
+        "title": "What are recurring reports?",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://wave.subworkflow.ai/",
-        "title": "Show HN: Wave – Layered gradient wave backgrounds using Three.js and shaders",
+        "url": "https://www.tpximpact.com/knowledge-hub/blogs/tech/regularly-recurring-reporting-panics-guide",
+        "title": "A guide to Regularly Recurring Reporting Panics - TPXimpact",
         "query_role": "discovery"
       },
       {
-        "reason": "weak_family_relevance",
-        "url": "https://www.ionos.de/digitalguide/online-marketing/verkaufen-im-internet/e-commerce/",
-        "title": "E-Commerce: Definition & Erklärung - IONOS",
+        "reason": "no_family",
+        "url": "https://jade.email/",
+        "title": "Show HN: Jade Email. Unlimited emails for your domain plus AI Agent support",
         "query_role": "discovery"
       },
       {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/E-commerce",
-        "title": "E-commerce - Wikipedia",
+        "reason": "no_demand_signal",
+        "url": "https://news.ycombinator.com/item?id=49760615",
+        "title": "Show HN: Prohibition of Nuclear Launch Automation",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://cactuscompute.com/needle",
+        "title": "Show HN: Cactus Needle 3: 8-29MB automation models can match DeepSeek V4 Flash",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://support.microsoft.com/de-de/",
+        "title": "Microsoft-Support",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://support.apple.com/",
+        "title": "Official Apple Support",
         "query_role": "discovery"
       },
       {
@@ -13165,46 +13506,58 @@
         "query_role": "discovery"
       },
       {
-        "reason": "no_family",
-        "url": "https://360suite.google.com/",
-        "title": "Google Analytics",
+        "reason": "weak_family_relevance",
+        "url": "https://www.reddit.com/r/SaaS/comments/1piy6lq/what_are_you_all_currently_using_for_analytics/",
+        "title": "r/SaaS on Reddit: What are you all currently using for analytics?",
         "query_role": "discovery"
       },
       {
         "reason": "no_family",
-        "url": "https://marketingplatform.google.com/about/analytics/",
-        "title": "Analytics Tools & Solutions for Your Business - Google Analytics",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/worktable/worktable-dev/",
-        "title": "Show HN: Worktable, an open-source workspace for you and your agents",
+        "url": "https://www.chargebee.com/blog/web-analytics-tools/",
+        "title": "7 Essential SaaS Analytics Tools For Subscription Businesses",
         "query_role": "discovery"
       },
       {
         "reason": "weak_family_relevance",
-        "url": "https://www.coveragecat.com/",
-        "title": "Launch HN: Coverage Cat (YC S22) – Umbrella insurance via your personal agent",
+        "url": "https://news.ycombinator.com/item?id=49776683",
+        "title": "Karen Nikoghosyan Is Building AI Operating Layers for Multichannel Commerce",
         "query_role": "discovery"
       },
       {
-        "reason": "no_demand_signal",
-        "url": "https://cactuscompute.com/needle",
-        "title": "Show HN: Cactus Needle 3: 8-29MB automation models can match DeepSeek V4 Flash",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.seo-kueche.de/ratgeber/was-ist-seo/",
-        "title": "Was ist SEO? Suchmaschinenoptimierung einfach erklärt",
+        "reason": "no_family",
+        "url": "https://www.bbc.co.uk/news/articles/cq51j10q601o",
+        "title": "White working-class children failed by education system, says inquiry",
         "query_role": "discovery"
       },
       {
         "reason": "noise_domain",
-        "url": "https://de.wikipedia.org/wiki/Suchmaschinenoptimierung",
-        "title": "Suchmaschinenoptimierung – Wikipedia",
+        "url": "https://en.wikipedia.org/wiki/Education",
+        "title": "Education - Wikipedia",
         "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.education.com/",
+        "title": "Education.com | #1 Educational Site for Pre-K to 8th Grade",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "query_irrelevant",
+        "url": "https://github.com/StellarEdgeServices/otterquote-platform/issues/2150",
+        "title": "[PROJECT] Realtor funnel line: 5 funnels + shared partner foundation (D-333)",
+        "query_role": "scout"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/chatmcp/mcpso/issues/1",
+        "title": "Submit Your MCP Servers here",
+        "query_role": "scout"
+      },
+      {
+        "reason": "github_noise",
+        "url": "https://github.com/VictorJimenez3/fable-job-search/issues/43",
+        "title": "📌 Job Radar — master board (every open role, one place)",
+        "query_role": "scout"
       },
       {
         "reason": "github_no_buyer_problem_context",
@@ -13225,6 +13578,24 @@
         "query_role": "scout"
       },
       {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/Uuriko/project-room/issues/266",
+        "title": "Claims board (continued from #11)",
+        "query_role": "scout"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://github.com/microsoft/aspire/issues/18232",
+        "title": "📈 CI Daily Pulse",
+        "query_role": "scout"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/pyatkoff/poisk-turov-test/issues/3419",
+        "title": "AnyTour development coordination — continuation of #2530",
+        "query_role": "scout"
+      },
+      {
         "reason": "weak_family_relevance",
         "url": "https://news.ycombinator.com/item?id=44821522",
         "title": "Show HN: Automating a manual step in RNA design (With a Conflicted Claude Opus)",
@@ -13235,106 +13606,113 @@
         "url": "https://www.exceltutor.pro/",
         "title": "Show HN: 15y Old's AI Assistant Tool Makes Money",
         "query_role": "scout"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://news.ycombinator.com/item?id=41259754",
-        "title": "Launch HN: Manaflow (YC S24) – Automate repetitive office work in tables",
-        "query_role": "scout"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/chesapeakedev/dn",
-        "title": "Show HN: Dn – plan collaboratively, let agents execute",
-        "query_role": "scout"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.moltplace.net",
-        "title": "Show HN: Moltplace – The place where AI agents hire each other and trade skills",
-        "query_role": "scout"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://news.ycombinator.com/item?id=42796885",
-        "title": "Lessons from Stargate AI: Applying Bold Visions to Smaller-Scale",
-        "query_role": "scout"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://news.ycombinator.com/item?id=29638920",
-        "title": "Jobvalley is hiring Software Engineers (Elixir)",
-        "query_role": "scout"
       }
     ],
     "ingestion_diagnostics": {
       "enabled": true,
       "raw_results_by_source": {
-        "bing-rss": 24,
-        "github": 0,
-        "hn": 29,
+        "bing-rss": 10,
+        "brave-search": 14,
+        "github": 16,
+        "hn": 28,
         "stackexchange": 0
       },
       "rejected_by_reason": {
-        "github_no_buyer_problem_context": 3,
+        "github_no_buyer_problem_context": 6,
+        "github_noise": 4,
         "no_demand_signal": 4,
-        "no_family": 13,
-        "noise_domain": 5,
-        "weak_family_relevance": 8
+        "no_family": 19,
+        "noise_domain": 1,
+        "query_irrelevant": 1,
+        "weak_family_relevance": 13
       },
       "self_contamination_rejected": 0,
       "rejected_by_source": {
         "bing-rss": {
-          "no_demand_signal": 2,
-          "no_family": 2,
-          "noise_domain": 5,
+          "no_family": 3,
+          "noise_domain": 1
+        },
+        "brave-search": {
+          "no_demand_signal": 1,
+          "no_family": 5,
           "weak_family_relevance": 1
         },
+        "github": {
+          "github_no_buyer_problem_context": 4,
+          "github_noise": 4,
+          "no_family": 2,
+          "query_irrelevant": 1,
+          "weak_family_relevance": 3
+        },
         "hn": {
-          "github_no_buyer_problem_context": 3,
-          "no_demand_signal": 2,
-          "no_family": 11,
-          "weak_family_relevance": 7
+          "github_no_buyer_problem_context": 2,
+          "no_demand_signal": 3,
+          "no_family": 9,
+          "weak_family_relevance": 9
         }
       },
       "rejected_by_query_class": {
         "explore": {
-          "github_no_buyer_problem_context": 1,
+          "github_noise": 1,
           "no_demand_signal": 3,
-          "no_family": 9,
-          "noise_domain": 5,
-          "weak_family_relevance": 5
+          "no_family": 15,
+          "noise_domain": 1,
+          "weak_family_relevance": 9
         },
         "scout": {
-          "github_no_buyer_problem_context": 2,
+          "github_no_buyer_problem_context": 6,
+          "github_noise": 3,
           "no_demand_signal": 1,
           "no_family": 4,
-          "weak_family_relevance": 3
+          "query_irrelevant": 1,
+          "weak_family_relevance": 4
         }
       },
       "query_relevance_pass_by_source": {
-        "bing-rss": 10,
-        "github": 0,
-        "hn": 13,
+        "bing-rss": 4,
+        "brave-search": 13,
+        "github": 4,
+        "hn": 14,
         "stackexchange": 0
       },
       "query_relevance_pass_by_source_and_class": {
         "bing-rss": {
-          "explore": 10
+          "explore": 4
+        },
+        "brave-search": {
+          "convergence": 6,
+          "explore": 7
+        },
+        "github": {
+          "explore": 4
         },
         "hn": {
-          "explore": 13
+          "explore": 14
         }
       },
       "observed_candidates_purged": 0,
       "observed_candidates_purged_by_reason": {},
-      "new_signal_rows": 0,
-      "new_signal_rows_by_source": {},
-      "new_signal_rows_by_query_class": {},
+      "new_signal_rows": 5,
+      "new_signal_rows_by_source": {
+        "brave-search": 5
+      },
+      "new_signal_rows_by_query_class": {
+        "convergence": 5
+      },
+      "new_signal_rows_by_provider": {
+        "brave": 5
+      },
+      "search_provider": {
+        "name": "brave",
+        "calls_cycle": 8,
+        "calls_day": 8,
+        "errors": 3,
+        "fallbacks": 3
+      },
       "revalidation": {
-        "attempted": 3,
+        "attempted": 0,
         "promoted": 0,
-        "failed": 3,
+        "failed": 0,
         "unreachable": 0
       },
       "diagnostic_errors": 0
@@ -13353,6 +13731,43 @@
         "quarantined_rows": 17,
         "signal_types": [],
         "domains": []
+      },
+      "manual_data_entry:general": {
+        "family": "manual_data_entry",
+        "gate_eligible": false,
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 0,
+        "independent_domains": 0,
+        "fresh_independent_domains": 0,
+        "strong_commercial_domains": 0,
+        "disconfirm_domains": 0,
+        "quarantined_rows": 1,
+        "signal_types": [],
+        "domains": []
+      },
+      "manual_data_entry:manual_data_entry": {
+        "family": "manual_data_entry",
+        "gate_eligible": true,
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 35,
+        "independent_domains": 6,
+        "fresh_independent_domains": 6,
+        "strong_commercial_domains": 0,
+        "disconfirm_domains": 0,
+        "quarantined_rows": 0,
+        "signal_types": [
+          "PAIN"
+        ],
+        "domains": [
+          "artsyltech.com",
+          "cgtech.com.au",
+          "github.com",
+          "katprotech.com",
+          "portagebay.com",
+          "powerfulplatform.net"
+        ]
       },
       "cybersecurity_tools:general": {
         "family": "cybersecurity_tools",
@@ -13500,22 +13915,6 @@
         "quarantined_rows": 4,
         "signal_types": [],
         "domains": []
-      },
-      "manual_data_entry:manual_data_entry": {
-        "family": "manual_data_entry",
-        "gate_eligible": true,
-        "qualified": false,
-        "commercially_actionable": false,
-        "gap_score": 0,
-        "independent_domains": 1,
-        "fresh_independent_domains": 1,
-        "strong_commercial_domains": 0,
-        "disconfirm_domains": 0,
-        "quarantined_rows": 0,
-        "signal_types": [],
-        "domains": [
-          "github.com"
-        ]
       },
       "spreadsheet_process:small_operations_teams:turn_recurring_spreadsheet_work_into_reliable_reports": {
         "family": "spreadsheet_process",
@@ -13672,6 +14071,89 @@
           }
         ]
       },
+      "manual_data_entry": {
+        "qualified": false,
+        "commercially_actionable": true,
+        "gap_score": 70,
+        "independent_domains": 7,
+        "strong_commercial_domains": 1,
+        "signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "domains": [
+          "artsyltech.com",
+          "cgtech.com.au",
+          "github.com",
+          "katprotech.com",
+          "portagebay.com",
+          "powerfulplatform.net",
+          "remoteok.com"
+        ],
+        "signals": [
+          {
+            "domain": "remoteok.com",
+            "source": "remoteok-api",
+            "title": "Data Entry Administrator",
+            "url": "https://remoteok.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
+            "signal_types": [
+              "BUY_INTENT",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "parseur.com",
+            "source": "bing-rss-free",
+            "title": "Manual Data Entry - Challenges and solutions in 2026 - Parseur",
+            "url": "https://parseur.com/blog/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM",
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "itechdata.ai",
+            "source": "bing-rss-free",
+            "title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
+            "url": "https://itechdata.ai/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM",
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "jotform.com",
+            "source": "bing-rss-free",
+            "title": "Understanding manual data entry - Jotform Blog",
+            "url": "https://jotform.com/blog/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM",
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "docuclipper.com",
+            "source": "bing-rss-free",
+            "title": "Manual vs Automated Data Entry: Pros, Cons & How to Choose",
+            "url": "https://docuclipper.com/blog/manual-data-entry-vs-automated-data-entry",
+            "signal_types": [
+              "DISCONFIRM",
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "docuclipper.com",
+            "source": "bing-rss-free",
+            "title": "Manual Data Entry: Challenges, Costs & How to Automate",
+            "url": "https://docuclipper.com/blog/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM",
+              "PAIN"
+            ]
+          }
+        ]
+      },
       "cybersecurity_tools": {
         "qualified": false,
         "commercially_actionable": false,
@@ -13704,9 +14186,7 @@
             "source": "github-issues",
             "title": "Aegis blog draft — Your AI Agent Can Become Malware’s Privilege Escalation Path",
             "url": "https://github.com/MaximumJusticeCybersecurity/mjc-site/issues/164",
-            "signal_types": [
-              "COMPETITION"
-            ]
+            "signal_types": []
           }
         ]
       },
@@ -13740,10 +14220,7 @@
             "source": "github-issues",
             "title": "[ PARENT ] X-Boundaries Automation Programme",
             "url": "https://github.com/x-boundaries/automation/issues/117",
-            "signal_types": [
-              "COMPETITION",
-              "PAID_DEMAND"
-            ]
+            "signal_types": []
           }
         ]
       },
@@ -13842,83 +14319,6 @@
             "url": "https://wingman.actor/",
             "signal_types": [
               "DISCONFIRM"
-            ]
-          }
-        ]
-      },
-      "manual_data_entry": {
-        "qualified": false,
-        "commercially_actionable": true,
-        "gap_score": 70,
-        "independent_domains": 2,
-        "strong_commercial_domains": 1,
-        "signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "domains": [
-          "github.com",
-          "remoteok.com"
-        ],
-        "signals": [
-          {
-            "domain": "remoteok.com",
-            "source": "remoteok-api",
-            "title": "Data Entry Administrator",
-            "url": "https://remoteok.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
-            "signal_types": [
-              "BUY_INTENT",
-              "PAID_DEMAND"
-            ]
-          },
-          {
-            "domain": "parseur.com",
-            "source": "bing-rss-free",
-            "title": "Manual Data Entry - Challenges and solutions in 2026 - Parseur",
-            "url": "https://parseur.com/blog/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM",
-              "PAIN"
-            ]
-          },
-          {
-            "domain": "itechdata.ai",
-            "source": "bing-rss-free",
-            "title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
-            "url": "https://itechdata.ai/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM",
-              "PAIN"
-            ]
-          },
-          {
-            "domain": "jotform.com",
-            "source": "bing-rss-free",
-            "title": "Understanding manual data entry - Jotform Blog",
-            "url": "https://jotform.com/blog/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM",
-              "PAIN"
-            ]
-          },
-          {
-            "domain": "docuclipper.com",
-            "source": "bing-rss-free",
-            "title": "Manual vs Automated Data Entry: Pros, Cons & How to Choose",
-            "url": "https://docuclipper.com/blog/manual-data-entry-vs-automated-data-entry",
-            "signal_types": [
-              "DISCONFIRM",
-              "PAIN"
-            ]
-          },
-          {
-            "domain": "docuclipper.com",
-            "source": "bing-rss-free",
-            "title": "Manual Data Entry: Challenges, Costs & How to Automate",
-            "url": "https://docuclipper.com/blog/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM",
-              "PAIN"
             ]
           }
         ]
@@ -14305,6 +14705,18 @@
       }
     ],
     "problem_performance": {
+      "manual_data_entry:manual_data_entry": {
+        "family": "manual_data_entry",
+        "last_domains": 6,
+        "last_strong_domains": 0,
+        "last_gap_score": 35,
+        "last_signal_types": [
+          "PAIN"
+        ],
+        "qualified": false,
+        "no_progress_streak": 0,
+        "near_gate": false
+      },
       "workflow_automation:automation": {
         "family": "workflow_automation",
         "last_domains": 1,
@@ -14356,16 +14768,6 @@
         "last_signal_types": [],
         "qualified": false,
         "no_progress_streak": 1,
-        "near_gate": false
-      },
-      "manual_data_entry:manual_data_entry": {
-        "family": "manual_data_entry",
-        "last_domains": 1,
-        "last_strong_domains": 0,
-        "last_gap_score": 0,
-        "last_signal_types": [],
-        "qualified": false,
-        "no_progress_streak": 0,
         "near_gate": false
       },
       "spreadsheet_process:small_operations_teams:turn_recurring_spreadsheet_work_into_reliable_reports": {
@@ -14432,13 +14834,114 @@
     "evidence_integrity": {
       "schema_v": 2,
       "tagger_v": 3,
-      "rows": 66,
+      "rows": 72,
       "changed": 2,
-      "quarantined": 62,
-      "rejected_current": 33
+      "quarantined": 63,
+      "rejected_current": 40
     },
     "evidence_contract_schema_v": 1,
-    "observed_pain_candidates": [],
+    "observed_pain_candidates": [
+      {
+        "hypothesis_schema_v": 7,
+        "family": "manual_data_entry",
+        "customer": "operations teams",
+        "job": "reduce repetitive manual work around manual data entry",
+        "pain": "help identify the processes that create the most friction and design a FileMaker-based solution that reduces manual data entry without disrupting your operations.",
+        "term": "manual data entry",
+        "search_aliases": [
+          "manual data entry",
+          "reduce repetitive manual work around manual data entry"
+        ],
+        "source_url": "https://www.portagebay.com/blog/manual-data-entry-is-slowing-down-your-team/",
+        "source_domain": "www.portagebay.com",
+        "source_title": "Manual Data Entry is Slowing Down Your Team",
+        "source_query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "source_role": "buyer",
+        "relevance_score": 55,
+        "pain_markers": [
+          "manual",
+          "repetitive"
+        ],
+        "buy_markers": [],
+        "paid_markers": [],
+        "evidence_contract": {
+          "schema_v": 1,
+          "actor": "operations teams",
+          "process": "reduce repetitive manual work around manual data entry",
+          "pain": "help identify the processes that create the most friction and design a FileMaker-based solution that reduces manual data entry without disrupting your operations.",
+          "frequency": [],
+          "cost_or_impact": [],
+          "buyer_signal": [],
+          "source_fact": "help identify the processes that create the most friction and design a FileMaker-based solution that reduces manual data entry without disrupting your operations.",
+          "inference": "operations teams may pay to solve reduce repetitive manual work around manual data entry because the source reports an operational pain.",
+          "confidence": 0.72,
+          "context_type": "operational",
+          "source_query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "skeptic": {
+            "passed": true,
+            "reasons": [],
+            "checks": {
+              "source_fact_present": true,
+              "fact_inference_separated": true,
+              "operational_pain_supported": true,
+              "process_grounded_in_source_fact": true,
+              "launch_customer_pain_supported": true
+            }
+          }
+        },
+        "priority": 63
+      },
+      {
+        "hypothesis_schema_v": 7,
+        "family": "manual_data_entry",
+        "customer": "teams experiencing the observed problem",
+        "job": "reduce repetitive manual work around manual data entry",
+        "pain": "By automating repetitive, rule-based tasks, businesses can dramatically reduce manual data entry while improving accuracy, speed, and scalability.",
+        "term": "manual data entry",
+        "search_aliases": [
+          "manual data entry",
+          "reduce repetitive manual work around manual data entry"
+        ],
+        "source_url": "https://www.katprotech.com/using-power-automate-to-reduce-manual-data-entry/",
+        "source_domain": "www.katprotech.com",
+        "source_title": "Using Power Automate to Reduce Manual Data Entry - KATPRO",
+        "source_query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+        "source_role": "buyer",
+        "relevance_score": 55,
+        "pain_markers": [
+          "manual",
+          "repetitive"
+        ],
+        "buy_markers": [],
+        "paid_markers": [],
+        "evidence_contract": {
+          "schema_v": 1,
+          "actor": "teams experiencing the observed problem",
+          "process": "reduce repetitive manual work around manual data entry",
+          "pain": "By automating repetitive, rule-based tasks, businesses can dramatically reduce manual data entry while improving accuracy, speed, and scalability.",
+          "frequency": [],
+          "cost_or_impact": [],
+          "buyer_signal": [],
+          "source_fact": "By automating repetitive, rule-based tasks, businesses can dramatically reduce manual data entry while improving accuracy, speed, and scalability.",
+          "inference": "teams experiencing the observed problem may pay to solve reduce repetitive manual work around manual data entry because the source reports an operational pain.",
+          "confidence": 0.72,
+          "context_type": "operational",
+          "source_query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "skeptic": {
+            "passed": true,
+            "reasons": [],
+            "checks": {
+              "source_fact_present": true,
+              "fact_inference_separated": true,
+              "operational_pain_supported": true,
+              "process_grounded_in_source_fact": true,
+              "launch_customer_pain_supported": true
+            }
+          }
+        },
+        "priority": 63
+      }
+    ],
     "query_execution": {
       "planned": [
         {
@@ -14472,11 +14975,18 @@
           ]
         },
         {
-          "query": "CRM follow up workflow need help manual workaround",
+          "query": "appointment admin software need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "lead_ops",
-          "family": "crm_lead_ops"
+          "sector": "local_business_ops",
+          "family": "local_business_tools"
+        },
+        {
+          "query": "productivity SaaS workflow need help manual workaround",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "productivity",
+          "family": "productivity_tools"
         },
         {
           "query": "recurring reporting software need help manual workaround",
@@ -14486,18 +14996,11 @@
           "family": "compliance_tools"
         },
         {
-          "query": "AI tool workflow business need help manual workaround",
+          "query": "customer support automation need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "ai_tools",
-          "family": "ai_tools"
-        },
-        {
-          "query": "ecommerce operations software need help manual workaround",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools"
+          "sector": "customer_support",
+          "family": "customer_support"
         },
         {
           "query": "analytics SaaS small business need help manual workaround",
@@ -14507,11 +15010,11 @@
           "family": "analytics_tools"
         },
         {
-          "query": "SEO automation tool need help manual workaround",
+          "query": "education workflow SaaS need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "seo_marketing",
-          "family": "marketing_seo"
+          "sector": "education_tools",
+          "family": "education_tools"
         }
       ],
       "executed": [
@@ -14548,11 +15051,19 @@
           "agent_search_completed": true
         },
         {
-          "query": "CRM follow up workflow need help manual workaround",
+          "query": "appointment admin software need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "lead_ops",
-          "family": "crm_lead_ops",
+          "sector": "local_business_ops",
+          "family": "local_business_tools",
+          "agent_search_completed": true
+        },
+        {
+          "query": "productivity SaaS workflow need help manual workaround",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "productivity",
+          "family": "productivity_tools",
           "agent_search_completed": true
         },
         {
@@ -14564,19 +15075,11 @@
           "agent_search_completed": true
         },
         {
-          "query": "AI tool workflow business need help manual workaround",
+          "query": "customer support automation need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "ai_tools",
-          "family": "ai_tools",
-          "agent_search_completed": true
-        },
-        {
-          "query": "ecommerce operations software need help manual workaround",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "ecommerce_ops",
-          "family": "ecommerce_tools",
+          "sector": "customer_support",
+          "family": "customer_support",
           "agent_search_completed": true
         },
         {
@@ -14588,11 +15091,11 @@
           "agent_search_completed": true
         },
         {
-          "query": "SEO automation tool need help manual workaround",
+          "query": "education workflow SaaS need help manual workaround",
           "class": "explore",
           "role": "discovery",
-          "sector": "seo_marketing",
-          "family": "marketing_seo",
+          "sector": "education_tools",
+          "family": "education_tools",
           "agent_search_completed": true
         }
       ]
@@ -14616,23 +15119,23 @@
     "agent_trust_top": [
       {
         "agent": "The Korova Milk Bar",
-        "observations": 389,
-        "accepted": 389,
-        "transport_success": 389,
-        "relevance_total": 32050.0,
-        "avg_relevance": 82.39,
+        "observations": 432,
+        "accepted": 432,
+        "transport_success": 432,
+        "relevance_total": 35650.0,
+        "avg_relevance": 82.52,
         "trust": 100.0,
         "stages": {
           "research": {
-            "observations": 387,
-            "accepted": 387,
-            "transport_success": 387,
-            "relevance_total": 31906.0,
-            "avg_relevance": 82.44,
+            "observations": 430,
+            "accepted": 430,
+            "transport_success": 430,
+            "relevance_total": 35506.0,
+            "avg_relevance": 82.57,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:01.386451+00:00"
+            "last_seen_utc": "2026-09-25T19:04:06.996455+00:00"
           },
           "security": {
             "observations": 1,
@@ -14660,15 +15163,15 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:01.386451+00:00"
+        "last_seen_utc": "2026-09-25T19:04:06.996455+00:00"
       },
       {
         "agent": "HORIZON SHIELD KIRA",
-        "observations": 103,
-        "accepted": 103,
-        "transport_success": 103,
-        "relevance_total": 6394.0,
-        "avg_relevance": 62.08,
+        "observations": 104,
+        "accepted": 104,
+        "transport_success": 104,
+        "relevance_total": 6452.0,
+        "avg_relevance": 62.04,
         "trust": 100.0,
         "stages": {
           "research": {
@@ -14694,15 +15197,15 @@
             "last_seen_utc": "2026-09-24T04:10:52.542887+00:00"
           },
           "ui_ux": {
-            "observations": 7,
+            "observations": 8,
             "accepted": 0,
-            "transport_success": 7,
-            "relevance_total": 494.0,
-            "avg_relevance": 70.57,
+            "transport_success": 8,
+            "relevance_total": 552.0,
+            "avg_relevance": 69.0,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "general": {
             "observations": 4,
@@ -14719,7 +15222,7 @@
         "last_stage": "ui_ux",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:16:06.768630+00:00"
+        "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
       },
       {
         "agent": "ToolOracle",
@@ -14959,23 +15462,23 @@
       },
       {
         "agent": "Graph Advocate",
-        "observations": 131,
-        "accepted": 130,
-        "transport_success": 130,
-        "relevance_total": 9234.0,
-        "avg_relevance": 70.49,
+        "observations": 132,
+        "accepted": 131,
+        "transport_success": 131,
+        "relevance_total": 9320.0,
+        "avg_relevance": 70.61,
         "trust": 99.39,
         "stages": {
           "research": {
-            "observations": 18,
+            "observations": 19,
             "accepted": 0,
-            "transport_success": 18,
-            "relevance_total": 1380.0,
-            "avg_relevance": 76.67,
+            "transport_success": 19,
+            "relevance_total": 1466.0,
+            "avg_relevance": 77.16,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "routing/payment/service response rather than domain analysis",
-            "last_seen_utc": "2026-09-25T16:39:46.381166+00:00"
+            "last_seen_utc": "2026-09-25T19:03:51.799227+00:00"
           },
           "business_review": {
             "observations": 1,
@@ -15014,15 +15517,15 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:39:46.381166+00:00"
+        "last_seen_utc": "2026-09-25T19:03:51.799227+00:00"
       },
       {
         "agent": "Magic You Agentic Commerce Lab",
-        "observations": 128,
-        "accepted": 127,
-        "transport_success": 127,
-        "relevance_total": 7442.0,
-        "avg_relevance": 58.14,
+        "observations": 129,
+        "accepted": 128,
+        "transport_success": 128,
+        "relevance_total": 7492.0,
+        "avg_relevance": 58.08,
         "trust": 99.38,
         "stages": {
           "research": {
@@ -15048,15 +15551,15 @@
             "last_seen_utc": "2026-09-20T20:54:28.560570+00:00"
           },
           "ui_ux": {
-            "observations": 6,
+            "observations": 7,
             "accepted": 0,
-            "transport_success": 6,
-            "relevance_total": 318.0,
-            "avg_relevance": 53.0,
+            "transport_success": 7,
+            "relevance_total": 368.0,
+            "avg_relevance": 52.57,
             "trust": 40.0,
             "last_quality_ok": false,
             "last_quality_reason": "insufficient concrete UI/UX content",
-            "last_seen_utc": "2026-09-24T04:26:13.221264+00:00"
+            "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
           },
           "security": {
             "observations": 4,
@@ -15070,41 +15573,41 @@
             "last_seen_utc": "2026-09-24T11:48:12.206618+00:00"
           }
         },
-        "last_stage": "research",
+        "last_stage": "ui_ux",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-24T17:02:27.002301+00:00"
+        "last_seen_utc": "2026-09-25T19:01:05.702118+00:00"
       },
       {
         "agent": "Scry Wallet Intelligence",
-        "observations": 815,
-        "accepted": 807,
-        "transport_success": 807,
-        "relevance_total": 89272.0,
-        "avg_relevance": 109.54,
-        "trust": 99.21,
+        "observations": 870,
+        "accepted": 862,
+        "transport_success": 862,
+        "relevance_total": 95234.0,
+        "avg_relevance": 109.46,
+        "trust": 99.26,
         "stages": {
           "research": {
-            "observations": 805,
-            "accepted": 797,
-            "transport_success": 797,
-            "relevance_total": 88282.0,
-            "avg_relevance": 109.67,
-            "trust": 99.2,
+            "observations": 859,
+            "accepted": 851,
+            "transport_success": 851,
+            "relevance_total": 94136.0,
+            "avg_relevance": 109.59,
+            "trust": 99.25,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "security": {
-            "observations": 8,
-            "accepted": 8,
-            "transport_success": 8,
-            "relevance_total": 842.0,
-            "avg_relevance": 105.25,
+            "observations": 9,
+            "accepted": 9,
+            "transport_success": 9,
+            "relevance_total": 950.0,
+            "avg_relevance": 105.56,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           },
           "ui_ux": {
             "observations": 2,
@@ -15121,27 +15624,27 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       },
       {
         "agent": "Flux · APEX on X1 & Arc",
-        "observations": 490,
-        "accepted": 480,
-        "transport_success": 480,
-        "relevance_total": 57570.0,
-        "avg_relevance": 117.49,
-        "trust": 98.37,
+        "observations": 545,
+        "accepted": 535,
+        "transport_success": 535,
+        "relevance_total": 63996.0,
+        "avg_relevance": 117.42,
+        "trust": 98.53,
         "stages": {
           "research": {
-            "observations": 484,
-            "accepted": 472,
-            "transport_success": 474,
-            "relevance_total": 56906.0,
-            "avg_relevance": 117.57,
-            "trust": 98.1,
+            "observations": 538,
+            "accepted": 526,
+            "transport_success": 528,
+            "relevance_total": 63216.0,
+            "avg_relevance": 117.5,
+            "trust": 98.29,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+            "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
           },
           "ui_ux": {
             "observations": 1,
@@ -15155,21 +15658,21 @@
             "last_seen_utc": "2026-09-24T17:35:17.392978+00:00"
           },
           "security": {
-            "observations": 5,
-            "accepted": 5,
-            "transport_success": 5,
-            "relevance_total": 560.0,
-            "avg_relevance": 112.0,
+            "observations": 6,
+            "accepted": 6,
+            "transport_success": 6,
+            "relevance_total": 676.0,
+            "avg_relevance": 112.67,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for security",
-            "last_seen_utc": "2026-09-25T16:09:29.227868+00:00"
+            "last_seen_utc": "2026-09-25T18:32:35.429567+00:00"
           }
         },
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-25T16:40:06.778245+00:00"
+        "last_seen_utc": "2026-09-25T19:04:07.009466+00:00"
       }
     ],
     "jarvis": {
@@ -15179,7 +15682,7 @@
       "summary": {
         "neo_quality_gate": false,
         "qualified_problem_clusters": 0,
-        "commercial_memory_items": 66,
+        "commercial_memory_items": 72,
         "remote_required": false
       },
       "opportunities": [],
