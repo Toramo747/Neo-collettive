@@ -5049,6 +5049,7 @@ def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str
         body,
         query_role,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+        seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
     )
 
 
@@ -5384,6 +5385,7 @@ def _commercial_evidence_quality(
             return
 
         weak=[t for t in weak_terms if contains_term(context,t)]
+        seller_launch=bool(SELLER_LAUNCH_GUARD_ENABLED and is_launch_title(title))
         signal_types=_demand_signal_type(title,context,query_role)
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
@@ -5410,6 +5412,7 @@ def _commercial_evidence_quality(
         gate_eligible=bool(
             query_role!="disconfirm"
             and "DISCONFIRM" not in signal_types
+            and not seller_launch
             and gate_eligible_problem_key(problem_key)
             and positive
         )
@@ -5420,9 +5423,12 @@ def _commercial_evidence_quality(
             "gate_eligible":gate_eligible,
             "quarantine_reason":None if gate_eligible else (
                 "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
+                else "seller_launch" if seller_launch
                 else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
                 else "nonpositive_signal"
             ),
+            "context_type":"product_launch" if seller_launch else "observed",
+            "signal_reverted":"seller_launch" if seller_launch else None,
             "domain":host,
             "source":source,
             "family":family,
@@ -5479,6 +5485,7 @@ def _commercial_evidence_quality(
         ],
         enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+        seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
     )
 
     index={}
