@@ -82,6 +82,7 @@ from evidence_integrity import (
     generic_web_pain_allowed,
     is_vendor_content,
     is_supply_offer,
+    marker_survives_query_echo,
     gate_eligible_problem_key,
     make_problem_id,
     make_thesis_id,
@@ -482,6 +483,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
             seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
             vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
             web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+            supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+            query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
         )
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
@@ -5083,6 +5086,8 @@ def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
         vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
         web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+        supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+        query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
     )
 
 
@@ -5428,6 +5433,7 @@ def _commercial_evidence_quality(
         weak=[t for t in weak_terms if contains_term(context,t)]
         seller_launch=bool(SELLER_LAUNCH_GUARD_ENABLED and is_launch_title(title))
         vendor_content=bool(VENDOR_CONTENT_GUARD_ENABLED and is_vendor_content(title,body,url,source))
+        supply_offer=bool(SUPPLY_OFFER_GUARD_ENABLED and is_supply_offer(title,body,url,source))
         web_buyer_voice_missing=bool(
             WEB_BUYER_VOICE_GUARD_ENABLED
             and generic_web_source(source)
@@ -5441,6 +5447,9 @@ def _commercial_evidence_quality(
             source=source,
             vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
             web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+            supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+            query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
+            query=query,
         )
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
@@ -5461,7 +5470,16 @@ def _commercial_evidence_quality(
         if thesis_bound and str(meta.get("family") or ""):
             family=str(meta.get("family"))
         positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(signal_types))
-        strong=[t for t in buyer_strong_terms if contains_term(context,t)] if "PAID_DEMAND" in signal_types else []
+        strong=[
+            t for t in buyer_strong_terms
+            if "PAID_DEMAND" in signal_types
+            and contains_term(context,t)
+            and (
+                not QUERY_ECHO_GUARD_ENABLED
+                or not generic_web_source(source)
+                or marker_survives_query_echo(t,title,body,query)
+            )
+        ]
         if structured_paid_source(source,query_role) and "PAID_DEMAND" in signal_types and not strong:
             strong=["structured_job_market"]
         gate_eligible=bool(
@@ -5469,6 +5487,7 @@ def _commercial_evidence_quality(
             and "DISCONFIRM" not in signal_types
             and not seller_launch
             and not vendor_content
+            and not supply_offer
             and not web_buyer_voice_missing
             and gate_eligible_problem_key(problem_key)
             and positive
@@ -5482,12 +5501,13 @@ def _commercial_evidence_quality(
                 "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
                 else "seller_launch" if seller_launch
                 else "vendor_content" if vendor_content
+                else "supply_offer" if supply_offer
                 else "web_buyer_voice_missing" if web_buyer_voice_missing
                 else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
                 else "nonpositive_signal"
             ),
-            "context_type":"product_launch" if seller_launch else "vendor_content" if vendor_content else "observed",
-            "signal_reverted":"seller_launch" if seller_launch else "vendor_content" if vendor_content else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
+            "context_type":"product_launch" if seller_launch else "vendor_content" if vendor_content else "supply_offer" if supply_offer else "observed",
+            "signal_reverted":"seller_launch" if seller_launch else "vendor_content" if vendor_content else "supply_offer" if supply_offer else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
             "domain":host,
             "source":source,
             "family":family,
@@ -7727,6 +7747,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
                 vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
                 web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+                supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+                query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
                 family_match_guard=ATTRIBUTION_FAMILY_GUARD_ENABLED,
                 strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
             )
