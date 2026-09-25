@@ -160,6 +160,7 @@ AUTOPILOT_GOAL = os.getenv(
     "Non effettuare spese, pagamenti, contratti, outreach commerciale, uso di account personali o transazioni senza approvazione umana."
 )
 AUTOPILOT_LOCK = asyncio.Lock()
+SEARCH_PROVIDER_LOCK = asyncio.Lock()
 BRAND_NAME = "MYCELIX"
 BRAND_TAGLINE = "Collective Intelligence Network"
 RUNTIME_PROFILE = load_runtime_profile()
@@ -6512,16 +6513,17 @@ async def free_web_search(query: str, limit: int = 6) -> dict:
     q = " ".join((query or "").strip().split())
     if not q:
         return {"ok": False, "query": q, "results": [], "error": "empty_query"}
-    rows,new_state,meta=await provider_search(
-        q,
-        limit,
-        state=AUTOPILOT_STATE.get("search_provider_state") or {},
-        provider_mode=SEARCH_PROVIDER_MODE,
-        max_calls_cycle=SEARCH_MAX_CALLS_PER_CYCLE,
-        max_calls_day=SEARCH_MAX_CALLS_PER_DAY,
-        timeout_seconds=min(TIMEOUT,6),
-    )
-    AUTOPILOT_STATE["search_provider_state"]=new_state
+    async with SEARCH_PROVIDER_LOCK:
+        rows,new_state,meta=await provider_search(
+            q,
+            limit,
+            state=AUTOPILOT_STATE.get("search_provider_state") or {},
+            provider_mode=SEARCH_PROVIDER_MODE,
+            max_calls_cycle=SEARCH_MAX_CALLS_PER_CYCLE,
+            max_calls_day=SEARCH_MAX_CALLS_PER_DAY,
+            timeout_seconds=min(TIMEOUT,6),
+        )
+        AUTOPILOT_STATE["search_provider_state"]=new_state
     if not meta.get("fallback"):
         safe_rows=[]
         for row in rows:
@@ -9821,6 +9823,10 @@ async def _autopilot_cycle() -> None:
         AUTOPILOT_STATE["running"] = True
         AUTOPILOT_STATE["last_started_utc"] = datetime.now(timezone.utc).isoformat()
         AUTOPILOT_STATE["last_error"] = None
+        AUTOPILOT_STATE["search_provider_state"] = begin_search_provider_cycle(
+            AUTOPILOT_STATE.get("search_provider_state") or {},
+            int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
+        )
         completed=False
         try:
             result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
