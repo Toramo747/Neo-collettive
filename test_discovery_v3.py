@@ -1,6 +1,6 @@
 import unittest
 
-from discovery_v3 import build_evidence_contract, natural_search_seed, observed_pain_candidates, query_relevance, structured_job_relevance
+from discovery_v3 import build_evidence_contract, natural_search_seed, observed_pain_candidates, query_relevance, structured_job_relevance, validate_observed_candidate
 
 
 class DiscoveryV3Tests(unittest.TestCase):
@@ -429,6 +429,101 @@ class DiscoveryV3Tests(unittest.TestCase):
         )
         self.assertFalse(contract["skeptic"]["passed"])
         self.assertIn("process_not_grounded_in_source_fact",contract["skeptic"]["reasons"])
+
+
+    def test_cycle_338_persisted_candidates_all_purge_under_v09910(self):
+        candidates=[
+            {
+                "family":"hr_tools",
+                "pain":"I am specifically looking for a general Windows UI Automation approach rather than a workaround for one particular website.",
+                "source_url":"https://stackoverflow.com/questions/80005249/windows-ui-automation",
+                "source_title":"Windows UI automation",
+                "source_role":"discovery",
+            },
+            {
+                "family":"it_hygiene",
+                "pain":"Mapping from ExcelInventoryItem into InventoryItem, check each field for value change, but that would be manual and tedious.",
+                "source_url":"https://stackoverflow.com/questions/77586043/example",
+                "source_title":"In Java/Spring Boot/JPA/Hibernate, is there a simple mechanism to track entity changes to generate a change report?",
+                "source_role":"discovery",
+            },
+            {
+                "family":"developer_tools",
+                "pain":"My biggest pain point is this: When frontend developers build slick UX in React or Flutter, the real-world plumbing becomes difficult.",
+                "source_url":"https://stackoverflow.com/questions/79899153/example",
+                "source_title":"WordPress as backend -> Flutter or React as the frontend",
+                "source_role":"discovery",
+            },
+            {
+                "family":"workflow_automation",
+                "pain":"Show HN: Automation ROI calculator for repetitive admin workflows",
+                "source_url":"https://tinyopsstudio.com/automation-roi-calculator",
+                "source_title":"Show HN: Automation ROI calculator for repetitive admin workflows",
+                "source_role":"discovery",
+            },
+            {
+                "family":"document_processing",
+                "pain":"But with repetitive tasks, it became annoying for me to switch tabs and navigate to ChatGPT, leaving the Excel document behind.",
+                "source_url":"https://sidenotepro.com",
+                "source_title":"Show HN: SideNote Pro - Native Windows 11 AI beside your work",
+                "source_role":"discovery",
+            },
+        ]
+        results=[
+            validate_observed_candidate(
+                row,
+                reject_self_contamination=True,
+                require_family_in_pain=True,
+                reject_launch=True,
+            )
+            for row in candidates
+        ]
+        self.assertEqual([ok for ok,_ in results],[False]*5)
+        self.assertEqual(
+            [reason for _,reason in results],
+            [
+                "family_term_missing_in_pain",
+                "family_term_missing_in_pain",
+                "family_term_missing_in_pain",
+                "seller_launch",
+                "seller_launch",
+            ],
+        )
+
+    def test_ask_hn_explicit_buyer_pain_stays_valid(self):
+        candidate={
+            "family":"workflow_automation",
+            "pain":"Our operations team has a manual workflow every week and we waste time copying orders between systems.",
+            "source_url":"https://news.ycombinator.com/item?id=123",
+            "source_title":"Ask HN: How are you automating repetitive back-office work?",
+            "source_role":"buyer",
+        }
+        ok,reason=validate_observed_candidate(
+            candidate,
+            reject_self_contamination=True,
+            require_family_in_pain=True,
+            reject_launch=True,
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason,"valid")
+
+    def test_new_observed_launch_is_never_promoted_when_guard_enabled(self):
+        q="small business admin automation need help manual workaround"
+        meta={q.lower():{"family":"workflow_automation","role":"buyer","search_alias_used":"admin automation"}}
+        groups=[{"query":q,"results":[{
+            "title":"Show HN: Automation ROI calculator for repetitive admin workflows",
+            "url":"https://tinyopsstudio.com/automation-roi-calculator",
+            "snippet":"Show HN: Automation ROI calculator for repetitive admin workflows",
+        }]}]
+        self.assertEqual(
+            observed_pain_candidates(
+                groups,meta,limit=5,
+                reject_self_contamination=True,
+                require_family_in_pain=True,
+                reject_seller_launch=True,
+            ),
+            [],
+        )
 
 
 if __name__ == "__main__":
