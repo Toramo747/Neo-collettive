@@ -1,0 +1,76 @@
+name: MYCELIX v0.99.11 validation
+# Branch-only validation; never deploys or merges.
+
+on:
+  push:
+    branches: [mycelix-quarantine-revalidation-v09911]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile changed modules
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py discovery_v3.py evidence_integrity.py ingestion_diagnostics.py quarantine_revalidation.py
+
+      - name: Run full unit suite with network blocked
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import socket
+          import unittest
+
+          def blocked(*args, **kwargs):
+              raise RuntimeError("network disabled during unit tests")
+
+          socket.create_connection = blocked
+          socket.socket.connect = blocked
+
+          suite = unittest.defaultTestLoader.discover(".", pattern="test_*.py")
+          count = suite.countTestCases()
+          print("discovered_tests="+str(count))
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful():
+              raise SystemExit(1)
+          print("all_tests_green="+str(count))
+          PY
+
+      - name: Validate production snapshot quarantine scope
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from collections import Counter
+
+          data=json.load(open("neo_latest_result.json",encoding="utf-8"))
+          rows=(data.get("autopilot") or {}).get("commercial_evidence_memory") or []
+          reasons=Counter(str(row.get("quarantine_reason") or "gate_eligible") for row in rows)
+          gate=[row for row in rows if row.get("gate_eligible")]
+          signaled=[
+              row for row in gate
+              if {"PAIN","BUY_INTENT","PAID_DEMAND"} & set(row.get("signal_types") or [])
+          ]
+          if len(rows)!=65:
+              raise SystemExit("unexpected memory row count: "+str(len(rows)))
+          if reasons.get("legacy_unverified_tagger_v1")!=17:
+              raise SystemExit("unexpected legacy quarantine count: "+str(reasons))
+          if reasons.get("disconfirm")!=33:
+              raise SystemExit("unexpected disconfirm count: "+str(reasons))
+          if len(gate)!=4:
+              raise SystemExit("unexpected gate eligible count: "+str(len(gate)))
+          if len(signaled)!=1 or signaled[0].get("domain")!="remoteok.com":
+              raise SystemExit("unexpected signaled gate rows")
+          print("memory_rows=65")
+          print("legacy_quarantine=17")
+          print("disconfirm_untouched_scope=33")
+          print("gate_eligible=4")
+          print("signaled_gate_rows=1")
+          PY
