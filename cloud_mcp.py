@@ -6497,8 +6497,16 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
         return await paid_market_search(query,meta,limit)
     seed=natural_search_seed(query,meta) or query
     query_class=str(meta.get("class") or "")
+    query_intent=str(meta.get("query_intent") or "pain").strip().lower()
     structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
-    if structured_first:
+    if query_intent=="desire":
+        tasks=[
+            free_web_search(query,max(2,min(limit,6))),
+            _hn_query_search(seed,3),
+            _github_issue_query_search(seed,3),
+            _stackexchange_query_search(seed,3,meta),
+        ]
+    elif structured_first:
         tasks=[
             _hn_query_search(seed,3),
             _github_issue_query_search(seed,3),
