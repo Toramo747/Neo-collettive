@@ -113,6 +113,9 @@ class IngestionDiagnostics:
         self.new_signal_rows_by_source = Counter()
         self.new_signal_rows_by_query_class = Counter()
         self.new_signal_rows_by_provider = Counter()
+        self.rows_by_intent_class = Counter()
+        self.buyer_signals_by_query_intent: dict[str, Counter] = defaultdict(Counter)
+        self.intent_review_sample: list[dict] = []
         self.search_provider = {"name":"bing","calls_cycle":0,"calls_day":0,"errors":0,"fallbacks":0,"fallback_reasons":{}}
         self.revalidation = {"attempted":0,"promoted":0,"failed":0,"unreachable":0}
         self.errors = 0
@@ -173,6 +176,35 @@ class IngestionDiagnostics:
         self.new_signal_rows_by_query_class[qclass] += 1
         self.new_signal_rows_by_provider[provider] += 1
 
+    def record_intent_result(
+        self,
+        intent_class: str,
+        query_intent: str,
+        title: str,
+        url: str,
+        signal_types: list[str] | tuple[str,...] | set[str],
+        source: str,
+    ) -> None:
+        if not self.enabled:
+            return
+        iclass=str(intent_class or "").strip()
+        qintent=str(query_intent or "pain").strip().lower()
+        tags=sorted({str(x) for x in (signal_types or []) if str(x)})
+        if iclass:
+            self.rows_by_intent_class[iclass] += 1
+        for tag in ("BUY_INTENT","PAID_DEMAND"):
+            if tag in tags:
+                self.buyer_signals_by_query_intent[qintent][tag] += 1
+        if len(self.intent_review_sample)<10:
+            self.intent_review_sample.append({
+                "title":str(title or "")[:220],
+                "url":str(url or "")[:700],
+                "source":canonical_source(source),
+                "query_intent":qintent,
+                "intent_class":iclass,
+                "signal_types":tags,
+            })
+
     def set_search_provider(self, payload: dict | None) -> None:
         if not self.enabled or not isinstance(payload,dict):
             return
@@ -227,6 +259,12 @@ class IngestionDiagnostics:
             "new_signal_rows_by_source": dict(sorted(self.new_signal_rows_by_source.items())),
             "new_signal_rows_by_query_class": dict(sorted(self.new_signal_rows_by_query_class.items())),
             "new_signal_rows_by_provider": dict(sorted(self.new_signal_rows_by_provider.items())),
+            "rows_by_intent_class": dict(sorted(self.rows_by_intent_class.items())),
+            "buyer_signals_by_query_intent": {
+                qintent: dict(sorted(counts.items()))
+                for qintent,counts in sorted(self.buyer_signals_by_query_intent.items())
+            },
+            "intent_review_sample": list(self.intent_review_sample),
             "search_provider": dict(self.search_provider),
             "revalidation": dict(self.revalidation),
             "diagnostic_errors": self.errors,
