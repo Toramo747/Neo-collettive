@@ -282,6 +282,49 @@ def is_supply_offer(title: str, body: str, url: str, source: str = "") -> bool:
     return False
 
 
+INTENT_CLASSES = (
+    "feature_gap","solution_search","recommendation","alternative",
+    "switching","paid_replacement","paid_automation",
+)
+
+
+def classify_intent_class(title: str, body: str, url: str = "", source: str = "") -> str:
+    """Classify buyer desire as metadata only; this function never creates a gate signal."""
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    if generic_web_source(source):
+        if is_supply_offer(title,body,url,source) or is_vendor_content(title,body,url,source):
+            return ""
+        if not (buyer_voice_present(title,body) or community_context(url,source)):
+            return ""
+
+    paid_context=contains_any(text,(
+        "we pay","we're paying","we are paying","our subscription","our license",
+        "renewal","budget","will pay","paid job","fixed-price","fixed price",
+    ))
+    replacement=contains_any(text,(
+        "alternative to","alternatives to","switching from","switch from",
+        "replace ","replacing ","moving away from","migrate from","migrating from",
+    ))
+    if replacement and paid_context:
+        return "paid_replacement"
+    if contains_any(text,("switching from","switch from","replace ","replacing ","moving away from","migrate from","migrating from")):
+        return "switching"
+    if contains_any(text,("alternative to","alternatives to")):
+        return "alternative"
+    if (
+        contains_any(text,("budget","will pay","hire someone","need to hire","looking to hire","contractor"))
+        and contains_any(text,("automate","automation","workflow"))
+    ):
+        return "paid_automation"
+    if contains_any(text,("what do you use","any recommendations","recommend a","recommendation for")):
+        return "recommendation"
+    if contains_any(text,("is there a tool","is there an app","looking for software","looking for a tool","looking for an app")):
+        return "solution_search"
+    if contains_any(text,("wish it had","wish there was","missing feature","feature request","would love if")):
+        return "feature_gap"
+    return ""
+
+
 def generic_web_pain_allowed(title: str, body: str, url: str, source: str = "") -> bool:
     if not generic_web_source(source):
         return True
