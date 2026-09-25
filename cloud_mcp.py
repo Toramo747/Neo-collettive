@@ -11,7 +11,7 @@ import time
 import zlib
 import ipaddress
 from datetime import datetime, timezone
-from urllib.parse import urlparse, quote_plus, parse_qs
+from urllib.parse import urlparse, quote_plus, parse_qs, urljoin
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
@@ -29,6 +29,7 @@ from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
 from query_builder import breakout_queries as build_breakout_queries, discovery_query as build_discovery_query, scout_queries as build_scout_queries
+from quarantine_revalidation import revalidate_quarantined_rows
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -94,7 +95,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.10"  # candidate revalidation and seller-launch evidence guard
+VERSION = "0.99.11"  # bounded legacy quarantine revalidation and ingestion yield metrics
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -133,6 +134,8 @@ SELF_CONTAMINATION_GUARD_ENABLED = (os.getenv("NEO_SELF_CONTAMINATION_GUARD", "1
 OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+QUARANTINE_REVALIDATION_ENABLED = (os.getenv("NEO_QUARANTINE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
+REVALIDATE_PER_CYCLE = max(0,min(20,int(os.getenv("NEO_REVALIDATE_PER_CYCLE", "3"))))
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
