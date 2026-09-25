@@ -22,7 +22,9 @@ from evidence_integrity import (
     family_relevance_terms,
     find_term_positions,
     gate_eligible_problem_key,
+    generic_web_pain_allowed,
     is_launch_title,
+    is_vendor_content,
     is_self_contamination,
     structured_paid_source,
 )
@@ -97,6 +99,8 @@ def evaluate_fetched_legacy_row(
     now_epoch: float | None = None,
     self_contamination_guard: bool = True,
     seller_launch_guard: bool = True,
+    vendor_content_guard: bool = True,
+    web_buyer_voice_guard: bool = True,
     family_match_guard: bool = True,
     strong_pain_only: bool = True,
 ) -> dict[str, Any]:
@@ -137,11 +141,37 @@ def evaluate_fetched_legacy_row(
         if not any(contains_term(title_low+" "+body_low,x) for x in GITHUB_DEMAND):
             return failed("github_no_buyer_problem_context")
 
+    if vendor_content_guard and is_vendor_content(title,body,url,source):
+        vendor_signals=demand_signal_type(
+            title,body,query_role,
+            strong_pain_only=strong_pain_only,
+            seller_launch_guard=seller_launch_guard,
+            url=url,source=source,
+            vendor_content_guard=True,
+            web_buyer_voice_guard=web_buyer_voice_guard,
+        )
+        return failed("vendor_content",{
+            "signal_types":[x for x in vendor_signals if x!="PAIN"],
+            "gate_eligible":False,
+            "quarantine_reason":"vendor_content",
+            "context_type":"vendor_content",
+            "signal_reverted":"vendor_content",
+        })
+    if web_buyer_voice_guard and not generic_web_pain_allowed(title,body,url,source):
+        return failed("web_buyer_voice_missing",{
+            "gate_eligible":False,
+            "quarantine_reason":"web_buyer_voice_missing",
+            "signal_reverted":"web_buyer_voice_missing",
+        })
+
     if seller_launch_guard and is_launch_title(title):
         launch_signals=demand_signal_type(
             title,body,query_role,
             strong_pain_only=strong_pain_only,
             seller_launch_guard=True,
+            url=url,source=source,
+            vendor_content_guard=vendor_content_guard,
+            web_buyer_voice_guard=web_buyer_voice_guard,
         )
         return failed("seller_launch",{
             "signal_types":[x for x in launch_signals if x!="PAIN"],
@@ -196,6 +226,9 @@ def evaluate_fetched_legacy_row(
         title,context,query_role,
         strong_pain_only=strong_pain_only,
         seller_launch_guard=seller_launch_guard,
+        url=url,source=source,
+        vendor_content_guard=vendor_content_guard,
+        web_buyer_voice_guard=web_buyer_voice_guard,
     )
     if structured_paid_source(source,query_role):
         signal_types=sorted(set(signal_types)|{"PAID_DEMAND","BUY_INTENT"})
@@ -250,6 +283,8 @@ async def revalidate_quarantined_rows(
     now_epoch: float | None = None,
     self_contamination_guard: bool = True,
     seller_launch_guard: bool = True,
+    vendor_content_guard: bool = True,
+    web_buyer_voice_guard: bool = True,
     family_match_guard: bool = True,
     strong_pain_only: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -302,6 +337,8 @@ async def revalidate_quarantined_rows(
                 now_epoch=now,
                 self_contamination_guard=self_contamination_guard,
                 seller_launch_guard=seller_launch_guard,
+                vendor_content_guard=vendor_content_guard,
+                web_buyer_voice_guard=web_buyer_voice_guard,
                 family_match_guard=family_match_guard,
                 strong_pain_only=strong_pain_only,
             )
