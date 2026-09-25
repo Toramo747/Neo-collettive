@@ -5315,6 +5315,7 @@ def _commercial_evidence_quality(
     web_research: list[dict],
     scouts: list[dict] | None = None,
     query_meta: dict[str, dict] | None = None,
+    revalidation_stats: dict[str, int] | None = None,
 ) -> dict:
     """Evidence Integrity v2: accumulate only attributable, gate-eligible commercial evidence."""
     noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
@@ -5330,6 +5331,7 @@ def _commercial_evidence_quality(
     diagnostics=IngestionDiagnostics(INGESTION_DIAGNOSTICS_ENABLED)
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
+    diagnostics.merge_revalidation(revalidation_stats)
     now_epoch=time.time()
     retention_seconds=21*24*3600
     fresh_seconds=7*24*3600
@@ -5518,6 +5520,16 @@ def _commercial_evidence_quality(
                 merged["quarantine_reason"]="disconfirm"
             memory[index[key]]=merged
         else:
+            if (
+                row.get("gate_eligible")
+                and bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(row.get("signal_types") or []))
+            ):
+                q=str(row.get("query") or "")
+                meta=query_meta.get(" ".join(q.split()).lower()) or {}
+                diagnostics.record_new_signal_row(
+                    str(row.get("source") or "unknown"),
+                    diagnostic_query_class(meta,str(row.get("query_role") or "")),
+                )
             index[key]=len(memory)
             memory.append(row)
 
