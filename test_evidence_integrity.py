@@ -328,5 +328,68 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertFalse(gate_eligible_problem_key("ai_tools:generic_technology"))
 
 
+    def test_seller_launch_guard_removes_pain_and_gate_eligibility(self):
+        rows=[{
+            "schema_v":2,
+            "tagger_v":3,
+            "migration_v":2,
+            "gate_eligible":True,
+            "quarantine_reason":None,
+            "domain":"tinyopsstudio.com",
+            "source":"hackernews",
+            "family":"workflow_automation",
+            "problem_key_raw":"workflow_automation:automation",
+            "problem_key":"workflow_automation:automation",
+            "title":"Show HN: Automation ROI calculator for repetitive admin workflows",
+            "snippet":"Show HN: Automation ROI calculator for repetitive admin workflows",
+            "signal_types":["PAIN"],
+            "url":"https://tinyopsstudio.com/automation-roi-calculator",
+            "last_seen_epoch":1,
+        }]
+        migrated,meta=migrate_evidence_memory(rows,seller_launch_guard=True)
+        row=migrated[0]
+        self.assertEqual(meta["changed"],1)
+        self.assertNotIn("PAIN",row["signal_types"])
+        self.assertFalse(row["gate_eligible"])
+        self.assertEqual(row["context_type"],"product_launch")
+        self.assertEqual(row["signal_reverted"],"seller_launch")
+        self.assertEqual(row["quarantine_reason"],"seller_launch")
+
+    def test_seller_launch_migration_is_idempotent(self):
+        rows=[{
+            "schema_v":2,"tagger_v":3,"migration_v":2,
+            "gate_eligible":True,"quarantine_reason":None,
+            "family":"workflow_automation",
+            "problem_key":"workflow_automation:automation",
+            "title":"Show HN: Automation ROI calculator for repetitive admin workflows",
+            "signal_types":["PAIN"],
+        }]
+        once,meta1=migrate_evidence_memory(rows,seller_launch_guard=True)
+        twice,meta2=migrate_evidence_memory(once,seller_launch_guard=True)
+        self.assertEqual(meta1["changed"],1)
+        self.assertEqual(meta2["changed"],0)
+        self.assertEqual(once,twice)
+
+    def test_seller_launch_guard_does_not_strip_ask_hn_buyer_pain(self):
+        tags=demand_signal_type(
+            "Ask HN: How do you automate repetitive admin work?",
+            "Our operations team has a manual workflow every week and wastes time on it.",
+            "buyer",
+            strong_pain_only=True,
+            seller_launch_guard=True,
+        )
+        self.assertIn("PAIN",tags)
+
+    def test_seller_launch_title_cannot_generate_pain_signal(self):
+        tags=demand_signal_type(
+            "Show HN: Automation ROI calculator for repetitive admin workflows",
+            "Repetitive manual admin workflows waste time.",
+            "buyer",
+            strong_pain_only=True,
+            seller_launch_guard=True,
+        )
+        self.assertNotIn("PAIN",tags)
+
+
 if __name__=="__main__":
     unittest.main()
