@@ -7529,34 +7529,63 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         limit=12,
         reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
         require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+        reject_seller_launch=SELLER_LAUNCH_GUARD_ENABLED,
     )
-    if observed_now:
-        existing=[
-            x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
-            if isinstance(x,dict)
-        ]
-        merged={}
-        for row in existing+observed_now:
-            key=str(row.get("source_url") or "")+"|"+str(row.get("source_title") or "")
-            if not key.strip("|"):
-                continue
-            prev=merged.get(key)
-            if (
-                not prev
-                or int(row.get("hypothesis_schema_v") or 1)>int(prev.get("hypothesis_schema_v") or 1)
-                or (
-                    int(row.get("hypothesis_schema_v") or 1)==int(prev.get("hypothesis_schema_v") or 1)
-                    and int(row.get("priority") or 0)>int(prev.get("priority") or 0)
-                )
-            ):
-                merged[key]=row
-        AUTOPILOT_STATE["observed_pain_candidates"]=sorted(
-            merged.values(),
-            key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),
-            reverse=True,
-        )[:30]
+    existing=[
+        x for x in (AUTOPILOT_STATE.get("observed_pain_candidates") or [])
+        if isinstance(x,dict)
+    ]
+    pending_purge=dict(AUTOPILOT_STATE.get("observed_candidate_purge_diagnostics") or {})
+    purge_reasons=dict(pending_purge.get("observed_candidates_purged_by_reason") or {})
+    validated_existing=[]
+    for candidate in existing:
+        if not OBSERVED_CANDIDATE_REVALIDATION_ENABLED:
+            validated_existing.append(candidate)
+            continue
+        valid,reason=validate_observed_candidate(
+            candidate,
+            reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
+            require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
+            reject_launch=SELLER_LAUNCH_GUARD_ENABLED,
+        )
+        if valid:
+            validated_existing.append(candidate)
+        else:
+            purge_reasons[reason]=int(purge_reasons.get(reason) or 0)+1
+
+    merged={}
+    for row in validated_existing+observed_now:
+        key=str(row.get("source_url") or "")+"|"+str(row.get("source_title") or "")
+        if not key.strip("|"):
+            continue
+        prev=merged.get(key)
+        if (
+            not prev
+            or int(row.get("hypothesis_schema_v") or 1)>int(prev.get("hypothesis_schema_v") or 1)
+            or (
+                int(row.get("hypothesis_schema_v") or 1)==int(prev.get("hypothesis_schema_v") or 1)
+                and int(row.get("priority") or 0)>int(prev.get("priority") or 0)
+            )
+        ):
+            merged[key]=row
+    AUTOPILOT_STATE["observed_pain_candidates"]=sorted(
+        merged.values(),
+        key=lambda x:(int(x.get("priority") or 0),int(x.get("relevance_score") or 0)),
+        reverse=True,
+    )[:30]
+    candidate_purge_diagnostics={
+        "observed_candidates_purged":sum(int(v or 0) for v in purge_reasons.values()),
+        "observed_candidates_purged_by_reason":purge_reasons,
+    }
+    AUTOPILOT_STATE["observed_candidate_purge_diagnostics"]={
+        "observed_candidates_purged":0,
+        "observed_candidates_purged_by_reason":{},
+    }
 
     evidence_quality = _commercial_evidence_quality(web_research, demand_evidence, query_meta)
+    ingestion_diag=dict(evidence_quality.get("ingestion_diagnostics") or {})
+    ingestion_diag.update(candidate_purge_diagnostics)
+    evidence_quality["ingestion_diagnostics"]=ingestion_diag
     family_performance = _update_family_performance(evidence_quality)
     product_candidate = build_candidate(evidence_quality)
 
