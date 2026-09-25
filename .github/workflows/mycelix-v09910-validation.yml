@@ -1,0 +1,43 @@
+name: MYCELIX v0.99.10 validation
+
+on:
+  push:
+    branches: [mycelix-candidate-revalidation-v09910]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile changed modules
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py discovery_v3.py evidence_integrity.py ingestion_diagnostics.py
+
+      - name: Run full unit suite with network blocked
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import socket
+          import unittest
+
+          def blocked(*args, **kwargs):
+              raise RuntimeError("network disabled during unit tests")
+
+          socket.create_connection = blocked
+          socket.socket.connect = blocked
+
+          suite = unittest.defaultTestLoader.discover(".", pattern="test_*.py")
+          count = suite.countTestCases()
+          print("discovered_tests="+str(count))
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful():
+              raise SystemExit(1)
+          print("all_tests_green="+str(count))
+          PY
