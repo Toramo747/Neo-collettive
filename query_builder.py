@@ -153,6 +153,8 @@ def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -
     if not candidates:
         return []
     candidates=list(reversed(candidates))
+    while len(candidates)<limit:
+        candidates.append(candidates[-1])
     out=[]
     for idx,(family,row) in enumerate(candidates[:limit]):
         anchor=family.replace("_"," ")
