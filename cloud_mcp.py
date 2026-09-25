@@ -5398,6 +5398,7 @@ def _commercial_evidence_quality(
     def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = ""):
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
+        query_intent=str(meta.get("query_intent") or "pain").strip().lower()
         raw_host=(urlparse(url or "").hostname or "").lower()
         host=canonical_domain(raw_host)
         if SELF_CONTAMINATION_GUARD_ENABLED and is_self_contamination(url,source,title+" "+body):
@@ -5466,6 +5467,15 @@ def _commercial_evidence_quality(
         )
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
+        intent_class=classify_intent_class(title,body,url,source)
+        diagnostics.record_intent_result(
+            intent_class,
+            query_intent,
+            title,
+            url,
+            signal_types,
+            source,
+        )
         if not signal_types:
             reject("no_demand_signal",url,title,query_role,source,query_class)
             return
@@ -5531,6 +5541,8 @@ def _commercial_evidence_quality(
             "thesis_id":str(meta.get("thesis_id") or ""),
             "query":(query or "")[:700],
             "query_role":query_role or str(meta.get("role") or ""),
+            "query_intent":query_intent,
+            "intent_class":intent_class,
             "title":(title or "")[:300],
             "snippet":(body or "")[:300],
             "url":canonical_url(url)[:1200],
@@ -7702,7 +7714,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
     followup_queries = _jarvis_next_queries(jarvis_brief)
-    web_queries = searches + followup_queries
+    web_queries = searches if DESIRE_EXPERIMENT_ENABLED else searches + followup_queries
     async def ask_probe_agents(q: str) -> dict:
         meta=query_meta.get(" ".join(q.split()).lower()) or {}
         role=str(meta.get("role") or meta.get("class") or "research")
