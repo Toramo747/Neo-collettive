@@ -811,6 +811,58 @@ def migrate_evidence_row(
             out["quarantine_reason"]=reason
             changed=True
 
+    # Re-evaluate all positive demand on generic web from stored source text. This
+    # closes both query-echo and historical tagger holes without changing gate thresholds.
+    if (
+        query_echo_guard
+        and generic_web_source(str(out.get("source") or ""))
+        and not supply_offer
+        and not vendor_content
+        and not (seller_launch_guard and is_launch_title(str(out.get("title") or "")))
+    ):
+        recomputed=demand_signal_type(
+            str(out.get("title") or ""),
+            str(out.get("snippet") or ""),
+            str(out.get("query_role") or ""),
+            strong_pain_only=strong_pain_only,
+            seller_launch_guard=seller_launch_guard,
+            url=str(out.get("url") or ""),
+            source=str(out.get("source") or ""),
+            vendor_content_guard=vendor_content_guard,
+            web_buyer_voice_guard=web_buyer_voice_guard,
+            supply_offer_guard=supply_offer_guard,
+            query_echo_guard=True,
+            query=str(out.get("query") or ""),
+        )
+        old_signals=list(out.get("signal_types") or [])
+        if sorted(old_signals)!=sorted(recomputed):
+            out["signal_types"]=sorted(recomputed)
+            changed=True
+        if "PAID_DEMAND" not in set(recomputed) and out.get("strong_markers"):
+            out["strong_markers"]=[]
+            changed=True
+        elif "PAID_DEMAND" in set(recomputed) and out.get("strong_markers"):
+            filtered=[
+                marker for marker in (out.get("strong_markers") or [])
+                if _marker_survives_query_echo(
+                    str(marker),
+                    str(out.get("title") or ""),
+                    str(out.get("snippet") or ""),
+                    str(out.get("query") or ""),
+                )
+            ]
+            if filtered != list(out.get("strong_markers") or []):
+                out["strong_markers"]=filtered
+                changed=True
+        positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(recomputed))
+        if not positive and "DISCONFIRM" not in set(recomputed):
+            if out.get("gate_eligible") is not False:
+                out["gate_eligible"]=False
+                changed=True
+            if out.get("quarantine_reason") not in {"vendor_content","supply_offer","seller_launch","disconfirm"}:
+                out["quarantine_reason"]="nonpositive_signal"
+                changed=True
+
     # Seller-authored launches are supply-side context, never buyer demand. Preserve
     # the row for market context/audit, but remove positive demand and exclude its domain from
     # every gate calculation. This migration is intentionally idempotent.
