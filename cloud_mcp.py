@@ -5345,6 +5345,12 @@ def _commercial_evidence_quality(
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
     diagnostics.merge_revalidation(revalidation_stats)
+    diagnostics.set_search_provider(
+        provider_diagnostics(
+            AUTOPILOT_STATE.get("search_provider_state") or {},
+            configured_provider(SEARCH_PROVIDER_MODE),
+        )
+    )
     now_epoch=time.time()
     retention_seconds=21*24*3600
     fresh_seconds=7*24*3600
@@ -5539,9 +5545,17 @@ def _commercial_evidence_quality(
             ):
                 q=str(row.get("query") or "")
                 meta=query_meta.get(" ".join(q.split()).lower()) or {}
+                source_name=str(row.get("source") or "unknown")
+                provider_name=(
+                    "brave" if source_name=="brave-search"
+                    else "google" if source_name=="google-pse"
+                    else "bing" if source_name=="bing-rss-free"
+                    else source_name
+                )
                 diagnostics.record_new_signal_row(
-                    str(row.get("source") or "unknown"),
+                    source_name,
                     diagnostic_query_class(meta,str(row.get("query_role") or "")),
+                    provider_name,
                 )
             index[key]=len(memory)
             memory.append(row)
@@ -6450,8 +6464,7 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     }
 
 
-async def free_web_search(query: str, limit: int = 6) -> dict:
-    """Free public web discovery via Bing RSS. No API key and no paid provider."""
+async def _bing_rss_search(query: str, limit: int = 6) -> dict:
     q = " ".join((query or "").strip().split())
     if not q:
         return {"ok": False, "query": q, "results": [], "error": "empty_query"}
@@ -6485,12 +6498,47 @@ async def free_web_search(query: str, limit: int = 6) -> dict:
                 })
                 if len(results) >= max(1, min(limit, 10)):
                     break
-            return {"ok": True, "query": q, "results": results, "count": len(results)}
+            return {"ok": True, "query": q, "results": results, "count": len(results), "provider":"bing"}
     except Exception as e:
         return {
             "ok": False, "query": q, "results": [],
-            "error": type(e).__name__ + ": " + str(e)[:300],
+            "error": type(e).__name__,
+            "provider":"bing",
         }
+
+
+async def free_web_search(query: str, limit: int = 6) -> dict:
+    """Use an optional configured search provider, falling back to Bing RSS."""
+    q = " ".join((query or "").strip().split())
+    if not q:
+        return {"ok": False, "query": q, "results": [], "error": "empty_query"}
+    rows,new_state,meta=await provider_search(
+        q,
+        limit,
+        state=AUTOPILOT_STATE.get("search_provider_state") or {},
+        provider_mode=SEARCH_PROVIDER_MODE,
+        max_calls_cycle=SEARCH_MAX_CALLS_PER_CYCLE,
+        max_calls_day=SEARCH_MAX_CALLS_PER_DAY,
+        timeout_seconds=min(TIMEOUT,6),
+    )
+    AUTOPILOT_STATE["search_provider_state"]=new_state
+    if not meta.get("fallback"):
+        safe_rows=[]
+        for row in rows:
+            safe,why=_safe_public_https(str(row.get("url") or ""))
+            if safe:
+                safe_rows.append(row)
+        return {
+            "ok":True,
+            "query":q,
+            "results":safe_rows,
+            "count":len(safe_rows),
+            "provider":str(meta.get("provider") or "unknown"),
+        }
+    fallback=await _bing_rss_search(q,limit)
+    fallback["provider_fallback_from"]=str(meta.get("provider") or "bing")
+    fallback["provider_fallback_reason"]=str(meta.get("reason") or "fallback")[:80]
+    return fallback
 
 
 def _jarvis_next_queries(jarvis_result: dict) -> list[str]:
