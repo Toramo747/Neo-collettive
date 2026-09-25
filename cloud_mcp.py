@@ -34,7 +34,7 @@ from search_providers import (
     begin_cycle as begin_search_provider_cycle,
     configured_provider,
     provider_diagnostics,
-    search as provider_search,
+    search_with_fallback as provider_search_with_fallback,
 )
 
 from seti_radar import (
@@ -6465,6 +6465,26 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     }
 
 
+async def _provider_http_get(
+    url: str,
+    *,
+    params: dict,
+    headers: dict,
+    timeout_seconds: float,
+) -> dict:
+    async with httpx.AsyncClient(
+        timeout=max(1.0,min(float(timeout_seconds),10.0)),
+        follow_redirects=False,
+    ) as client:
+        response=await client.get(url,params=params,headers=headers)
+    payload=None
+    try:
+        payload=response.json()
+    except Exception:
+        payload=None
+    return {"status":response.status_code,"json":payload}
+
+
 async def _bing_rss_search(query: str, limit: int = 6) -> dict:
     q = " ".join((query or "").strip().split())
     if not q:
@@ -6514,33 +6534,26 @@ async def free_web_search(query: str, limit: int = 6) -> dict:
     if not q:
         return {"ok": False, "query": q, "results": [], "error": "empty_query"}
     async with SEARCH_PROVIDER_LOCK:
-        rows,new_state,meta=await provider_search(
+        result,new_state=await provider_search_with_fallback(
             q,
             limit,
+            bing_search=_bing_rss_search,
             state=AUTOPILOT_STATE.get("search_provider_state") or {},
             provider_mode=SEARCH_PROVIDER_MODE,
             max_calls_cycle=SEARCH_MAX_CALLS_PER_CYCLE,
             max_calls_day=SEARCH_MAX_CALLS_PER_DAY,
             timeout_seconds=min(TIMEOUT,6),
+            http_get=_provider_http_get,
         )
         AUTOPILOT_STATE["search_provider_state"]=new_state
-    if not meta.get("fallback"):
-        safe_rows=[]
-        for row in rows:
-            safe,why=_safe_public_https(str(row.get("url") or ""))
-            if safe:
-                safe_rows.append(row)
-        return {
-            "ok":True,
-            "query":q,
-            "results":safe_rows,
-            "count":len(safe_rows),
-            "provider":str(meta.get("provider") or "unknown"),
-        }
-    fallback=await _bing_rss_search(q,limit)
-    fallback["provider_fallback_from"]=str(meta.get("provider") or "bing")
-    fallback["provider_fallback_reason"]=str(meta.get("reason") or "fallback")[:80]
-    return fallback
+    safe_rows=[]
+    for row in result.get("results") or []:
+        safe,why=_safe_public_https(str(row.get("url") or ""))
+        if safe:
+            safe_rows.append(row)
+    result["results"]=safe_rows
+    result["count"]=len(safe_rows)
+    return result
 
 
 def _jarvis_next_queries(jarvis_result: dict) -> list[str]:
