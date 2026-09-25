@@ -296,13 +296,41 @@ def make_thesis_id(family: str, customer: str, job: str, pain: str) -> str:
     return "th-" + hashlib.sha1(raw).hexdigest()[:12]
 
 
-def migrate_evidence_row(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+def _legacy_derived_problem_remap(problem_key: str, sibling_problem_keys: list[str] | tuple[str,...] | set[str]) -> str:
+    """Map one truncated family:customer_job key to a unique family:customer:job sibling."""
+    key=str(problem_key or "").strip()
+    parts=key.split(":")
+    if len(parts)!=2:
+        return key
+    family,tail=parts
+    matches=[]
+    for candidate in sibling_problem_keys or []:
+        cand=canonical_problem_key("",str(candidate or "").strip())
+        cparts=cand.split(":")
+        if len(cparts)!=3 or cparts[0]!=family:
+            continue
+        customer,job=cparts[1],cparts[2]
+        prefix=customer+"_"
+        if not tail.startswith(prefix):
+            continue
+        remainder=tail[len(prefix):]
+        if remainder and job.startswith(remainder):
+            matches.append(cand)
+    unique=sorted(set(matches))
+    return unique[0] if len(unique)==1 else key
+
+
+def migrate_evidence_row(
+    row: dict[str, Any],
+    sibling_problem_keys: list[str] | tuple[str,...] | set[str] = (),
+) -> tuple[dict[str, Any], bool]:
     """Idempotently quarantine pre-v2 evidence until it is re-observed by tagger v2."""
     out = dict(row or {})
     changed = False
     family = str(out.get("family") or "")
     raw_key = str(out.get("problem_key_raw") or out.get("problem_key") or (family + ":general" if family else ""))
     canonical = canonical_problem_key(family, str(out.get("problem_key") or raw_key))
+    canonical = _legacy_derived_problem_remap(canonical, sibling_problem_keys)
     if out.get("problem_key_raw") != raw_key:
         out["problem_key_raw"] = raw_key
         changed = True
@@ -338,13 +366,17 @@ def migrate_evidence_row(row: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def migrate_evidence_memory(rows: list[dict[str, Any]] | None) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    source_rows=[row for row in (rows or []) if isinstance(row,dict)]
+    sibling_problem_keys=[
+        canonical_problem_key(str(row.get("family") or ""),str(row.get("problem_key") or ""))
+        for row in source_rows
+        if str(row.get("problem_key") or "").strip()
+    ]
     migrated: list[dict[str, Any]] = []
     changed = 0
     quarantined = 0
-    for row in rows or []:
-        if not isinstance(row, dict):
-            continue
-        new_row, row_changed = migrate_evidence_row(row)
+    for row in source_rows:
+        new_row, row_changed = migrate_evidence_row(row,sibling_problem_keys)
         if row_changed:
             changed += 1
         if not bool(new_row.get("gate_eligible")):

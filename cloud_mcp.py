@@ -28,6 +28,7 @@ from peer_quality import classify_peer_response, classify_stored_interviews, col
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
+from query_builder import breakout_queries as build_breakout_queries, discovery_query as build_discovery_query, scout_queries as build_scout_queries
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -90,7 +91,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.7"  # ingestion diagnostics only
+VERSION = "0.99.8"  # buyer-language query builder v2
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -122,6 +123,7 @@ DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
 AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 INGESTION_DIAGNOSTICS_ENABLED = (os.getenv("NEO_INGESTION_DIAGNOSTICS", "1").strip().lower() in {"1","true","yes","on"})
+QUERY_BUILDER_V2_ENABLED = (os.getenv("NEO_QUERY_BUILDER_V2", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
 SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))))
@@ -4540,10 +4542,21 @@ def _stagnation_breakout_queries(limit: int = 4) -> list[dict]:
     out=[]
     for problem_key,cl in ranked[:2]:
         marker=problem_job_tail(problem_key).replace("_"," ")
-        for q in [
+        queries=[
             f'site:reddit.com "{marker}" "need help"',
             f'site:upwork.com "{marker}" automation OR consultant',
-        ]:
+        ]
+        if QUERY_BUILDER_V2_ENABLED:
+            try:
+                queries=build_breakout_queries(
+                    marker,
+                    AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                    cl["family"],
+                    2,
+                ) or queries
+            except Exception:
+                pass
+        for q in queries:
             out.append({"family":cl["family"],"problem_key":problem_key,"query":q,"mode":"source_breakout"})
             if len(out)>=max(0,limit):
                 return out
@@ -4678,9 +4691,6 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     def sector_entry(sector: dict, cls: str) -> dict:
         term=rng.choice(sector["terms"])
         family=_sector_family(sector["id"])
-        # Discovery v2: anchor queries to explicit work/pain contexts and useful
-        # source classes. Avoid generic trigger phrases that Bing often interprets
-        # as names, dictionaries or unrelated media.
         templates=[
             f'{term} manual repetitive workflow workaround',
             f'{term} freelance contractor hourly fixed price',
@@ -4688,6 +4698,16 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
             f'{term} customer workflow need help',
         ]
         query=rng.choice(templates)
+        if QUERY_BUILDER_V2_ENABLED:
+            try:
+                query=build_discovery_query(
+                    family,
+                    list(sector.get("terms") or []),
+                    cls,
+                    AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                ) or query
+            except Exception:
+                pass
         return {
             "query":" ".join(query.split()),
             "class":cls,
@@ -6194,11 +6214,16 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     if role=="paid_market":
         return await paid_market_search(query,meta,limit)
     seed=natural_search_seed(query,meta) or query
-    tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
-    if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
-        tasks.append(_github_issue_query_search(seed,3))
-    if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
-        tasks.append(_stackexchange_query_search(seed,3))
+    query_class=str(meta.get("class") or "")
+    structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
+    if structured_first:
+        tasks=[_hn_query_search(seed,3),_github_issue_query_search(seed,3),_stackexchange_query_search(seed,3),free_web_search(seed,2)]
+    else:
+        tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
+        if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
+            tasks.append(_github_issue_query_search(seed,3))
+        if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
+            tasks.append(_stackexchange_query_search(seed,3))
     batches=await asyncio.gather(*tasks,return_exceptions=True)
     ingestion_diagnostics=(
         routed_search_diagnostics(batches,query,meta,query_relevance)
@@ -6337,6 +6362,14 @@ async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
     ]
     rng=secrets.SystemRandom()
     terms=rng.sample(broad_terms,k=min(7,len(broad_terms)))
+    if QUERY_BUILDER_V2_ENABLED:
+        try:
+            terms=build_scout_queries(
+                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                7,
+            ) or terms
+        except Exception:
+            pass
 
     async def hn(term: str):
         try:

@@ -97,6 +97,52 @@ class EvidenceIntegrityTests(unittest.TestCase):
         b=canonical_url("https://example.com/path?a=1")
         self.assertEqual(a,b)
 
+    def test_migration_remaps_real_truncated_problem_identity_uniquely(self):
+        legacy="manual_data_entry:teams_experiencing_the_observed_problem_reduce_repetitive_manual_work_ar"
+        target="manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry"
+        rows=[
+            {
+                "schema_v":2,
+                "tagger_v":3,
+                "migration_v":2,
+                "gate_eligible":True,
+                "family":"manual_data_entry",
+                "problem_key_raw":"manual_data_entry:general",
+                "problem_key":legacy,
+                "signal_types":["BUY_INTENT","PAID_DEMAND"],
+                "domain":"remoteok.com",
+                "url":"https://remoteok.com/example",
+                "last_seen_epoch":1,
+            },
+            {
+                "schema_v":2,
+                "tagger_v":3,
+                "migration_v":2,
+                "gate_eligible":True,
+                "family":"manual_data_entry",
+                "problem_key_raw":"marketing_seo:general",
+                "problem_key":target,
+                "signal_types":["PAIN"],
+                "domain":"github.com",
+                "url":"https://github.com/example/issues/1",
+                "last_seen_epoch":1,
+            },
+        ]
+        migrated,_=migrate_evidence_memory(rows)
+        self.assertEqual(migrated[0]["problem_key"],target)
+        self.assertTrue(migrated[0]["gate_eligible"])
+        self.assertEqual(migrated[0]["problem_key_raw"],"manual_data_entry:general")
+
+    def test_migration_keeps_ambiguous_truncated_problem_identity(self):
+        legacy="manual_data_entry:teams_reduce_repetitive"
+        rows=[
+            {"schema_v":2,"tagger_v":3,"migration_v":2,"gate_eligible":True,"family":"manual_data_entry","problem_key":legacy},
+            {"schema_v":2,"tagger_v":3,"migration_v":2,"gate_eligible":True,"family":"manual_data_entry","problem_key":"manual_data_entry:teams:reduce_repetitive_entry"},
+            {"schema_v":2,"tagger_v":3,"migration_v":2,"gate_eligible":True,"family":"manual_data_entry","problem_key":"manual_data_entry:teams:reduce_repetitive_work"},
+        ]
+        migrated,_=migrate_evidence_memory(rows)
+        self.assertEqual(migrated[0]["problem_key"],legacy)
+
     def test_migration_is_idempotent_and_quarantines_v1(self):
         original=[{
             "domain":"news.ycombinator.com",

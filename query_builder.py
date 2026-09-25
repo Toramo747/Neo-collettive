@@ -1,0 +1,123 @@
+"""Buyer-language query construction for MYCELIX.
+
+Pure helpers only: no network, no gate/tagger mutations.
+"""
+from __future__ import annotations
+
+import re
+from typing import Iterable
+
+BUYER_SIGNAL_TERMS = (
+    "need help","looking for","hiring","hire","contractor","freelance","freelancer",
+    "fixed price","fixed-price","hourly","budget","manual","repetitive","workaround",
+    "time consuming","time-consuming","struggle","problem","pain",
+)
+
+
+def _clean(value: str, limit: int = 180) -> str:
+    return " ".join(str(value or "").replace("\n"," ").split())[:limit].strip()
+
+
+def _phrase_candidates(text: str) -> list[str]:
+    text=_clean(text,600)
+    if not text:
+        return []
+    parts=re.split(r"(?<=[.!?])\s+|\s+[|•—–]\s+",text)
+    out=[]
+    for part in parts:
+        phrase=_clean(part,180)
+        low=phrase.lower()
+        words=phrase.split()
+        if 5 <= len(words) <= 24 and any(term in low for term in BUYER_SIGNAL_TERMS):
+            out.append(phrase)
+    return out
+
+
+def observed_buyer_phrases(rows: Iterable[dict] | None, family: str = "", limit: int = 8) -> list[str]:
+    """Use only current, non-quarantined evidence with buyer/pain tags."""
+    wanted=str(family or "").strip()
+    scored=[]
+    seen=set()
+    for row in rows or []:
+        if not isinstance(row,dict):
+            continue
+        if int(row.get("tagger_v") or 0) < 3:
+            continue
+        if row.get("quarantine_reason"):
+            continue
+        if wanted and str(row.get("family") or "") != wanted:
+            continue
+        tags=set(row.get("signal_types") or [])
+        if not tags.intersection({"PAIN","BUY_INTENT","PAID_DEMAND"}):
+            continue
+        for text in (row.get("title"),row.get("snippet")):
+            for phrase in _phrase_candidates(str(text or "")):
+                key=phrase.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                score=(
+                    3*("PAID_DEMAND" in tags)
+                    + 2*("BUY_INTENT" in tags)
+                    + 1*("PAIN" in tags)
+                    + min(2,int(row.get("seen_count") or 1))
+                )
+                scored.append((score,phrase))
+    scored.sort(key=lambda item:(-item[0],item[1].lower()))
+    return [phrase for _,phrase in scored[:max(0,limit)]]
+
+
+def discovery_query(
+    family: str,
+    sector_terms: list[str] | tuple[str,...],
+    query_class: str,
+    evidence_rows: Iterable[dict] | None,
+) -> str:
+    """Prefer observed buyer language; use a deterministic family-specific fallback."""
+    phrases=observed_buyer_phrases(evidence_rows,family,4)
+    if phrases:
+        return phrases[0]
+    terms=[_clean(x,100) for x in (sector_terms or []) if _clean(x,100)]
+    anchor=terms[0] if terms else str(family or "").replace("_"," ")
+    suffix="need help manual workaround" if query_class=="explore" else "hiring contractor manual workflow"
+    return _clean(f"{anchor} {suffix}",220)
+
+
+def scout_queries(evidence_rows: Iterable[dict] | None, limit: int = 7) -> list[str]:
+    """Build scout queries from observed buyer phrases, then narrow buyer-context fallbacks."""
+    phrases=observed_buyer_phrases(evidence_rows,"",max(limit*2,8))
+    if phrases:
+        return phrases[:max(1,limit)]
+    fallbacks=[
+        "manual data entry hiring contractor",
+        "API integration need help workaround",
+        "spreadsheet automation manual repetitive workflow",
+        "reporting dashboard need help workflow",
+        "customer support repetitive workflow problem",
+        "document processing manual workaround",
+        "CRM lead qualification hiring contractor",
+    ]
+    return fallbacks[:max(1,limit)]
+
+
+def breakout_queries(marker: str, evidence_rows: Iterable[dict] | None, family: str = "", limit: int = 2) -> list[str]:
+    """Structured-source-friendly breakout queries; no site:reddit.com templates."""
+    phrases=observed_buyer_phrases(evidence_rows,family,max(limit,2))
+    out=[]
+    for phrase in phrases:
+        if phrase.lower() not in {x.lower() for x in out}:
+            out.append(phrase)
+        if len(out)>=limit:
+            return out
+    marker=_clean(marker,120)
+    fallbacks=[
+        f"{marker} need help manual workaround",
+        f"{marker} hiring contractor budget",
+    ]
+    for query in fallbacks:
+        query=_clean(query,220)
+        if query and query.lower() not in {x.lower() for x in out}:
+            out.append(query)
+        if len(out)>=limit:
+            break
+    return out

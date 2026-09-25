@@ -270,6 +270,29 @@ class PeerQualityIntegrationTests(unittest.TestCase):
         self.assertIn('problem_customer_segment(key)',anthropic)
         self.assertIn('key = canonical_problem_key(family, problem_id)',anthropic)
 
+    def test_query_builder_v2_is_wired_before_broad_discovery(self):
+        entropy=IntegratedRoutingTests().function('_entropy_search_strategy')
+        scouts=IntegratedRoutingTests().function('evidence_scouts')
+        breakout=IntegratedRoutingTests().function('_stagnation_breakout_queries')
+        self.assertIn('QUERY_BUILDER_V2_ENABLED',entropy)
+        self.assertIn('build_discovery_query',entropy)
+        self.assertIn('build_scout_queries',scouts)
+        self.assertIn('build_breakout_queries',breakout)
+
+    def test_explore_exploit_route_structured_sources_before_bing(self):
+        source=IntegratedRoutingTests().function('routed_public_search')
+        self.assertIn("query_class in {'explore', 'exploit'}",source)
+        self.assertIn('free_web_search(seed, 2)',source)
+        self.assertIn('_hn_query_search(seed, 3)',source)
+        self.assertIn('_github_issue_query_search(seed, 3)',source)
+        self.assertIn('_stackexchange_query_search(seed, 3)',source)
+
+    def test_query_builder_v2_does_not_change_thesis_generation(self):
+        source=IntegratedRoutingTests().function('_anthropic_convergence_queries')
+        self.assertNotIn('build_discovery_query',source)
+        self.assertNotIn('build_scout_queries',source)
+        self.assertNotIn('build_breakout_queries',source)
+
     def test_problem_snapshot_canonicalizes_input_key(self):
         source=IntegratedRoutingTests().function('_problem_snapshot')
         import time
