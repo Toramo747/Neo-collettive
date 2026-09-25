@@ -28,7 +28,12 @@ from peer_quality import classify_peer_response, classify_stored_interviews, col
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
-from query_builder import breakout_queries as build_breakout_queries, discovery_query as build_discovery_query, scout_queries as build_scout_queries
+from query_builder import (
+    breakout_queries as build_breakout_queries,
+    discovery_query as build_discovery_query,
+    scout_queries as build_scout_queries,
+    desire_experiment_entries as build_desire_experiment_entries,
+)
 from quarantine_revalidation import revalidate_quarantined_rows
 from search_providers import (
     begin_cycle as begin_search_provider_cycle,
@@ -75,12 +80,15 @@ from evidence_integrity import (
     canonical_problem_key,
     canonical_url,
     commercial_family as integrity_commercial_family,
+    classify_intent_class,
     contains_any,
     contains_term,
     demand_signal_type as integrity_demand_signal_type,
     generic_web_source,
     generic_web_pain_allowed,
     is_vendor_content,
+    is_supply_offer,
+    marker_survives_query_echo,
     gate_eligible_problem_key,
     make_problem_id,
     make_thesis_id,
@@ -104,7 +112,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.13"  # vendor-content gate integrity and Brave fallback diagnostics
+VERSION = "0.99.14"  # demand-signal guards and bounded desire experiment
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -144,6 +152,9 @@ OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").str
 OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 VENDOR_CONTENT_GUARD_ENABLED = (os.getenv("NEO_VENDOR_CONTENT_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+SUPPLY_OFFER_GUARD_ENABLED = (os.getenv("NEO_SUPPLY_OFFER_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+QUERY_ECHO_GUARD_ENABLED = (os.getenv("NEO_QUERY_ECHO_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+DESIRE_EXPERIMENT_ENABLED = (os.getenv("NEO_DESIRE_EXPERIMENT", "1").strip().lower() in {"1","true","yes","on"})
 WEB_BUYER_VOICE_GUARD_ENABLED = (os.getenv("NEO_WEB_BUYER_VOICE_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 QUARANTINE_REVALIDATION_ENABLED = (os.getenv("NEO_QUARANTINE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 REVALIDATE_PER_CYCLE = max(0,min(20,int(os.getenv("NEO_REVALIDATE_PER_CYCLE", "3"))))
@@ -478,6 +489,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
             seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
             vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
             web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+            supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+            query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
         )
         AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
         AUTOPILOT_STATE["evidence_integrity"] = migration
@@ -4886,6 +4899,13 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
                 break
 
     planned=planned[:count]
+    for row in planned:
+        row.setdefault("query_intent","pain")
+        row.setdefault("intent_class","")
+    if DESIRE_EXPERIMENT_ENABLED and count>=2 and len(planned)>=2:
+        desire_entries=build_desire_experiment_entries(planned,2)
+        if len(desire_entries)==2:
+            planned=planned[:-2]+desire_entries
     executed_sectors=[str(x.get("sector")) for x in planned if x.get("sector")]
     AUTOPILOT_STATE["recent_sectors"]=(recent+executed_sectors)[-12:]
     AUTOPILOT_STATE["query_execution"]={"planned":planned,"executed":[]}
@@ -5079,6 +5099,8 @@ def _demand_signal_type(title: str, body: str, query_role: str = "") -> list[str
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
         vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
         web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+        supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+        query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
     )
 
 
@@ -5376,6 +5398,7 @@ def _commercial_evidence_quality(
     def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = ""):
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
+        query_intent=str(meta.get("query_intent") or "pain").strip().lower()
         raw_host=(urlparse(url or "").hostname or "").lower()
         host=canonical_domain(raw_host)
         if SELF_CONTAMINATION_GUARD_ENABLED and is_self_contamination(url,source,title+" "+body):
@@ -5424,6 +5447,7 @@ def _commercial_evidence_quality(
         weak=[t for t in weak_terms if contains_term(context,t)]
         seller_launch=bool(SELLER_LAUNCH_GUARD_ENABLED and is_launch_title(title))
         vendor_content=bool(VENDOR_CONTENT_GUARD_ENABLED and is_vendor_content(title,body,url,source))
+        supply_offer=bool(SUPPLY_OFFER_GUARD_ENABLED and is_supply_offer(title,body,url,source))
         web_buyer_voice_missing=bool(
             WEB_BUYER_VOICE_GUARD_ENABLED
             and generic_web_source(source)
@@ -5437,9 +5461,21 @@ def _commercial_evidence_quality(
             source=source,
             vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
             web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+            supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+            query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
+            query=query,
         )
         if structured_paid_source(source,query_role):
             signal_types=sorted(set(signal_types) | {"PAID_DEMAND","BUY_INTENT"})
+        intent_class=classify_intent_class(title,body,url,source)
+        diagnostics.record_intent_result(
+            intent_class,
+            query_intent,
+            title,
+            url,
+            signal_types,
+            source,
+        )
         if not signal_types:
             reject("no_demand_signal",url,title,query_role,source,query_class)
             return
@@ -5457,7 +5493,16 @@ def _commercial_evidence_quality(
         if thesis_bound and str(meta.get("family") or ""):
             family=str(meta.get("family"))
         positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(signal_types))
-        strong=[t for t in buyer_strong_terms if contains_term(context,t)] if "PAID_DEMAND" in signal_types else []
+        strong=[
+            t for t in buyer_strong_terms
+            if "PAID_DEMAND" in signal_types
+            and contains_term(context,t)
+            and (
+                not QUERY_ECHO_GUARD_ENABLED
+                or not generic_web_source(source)
+                or marker_survives_query_echo(t,title,body,query)
+            )
+        ]
         if structured_paid_source(source,query_role) and "PAID_DEMAND" in signal_types and not strong:
             strong=["structured_job_market"]
         gate_eligible=bool(
@@ -5465,6 +5510,7 @@ def _commercial_evidence_quality(
             and "DISCONFIRM" not in signal_types
             and not seller_launch
             and not vendor_content
+            and not supply_offer
             and not web_buyer_voice_missing
             and gate_eligible_problem_key(problem_key)
             and positive
@@ -5477,13 +5523,14 @@ def _commercial_evidence_quality(
             "quarantine_reason":None if gate_eligible else (
                 "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
                 else "seller_launch" if seller_launch
+                else "supply_offer" if supply_offer
                 else "vendor_content" if vendor_content
                 else "web_buyer_voice_missing" if web_buyer_voice_missing
                 else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
                 else "nonpositive_signal"
             ),
-            "context_type":"product_launch" if seller_launch else "vendor_content" if vendor_content else "observed",
-            "signal_reverted":"seller_launch" if seller_launch else "vendor_content" if vendor_content else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
+            "context_type":"product_launch" if seller_launch else "supply_offer" if supply_offer else "vendor_content" if vendor_content else "observed",
+            "signal_reverted":"seller_launch" if seller_launch else "supply_offer" if supply_offer else "vendor_content" if vendor_content else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
             "domain":host,
             "source":source,
             "family":family,
@@ -5494,6 +5541,8 @@ def _commercial_evidence_quality(
             "thesis_id":str(meta.get("thesis_id") or ""),
             "query":(query or "")[:700],
             "query_role":query_role or str(meta.get("role") or ""),
+            "query_intent":query_intent,
+            "intent_class":intent_class,
             "title":(title or "")[:300],
             "snippet":(body or "")[:300],
             "url":canonical_url(url)[:1200],
@@ -5543,6 +5592,8 @@ def _commercial_evidence_quality(
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
         vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
         web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+        supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+        query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
     )
 
     index={}
@@ -5559,14 +5610,28 @@ def _commercial_evidence_quality(
         if key in index:
             old=memory[index[key]]
             first=min(float(old.get("first_seen_epoch") or now_epoch),float(row.get("first_seen_epoch") or now_epoch))
-            # A current v2 observation supersedes an old generic/quarantined classification;
-            # a generic observation never demotes an existing concrete v2 classification.
-            preserve_concrete=bool(old.get("gate_eligible")) and not bool(row.get("gate_eligible"))
+            # Current guarded classification is authoritative for positive demand.
+            # Never resurrect BUY_INTENT/PAID_DEMAND/PAIN from a pre-guard observation.
+            protected_rejection=str(row.get("quarantine_reason") or "") in {
+                "supply_offer","vendor_content","web_buyer_voice_missing","seller_launch","disconfirm"
+            }
+            preserve_concrete=(
+                bool(old.get("gate_eligible"))
+                and not bool(row.get("gate_eligible"))
+                and not protected_rejection
+            )
             merged=dict(old if preserve_concrete else row)
             merged["first_seen_epoch"]=first
             merged["last_seen_epoch"]=now_epoch
             merged["seen_count"]=int(old.get("seen_count") or 1)+1
-            merged["signal_types"]=sorted(set(old.get("signal_types") or []) | set(row.get("signal_types") or []))
+            if preserve_concrete:
+                merged["signal_types"]=sorted(set(old.get("signal_types") or []))
+            else:
+                old_context={
+                    x for x in (old.get("signal_types") or [])
+                    if x in {"COMPETITION","DISCONFIRM"}
+                }
+                merged["signal_types"]=sorted(set(row.get("signal_types") or []) | old_context)
             if row.get("query_role")=="disconfirm" or "DISCONFIRM" in set(merged.get("signal_types") or []):
                 merged["gate_eligible"]=False
                 merged["quarantine_reason"]="disconfirm"
@@ -6432,8 +6497,16 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
         return await paid_market_search(query,meta,limit)
     seed=natural_search_seed(query,meta) or query
     query_class=str(meta.get("class") or "")
+    query_intent=str(meta.get("query_intent") or "pain").strip().lower()
     structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
-    if structured_first:
+    if query_intent=="desire":
+        tasks=[
+            free_web_search(query,max(2,min(limit,6))),
+            _hn_query_search(seed,3),
+            _github_issue_query_search(seed,3),
+            _stackexchange_query_search(seed,3,meta),
+        ]
+    elif structured_first:
         tasks=[
             _hn_query_search(seed,3),
             _github_issue_query_search(seed,3),
@@ -7649,7 +7722,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
     followup_queries = _jarvis_next_queries(jarvis_brief)
-    web_queries = searches + followup_queries
+    web_queries = searches if DESIRE_EXPERIMENT_ENABLED else searches + followup_queries
     async def ask_probe_agents(q: str) -> dict:
         meta=query_meta.get(" ".join(q.split()).lower()) or {}
         role=str(meta.get("role") or meta.get("class") or "research")
@@ -7723,6 +7796,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
                 vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
                 web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+                supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+                query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
                 family_match_guard=ATTRIBUTION_FAMILY_GUARD_ENABLED,
                 strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
             )

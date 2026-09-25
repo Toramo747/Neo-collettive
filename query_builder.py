@@ -126,3 +126,51 @@ def breakout_queries(marker: str, evidence_rows: Iterable[dict] | None, family: 
         if len(out)>=limit:
             break
     return out
+
+
+DESIRE_EXPERIMENT_INTENT_CLASSES = (
+    "solution_search","paid_automation",
+)
+
+
+def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -> list[dict]:
+    """Build exactly bounded desire probes from already-selected family slots."""
+    limit=max(0,min(int(limit or 0),2))
+    if not limit:
+        return []
+    candidates=[]
+    seen=set()
+    for row in reversed(list(base_entries or [])):
+        if not isinstance(row,dict):
+            continue
+        family=str(row.get("family") or "").strip()
+        if not family or family in seen:
+            continue
+        seen.add(family)
+        candidates.append((family,row))
+        if len(candidates)>=limit:
+            break
+    if not candidates:
+        return []
+    candidates=list(reversed(candidates))
+    while len(candidates)<limit:
+        candidates.append(candidates[-1])
+    out=[]
+    for idx,(family,row) in enumerate(candidates[:limit]):
+        anchor=family.replace("_"," ")
+        intent_class=DESIRE_EXPERIMENT_INTENT_CLASSES[idx % len(DESIRE_EXPERIMENT_INTENT_CLASSES)]
+        if intent_class=="solution_search":
+            query=f'"{anchor}" ("is there a tool" OR "looking for software" OR "any recommendations")'
+        else:
+            query=f'"{anchor}" ("hire someone to automate" OR ("budget" AND automate))'
+        out.append({
+            "query":_clean(query,260),
+            "class":"desire",
+            "role":"buyer",
+            "query_intent":"desire",
+            "intent_class":intent_class,
+            "family":family,
+            "sector":row.get("sector"),
+            "search_alias_used":anchor,
+        })
+    return out

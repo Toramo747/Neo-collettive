@@ -104,8 +104,9 @@ STRONG_PAIN_TERMS = (
     "frustrat","tired of","waste time","workaround","backlog",
 )
 BUY_INTENT_TERMS = (
-    "looking for","need help","need a","seeking","want someone","recommend a",
-    "how can i automate","request:","rfp","request for proposal",
+    "looking for","need help","need a","need to hire","looking to hire","hire someone",
+    "seeking","want someone","recommend a","how can i automate",
+    "request:","rfp","request for proposal",
 )
 BUYER_PAID_TERMS = (
     "budget","will pay","paid job","fixed-price","fixed price","hourly",
@@ -123,6 +124,15 @@ LAUNCH_TITLE_MARKERS = (
 
 GENERIC_WEB_SOURCES = {"brave-search","google-pse","bing-rss-free","web"}
 VENDOR_PATH_MARKERS = ("/blog/","/solutions/","/challenges/","/services/","/resources/")
+SUPPLY_OFFER_PATH_MARKERS = ("/services/","/hire/","/freelancers/","/experts/","/talent/")
+SUPPLY_OFFER_TERMS = (
+    "hire our","hire one of our","our freelancers","our freelancer","our experts",
+    "our expert","we offer","we provide","book a call","book a demo",
+    "get a quote from us","start a free trial","start free trial","try us free",
+)
+GIG_MARKET_DOMAINS = (
+    "fiverr.com","upwork.com","freelancer.com","guru.com","peopleperhour.com","toptal.com",
+)
 COMMUNITY_DOMAINS = (
     "reddit.com","news.ycombinator.com","stackoverflow.com","serverfault.com",
     "superuser.com","stackexchange.com",
@@ -171,6 +181,28 @@ def buyer_voice_present(title: str, body: str) -> bool:
     ))
 
 
+def first_person_buyer_voice_present(title: str, body: str) -> bool:
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    if not re.search(r"\b(?:i|we|our|my)\b",text):
+        return False
+    return bool(re.search(
+        r"\b(?:i|we|our|my)\b[^.!?]{0,140}\b(?:need|looking|seeking|want|hire|pay|budget|replace|switch|automate)\b",
+        text,
+        flags=re.I,
+    ))
+
+
+def marker_survives_query_echo(marker: str, title: str, body: str, query: str) -> bool:
+    if not contains_term(query or "",marker):
+        return True
+    if contains_term(title or "",marker):
+        return True
+    for sentence in re.split(r"(?<=[.!?])\s+",str(body or "")):
+        if contains_term(sentence,marker) and first_person_buyer_voice_present("",sentence):
+            return True
+    return False
+
+
 def community_context(url: str, source: str = "") -> bool:
     source_low=(source or "").strip().lower()
     if source_low in {"hn-algolia-routed","hackernews","stackexchange-routed","github-issues-routed","github-issues"}:
@@ -216,6 +248,81 @@ def is_vendor_content(title: str, body: str, url: str, source: str = "") -> bool
         return False
     score=int(flags["marketing_title"])+int(flags["marketing_path"])+int(not flags["buyer_voice"])
     return score>=2
+
+
+def is_supply_offer(title: str, body: str, url: str, source: str = "") -> bool:
+    """Detect seller-side service/product offers returned by generic web search."""
+    if not generic_web_source(source):
+        return False
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    try:
+        parts=urlsplit(str(url or ""))
+        host=(parts.hostname or "").lower().strip(".")
+        path=(parts.path or "").lower()
+    except Exception:
+        host=""
+        path=""
+    strong_phrase=(
+        any(contains_term(text,term) for term in SUPPLY_OFFER_TERMS)
+        or bool(re.search(r"\btry\s+[a-z0-9][a-z0-9 .+_-]{0,60}\s+(?:for\s+)?free(?:\s+trial)?\b",text,re.I))
+    )
+    path_offer=any(marker in path for marker in SUPPLY_OFFER_PATH_MARKERS)
+    gig_market=any(host==d or host.endswith("."+d) for d in GIG_MARKET_DOMAINS)
+    first_person=first_person_buyer_voice_present(title,body)
+    if strong_phrase:
+        return True
+    if path_offer and not first_person:
+        return True
+    if gig_market and not first_person and (
+        contains_term(text,"hire")
+        or contains_term(text,"freelancer")
+        or contains_term(text,"expert")
+    ):
+        return True
+    return False
+
+
+INTENT_CLASSES = (
+    "feature_gap","solution_search","recommendation","alternative",
+    "switching","paid_replacement","paid_automation",
+)
+
+
+def classify_intent_class(title: str, body: str, url: str = "", source: str = "") -> str:
+    """Classify buyer desire as metadata only; this function never creates a gate signal."""
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    if generic_web_source(source):
+        if is_supply_offer(title,body,url,source) or is_vendor_content(title,body,url,source):
+            return ""
+        if not (buyer_voice_present(title,body) or community_context(url,source)):
+            return ""
+
+    paid_context=contains_any(text,(
+        "we pay","we're paying","we are paying","our subscription","our license",
+        "renewal","budget","will pay","paid job","fixed-price","fixed price",
+    ))
+    replacement=contains_any(text,(
+        "alternative to","alternatives to","switching from","switch from",
+        "replace ","replacing ","moving away from","migrate from","migrating from",
+    ))
+    if replacement and paid_context:
+        return "paid_replacement"
+    if contains_any(text,("switching from","switch from","replace ","replacing ","moving away from","migrate from","migrating from")):
+        return "switching"
+    if contains_any(text,("alternative to","alternatives to")):
+        return "alternative"
+    if (
+        contains_any(text,("budget","will pay","hire someone","need to hire","looking to hire","contractor"))
+        and contains_any(text,("automate","automation","workflow"))
+    ):
+        return "paid_automation"
+    if contains_any(text,("what do you use","any recommendations","recommend a","recommendation for")):
+        return "recommendation"
+    if contains_any(text,("is there a tool","is there an app","looking for software","looking for a tool","looking for an app")):
+        return "solution_search"
+    if contains_any(text,("wish it had","wish there was","missing feature","feature request","would love if")):
+        return "feature_gap"
+    return ""
 
 
 def generic_web_pain_allowed(title: str, body: str, url: str, source: str = "") -> bool:
@@ -313,6 +420,9 @@ def demand_signal_type(
     source: str = "",
     vendor_content_guard: bool = False,
     web_buyer_voice_guard: bool = False,
+    supply_offer_guard: bool = False,
+    query_echo_guard: bool = False,
+    query: str = "",
 ) -> list[str]:
     """Tag buyer-side demand separately from vendor/supply pricing.
 
@@ -326,23 +436,52 @@ def demand_signal_type(
     tags: list[str] = []
     seller_launch = bool(seller_launch_guard and is_launch_title(title))
     vendor_content = bool(vendor_content_guard and is_vendor_content(title,body,url,source))
+    supply_offer = bool(supply_offer_guard and is_supply_offer(title,body,url,source))
+    generic_web = generic_web_source(source)
     buyer_voice_ok = bool(
         not web_buyer_voice_guard
+        or not generic_web
         or generic_web_pain_allowed(title,body,url,source)
     )
-    pain = contains_any(text, STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS)
-    intent = contains_any(text, BUY_INTENT_TERMS)
-    buyer_paid = contains_any(text, BUYER_PAID_TERMS)
+    positive_guard_ok = bool(
+        not seller_launch
+        and not vendor_content
+        and not supply_offer
+        and buyer_voice_ok
+    )
+
+    pain_markers = STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS
+    pain = contains_any(text,pain_markers)
+    intent_markers=[
+        marker for marker in BUY_INTENT_TERMS
+        if contains_term(text,marker)
+        and (
+            not query_echo_guard
+            or not generic_web
+            or marker_survives_query_echo(marker,title,body,query)
+        )
+    ]
+    paid_markers=[
+        marker for marker in BUYER_PAID_TERMS
+        if contains_term(text,marker)
+        and (
+            not query_echo_guard
+            or not generic_web
+            or marker_survives_query_echo(marker,title,body,query)
+        )
+    ]
+    intent=bool(intent_markers)
+    buyer_paid=bool(paid_markers)
     supply = contains_any(text, SUPPLY_TERMS)
 
-    if pain and not seller_launch and not vendor_content and buyer_voice_ok:
+    if pain and positive_guard_ok:
         tags.append("PAIN")
-    if intent:
+    if intent and positive_guard_ok:
         tags.append("BUY_INTENT")
 
-    # Buyer-side payment must have a buyer/hiring context. Generic vendor pricing
-    # is supply/competition, not proof that a buyer is currently willing to pay.
-    if buyer_paid and (intent or pain or role in {"buyer", "paid_market", "practitioner"}):
+    # Buyer-side payment must have a buyer/hiring context and survive all generic-web guards.
+    # Generic vendor pricing remains COMPETITION only.
+    if buyer_paid and positive_guard_ok and (intent or pain or role in {"buyer","paid_market","practitioner"}):
         tags.append("PAID_DEMAND")
     if supply:
         tags.append("COMPETITION")
@@ -523,6 +662,8 @@ def migrate_evidence_row(
     seller_launch_guard: bool = False,
     vendor_content_guard: bool = False,
     web_buyer_voice_guard: bool = False,
+    supply_offer_guard: bool = False,
+    query_echo_guard: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Idempotently quarantine pre-v2 evidence until it is re-observed by tagger v2."""
     out = dict(row or {})
@@ -609,8 +750,42 @@ def migrate_evidence_row(
             out["migration_v"] = EVIDENCE_SCHEMA_VERSION
             changed = True
 
+    supply_offer=bool(
+        supply_offer_guard
+        and is_supply_offer(
+            str(out.get("title") or ""),
+            str(out.get("snippet") or ""),
+            str(out.get("url") or ""),
+            str(out.get("source") or ""),
+        )
+    )
+    if supply_offer:
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
+        if out.get("signal_types") != signals:
+            out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
+            changed=True
+        if out.get("context_type") != "supply_offer":
+            out["context_type"]="supply_offer"
+            changed=True
+        if out.get("signal_reverted") != "supply_offer":
+            out["signal_reverted"]="supply_offer"
+            changed=True
+        if out.get("gate_eligible") is not False:
+            out["gate_eligible"]=False
+            changed=True
+        reason="disconfirm" if "DISCONFIRM" in set(signals) else "supply_offer"
+        if out.get("quarantine_reason") != reason:
+            out["quarantine_reason"]=reason
+            changed=True
+
     # Generic vendor-authored solution/SEO content is useful market context but is
-    # not buyer pain and must never contribute an independent gate domain.
+    # not buyer demand and must never contribute an independent gate domain.
     vendor_content=bool(
         vendor_content_guard
         and is_vendor_content(
@@ -620,10 +795,16 @@ def migrate_evidence_row(
             str(out.get("source") or ""),
         )
     )
-    if vendor_content:
-        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+    if vendor_content and not supply_offer:
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
         if out.get("signal_types") != signals:
             out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
             changed=True
         if out.get("context_type") != "vendor_content":
             out["context_type"]="vendor_content"
@@ -639,11 +820,11 @@ def migrate_evidence_row(
             out["quarantine_reason"]=reason
             changed=True
 
-    # Generic web PAIN requires buyer voice or a community/Q&A context.
+    # Generic web positive demand requires buyer voice or a community/Q&A context.
     buyer_voice_missing=bool(
         web_buyer_voice_guard
         and generic_web_source(str(out.get("source") or ""))
-        and "PAIN" in set(out.get("signal_types") or [])
+        and bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(out.get("signal_types") or []))
         and not generic_web_pain_allowed(
             str(out.get("title") or ""),
             str(out.get("snippet") or ""),
@@ -651,10 +832,16 @@ def migrate_evidence_row(
             str(out.get("source") or ""),
         )
     )
-    if buyer_voice_missing and not vendor_content:
-        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+    if buyer_voice_missing and not vendor_content and not supply_offer:
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
         if out.get("signal_types") != signals:
             out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
             changed=True
         if out.get("signal_reverted") != "web_buyer_voice_missing":
             out["signal_reverted"]="web_buyer_voice_missing"
@@ -667,13 +854,71 @@ def migrate_evidence_row(
             out["quarantine_reason"]=reason
             changed=True
 
-    # Seller-authored launches are supply-side context, never buyer pain. Preserve
-    # the row for market context/audit, but remove PAIN and exclude its domain from
+    # Re-evaluate all positive demand on generic web from stored source text. This
+    # closes both query-echo and historical tagger holes without changing gate thresholds.
+    if (
+        query_echo_guard
+        and generic_web_source(str(out.get("source") or ""))
+        and not supply_offer
+        and not vendor_content
+        and not (seller_launch_guard and is_launch_title(str(out.get("title") or "")))
+    ):
+        recomputed=demand_signal_type(
+            str(out.get("title") or ""),
+            str(out.get("snippet") or ""),
+            str(out.get("query_role") or ""),
+            strong_pain_only=strong_pain_only,
+            seller_launch_guard=seller_launch_guard,
+            url=str(out.get("url") or ""),
+            source=str(out.get("source") or ""),
+            vendor_content_guard=vendor_content_guard,
+            web_buyer_voice_guard=web_buyer_voice_guard,
+            supply_offer_guard=supply_offer_guard,
+            query_echo_guard=True,
+            query=str(out.get("query") or ""),
+        )
+        old_signals=list(out.get("signal_types") or [])
+        if sorted(old_signals)!=sorted(recomputed):
+            out["signal_types"]=sorted(recomputed)
+            changed=True
+        if "PAID_DEMAND" not in set(recomputed) and out.get("strong_markers"):
+            out["strong_markers"]=[]
+            changed=True
+        elif "PAID_DEMAND" in set(recomputed) and out.get("strong_markers"):
+            filtered=[
+                marker for marker in (out.get("strong_markers") or [])
+                if marker_survives_query_echo(
+                    str(marker),
+                    str(out.get("title") or ""),
+                    str(out.get("snippet") or ""),
+                    str(out.get("query") or ""),
+                )
+            ]
+            if filtered != list(out.get("strong_markers") or []):
+                out["strong_markers"]=filtered
+                changed=True
+        positive=bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(recomputed))
+        if not positive and "DISCONFIRM" not in set(recomputed):
+            if out.get("gate_eligible") is not False:
+                out["gate_eligible"]=False
+                changed=True
+            if out.get("quarantine_reason") not in {"vendor_content","supply_offer","seller_launch","disconfirm"}:
+                out["quarantine_reason"]="nonpositive_signal"
+                changed=True
+
+    # Seller-authored launches are supply-side context, never buyer demand. Preserve
+    # the row for market context/audit, but remove positive demand and exclude its domain from
     # every gate calculation. This migration is intentionally idempotent.
     if seller_launch_guard and is_launch_title(str(out.get("title") or "")):
-        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+        signals=[
+            x for x in (out.get("signal_types") or [])
+            if x not in {"PAIN","BUY_INTENT","PAID_DEMAND"}
+        ]
         if out.get("signal_types") != signals:
             out["signal_types"]=signals
+            changed=True
+        if out.get("strong_markers"):
+            out["strong_markers"]=[]
             changed=True
         if out.get("context_type") != "product_launch":
             out["context_type"]="product_launch"
@@ -698,6 +943,8 @@ def migrate_evidence_memory(
     seller_launch_guard: bool = False,
     vendor_content_guard: bool = False,
     web_buyer_voice_guard: bool = False,
+    supply_offer_guard: bool = False,
+    query_echo_guard: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     source_rows=[row for row in (rows or []) if isinstance(row,dict)]
     sibling_problem_keys=[
@@ -717,6 +964,8 @@ def migrate_evidence_memory(
             seller_launch_guard=seller_launch_guard,
             vendor_content_guard=vendor_content_guard,
             web_buyer_voice_guard=web_buyer_voice_guard,
+            supply_offer_guard=supply_offer_guard,
+            query_echo_guard=query_echo_guard,
         )
         if row_changed:
             changed += 1

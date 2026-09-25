@@ -25,6 +25,8 @@ from evidence_integrity import (
     generic_web_pain_allowed,
     is_launch_title,
     is_vendor_content,
+    is_supply_offer,
+    marker_survives_query_echo,
     is_self_contamination,
     structured_paid_source,
 )
@@ -101,6 +103,8 @@ def evaluate_fetched_legacy_row(
     seller_launch_guard: bool = True,
     vendor_content_guard: bool = True,
     web_buyer_voice_guard: bool = True,
+    supply_offer_guard: bool = True,
+    query_echo_guard: bool = True,
     family_match_guard: bool = True,
     strong_pain_only: bool = True,
 ) -> dict[str, Any]:
@@ -149,6 +153,9 @@ def evaluate_fetched_legacy_row(
             url=url,source=source,
             vendor_content_guard=vendor_content_guard,
             web_buyer_voice_guard=web_buyer_voice_guard,
+            supply_offer_guard=supply_offer_guard,
+            query_echo_guard=query_echo_guard,
+            query=query,
         )
         return failed("seller_launch",{
             "signal_types":[x for x in launch_signals if x!="PAIN"],
@@ -156,6 +163,16 @@ def evaluate_fetched_legacy_row(
             "quarantine_reason":"seller_launch",
             "context_type":"product_launch",
             "signal_reverted":"seller_launch",
+        })
+
+    if supply_offer_guard and is_supply_offer(title,body,url,source):
+        return failed("supply_offer",{
+            "signal_types":[],
+            "strong_markers":[],
+            "gate_eligible":False,
+            "quarantine_reason":"supply_offer",
+            "context_type":"supply_offer",
+            "signal_reverted":"supply_offer",
         })
 
     if vendor_content_guard and is_vendor_content(title,body,url,source):
@@ -166,6 +183,9 @@ def evaluate_fetched_legacy_row(
             url=url,source=source,
             vendor_content_guard=True,
             web_buyer_voice_guard=web_buyer_voice_guard,
+            supply_offer_guard=supply_offer_guard,
+            query_echo_guard=query_echo_guard,
+            query=query,
         )
         return failed("vendor_content",{
             "signal_types":[x for x in vendor_signals if x!="PAIN"],
@@ -229,6 +249,9 @@ def evaluate_fetched_legacy_row(
         url=url,source=source,
         vendor_content_guard=vendor_content_guard,
         web_buyer_voice_guard=web_buyer_voice_guard,
+        supply_offer_guard=supply_offer_guard,
+        query_echo_guard=query_echo_guard,
+        query=query,
     )
     if structured_paid_source(source,query_role):
         signal_types=sorted(set(signal_types)|{"PAID_DEMAND","BUY_INTENT"})
@@ -241,7 +264,13 @@ def evaluate_fetched_legacy_row(
 
     strong=[
         term for term in BUYER_STRONG_TERMS
-        if "PAID_DEMAND" in signal_types and contains_term(context,term)
+        if "PAID_DEMAND" in signal_types
+        and contains_term(context,term)
+        and (
+            not query_echo_guard
+            or not str(source or "").strip().lower() in {"brave-search","google-pse","bing-rss-free","web"}
+            or marker_survives_query_echo(term,title,body,query)
+        )
     ]
     if structured_paid_source(source,query_role) and "PAID_DEMAND" in signal_types and not strong:
         strong=["structured_job_market"]
@@ -285,6 +314,8 @@ async def revalidate_quarantined_rows(
     seller_launch_guard: bool = True,
     vendor_content_guard: bool = True,
     web_buyer_voice_guard: bool = True,
+    supply_offer_guard: bool = True,
+    query_echo_guard: bool = True,
     family_match_guard: bool = True,
     strong_pain_only: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -339,6 +370,8 @@ async def revalidate_quarantined_rows(
                 seller_launch_guard=seller_launch_guard,
                 vendor_content_guard=vendor_content_guard,
                 web_buyer_voice_guard=web_buyer_voice_guard,
+                supply_offer_guard=supply_offer_guard,
+                query_echo_guard=query_echo_guard,
                 family_match_guard=family_match_guard,
                 strong_pain_only=strong_pain_only,
             )
