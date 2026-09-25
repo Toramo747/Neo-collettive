@@ -3,40 +3,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-import httpx
-
 import search_providers as sp
-
-
-class FakeResponse:
-    def __init__(self, status=200, payload=None):
-        self.status_code=status
-        self._payload=payload if payload is not None else {}
-        self.request=httpx.Request("GET","https://provider.invalid/")
-    def json(self):
-        return self._payload
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise httpx.HTTPStatusError(
-                "provider request failed",
-                request=self.request,
-                response=httpx.Response(self.status_code,request=self.request),
-            )
-
-
-class FakeClient:
-    response=FakeResponse()
-    last_kwargs=None
-    last_get=None
-    def __init__(self,*args,**kwargs):
-        type(self).last_kwargs=kwargs
-    async def __aenter__(self):
-        return self
-    async def __aexit__(self,*args):
-        return False
-    async def get(self,url,**kwargs):
-        type(self).last_get=(url,kwargs)
-        return type(self).response
 
 
 class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
@@ -57,19 +24,24 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_brave_key_uses_official_contract(self):
         os.environ["BRAVE_SEARCH_API_KEY"]="super-secret-brave"
-        FakeClient.response=FakeResponse(200,{
-            "web":{"results":[{
-                "title":"Need help automating reports",
-                "url":"https://example.org/problem",
-                "description":"Manual reporting takes hours every week.",
-            }]}
-        })
-        with patch.object(sp.httpx,"AsyncClient",FakeClient):
-            rows,state,meta=await sp.search("manual reporting",4,state=sp.new_search_state())
+        calls=[]
+        async def http_get(url,**kwargs):
+            calls.append((url,kwargs))
+            return {
+                "status":200,
+                "json":{"web":{"results":[{
+                    "title":"Need help automating reports",
+                    "url":"https://example.org/problem",
+                    "description":"Manual reporting takes hours every week.",
+                }]}}
+            }
+        rows,state,meta=await sp.search(
+            "manual reporting",4,state=sp.new_search_state(),http_get=http_get
+        )
         self.assertFalse(meta["fallback"])
         self.assertEqual(meta["provider"],"brave")
         self.assertEqual(rows[0]["source"],"brave-search")
-        url,kwargs=FakeClient.last_get
+        url,kwargs=calls[0]
         self.assertEqual(url,sp.BRAVE_ENDPOINT)
         self.assertEqual(kwargs["params"],{"q":"manual reporting","count":4})
         self.assertEqual(kwargs["headers"]["X-Subscription-Token"],"super-secret-brave")
@@ -80,19 +52,24 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         os.environ["NEO_SEARCH_PROVIDER"]="google"
         os.environ["GOOGLE_PSE_KEY"]="super-secret-google"
         os.environ["GOOGLE_PSE_CX"]="cx-secret"
-        FakeClient.response=FakeResponse(200,{
-            "items":[{
-                "title":"Buyer asks for automation",
-                "link":"https://example.net/buyer",
-                "snippet":"Looking for help with a repetitive workflow.",
-            }]
-        })
-        with patch.object(sp.httpx,"AsyncClient",FakeClient):
-            rows,state,meta=await sp.search("workflow",3,state=sp.new_search_state())
+        calls=[]
+        async def http_get(url,**kwargs):
+            calls.append((url,kwargs))
+            return {
+                "status":200,
+                "json":{"items":[{
+                    "title":"Buyer asks for automation",
+                    "link":"https://example.net/buyer",
+                    "snippet":"Looking for help with a repetitive workflow.",
+                }]}
+            }
+        rows,state,meta=await sp.search(
+            "workflow",3,state=sp.new_search_state(),http_get=http_get
+        )
         self.assertFalse(meta["fallback"])
         self.assertEqual(meta["provider"],"google")
         self.assertEqual(rows[0]["source"],"google-pse")
-        url,kwargs=FakeClient.last_get
+        url,kwargs=calls[0]
         self.assertEqual(url,sp.GOOGLE_ENDPOINT)
         self.assertEqual(
             kwargs["params"],
@@ -103,22 +80,23 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         secret="DO-NOT-LEAK-THIS"
         os.environ["BRAVE_SEARCH_API_KEY"]=secret
         for status in (401,429):
-            FakeClient.response=FakeResponse(status,{})
-            with patch.object(sp.httpx,"AsyncClient",FakeClient):
-                rows,state,meta=await sp.search("workflow",3,state=sp.new_search_state())
+            async def http_get(url,**kwargs):
+                return {"status":status,"json":{}}
+            rows,state,meta=await sp.search(
+                "workflow",3,state=sp.new_search_state(),http_get=http_get
+            )
             self.assertEqual(rows,[])
             self.assertTrue(meta["fallback"])
             self.assertEqual(meta["reason"],"HTTPStatusError:"+str(status))
-            serialized=repr((state,meta,rows))
-            self.assertNotIn(secret,serialized)
+            self.assertNotIn(secret,repr((state,meta,rows)))
 
     async def test_cycle_limit_is_respected(self):
         os.environ["BRAVE_SEARCH_API_KEY"]="secret"
-        FakeClient.response=FakeResponse(200,{"web":{"results":[]}})
+        async def http_get(url,**kwargs):
+            return {"status":200,"json":{"web":{"results":[]}}}
         state=sp.new_search_state()
-        with patch.object(sp.httpx,"AsyncClient",FakeClient):
-            _,state,_=await sp.search("one",2,state=state,max_calls_cycle=1,max_calls_day=10)
-            _,state,meta=await sp.search("two",2,state=state,max_calls_cycle=1,max_calls_day=10)
+        _,state,_=await sp.search("one",2,state=state,max_calls_cycle=1,max_calls_day=10,http_get=http_get)
+        _,state,meta=await sp.search("two",2,state=state,max_calls_cycle=1,max_calls_day=10,http_get=http_get)
         self.assertTrue(meta["fallback"])
         self.assertEqual(meta["reason"],"budget_exhausted")
         self.assertEqual(state["calls_cycle"],1)
@@ -129,7 +107,8 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         state=sp.new_search_state()
         state.update({"calls_day":2,"calls_cycle":0})
         rows,state,meta=await sp.search(
-            "workflow",2,state=state,max_calls_cycle=10,max_calls_day=2
+            "workflow",2,state=state,max_calls_cycle=10,max_calls_day=2,
+            http_get=lambda *a,**k: None,
         )
         self.assertEqual(rows,[])
         self.assertTrue(meta["fallback"])
@@ -146,24 +125,20 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
             "fallbacks":3,
             "last_provider":"brave",
         }
-        same=sp.begin_cycle(
-            state,348,datetime(2026,9,25,18,0,tzinfo=timezone.utc)
-        )
+        same=sp.begin_cycle(state,348,datetime(2026,9,25,18,0,tzinfo=timezone.utc))
         self.assertEqual(same["calls_day"],37)
         self.assertEqual(same["calls_cycle"],0)
         self.assertEqual(same["errors"],0)
         self.assertEqual(same["fallbacks"],0)
-        next_day=sp.begin_cycle(
-            same,349,datetime(2026,9,26,1,0,tzinfo=timezone.utc)
-        )
+        next_day=sp.begin_cycle(same,349,datetime(2026,9,26,1,0,tzinfo=timezone.utc))
         self.assertEqual(next_day["calls_day"],0)
 
     async def test_secret_never_appears_in_state_metadata_or_exception(self):
         secret="SECRET-API-VALUE-123"
         os.environ["BRAVE_SEARCH_API_KEY"]=secret
-        FakeClient.response=FakeResponse(429,{})
-        with patch.object(sp.httpx,"AsyncClient",FakeClient):
-            rows,state,meta=await sp.search("test",2,state=sp.new_search_state())
+        async def http_get(url,**kwargs):
+            raise RuntimeError("transport failed")
+        rows,state,meta=await sp.search("test",2,state=sp.new_search_state(),http_get=http_get)
         combined=repr({"rows":rows,"state":state,"meta":meta})
         self.assertNotIn(secret,combined)
         self.assertNotIn("BRAVE_SEARCH_API_KEY",combined)
