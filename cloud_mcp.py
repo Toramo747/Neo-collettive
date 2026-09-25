@@ -5523,14 +5523,14 @@ def _commercial_evidence_quality(
             "quarantine_reason":None if gate_eligible else (
                 "disconfirm" if query_role=="disconfirm" or "DISCONFIRM" in signal_types
                 else "seller_launch" if seller_launch
-                else "vendor_content" if vendor_content
                 else "supply_offer" if supply_offer
+                else "vendor_content" if vendor_content
                 else "web_buyer_voice_missing" if web_buyer_voice_missing
                 else "generic_or_nonconcrete_problem" if not gate_eligible_problem_key(problem_key)
                 else "nonpositive_signal"
             ),
-            "context_type":"product_launch" if seller_launch else "vendor_content" if vendor_content else "supply_offer" if supply_offer else "observed",
-            "signal_reverted":"seller_launch" if seller_launch else "vendor_content" if vendor_content else "supply_offer" if supply_offer else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
+            "context_type":"product_launch" if seller_launch else "supply_offer" if supply_offer else "vendor_content" if vendor_content else "observed",
+            "signal_reverted":"seller_launch" if seller_launch else "supply_offer" if supply_offer else "vendor_content" if vendor_content else "web_buyer_voice_missing" if web_buyer_voice_missing else None,
             "domain":host,
             "source":source,
             "family":family,
