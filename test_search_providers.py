@@ -138,6 +138,44 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         next_day=sp.begin_cycle(same,349,datetime(2026,9,26,1,0,tzinfo=timezone.utc))
         self.assertEqual(next_day["calls_day"],0)
 
+
+    async def test_fallback_reason_is_counted_without_secret(self):
+        secret="BRAVE-DO-NOT-LEAK"
+        os.environ["BRAVE_SEARCH_API_KEY"]=secret
+        async def http_get(url,**kwargs):
+            return {"status":429,"json":{}}
+        rows,state,meta=await sp.search(
+            "workflow",2,state=sp.new_search_state(),http_get=http_get
+        )
+        self.assertEqual(state["fallback_reasons"],{"HTTPStatusError:429":1})
+        self.assertEqual(sp.provider_diagnostics(state)["fallback_reasons"],{"HTTPStatusError:429":1})
+        self.assertNotIn(secret,repr((state,meta,rows)))
+
+    async def test_minimum_interval_between_provider_calls(self):
+        os.environ["BRAVE_SEARCH_API_KEY"]="secret"
+        clock=[100.0]
+        sleeps=[]
+        async def http_get(url,**kwargs):
+            return {"status":200,"json":{"web":{"results":[]}}}
+        async def sleep_fn(seconds):
+            sleeps.append(seconds)
+            clock[0]+=seconds
+        def monotonic_fn():
+            return clock[0]
+
+        state=sp.new_search_state()
+        _,state,_=await sp.search(
+            "one",2,state=state,http_get=http_get,min_interval_ms=1100,
+            sleep_fn=sleep_fn,monotonic_fn=monotonic_fn,
+        )
+        clock[0]+=0.1
+        _,state,_=await sp.search(
+            "two",2,state=state,http_get=http_get,min_interval_ms=1100,
+            sleep_fn=sleep_fn,monotonic_fn=monotonic_fn,
+        )
+        self.assertEqual(len(sleeps),1)
+        self.assertAlmostEqual(sleeps[0],1.0,places=3)
+
     async def test_secret_never_appears_in_state_metadata_or_exception(self):
         secret="SECRET-API-VALUE-123"
         os.environ["BRAVE_SEARCH_API_KEY"]=secret
