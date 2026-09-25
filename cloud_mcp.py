@@ -56,6 +56,7 @@ from discovery_v3 import (
     OBSERVED_HYPOTHESIS_SCHEMA_VERSION,
     natural_search_seed,
     observed_pain_candidates,
+    validate_observed_candidate,
     query_relevance,
     structured_job_relevance,
 )
@@ -75,6 +76,7 @@ from evidence_integrity import (
     make_thesis_id,
     migrate_evidence_memory,
     is_self_contamination,
+    is_launch_title,
     problem_customer_segment,
     problem_job_tail,
     structured_paid_source,
@@ -92,7 +94,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.9"  # evidence integrity hardening
+VERSION = "0.99.10"  # candidate revalidation and seller-launch evidence guard
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -129,6 +131,8 @@ ATTRIBUTION_FAMILY_GUARD_ENABLED = (os.getenv("NEO_ATTRIBUTION_FAMILY_GUARD", "1
 STRONG_PAIN_GUARD_ENABLED = (os.getenv("NEO_STRONG_PAIN_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 SELF_CONTAMINATION_GUARD_ENABLED = (os.getenv("NEO_SELF_CONTAMINATION_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
+SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
@@ -192,6 +196,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "knowledge_ledger": [],
     "hypothesis_queue": [],
     "observed_pain_candidates": [],
+    "observed_candidate_purge_diagnostics": {"observed_candidates_purged":0,"observed_candidates_purged_by_reason":{}},
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
@@ -324,6 +329,7 @@ def _state_payload() -> dict:
         "knowledge_ledger": list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
         "hypothesis_queue": list(AUTOPILOT_STATE.get("hypothesis_queue") or [])[-40:],
         "observed_pain_candidates": list(AUTOPILOT_STATE.get("observed_pain_candidates") or [])[-30:],
+        "observed_candidate_purge_diagnostics": AUTOPILOT_STATE.get("observed_candidate_purge_diagnostics") or {},
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
