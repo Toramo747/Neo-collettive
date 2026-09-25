@@ -7721,6 +7721,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 max_fetch_attempts=3,
                 self_contamination_guard=SELF_CONTAMINATION_GUARD_ENABLED,
                 seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+                vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
+                web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
                 family_match_guard=ATTRIBUTION_FAMILY_GUARD_ENABLED,
                 strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
             )
