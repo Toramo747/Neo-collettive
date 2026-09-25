@@ -1,0 +1,14 @@
+name: Verify main pytest
+on:
+  push:
+    branches: [verify-main-pytest-c5d6f835]
+permissions:
+  contents: read
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pip install -q -r requirements.txt pytest
+      - run: python -m pytest -q
