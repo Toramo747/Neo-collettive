@@ -5,6 +5,11 @@ from unittest.mock import patch
 
 import search_providers as sp
 
+try:
+    import httpx
+except ImportError:
+    httpx=None
+
 
 class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -142,6 +147,72 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         combined=repr({"rows":rows,"state":state,"meta":meta})
         self.assertNotIn(secret,combined)
         self.assertNotIn("BRAVE_SEARCH_API_KEY",combined)
+
+
+    @unittest.skipIf(httpx is None,"httpx not installed")
+    async def test_google_mocktransport_log_never_contains_key_or_cx(self):
+        key="FAKE_SECRET_123"
+        cx="FAKE_CX_456"
+        os.environ["GOOGLE_PSE_KEY"]=key
+        os.environ["GOOGLE_PSE_CX"]=cx
+        sp.configure_http_client_logging()
+
+        async def handler(request):
+            return httpx.Response(
+                200,
+                request=request,
+                json={"items":[{"title":"x","link":"https://example.com","snippet":"y"}]},
+            )
+
+        transport=httpx.MockTransport(handler)
+        logger=__import__("logging").getLogger("httpx")
+        old_level=logger.level
+        logger.setLevel(__import__("logging").INFO)
+        try:
+            with self.assertLogs("httpx",level="INFO") as captured:
+                async with httpx.AsyncClient(transport=transport) as client:
+                    await client.get(
+                        sp.GOOGLE_ENDPOINT,
+                        params={"key":key,"cx":cx,"q":"workflow","num":1},
+                    )
+        finally:
+            logger.setLevel(old_level)
+        output="\n".join(captured.output)
+        self.assertNotIn(key,output)
+        self.assertNotIn(cx,output)
+        self.assertNotIn("key="+key,output)
+        self.assertNotIn("cx="+cx,output)
+
+    @unittest.skipIf(httpx is None,"httpx not installed")
+    async def test_brave_mocktransport_log_never_contains_header_secret(self):
+        secret="FAKE_BRAVE_SECRET_789"
+        os.environ["BRAVE_SEARCH_API_KEY"]=secret
+        sp.configure_http_client_logging()
+
+        async def handler(request):
+            return httpx.Response(
+                200,
+                request=request,
+                json={"web":{"results":[]}},
+            )
+
+        transport=httpx.MockTransport(handler)
+        logger=__import__("logging").getLogger("httpx")
+        old_level=logger.level
+        logger.setLevel(__import__("logging").INFO)
+        try:
+            with self.assertLogs("httpx",level="INFO") as captured:
+                async with httpx.AsyncClient(transport=transport) as client:
+                    await client.get(
+                        sp.BRAVE_ENDPOINT,
+                        params={"q":"workflow","count":1},
+                        headers={"X-Subscription-Token":secret},
+                    )
+        finally:
+            logger.setLevel(old_level)
+        output="\n".join(captured.output)
+        self.assertNotIn(secret,output)
+        self.assertNotIn("X-Subscription-Token",output)
 
 
 if __name__=="__main__":
