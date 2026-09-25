@@ -1,0 +1,63 @@
+name: MYCELIX v0.99.12 validation
+# Branch-only validation; never deploys or merges.
+
+on:
+  push:
+    branches: [mycelix-search-provider-v09912]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile changed modules
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py ingestion_diagnostics.py search_providers.py
+
+      - name: Run full unit suite with network blocked
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import socket
+          import unittest
+
+          def blocked(*args, **kwargs):
+              raise RuntimeError("network disabled during unit tests")
+
+          socket.create_connection = blocked
+          socket.socket.connect = blocked
+
+          suite = unittest.defaultTestLoader.discover(".", pattern="test_*.py")
+          count = suite.countTestCases()
+          print("discovered_tests="+str(count))
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          if not result.wasSuccessful():
+              raise SystemExit(1)
+          print("all_tests_green="+str(count))
+          PY
+
+      - name: Verify version and secret isolation surface
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pathlib
+          import re
+
+          source=pathlib.Path("cloud_mcp.py").read_text(encoding="utf-8")
+          m=re.search(r'^VERSION = "([^"]+)"',source,re.M)
+          if not m or m.group(1)!="0.99.12":
+              raise SystemExit("wrong VERSION")
+          provider=pathlib.Path("search_providers.py").read_text(encoding="utf-8")
+          for forbidden in ("super-secret-brave","super-secret-google","SECRET-API-VALUE-123","NEVER-PERSIST-THIS-SECRET"):
+              if forbidden in source or forbidden in provider:
+                  raise SystemExit("test secret leaked into production source")
+          print("version=0.99.12")
+          print("production_source_secret_values=0")
+          PY
