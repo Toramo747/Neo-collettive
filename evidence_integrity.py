@@ -160,7 +160,15 @@ def generic_web_source(source: str) -> bool:
 
 def buyer_voice_present(title: str, body: str) -> bool:
     text=" ".join(((title or "")+" "+(body or "")).lower().split())
-    return any(contains_term(text,phrase) for phrase in BUYER_VOICE_PHRASES)
+    if any(contains_term(text,phrase) for phrase in BUYER_VOICE_PHRASES):
+        return True
+    # Direct buyer-style questions are acceptable even when the source does not
+    # use a first-person phrase verbatim.
+    return bool(re.search(
+        r"(?:^|[.!?]\s)(?:how|what|which|anyone|does anyone|can anyone|is there|are there)\b[^?]{0,180}\?",
+        text,
+        flags=re.I,
+    ))
 
 
 def community_context(url: str, source: str = "") -> bool:
