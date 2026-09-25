@@ -121,6 +121,21 @@ LAUNCH_TITLE_MARKERS = (
     "show hn:","launch hn:","introducing ","announcing ","we built ","i built ",
 )
 
+GENERIC_WEB_SOURCES = {"brave-search","google-pse","bing-rss-free","web"}
+VENDOR_PATH_MARKERS = ("/blog/","/solutions/","/challenges/","/services/","/resources/")
+COMMUNITY_DOMAINS = (
+    "reddit.com","news.ycombinator.com","stackoverflow.com","serverfault.com",
+    "superuser.com","stackexchange.com",
+)
+BUYER_VOICE_PHRASES = (
+    "i need","we need","i'm looking","i am looking","we're looking","we are looking",
+    "our team spends","our team spend","we spend","i spend","we are struggling",
+    "we're struggling","i am struggling","i'm struggling","we struggle","i struggle",
+    "we manually","i manually","we have to","i have to","can anyone","does anyone",
+    "has anyone","any recommendations","what do you use","how do i","how can i",
+    "how do we","how can we","looking for help",
+)
+
 STRUCTURED_PAID_SOURCES = {
     "remotive-api",
     "remoteok-api",
@@ -137,6 +152,68 @@ def is_launch_title(title: str) -> bool:
     """
     low=" ".join(str(title or "").split()).strip().lower()
     return any(low.startswith(marker) for marker in LAUNCH_TITLE_MARKERS)
+
+
+def generic_web_source(source: str) -> bool:
+    return (source or "").strip().lower() in GENERIC_WEB_SOURCES
+
+
+def buyer_voice_present(title: str, body: str) -> bool:
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    return any(contains_term(text,phrase) for phrase in BUYER_VOICE_PHRASES)
+
+
+def community_context(url: str, source: str = "") -> bool:
+    source_low=(source or "").strip().lower()
+    if source_low in {"hn-algolia-routed","hackernews","stackexchange-routed","github-issues-routed","github-issues"}:
+        return True
+    try:
+        parts=urlsplit(str(url or ""))
+        host=(parts.hostname or "").lower().strip(".")
+        path=(parts.path or "").lower()
+    except Exception:
+        host=""
+        path=""
+    if any(host==d or host.endswith("."+d) for d in COMMUNITY_DOMAINS):
+        return True
+    return any(marker in path for marker in ("/forum/","/forums/","/questions/","/discussion/","/discussions/","/thread/","/threads/"))
+
+
+def vendor_content_indicators(title: str, body: str, url: str, source: str = "") -> dict[str, bool]:
+    low=" ".join(str(title or "").lower().split())
+    try:
+        path=(urlsplit(str(url or "")).path or "").lower()
+    except Exception:
+        path=""
+    marketing_title=bool(
+        re.search(r"^(?:how to\b|using\b.+\bto\b|reduce\b)",low)
+        or re.search(r"\b\d+\s+(?:simple\s+)?(?:ways|fixes|tips|steps)\b",low)
+        or " is slowing down your team" in low
+    )
+    marketing_path=any(marker in path for marker in VENDOR_PATH_MARKERS)
+    buyer_voice=buyer_voice_present(title,body)
+    return {
+        "marketing_title":marketing_title,
+        "marketing_path":marketing_path,
+        "buyer_voice":buyer_voice,
+        "community":community_context(url,source),
+    }
+
+
+def is_vendor_content(title: str, body: str, url: str, source: str = "") -> bool:
+    if not generic_web_source(source):
+        return False
+    flags=vendor_content_indicators(title,body,url,source)
+    if flags["community"]:
+        return False
+    score=int(flags["marketing_title"])+int(flags["marketing_path"])+int(not flags["buyer_voice"])
+    return score>=2
+
+
+def generic_web_pain_allowed(title: str, body: str, url: str, source: str = "") -> bool:
+    if not generic_web_source(source):
+        return True
+    return bool(community_context(url,source) or buyer_voice_present(title,body))
 
 
 def structured_paid_source(source: str, query_role: str = "") -> bool:
@@ -224,6 +301,10 @@ def demand_signal_type(
     query_role: str = "",
     strong_pain_only: bool = False,
     seller_launch_guard: bool = False,
+    url: str = "",
+    source: str = "",
+    vendor_content_guard: bool = False,
+    web_buyer_voice_guard: bool = False,
 ) -> list[str]:
     """Tag buyer-side demand separately from vendor/supply pricing.
 
@@ -236,12 +317,17 @@ def demand_signal_type(
 
     tags: list[str] = []
     seller_launch = bool(seller_launch_guard and is_launch_title(title))
+    vendor_content = bool(vendor_content_guard and is_vendor_content(title,body,url,source))
+    buyer_voice_ok = bool(
+        not web_buyer_voice_guard
+        or generic_web_pain_allowed(title,body,url,source)
+    )
     pain = contains_any(text, STRONG_PAIN_TERMS if strong_pain_only else PAIN_TERMS)
     intent = contains_any(text, BUY_INTENT_TERMS)
     buyer_paid = contains_any(text, BUYER_PAID_TERMS)
     supply = contains_any(text, SUPPLY_TERMS)
 
-    if pain and not seller_launch:
+    if pain and not seller_launch and not vendor_content and buyer_voice_ok:
         tags.append("PAIN")
     if intent:
         tags.append("BUY_INTENT")
@@ -427,6 +513,8 @@ def migrate_evidence_row(
     enforce_family_match: bool = False,
     strong_pain_only: bool = False,
     seller_launch_guard: bool = False,
+    vendor_content_guard: bool = False,
+    web_buyer_voice_guard: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Idempotently quarantine pre-v2 evidence until it is re-observed by tagger v2."""
     out = dict(row or {})
@@ -513,6 +601,64 @@ def migrate_evidence_row(
             out["migration_v"] = EVIDENCE_SCHEMA_VERSION
             changed = True
 
+    # Generic vendor-authored solution/SEO content is useful market context but is
+    # not buyer pain and must never contribute an independent gate domain.
+    vendor_content=bool(
+        vendor_content_guard
+        and is_vendor_content(
+            str(out.get("title") or ""),
+            str(out.get("snippet") or ""),
+            str(out.get("url") or ""),
+            str(out.get("source") or ""),
+        )
+    )
+    if vendor_content:
+        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+        if out.get("signal_types") != signals:
+            out["signal_types"]=signals
+            changed=True
+        if out.get("context_type") != "vendor_content":
+            out["context_type"]="vendor_content"
+            changed=True
+        if out.get("signal_reverted") != "vendor_content":
+            out["signal_reverted"]="vendor_content"
+            changed=True
+        if out.get("gate_eligible") is not False:
+            out["gate_eligible"]=False
+            changed=True
+        reason="disconfirm" if "DISCONFIRM" in set(signals) else "vendor_content"
+        if out.get("quarantine_reason") != reason:
+            out["quarantine_reason"]=reason
+            changed=True
+
+    # Generic web PAIN requires buyer voice or a community/Q&A context.
+    buyer_voice_missing=bool(
+        web_buyer_voice_guard
+        and generic_web_source(str(out.get("source") or ""))
+        and "PAIN" in set(out.get("signal_types") or [])
+        and not generic_web_pain_allowed(
+            str(out.get("title") or ""),
+            str(out.get("snippet") or ""),
+            str(out.get("url") or ""),
+            str(out.get("source") or ""),
+        )
+    )
+    if buyer_voice_missing and not vendor_content:
+        signals=[x for x in (out.get("signal_types") or []) if x!="PAIN"]
+        if out.get("signal_types") != signals:
+            out["signal_types"]=signals
+            changed=True
+        if out.get("signal_reverted") != "web_buyer_voice_missing":
+            out["signal_reverted"]="web_buyer_voice_missing"
+            changed=True
+        if out.get("gate_eligible") is not False:
+            out["gate_eligible"]=False
+            changed=True
+        reason="disconfirm" if "DISCONFIRM" in set(signals) else "web_buyer_voice_missing"
+        if out.get("quarantine_reason") != reason:
+            out["quarantine_reason"]=reason
+            changed=True
+
     # Seller-authored launches are supply-side context, never buyer pain. Preserve
     # the row for market context/audit, but remove PAIN and exclude its domain from
     # every gate calculation. This migration is intentionally idempotent.
@@ -542,6 +688,8 @@ def migrate_evidence_memory(
     enforce_family_match: bool = False,
     strong_pain_only: bool = False,
     seller_launch_guard: bool = False,
+    vendor_content_guard: bool = False,
+    web_buyer_voice_guard: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     source_rows=[row for row in (rows or []) if isinstance(row,dict)]
     sibling_problem_keys=[
@@ -559,6 +707,8 @@ def migrate_evidence_memory(
             enforce_family_match=enforce_family_match,
             strong_pain_only=strong_pain_only,
             seller_launch_guard=seller_launch_guard,
+            vendor_content_guard=vendor_content_guard,
+            web_buyer_voice_guard=web_buyer_voice_guard,
         )
         if row_changed:
             changed += 1
