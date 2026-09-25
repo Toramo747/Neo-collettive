@@ -81,6 +81,7 @@ from evidence_integrity import (
     generic_web_source,
     generic_web_pain_allowed,
     is_vendor_content,
+    is_supply_offer,
     gate_eligible_problem_key,
     make_problem_id,
     make_thesis_id,
@@ -104,7 +105,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.13"  # vendor-content gate integrity and Brave fallback diagnostics
+VERSION = "0.99.14"  # demand-signal guards and bounded desire experiment
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -144,6 +145,9 @@ OBSERVED_FAMILY_GUARD_ENABLED = (os.getenv("NEO_OBSERVED_FAMILY_GUARD", "1").str
 OBSERVED_CANDIDATE_REVALIDATION_ENABLED = (os.getenv("NEO_OBSERVED_CANDIDATE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 SELLER_LAUNCH_GUARD_ENABLED = (os.getenv("NEO_SELLER_LAUNCH_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 VENDOR_CONTENT_GUARD_ENABLED = (os.getenv("NEO_VENDOR_CONTENT_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+SUPPLY_OFFER_GUARD_ENABLED = (os.getenv("NEO_SUPPLY_OFFER_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+QUERY_ECHO_GUARD_ENABLED = (os.getenv("NEO_QUERY_ECHO_GUARD", "1").strip().lower() in {"1","true","yes","on"})
+DESIRE_EXPERIMENT_ENABLED = (os.getenv("NEO_DESIRE_EXPERIMENT", "1").strip().lower() in {"1","true","yes","on"})
 WEB_BUYER_VOICE_GUARD_ENABLED = (os.getenv("NEO_WEB_BUYER_VOICE_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 QUARANTINE_REVALIDATION_ENABLED = (os.getenv("NEO_QUARANTINE_REVALIDATION", "1").strip().lower() in {"1","true","yes","on"})
 REVALIDATE_PER_CYCLE = max(0,min(20,int(os.getenv("NEO_REVALIDATE_PER_CYCLE", "3"))))
