@@ -98,6 +98,42 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         )
 
 
+    def test_desire_experiment_metrics_and_sample_are_visible(self):
+        d=IngestionDiagnostics(True)
+        d.record_intent_result(
+            "solution_search","desire",
+            "Is there a tool for invoice entry?",
+            "https://example.com/thread/1",
+            ["BUY_INTENT"],
+            "brave-search",
+        )
+        d.record_intent_result(
+            "paid_automation","desire",
+            "We need to hire someone to automate invoice entry",
+            "https://example.com/thread/2",
+            ["BUY_INTENT","PAID_DEMAND"],
+            "brave-search",
+        )
+        d.record_intent_result(
+            "","pain",
+            "Manual invoice entry is repetitive",
+            "https://example.com/thread/3",
+            ["PAIN"],
+            "hn-algolia-routed",
+        )
+        snap=d.snapshot()
+        self.assertEqual(snap["rows_by_intent_class"],{
+            "paid_automation":1,
+            "solution_search":1,
+        })
+        self.assertEqual(snap["buyer_signals_by_query_intent"]["desire"],{
+            "BUY_INTENT":2,
+            "PAID_DEMAND":1,
+        })
+        self.assertEqual(len(snap["intent_review_sample"]),3)
+        self.assertEqual(snap["intent_review_sample"][0]["query_intent"],"desire")
+        self.assertEqual(snap["intent_review_sample"][1]["intent_class"],"paid_automation")
+
     def test_search_provider_fallback_reasons_are_visible(self):
         d=IngestionDiagnostics(True)
         d.set_search_provider({
