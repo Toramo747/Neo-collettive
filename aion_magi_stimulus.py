@@ -103,6 +103,39 @@ async def main() -> int:
         except Exception as exc:
             structured = {"error": type(exc).__name__ + ":" + str(exc)[:300]}
 
+        structured_actions = []
+        for idx, data in enumerate([
+            {"action": "live_utility", "subject": "a2a"},
+            {"action": "live_utility", "subject": "mcp"},
+            {"action": "discover_external_agents", "capability": "web_research", "need_id": 1},
+        ], 1):
+            req = {
+                "jsonrpc": "2.0",
+                "id": f"mycelix-magi-structured-{idx}",
+                "method": "SendMessage",
+                "params": {
+                    "message": {
+                        "messageId": f"mycelix-magi-structured-{idx}-msg",
+                        "role": "ROLE_USER",
+                        "parts": [{"data": data}],
+                    }
+                },
+            }
+            try:
+                rr = await client.post(
+                    ENDPOINT,
+                    headers={"A2A-Version": "1.0", "Content-Type": "application/json", "Accept": "application/json"},
+                    json=req,
+                )
+                try:
+                    bb = rr.json()
+                except Exception:
+                    bb = {"raw": rr.text[:10000]}
+                structured_actions.append({"request": data, "http_status": rr.status_code, "body": bb})
+            except Exception as exc:
+                structured_actions.append({"request": data, "error": type(exc).__name__ + ":" + str(exc)[:300]})
+            await asyncio.sleep(1)
+
         for turn, prompt in enumerate(PROMPTS, 1):
             payload, headers = send_request(interface, prompt, context_id=context_id, task_id=task_id)
             try:
@@ -146,6 +179,7 @@ async def main() -> int:
         "commercial_gate_changed": False,
         "discovery": discovery,
         "structured_need_probe": structured,
+        "structured_actions": structured_actions,
         "turns_attempted": len(transcript),
         "transcript": transcript,
     }
