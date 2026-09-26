@@ -69,14 +69,10 @@ def _blocked_ip(ip_text: str) -> bool:
         ip = ipaddress.ip_address(ip_text)
     except ValueError:
         return True
-    return bool(
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    )
+    # Fail closed: only globally routable addresses are eligible. This also
+    # blocks RFC1918, loopback, link-local, CGNAT/shared space, documentation
+    # ranges, IPv6 ULA and cloud metadata/link-local addresses.
+    return not bool(ip.is_global)
 
 
 async def resolve_public_ips(host: str) -> list[str]:
