@@ -1,9 +1,9 @@
 {
-  "captured_at_utc": "2026-09-26T05:13:39.827530+00:00",
+  "captured_at_utc": "2026-09-26T05:55:35.589453+00:00",
   "snapshot_schema": 6,
   "brand": "MYCELIX",
   "brand_tagline": "Collective Intelligence Network",
-  "neo_version": "0.99.20",
+  "neo_version": "0.99.22",
   "runtime_profile": {
     "profile_id": "mycelix-prod-main",
     "deployment_role": "production",
@@ -54,50 +54,61 @@
   },
   "heartbeat": {
     "ok": true,
-    "neo_version": "0.99.20",
+    "neo_version": "0.99.22",
     "started": false,
-    "busy": false,
+    "busy": true,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 193.822495,
-    "cycles_completed": 367,
-    "last_started_utc": "2026-09-26T05:10:25.319158+00:00",
-    "last_finished_utc": "2026-09-26T05:13:25.861097+00:00",
+    "last_started_age_seconds": 225.019518,
+    "cycles_completed": 370,
+    "last_started_utc": "2026-09-26T05:36:29.007234+00:00",
+    "last_finished_utc": "2026-09-26T05:22:03.024057+00:00",
     "last_status": "SELECT",
     "last_error": null
   },
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "36219957998",
+    "github_run_id": "36221252654",
     "github_run_attempt": "1",
-    "source_commit": "3f5bf30bb7f3292eaac5a0087434895ef6a1fdfa",
+    "source_commit": "67c435d57815afc8ceeb76b8f5ab2f452a5a38ad",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
-    "running": false,
-    "cycles_completed": 367,
-    "last_started_utc": "2026-09-26T05:10:25.319158+00:00",
-    "last_finished_utc": "2026-09-26T05:13:25.861097+00:00",
+    "running": true,
+    "cycles_completed": 370,
+    "last_started_utc": "2026-09-26T05:36:29.007234+00:00",
+    "last_finished_utc": "2026-09-26T05:22:03.024057+00:00",
     "last_status": "SELECT",
     "last_error": null,
     "stagnation_cycles": 0,
     "recent_sectors": [
-      "small_business_admin",
-      "integration_api",
-      "productivity",
+      "reporting_compliance",
       "ecommerce_ops",
-      "education_tools",
-      "spreadsheet_ops",
-      "data_analytics",
-      "cybersecurity_ops",
-      "hr_ops",
+      "productivity",
+      "it_hygiene",
+      "seo_marketing",
+      "micro_saas",
       "finance_ops",
-      "website_quality",
-      "ecommerce_ops"
+      "hr_ops",
+      "spreadsheet_ops",
+      "ai_tools",
+      "developer_tools",
+      "micro_saas"
     ],
     "family_performance": {
+      "ai_tools": {
+        "score": 0,
+        "observations": 1,
+        "best_gap_score": 0,
+        "qualified_hits": 0,
+        "last_gap_score": 0,
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_signal_types": [],
+        "no_progress_streak": 1
+      },
       "manual_data_entry": {
         "score": 90,
         "observations": 1,
@@ -112,17 +123,6 @@
           "PAIN"
         ],
         "no_progress_streak": 0
-      },
-      "ai_tools": {
-        "score": 0,
-        "observations": 1,
-        "best_gap_score": 0,
-        "qualified_hits": 0,
-        "last_gap_score": 0,
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_signal_types": [],
-        "no_progress_streak": 1
       },
       "workflow_automation": {
         "score": 5,
@@ -228,74 +228,51 @@
       "mode": "evidence_integrity_query_budget",
       "entropy_source": "system_random",
       "queries": [
-        "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
-        "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
-        "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+        "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
         "invoice workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
-        "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
+        "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+        "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
       ],
       "query_plan": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
           "query_intent": "pain",
           "intent_class": ""
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "data_analytics",
-          "family": "analytics_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "hr_ops",
-          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
@@ -309,24 +286,51 @@
           "intent_class": ""
         },
         {
-          "query": "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "hr_ops",
+          "family": "hr_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "spreadsheet_ops",
+          "family": "spreadsheet_process",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "ai_tools",
+          "family": "ai_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "website_audit",
-          "sector": "website_quality",
-          "search_alias_used": "website audit"
+          "family": "developer_tools",
+          "sector": "developer_tools",
+          "search_alias_used": "developer tools"
         },
         {
-          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ecommerce_tools",
-          "sector": "ecommerce_ops",
-          "search_alias_used": "ecommerce tools"
+          "family": "micro_saas",
+          "sector": "micro_saas",
+          "search_alias_used": "micro saas"
         }
       ],
       "query_budget": {
@@ -336,34 +340,34 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "data_analytics",
-        "cybersecurity_ops",
-        "hr_ops",
         "finance_ops",
-        "website_quality",
-        "ecommerce_ops"
+        "hr_ops",
+        "spreadsheet_ops",
+        "ai_tools",
+        "developer_tools",
+        "micro_saas"
       ],
       "sector_families": {
-        "data_analytics": "analytics_tools",
-        "cybersecurity_ops": "cybersecurity_tools",
-        "hr_ops": "hr_tools",
         "finance_ops": "finance_ops",
-        "website_quality": "website_audit",
-        "ecommerce_ops": "ecommerce_tools"
+        "hr_ops": "hr_tools",
+        "spreadsheet_ops": "spreadsheet_process",
+        "ai_tools": "ai_tools",
+        "developer_tools": "developer_tools",
+        "micro_saas": "micro_saas"
       },
       "recent_sector_memory": [
-        "small_business_admin",
-        "integration_api",
-        "productivity",
+        "reporting_compliance",
         "ecommerce_ops",
-        "education_tools",
-        "spreadsheet_ops",
-        "data_analytics",
-        "cybersecurity_ops",
-        "hr_ops",
+        "productivity",
+        "it_hygiene",
+        "seo_marketing",
+        "micro_saas",
         "finance_ops",
-        "website_quality",
-        "ecommerce_ops"
+        "hr_ops",
+        "spreadsheet_ops",
+        "ai_tools",
+        "developer_tools",
+        "micro_saas"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
@@ -376,32 +380,36 @@
       "convergence_probes": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ]
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ]
         }
       ],
@@ -415,7 +423,7 @@
       "evidence_integrity": {
         "schema_v": 2,
         "tagger_v": 3,
-        "rows": 76,
+        "rows": 77,
         "changed": 3,
         "quarantined": 72
       },
@@ -8732,6 +8740,65 @@
         "intent_confidence": 0.2,
         "commercial_intent": false,
         "reasons": []
+      },
+      {
+        "evaluated_at_utc": "2026-09-26T05:36:55.787462+00:00",
+        "decision": "PARK",
+        "trust_score": 0,
+        "identity_status": "anonymous",
+        "agent_id": "",
+        "source_count": 0,
+        "unsupported_inference": true,
+        "intent_primary": "CONNECTIVITY",
+        "intent_secondary": [
+          "COMMERCIAL",
+          "CONTACT"
+        ],
+        "intent_confidence": 0.98,
+        "commercial_intent": true,
+        "reasons": [
+          "agent_identity_missing",
+          "agent_card_missing",
+          "capability_interview_incomplete",
+          "claim_has_no_explicit_support",
+          "unsupported_inference_detected",
+          "falsification_condition_missing"
+        ]
+      },
+      {
+        "evaluated_at_utc": "2026-09-26T05:36:56.097766+00:00",
+        "decision": "PARK",
+        "trust_score": 40,
+        "identity_status": "self_declared",
+        "agent_id": "chatgpt-research-session-7e1c9a",
+        "source_count": 0,
+        "unsupported_inference": false,
+        "intent_primary": "RESEARCH",
+        "intent_secondary": [
+          "CONNECTIVITY",
+          "DISCOVERY"
+        ],
+        "intent_confidence": 0.98,
+        "commercial_intent": false,
+        "reasons": [
+          "identity_is_self_declared",
+          "agent_card_missing",
+          "capability_interview_incomplete"
+        ]
+      },
+      {
+        "evaluated_at_utc": "2026-09-26T05:36:56.390754+00:00",
+        "decision": "ALLOW_BOUNDED",
+        "trust_score": 86,
+        "identity_status": "verified",
+        "agent_id": "synthetic-verified-agent",
+        "source_count": 2,
+        "unsupported_inference": false,
+        "intent_primary": "UNKNOWN",
+        "intent_secondary": [],
+        "intent_confidence": 0.2,
+        "commercial_intent": false,
+        "reasons": []
       }
     ],
     "agent_demand_observatory": {
@@ -9250,7 +9317,7 @@
     ],
     "a2a_discovery": {
       "registry_enabled": true,
-      "last_registration_utc": "2026-09-26T05:10:25.412349+00:00",
+      "last_registration_utc": "2026-09-26T05:36:29.092684+00:00",
       "last_registration_ok": true,
       "last_registration_status": 200,
       "last_registration_reason": "published_via:allagents",
@@ -9275,57 +9342,6 @@
       }
     },
     "jarvis_dialogue_history": [
-      {
-        "created_at_utc": "2026-09-25T19:01:08.246136+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
-          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T19:04:10.724255+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
-          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-25T20:21:43.528761+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
-          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
       {
         "created_at_utc": "2026-09-25T20:28:36.797273+00:00",
         "neo_status": "SELECT",
@@ -9480,23 +9496,145 @@
         ],
         "build_tests_passed": false,
         "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-26T05:19:45.447153+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+          "manual data entry manual workaround frustrating -site:github.com -site:reddit.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-26T05:22:02.944937+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+          "manual data entry manual workaround frustrating -site:github.com -site:reddit.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-26T05:37:46.584355+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+          "manual data entry manual workaround frustrating -site:github.com -site:reddit.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
       }
     ],
     "jarvis_runtime": {
       "last_request_utc": "2026-09-21T09:19:40.909607+00:00",
-      "last_response_utc": "2026-09-26T05:11:45.362649+00:00",
+      "last_response_utc": "2026-09-26T05:37:46.584198+00:00",
       "last_ok": true,
       "last_status": 200,
       "last_attempt": 1,
       "last_phase": "review",
       "last_reason": null,
-      "requests_total": 545,
-      "success_total": 525,
+      "requests_total": 551,
+      "success_total": 531,
       "failure_total": 20,
-      "last_payload_bytes": 55664,
+      "last_payload_bytes": 35759,
       "last_payload_mode": "embedded_core_remote_advisory"
     },
     "commercial_evidence_memory": [
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": false,
+        "quarantine_reason": "generic_or_nonconcrete_problem",
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "github.com",
+        "source": "github-issues-routed",
+        "family": "ai_tools",
+        "problem_key_raw": "ai_tools:generic_technology",
+        "problem_key": "ai_tools:generic_technology",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "query_role": "discovery",
+        "query_intent": "pain",
+        "intent_class": "paid_automation",
+        "title": "Agentic OS Conductor Log",
+        "snippet": "This is the pinned run log for the **Agentic OS Conductor** — the privileged, locally-run routine (Claude Code Desktop, workspace `C:\\ClaudeCodeDesktop\\Claude_AI_OS_Routine`) that supervises all FFC agentic automation.\n\n**Do not close this issue.** Every conductor run posts comments here; this issue",
+        "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
+        "strong_markers": [
+          "budget"
+        ],
+        "weak_markers": [
+          "workflow",
+          "automation"
+        ],
+        "signal_types": [
+          "PAID_DEMAND"
+        ],
+        "last_seen_epoch": 1790399983.3190246,
+        "first_seen_epoch": 1790367700.6050544,
+        "seen_count": 4
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": false,
+        "quarantine_reason": "disconfirm",
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "itechdata.ai",
+        "source": "brave-search",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:manual_data_entry",
+        "problem_key": "manual_data_entry:manual_data_entry",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+        "query_role": "buyer",
+        "query_intent": "pain",
+        "intent_class": "",
+        "title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
+        "snippet": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, and many more.",
+        "url": "https://itechdata.ai/manual-data-entry",
+        "strong_markers": [],
+        "weak_markers": [
+          "manual"
+        ],
+        "signal_types": [
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790399983.3190246,
+        "first_seen_epoch": 1790223484.9022217,
+        "seen_count": 23
+      },
       {
         "schema_v": 2,
         "tagger_v": 3,
@@ -9530,43 +9668,6 @@
         "last_seen_epoch": 1790399503.5153558,
         "first_seen_epoch": 1790399503.5153558,
         "seen_count": 1
-      },
-      {
-        "schema_v": 2,
-        "tagger_v": 3,
-        "migration_v": 2,
-        "gate_eligible": false,
-        "quarantine_reason": "generic_or_nonconcrete_problem",
-        "context_type": "observed",
-        "signal_reverted": null,
-        "domain": "github.com",
-        "source": "github-issues-routed",
-        "family": "ai_tools",
-        "problem_key_raw": "ai_tools:generic_technology",
-        "problem_key": "ai_tools:generic_technology",
-        "thesis_bound": false,
-        "problem_id": "",
-        "thesis_id": "",
-        "query": "document processing (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "query_role": "discovery",
-        "query_intent": "pain",
-        "intent_class": "paid_automation",
-        "title": "Agentic OS Conductor Log",
-        "snippet": "This is the pinned run log for the **Agentic OS Conductor** — the privileged, locally-run routine (Claude Code Desktop, workspace `C:\\ClaudeCodeDesktop\\Claude_AI_OS_Routine`) that supervises all FFC agentic automation.\n\n**Do not close this issue.** Every conductor run posts comments here; this issue",
-        "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
-        "strong_markers": [
-          "budget"
-        ],
-        "weak_markers": [
-          "workflow",
-          "automation"
-        ],
-        "signal_types": [
-          "PAID_DEMAND"
-        ],
-        "last_seen_epoch": 1790390442.8439043,
-        "first_seen_epoch": 1790367700.6050544,
-        "seen_count": 3
       },
       {
         "schema_v": 2,
@@ -10401,36 +10502,6 @@
         "seen_count": 22,
         "context_type": "vendor_content",
         "signal_reverted": "vendor_content"
-      },
-      {
-        "schema_v": 2,
-        "tagger_v": 3,
-        "migration_v": 2,
-        "gate_eligible": false,
-        "quarantine_reason": "disconfirm",
-        "domain": "itechdata.ai",
-        "source": "bing-rss-free",
-        "family": "manual_data_entry",
-        "problem_key_raw": "manual_data_entry:manual_data_entry",
-        "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-        "thesis_bound": true,
-        "problem_id": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-        "thesis_id": "th-ce77f7fb0ef3",
-        "query": "manual data entry already automated solved no need",
-        "query_role": "disconfirm",
-        "title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
-        "snippet": "Manual Data Entry is a centuries-old practice usually done by a data entry operator of documenting data for safekeeping and duplication. Performing the task is so simple, requiring little effort to implement.",
-        "url": "https://itechdata.ai/manual-data-entry",
-        "strong_markers": [],
-        "weak_markers": [
-          "manual"
-        ],
-        "signal_types": [
-          "DISCONFIRM"
-        ],
-        "last_seen_epoch": 1790234980.4159124,
-        "first_seen_epoch": 1790223484.9022217,
-        "seen_count": 22
       },
       {
         "schema_v": 2,
@@ -11867,7 +11938,7 @@
       "rows": 77,
       "changed": 3,
       "quarantined": 72,
-      "rejected_current": 40
+      "rejected_current": 0
     },
     "active_thesis": null,
     "thesis_history": [
@@ -12934,62 +13005,39 @@
       "planned": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
           "query_intent": "pain",
           "intent_class": ""
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "data_analytics",
-          "family": "analytics_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "hr_ops",
-          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
@@ -13003,40 +13051,69 @@
           "intent_class": ""
         },
         {
-          "query": "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "hr_ops",
+          "family": "hr_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "spreadsheet_ops",
+          "family": "spreadsheet_process",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "ai_tools",
+          "family": "ai_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "website_audit",
-          "sector": "website_quality",
-          "search_alias_used": "website audit"
+          "family": "developer_tools",
+          "sector": "developer_tools",
+          "search_alias_used": "developer tools"
         },
         {
-          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ecommerce_tools",
-          "sector": "ecommerce_ops",
-          "search_alias_used": "ecommerce tools"
+          "family": "micro_saas",
+          "sector": "micro_saas",
+          "search_alias_used": "micro saas"
         }
       ],
       "executed": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
           "query_intent": "pain",
           "intent_class": "",
@@ -13044,48 +13121,20 @@
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
-          "query_intent": "pain",
-          "intent_class": "",
-          "agent_search_completed": true
-        },
-        {
-          "query": "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "data_analytics",
-          "family": "analytics_tools",
-          "query_intent": "pain",
-          "intent_class": "",
-          "agent_search_completed": true
-        },
-        {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
-          "query_intent": "pain",
-          "intent_class": "",
-          "agent_search_completed": true
-        },
-        {
-          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "hr_ops",
-          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
@@ -13101,25 +13150,55 @@
           "agent_search_completed": true
         },
         {
-          "query": "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "hr_ops",
+          "family": "hr_tools",
+          "query_intent": "pain",
+          "intent_class": "",
+          "agent_search_completed": true
+        },
+        {
+          "query": "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "spreadsheet_ops",
+          "family": "spreadsheet_process",
+          "query_intent": "pain",
+          "intent_class": "",
+          "agent_search_completed": true
+        },
+        {
+          "query": "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "ai_tools",
+          "family": "ai_tools",
+          "query_intent": "pain",
+          "intent_class": "",
+          "agent_search_completed": true
+        },
+        {
+          "query": "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "website_audit",
-          "sector": "website_quality",
-          "search_alias_used": "website audit",
+          "family": "developer_tools",
+          "sector": "developer_tools",
+          "search_alias_used": "developer tools",
           "agent_search_completed": true
         },
         {
-          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ecommerce_tools",
-          "sector": "ecommerce_ops",
-          "search_alias_used": "ecommerce tools",
+          "family": "micro_saas",
+          "sector": "micro_saas",
+          "search_alias_used": "micro saas",
           "agent_search_completed": true
         }
       ]
@@ -13127,7 +13206,7 @@
     "venture_metrics": {},
     "outcome_control": {
       "schema_v": 1,
-      "cycle": 367,
+      "cycle": 369,
       "mode": "external_results_only",
       "wins": [],
       "new_wins": [],
@@ -13174,7 +13253,7 @@
           "proof": {
             "wins": [],
             "new_wins": [],
-            "cycle": 367
+            "cycle": 369
           },
           "next_action": "Do not add features. Spend the next cycle only on peer 3/3 or the active thesis gate/missing evidence."
         }
@@ -13184,22 +13263,6 @@
       "rule": "A version, scan, candidate, build, or internal score is not a result by itself."
     },
     "outcome_history": [
-      {
-        "cycle": 345,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 346,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
       {
         "cycle": 348,
         "overall_status": "WORKING",
@@ -13343,11 +13406,27 @@
         "new_wins": [],
         "peer_status": "PURSUE",
         "market_status": "PURSUE"
+      },
+      {
+        "cycle": 368,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 369,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
       }
     ],
     "seti": {
       "enabled": true,
-      "mode": "bounded_active",
+      "mode": "passive",
       "every_cycles": 6,
       "last_scan_utc": "2026-09-26T05:12:07.929507+00:00",
       "last_error": null,
@@ -13422,19 +13501,16 @@
           "ready": 2
         },
         "interview_attempted": false,
-        "last_interview_status": "PARKED",
+        "last_interview_status": "NO_ELIGIBLE_CANDIDATE",
         "interview_attempted_count": 0,
-        "interview_candidate_checks_count": 2,
-        "interview_preflight_skipped_count": 2,
+        "interview_candidate_checks_count": 0,
+        "interview_preflight_skipped_count": 0,
         "interview_post_started_count": 0,
         "interview_message_post_started_count": 0,
         "interview_http_response_count": 0,
         "interview_protocol_response_count": 0,
         "interview_delivery_unknown_count": 0,
-        "interview_failure_reason_counts": {
-          "JSON_RESPONSE_REQUIRED": 1,
-          "AUTH_REQUIRED": 1
-        },
+        "interview_failure_reason_counts": {},
         "interview_peer_class_counts": {},
         "interview_peer_class_migration": {
           "changed": 0,
@@ -13447,7 +13523,7 @@
         },
         "interview_request_budget": 9,
         "interview_admitted_count": 0,
-        "interview_parked_count": 2,
+        "interview_parked_count": 0,
         "admitted_agent_count": 0,
         "safety": {
           "target_http_requests": true,
@@ -13472,7 +13548,8 @@
           "explicit_public_a2a_endpoint_only": true,
           "max_interviews_per_scan": 3,
           "commercial_or_third_party_actions": false
-        }
+        },
+        "engine_upgrade_retry": true
       },
       "signal_memory_count": 8
     }
@@ -13485,85 +13562,62 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-26T05:11:45.362967+00:00",
-    "neo_version": "0.99.20",
+    "timestamp_utc": "2026-09-26T05:37:46.584477+00:00",
+    "neo_version": "0.99.22",
     "status": "SELECT",
     "next_gate": "SELECT: raccogli evidenza convergente e prepara un candidato testabile.",
     "valid_external_answers": 0,
-    "web_source_count": 29,
-    "evidence_scout_count": 13,
+    "web_source_count": 0,
+    "evidence_scout_count": 0,
     "search_strategy": {
       "mode": "evidence_integrity_query_budget",
       "entropy_source": "system_random",
       "queries": [
-        "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
-        "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
-        "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+        "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
         "invoice workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
-        "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
+        "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+        "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
       ],
       "query_plan": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
           "query_intent": "pain",
           "intent_class": ""
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "data_analytics",
-          "family": "analytics_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "hr_ops",
-          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
@@ -13577,24 +13631,51 @@
           "intent_class": ""
         },
         {
-          "query": "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "hr_ops",
+          "family": "hr_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "spreadsheet_ops",
+          "family": "spreadsheet_process",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "ai_tools",
+          "family": "ai_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "website_audit",
-          "sector": "website_quality",
-          "search_alias_used": "website audit"
+          "family": "developer_tools",
+          "sector": "developer_tools",
+          "search_alias_used": "developer tools"
         },
         {
-          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ecommerce_tools",
-          "sector": "ecommerce_ops",
-          "search_alias_used": "ecommerce tools"
+          "family": "micro_saas",
+          "sector": "micro_saas",
+          "search_alias_used": "micro saas"
         }
       ],
       "query_budget": {
@@ -13604,34 +13685,34 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "data_analytics",
-        "cybersecurity_ops",
-        "hr_ops",
         "finance_ops",
-        "website_quality",
-        "ecommerce_ops"
+        "hr_ops",
+        "spreadsheet_ops",
+        "ai_tools",
+        "developer_tools",
+        "micro_saas"
       ],
       "sector_families": {
-        "data_analytics": "analytics_tools",
-        "cybersecurity_ops": "cybersecurity_tools",
-        "hr_ops": "hr_tools",
         "finance_ops": "finance_ops",
-        "website_quality": "website_audit",
-        "ecommerce_ops": "ecommerce_tools"
+        "hr_ops": "hr_tools",
+        "spreadsheet_ops": "spreadsheet_process",
+        "ai_tools": "ai_tools",
+        "developer_tools": "developer_tools",
+        "micro_saas": "micro_saas"
       },
       "recent_sector_memory": [
-        "small_business_admin",
-        "integration_api",
-        "productivity",
+        "reporting_compliance",
         "ecommerce_ops",
-        "education_tools",
-        "spreadsheet_ops",
-        "data_analytics",
-        "cybersecurity_ops",
-        "hr_ops",
+        "productivity",
+        "it_hygiene",
+        "seo_marketing",
+        "micro_saas",
         "finance_ops",
-        "website_quality",
-        "ecommerce_ops"
+        "hr_ops",
+        "spreadsheet_ops",
+        "ai_tools",
+        "developer_tools",
+        "micro_saas"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
@@ -13644,32 +13725,36 @@
       "convergence_probes": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ]
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ]
         }
       ],
@@ -13683,7 +13768,7 @@
       "evidence_integrity": {
         "schema_v": 2,
         "tagger_v": 3,
-        "rows": 76,
+        "rows": 77,
         "changed": 3,
         "quarantined": 72
       },
@@ -13731,6 +13816,17 @@
       }
     },
     "family_performance": {
+      "ai_tools": {
+        "score": 0,
+        "observations": 1,
+        "best_gap_score": 0,
+        "qualified_hits": 0,
+        "last_gap_score": 0,
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_signal_types": [],
+        "no_progress_streak": 1
+      },
       "manual_data_entry": {
         "score": 90,
         "observations": 1,
@@ -13745,17 +13841,6 @@
           "PAIN"
         ],
         "no_progress_streak": 0
-      },
-      "ai_tools": {
-        "score": 0,
-        "observations": 1,
-        "best_gap_score": 0,
-        "qualified_hits": 0,
-        "last_gap_score": 0,
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_signal_types": [],
-        "no_progress_streak": 1
       },
       "workflow_automation": {
         "score": 5,
@@ -13884,435 +13969,42 @@
     "evidence_schema_v": 2,
     "tagger_v": 3,
     "quarantined_evidence_items": 72,
-    "rejected_current_results": [
-      {
-        "reason": "no_demand_signal",
-        "url": "https://parseur.com/blog/reduce-manual-work",
-        "title": "How to Reduce Manual Work in Data Entry | Parseur®",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.portagebay.com/blog/manual-data-entry-is-slowing-down-your-team/",
-        "title": "Manual Data Entry is Slowing Down Your Team",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://cgtech.com.au/challenges/reduce-manual-data-entry/",
-        "title": "Reduce manual data entry – CG TECH",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.katprotech.com/using-power-automate-to-reduce-manual-data-entry/",
-        "title": "Using Power Automate to Reduce Manual Data Entry - KATPRO",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.artsyltech.com/blog/how-to-stop-manual-data-entry",
-        "title": "Reduce Manual Data Entry: 7 Simple Fixes That Save Time",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://news.ycombinator.com/item?id=37384957",
-        "title": "The Evolution of CLM Software: Tracing the Transformative Journey",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://news.ycombinator.com/item?id=33590432",
-        "title": "Ask HN: Trading Software: Build or Buy",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://news.ycombinator.com/item?id=27918900",
-        "title": "Launch HN: hotglue (YC S21) – Easy user-facing SaaS integrations",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/claude-builders-bounty/claude-builders-bounty/issues/2",
-        "title": "[BOUNTY $75] TEMPLATE: CLAUDE.md for a Next.js + SQLite SaaS project",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.yellowfinbi.com/blog/how-to-build-the-best-analytics-experience-for-your-saas-product",
-        "title": "Why SaaS Products Struggle With Analytics and How to Fix It",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.reddit.com/r/SaaS/comments/1piy6lq/what_are_you_all_currently_using_for_analytics/",
-        "title": "r/SaaS on Reddit: What are you all currently using for analytics?",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://www.welivesecurity.com/en/business-security/cyberthreats-moving-faster-smbs-readiness-must-accelerate/",
-        "title": "Cyberthreats are moving faster than SMBs: Readiness must accelerate",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://sectigo.com/resource-library/automation-in-cybersecurity-for-smbs",
-        "title": "Automation in Cybersecurity: Importance & Use Cases for SMBs | Sectigo® Official",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://www.shrm.org/labs/resources/automate-hr-while-keeping-the-human-touch",
-        "title": "Automate HR While Keeping the Human Touch",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://www.moveworks.com/us/en/resources/blog/how-to-implement-enterprise-hr-automation-successfully",
-        "title": "A Guide to Automating HR Workflows in the Enterprise",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://precoro.com/blog/invoice-automation/",
-        "title": "Invoice Automation: How It Works and Why You Need It",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.stampli.com/blog/invoice-management/invoice-problems-and-solutions/",
-        "title": "4 common invoice problems and solutions — thanks to automation",
-        "query_role": "discovery"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://www.reddit.com/r/SEO_Digital_Marketing/comments/1fkdkeo/looking_for_free_website_auditing_tools_any/",
-        "title": "r/SEO_Digital_Marketing on Reddit: Looking for Free Website Auditing Tools – Any Recommendations?",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.link-assistant.com/website-auditor/",
-        "title": "Free SEO Audit Tool by SEO PowerSuite",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://mya11y.report/mcp/",
-        "title": "Show HN: MyA11yReport MCP – Build and test accessible websites with AI",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://www.coveragecat.com/",
-        "title": "Launch HN: Coverage Cat (YC S22) – Umbrella insurance via your personal agent",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://droprun.sh/",
-        "title": "Show HN: Drop – A rootless Linux sandbox with gVisor support",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.linnworks.com/blog/best-ecommerce-automation-tools/",
-        "title": "17 Best eCommerce Automation Tools to Grow Your Business in 2025",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://warego.co/blog/ecommerce-automation-software/",
-        "title": "12 Top Ecommerce Automation Software Tools - WareGo Blog",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.bigcommerce.com/articles/ecommerce/tools/",
-        "title": "Best Ecommerce Tools (Scale Your Business)",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://www.bigcommerce.co.uk/articles/ecommerce/tools/",
-        "title": "Best Ecommerce Tools (Scale Your Business)",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://ai-rete-rag.com/",
-        "title": "Show HN: AI·rete·RAG – a Rete rule engine decides, RAG explains why",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://news.ycombinator.com/item?id=49776683",
-        "title": "Karen Nikoghosyan Is Building AI Operating Layers for Multichannel Commerce",
-        "query_role": "buyer"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/KAFKA2306/agent-resources/issues/381",
-        "title": "[Software Factory] 通常運転の人間作業0を実現する自律ソフトウェア工場へ刷新する",
-        "query_role": "scout"
-      },
-      {
-        "reason": "github_noise",
-        "url": "https://github.com/sojaym/cs-music-site/issues/1",
-        "title": "ClearSocial Music — AI Development Control & Handoff",
-        "query_role": "scout"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/Uuriko/project-room/issues/266",
-        "title": "Claims board (continued from #11)",
-        "query_role": "scout"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://github.com/maziggy/bambuddy/issues/3012",
-        "title": "[Feature]: Track physical build plates as objects and record which plate/face each print ran on",
-        "query_role": "scout"
-      },
-      {
-        "reason": "query_irrelevant",
-        "url": "https://github.com/SUSANO-OOO/Zombieee/issues/172",
-        "title": "[Execution Ledger] Version 1.0.0 final release",
-        "query_role": "scout"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/cvolkernick/personal-workspace/issues/718",
-        "title": "[Ops] Muse ↔ Grok.btc direct line",
-        "query_role": "scout"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://github.com/Coil-Legal/coil/issues/12",
-        "title": "Phase 5 queue: harden every proven tool, then close the Phase 2 caveats",
-        "query_role": "scout"
-      },
-      {
-        "reason": "query_irrelevant",
-        "url": "https://github.com/tvofi/heatpump_optimizer/issues/201",
-        "title": "Audit — (tracking)",
-        "query_role": "scout"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/AIClarityAU/minspec/issues/1816",
-        "title": "security: agent sessions can launch on the host instead of the container, and there they hold every founder credential",
-        "query_role": "scout"
-      },
-      {
-        "reason": "query_irrelevant",
-        "url": "https://github.com/zbynekdrlik/camera-box/issues/1367",
-        "title": "GOAL (owner 24.9.2026): stream output A/V + camera sync correct after every restart, zero dropouts, no drift over 8 h continuous",
-        "query_role": "scout"
-      },
-      {
-        "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/goodkie/v-show/issues/4",
-        "title": "[3DZ PRO TRACK] ChatGPT × Antigravity 자율 개발 회의실 — 경로 A·RI·E2E",
-        "query_role": "scout"
-      },
-      {
-        "reason": "query_irrelevant",
-        "url": "https://github.com/Presidente49/gatorbait-media-redesign/issues/3",
-        "title": "Master Control — current production status and shared owner handoff",
-        "query_role": "scout"
-      }
-    ],
+    "rejected_current_results": [],
     "ingestion_diagnostics": {
       "enabled": true,
       "raw_results_by_source": {
-        "bing-rss": 6,
-        "brave-search": 20,
-        "github": 16,
-        "hn": 9,
+        "bing-rss": 0,
+        "github": 0,
+        "hn": 0,
         "stackexchange": 0
       },
-      "rejected_by_reason": {
-        "github_no_buyer_problem_context": 6,
-        "github_noise": 2,
-        "no_demand_signal": 13,
-        "no_family": 7,
-        "query_irrelevant": 4,
-        "weak_family_relevance": 9
-      },
+      "rejected_by_reason": {},
       "self_contamination_rejected": 0,
-      "rejected_by_source": {
-        "brave-search": {
-          "no_demand_signal": 13,
-          "no_family": 2,
-          "weak_family_relevance": 4
-        },
-        "github": {
-          "github_no_buyer_problem_context": 6,
-          "github_noise": 2,
-          "no_family": 1,
-          "query_irrelevant": 4,
-          "weak_family_relevance": 1
-        },
-        "hn": {
-          "no_family": 4,
-          "weak_family_relevance": 4
-        }
-      },
-      "rejected_by_query_class": {
-        "convergence": {
-          "no_demand_signal": 5
-        },
-        "desire": {
-          "no_demand_signal": 5,
-          "no_family": 2,
-          "weak_family_relevance": 4
-        },
-        "explore": {
-          "github_no_buyer_problem_context": 1,
-          "no_demand_signal": 3,
-          "no_family": 4,
-          "weak_family_relevance": 4
-        },
-        "scout": {
-          "github_no_buyer_problem_context": 5,
-          "github_noise": 2,
-          "no_family": 1,
-          "query_irrelevant": 4,
-          "weak_family_relevance": 1
-        }
-      },
+      "rejected_by_source": {},
+      "rejected_by_query_class": {},
       "query_relevance_pass_by_source": {
         "bing-rss": 0,
-        "brave-search": 20,
-        "github": 1,
-        "hn": 9,
+        "github": 0,
+        "hn": 0,
         "stackexchange": 0
       },
-      "query_relevance_pass_by_source_and_class": {
-        "brave-search": {
-          "convergence": 6,
-          "desire": 6,
-          "explore": 8
-        },
-        "github": {
-          "explore": 1
-        },
-        "hn": {
-          "desire": 6,
-          "explore": 3
-        }
-      },
+      "query_relevance_pass_by_source_and_class": {},
       "observed_candidates_purged": 0,
       "observed_candidates_purged_by_reason": {},
-      "new_signal_rows": 1,
-      "new_signal_rows_by_source": {
-        "brave-search": 1
-      },
-      "new_signal_rows_by_query_class": {
-        "convergence": 1
-      },
-      "new_signal_rows_by_provider": {
-        "brave": 1
-      },
+      "new_signal_rows": 0,
+      "new_signal_rows_by_source": {},
+      "new_signal_rows_by_query_class": {},
+      "new_signal_rows_by_provider": {},
       "rows_by_intent_class": {},
       "buyer_signals_by_query_intent": {},
-      "intent_review_sample": [
-        {
-          "title": "How to Reduce Manual Work in Data Entry | Parseur®",
-          "url": "https://parseur.com/blog/reduce-manual-work",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "Manual Data Entry is Slowing Down Your Team",
-          "url": "https://www.portagebay.com/blog/manual-data-entry-is-slowing-down-your-team/",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "Reduce manual data entry – CG TECH",
-          "url": "https://cgtech.com.au/challenges/reduce-manual-data-entry/",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "Using Power Automate to Reduce Manual Data Entry - KATPRO",
-          "url": "https://www.katprotech.com/using-power-automate-to-reduce-manual-data-entry/",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "Reduce Manual Data Entry: 7 Simple Fixes That Save Time",
-          "url": "https://www.artsyltech.com/blog/how-to-stop-manual-data-entry",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "r/dataanalyst on Reddit: How do you reduce errors when doing repetitive manual data entry?",
-          "url": "https://www.reddit.com/r/dataanalyst/comments/1qq6vbs/how_do_you_reduce_errors_when_doing_repetitive/",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": [
-            "PAIN"
-          ]
-        },
-        {
-          "title": "Automation in Cybersecurity: Importance & Use Cases for SMBs | Sectigo® Official",
-          "url": "https://sectigo.com/resource-library/automation-in-cybersecurity-for-smbs",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "Invoice Automation: How It Works and Why You Need It",
-          "url": "https://precoro.com/blog/invoice-automation/",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "4 common invoice problems and solutions — thanks to automation",
-          "url": "https://www.stampli.com/blog/invoice-management/invoice-problems-and-solutions/",
-          "source": "brave-search",
-          "query_intent": "pain",
-          "intent_class": "",
-          "signal_types": []
-        },
-        {
-          "title": "Free SEO Audit Tool by SEO PowerSuite",
-          "url": "https://www.link-assistant.com/website-auditor/",
-          "source": "brave-search",
-          "query_intent": "desire",
-          "intent_class": "",
-          "signal_types": []
-        }
-      ],
+      "intent_review_sample": [],
       "search_provider": {
         "name": "brave",
-        "calls_cycle": 8,
-        "calls_day": 36,
-        "errors": 1,
-        "fallbacks": 1,
-        "fallback_reasons": {
-          "HTTPStatusError:429": 1
-        }
+        "calls_cycle": 0,
+        "calls_day": 46,
+        "errors": 0,
+        "fallbacks": 0,
+        "fallback_reasons": {}
       },
       "revalidation": {
         "attempted": 0,
@@ -14323,25 +14015,6 @@
       "diagnostic_errors": 0
     },
     "problem_clusters": {
-      "manual_data_entry:manual_data_entry": {
-        "family": "manual_data_entry",
-        "gate_eligible": true,
-        "qualified": false,
-        "commercially_actionable": false,
-        "gap_score": 25,
-        "independent_domains": 2,
-        "fresh_independent_domains": 2,
-        "strong_commercial_domains": 0,
-        "disconfirm_domains": 0,
-        "quarantined_rows": 5,
-        "signal_types": [
-          "PAIN"
-        ],
-        "domains": [
-          "github.com",
-          "reddit.com"
-        ]
-      },
       "ai_tools:generic_technology": {
         "family": "ai_tools",
         "gate_eligible": false,
@@ -14355,6 +14028,25 @@
         "quarantined_rows": 5,
         "signal_types": [],
         "domains": []
+      },
+      "manual_data_entry:manual_data_entry": {
+        "family": "manual_data_entry",
+        "gate_eligible": true,
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 25,
+        "independent_domains": 2,
+        "fresh_independent_domains": 2,
+        "strong_commercial_domains": 0,
+        "disconfirm_domains": 0,
+        "quarantined_rows": 6,
+        "signal_types": [
+          "PAIN"
+        ],
+        "domains": [
+          "github.com",
+          "reddit.com"
+        ]
       },
       "workflow_automation:workflow_automation": {
         "family": "workflow_automation",
@@ -14509,8 +14201,8 @@
         "independent_domains": 1,
         "fresh_independent_domains": 1,
         "strong_commercial_domains": 1,
-        "disconfirm_domains": 5,
-        "quarantined_rows": 6,
+        "disconfirm_domains": 4,
+        "quarantined_rows": 5,
         "signal_types": [
           "BUY_INTENT",
           "PAID_DEMAND"
@@ -14619,80 +14311,6 @@
       }
     },
     "clusters": {
-      "manual_data_entry": {
-        "qualified": false,
-        "commercially_actionable": true,
-        "gap_score": 70,
-        "independent_domains": 3,
-        "strong_commercial_domains": 1,
-        "signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND",
-          "PAIN"
-        ],
-        "domains": [
-          "github.com",
-          "reddit.com",
-          "remoteok.com"
-        ],
-        "signals": [
-          {
-            "domain": "remoteok.com",
-            "source": "remoteok-api",
-            "title": "Data Entry Administrator",
-            "url": "https://remoteok.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
-            "signal_types": [
-              "BUY_INTENT",
-              "PAID_DEMAND"
-            ]
-          },
-          {
-            "domain": "parseur.com",
-            "source": "bing-rss-free",
-            "title": "Manual Data Entry - Challenges and solutions in 2026 - Parseur",
-            "url": "https://parseur.com/blog/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM"
-            ]
-          },
-          {
-            "domain": "itechdata.ai",
-            "source": "bing-rss-free",
-            "title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
-            "url": "https://itechdata.ai/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM"
-            ]
-          },
-          {
-            "domain": "jotform.com",
-            "source": "bing-rss-free",
-            "title": "Understanding manual data entry - Jotform Blog",
-            "url": "https://jotform.com/blog/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM"
-            ]
-          },
-          {
-            "domain": "docuclipper.com",
-            "source": "bing-rss-free",
-            "title": "Manual vs Automated Data Entry: Pros, Cons & How to Choose",
-            "url": "https://docuclipper.com/blog/manual-data-entry-vs-automated-data-entry",
-            "signal_types": [
-              "DISCONFIRM"
-            ]
-          },
-          {
-            "domain": "docuclipper.com",
-            "source": "bing-rss-free",
-            "title": "Manual Data Entry: Challenges, Costs & How to Automate",
-            "url": "https://docuclipper.com/blog/manual-data-entry",
-            "signal_types": [
-              "DISCONFIRM"
-            ]
-          }
-        ]
-      },
       "ai_tools": {
         "qualified": false,
         "commercially_actionable": false,
@@ -14741,6 +14359,80 @@
             "title": "AI Agent Radar 周榜 · 2026-W39",
             "url": "https://github.com/apiiskan/ai-agent-radar/issues/69",
             "signal_types": []
+          }
+        ]
+      },
+      "manual_data_entry": {
+        "qualified": false,
+        "commercially_actionable": true,
+        "gap_score": 70,
+        "independent_domains": 3,
+        "strong_commercial_domains": 1,
+        "signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "domains": [
+          "github.com",
+          "reddit.com",
+          "remoteok.com"
+        ],
+        "signals": [
+          {
+            "domain": "remoteok.com",
+            "source": "remoteok-api",
+            "title": "Data Entry Administrator",
+            "url": "https://remoteok.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
+            "signal_types": [
+              "BUY_INTENT",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "parseur.com",
+            "source": "bing-rss-free",
+            "title": "Manual Data Entry - Challenges and solutions in 2026 - Parseur",
+            "url": "https://parseur.com/blog/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM"
+            ]
+          },
+          {
+            "domain": "jotform.com",
+            "source": "bing-rss-free",
+            "title": "Understanding manual data entry - Jotform Blog",
+            "url": "https://jotform.com/blog/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM"
+            ]
+          },
+          {
+            "domain": "docuclipper.com",
+            "source": "bing-rss-free",
+            "title": "Manual vs Automated Data Entry: Pros, Cons & How to Choose",
+            "url": "https://docuclipper.com/blog/manual-data-entry-vs-automated-data-entry",
+            "signal_types": [
+              "DISCONFIRM"
+            ]
+          },
+          {
+            "domain": "docuclipper.com",
+            "source": "bing-rss-free",
+            "title": "Manual Data Entry: Challenges, Costs & How to Automate",
+            "url": "https://docuclipper.com/blog/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM"
+            ]
+          },
+          {
+            "domain": "nogg.org.uk",
+            "source": "bing-rss-free",
+            "title": "Manual Data Entry - NOGG",
+            "url": "https://nogg.org.uk/manual-data-entry",
+            "signal_types": [
+              "DISCONFIRM"
+            ]
           }
         ]
       },
@@ -15513,10 +15205,61 @@
       "rows": 77,
       "changed": 3,
       "quarantined": 72,
-      "rejected_current": 40
+      "rejected_current": 0
     },
     "evidence_contract_schema_v": 1,
     "observed_pain_candidates": [
+      {
+        "hypothesis_schema_v": 7,
+        "family": "manual_data_entry",
+        "customer": "teams experiencing the observed problem",
+        "job": "reduce repetitive manual work around manual data entry",
+        "pain": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, an",
+        "term": "manual data entry",
+        "search_aliases": [
+          "manual data entry",
+          "reduce repetitive manual work around manual data entry"
+        ],
+        "source_url": "https://itechdata.ai/manual-data-entry/",
+        "source_domain": "itechdata.ai",
+        "source_title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
+        "source_query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+        "source_role": "buyer",
+        "source": "brave-search",
+        "source_snippet": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, and many more.",
+        "relevance_score": 100,
+        "pain_markers": [
+          "manual"
+        ],
+        "buy_markers": [],
+        "paid_markers": [],
+        "evidence_contract": {
+          "schema_v": 1,
+          "actor": "teams experiencing the observed problem",
+          "process": "reduce repetitive manual work around manual data entry",
+          "pain": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, an",
+          "frequency": [],
+          "cost_or_impact": [],
+          "buyer_signal": [],
+          "source_fact": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, an",
+          "inference": "teams experiencing the observed problem may pay to solve reduce repetitive manual work around manual data entry because the source reports an operational pain.",
+          "confidence": 0.72,
+          "context_type": "operational",
+          "source_query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
+          "skeptic": {
+            "passed": true,
+            "reasons": [],
+            "checks": {
+              "source_fact_present": true,
+              "fact_inference_separated": true,
+              "operational_pain_supported": true,
+              "process_grounded_in_source_fact": true,
+              "launch_customer_pain_supported": true
+            }
+          }
+        },
+        "priority": 73
+      },
       {
         "hypothesis_schema_v": 7,
         "family": "productivity_tools",
@@ -15625,62 +15368,39 @@
       "planned": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
           "query_intent": "pain",
           "intent_class": ""
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "data_analytics",
-          "family": "analytics_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
-          "query_intent": "pain",
-          "intent_class": ""
-        },
-        {
-          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "hr_ops",
-          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
@@ -15694,40 +15414,69 @@
           "intent_class": ""
         },
         {
-          "query": "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "hr_ops",
+          "family": "hr_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "spreadsheet_ops",
+          "family": "spreadsheet_process",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "ai_tools",
+          "family": "ai_tools",
+          "query_intent": "pain",
+          "intent_class": ""
+        },
+        {
+          "query": "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "website_audit",
-          "sector": "website_quality",
-          "search_alias_used": "website audit"
+          "family": "developer_tools",
+          "sector": "developer_tools",
+          "search_alias_used": "developer tools"
         },
         {
-          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ecommerce_tools",
-          "sector": "ecommerce_ops",
-          "search_alias_used": "ecommerce tools"
+          "family": "micro_saas",
+          "sector": "micro_saas",
+          "search_alias_used": "micro saas"
         }
       ],
       "executed": [
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
           "role": "buyer",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
           "query_intent": "pain",
           "intent_class": "",
@@ -15735,48 +15484,20 @@
         },
         {
           "family": "manual_data_entry",
-          "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-          "query": "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com",
+          "problem_key": "manual_data_entry:manual_data_entry",
+          "query": "manual data entry manual workaround frustrating -site:github.com -site:reddit.com",
           "role": "practitioner",
           "class": "convergence",
-          "rank": 85,
+          "rank": 90,
           "missing": [
             "independent_domains",
-            "fresh_independent_domains"
+            "commercial_source",
+            "paid_demand"
           ],
           "existing_domains": [
-            "remoteok.com"
+            "github.com",
+            "reddit.com"
           ],
-          "query_intent": "pain",
-          "intent_class": "",
-          "agent_search_completed": true
-        },
-        {
-          "query": "analytics SaaS small business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "data_analytics",
-          "family": "analytics_tools",
-          "query_intent": "pain",
-          "intent_class": "",
-          "agent_search_completed": true
-        },
-        {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
-          "query_intent": "pain",
-          "intent_class": "",
-          "agent_search_completed": true
-        },
-        {
-          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-          "class": "explore",
-          "role": "discovery",
-          "sector": "hr_ops",
-          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
@@ -15792,25 +15513,55 @@
           "agent_search_completed": true
         },
         {
-          "query": "\"website audit\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "hr_ops",
+          "family": "hr_tools",
+          "query_intent": "pain",
+          "intent_class": "",
+          "agent_search_completed": true
+        },
+        {
+          "query": "spreadsheet automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "spreadsheet_ops",
+          "family": "spreadsheet_process",
+          "query_intent": "pain",
+          "intent_class": "",
+          "agent_search_completed": true
+        },
+        {
+          "query": "AI tool workflow business (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "class": "explore",
+          "role": "discovery",
+          "sector": "ai_tools",
+          "family": "ai_tools",
+          "query_intent": "pain",
+          "intent_class": "",
+          "agent_search_completed": true
+        },
+        {
+          "query": "\"developer tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "website_audit",
-          "sector": "website_quality",
-          "search_alias_used": "website audit",
+          "family": "developer_tools",
+          "sector": "developer_tools",
+          "search_alias_used": "developer tools",
           "agent_search_completed": true
         },
         {
-          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"micro saas\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ecommerce_tools",
-          "sector": "ecommerce_ops",
-          "search_alias_used": "ecommerce tools",
+          "family": "micro_saas",
+          "sector": "micro_saas",
+          "search_alias_used": "micro saas",
           "agent_search_completed": true
         }
       ]
