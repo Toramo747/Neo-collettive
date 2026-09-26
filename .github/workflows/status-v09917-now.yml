@@ -54,3 +54,11 @@ jobs:
           }
           print(json.dumps(out,indent=2,sort_keys=True))
           PY
+          echo "--- SETI INTERVIEWS ---"
+          curl -fsS --max-time 20 https://neo-collettive.onrender.com/api/seti/interviews > /tmp/interviews.json
+          python - <<'PY2'
+import json
+d=json.load(open("/tmp/interviews.json"))
+rows=d.get("interviews") or []
+print(json.dumps(rows,ensure_ascii=False,indent=2)[:30000])
+PY2
