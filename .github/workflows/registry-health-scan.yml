@@ -1,0 +1,142 @@
+name: Registry Health Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "First census/probe or second confirmation probe"
+        required: true
+        default: first
+        type: choice
+        options:
+          - first
+          - second
+      scan_date:
+        description: "Optional YYYY-MM-DD scan directory for second phase"
+        required: false
+        default: ""
+        type: string
+  # Monthly cadence is intentionally disabled pending Andrea Gava approval.
+  # schedule:
+  #   - cron: "17 3 1 * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: registry-health-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+
+      - name: Verify scanner before network use
+        run: |
+          set -euo pipefail
+          python -m py_compile registry_health.py registry_health_scan.py mcp_endpoint_verifier.py
+          python -m unittest -v test_registry_health.py test_mcp_endpoint_verifier.py
+
+      - name: Resolve scan phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          phase="${{ inputs.phase }}"
+          if [ "${GITHUB_RUN_ATTEMPT}" -gt 1 ] && [ "$phase" = "first" ]; then
+            phase="second"
+          fi
+          echo "REGISTRY_HEALTH_PHASE=$phase" >> "$GITHUB_ENV"
+          echo "effective_phase=$phase"
+
+      - name: Run Registry Health phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=("$REGISTRY_HEALTH_PHASE")
+          if [ "$REGISTRY_HEALTH_PHASE" = "second" ] && [ -n "${{ inputs.scan_date }}" ]; then
+            args+=("--scan-date" "${{ inputs.scan_date }}")
+          fi
+          python registry_health_scan.py "${args[@]}" | tee /tmp/registry-health-run.log
+
+      - name: Assert scan isolation and safety telemetry
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          d=json.load(open("data/registry-health/latest-summary.json",encoding="utf-8"))
+          ext=d.get("external_verifier_metrics") or {}
+          internal=d.get("internal_verifier_metrics") or {}
+          if int(ext.get("calls") or 0) != 0:
+              raise SystemExit("registry scan contaminated external verify_mcp_endpoint metrics")
+          if str(internal.get("scope") or "") != "internal_registry_health":
+              raise SystemExit("internal registry-health usage scope missing")
+          if internal.get("payment_signal") is not False:
+              raise SystemExit("internal scan unexpectedly marked as payment signal")
+          rows=json.load(open("data/registry-health/latest-servers.json",encoding="utf-8")).get("servers") or []
+          for row in rows:
+              for key in ("probe1","probe2"):
+                  probe=row.get(key)
+                  if not isinstance(probe,dict):
+                      continue
+                  if probe.get("remote_tools_called") is True:
+                      raise SystemExit("remote tools/call detected")
+                  if probe.get("credentials_forwarded") is True:
+                      raise SystemExit("credential forwarding detected")
+                  if probe.get("usage_scope") not in (None,"internal_registry_health"):
+                      raise SystemExit("unexpected verifier usage scope")
+          print(json.dumps({
+              "phase":d.get("phase"),
+              "servers_total":d.get("servers_total"),
+              "remote_verifiable":d.get("remote_verifiable"),
+              "package_only":d.get("package_only"),
+              "scanned":d.get("scanned"),
+              "external_calls":ext.get("calls"),
+              "internal_calls":internal.get("calls"),
+          },indent=2))
+          PY
+
+      - name: Commit public dataset and aggregate drafts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Registry Health"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/registry-health docs/reports
+          if git diff --cached --quiet; then
+            echo "No Registry Health data changes"
+            exit 0
+          fi
+          git commit -m "registry health data: ${REGISTRY_HEALTH_PHASE} probe $(date -u +%F)"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt * 3))
+          done
+          echo "Could not publish Registry Health dataset commit" >&2
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: registry-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            data/registry-health/
+            docs/reports/
+          if-no-files-found: warn
+          retention-days: 30
