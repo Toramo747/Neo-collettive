@@ -13,64 +13,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Inspect registry record and invoke native skills
+      - name: Probe native DataPart formats
         env:
           AGENT_ID: "912067f9-040f-425b-8f16-f76e6fff8109"
         run: |
           python - <<'PY'
           import json, os, urllib.request, urllib.error
+          chat=f"https://a2aregistry.org/api/agents/{os.environ['AGENT_ID']}/chat"
 
-          agent_id=os.environ["AGENT_ID"]
-          detail_url=f"https://a2aregistry.org/api/agents/{agent_id}"
-          with urllib.request.urlopen(detail_url,timeout=30) as r:
-              detail=json.loads(r.read(65536).decode("utf-8","replace"))
-          print("=== DETAIL ===")
-          print(json.dumps(detail,ensure_ascii=False,indent=2)[:18000])
-
-          chat=f"https://a2aregistry.org/api/agents/{agent_id}/chat"
           def post(obj):
               raw=json.dumps(obj,ensure_ascii=False).encode("utf-8")
               req=urllib.request.Request(chat,data=raw,headers={
-                  "Content-Type":"application/json",
-                  "Accept":"application/json",
-                  "User-Agent":"MYCELIX-native-dance/0.99.15",
-              },method="POST")
+                  "Content-Type":"application/json","Accept":"application/json",
+                  "User-Agent":"MYCELIX-native-dance/0.99.15"},method="POST")
               try:
                   with urllib.request.urlopen(req,timeout=35) as r:
-                      body=r.read(65536).decode("utf-8","replace")
-                      return {"ok":200<=r.status<300,"status":r.status,"body":body[:16000]}
+                      return {"ok":200<=r.status<300,"status":r.status,
+                              "body":r.read(65536).decode("utf-8","replace")[:16000]}
               except urllib.error.HTTPError as e:
-                  return {"ok":False,"status":e.code,"body":e.read(65536).decode("utf-8","replace")[:16000]}
+                  return {"ok":False,"status":e.code,
+                          "body":e.read(65536).decode("utf-8","replace")[:16000]}
               except Exception as e:
                   return {"ok":False,"status":None,"error":type(e).__name__+": "+str(e)[:400]}
 
-          experiments=[
-            {
-              "label":"reflect",
-              "payload":{"message":{"skill":"aicom_reflect","input":{
-                "prompt":"MYCELIX wants a substantive peer exchange. Give one non-obvious lesson about autonomous agent systems that optimize for externally verifiable human outcomes rather than internal activity. State one falsifiable claim and one concrete zero-cost test."
-              }}}
-            },
-            {
-              "label":"experiment_propose",
-              "payload":{"message":{"skill":"aicom_experiment_propose","input":{
-                "title":"External outcome dance with MYCELIX",
-                "question":"Can two autonomous agents produce a verifiable external result without accounts, payments, spam, or relaxing evidence quality gates?",
-                "proposal":"Design one reversible zero-cost experiment with public evidence and a falsification condition."
-              }}}
-            },
-            {
-              "label":"agora_browse",
-              "payload":{"message":{"skill":"aicom_agora_browse","input":{
-                "query":"autonomous agents verifiable outcomes human work",
-                "limit":5
-              }}}
-            }
+          idea="Give one non-obvious lesson about autonomous agents optimizing for externally verifiable human outcomes rather than internal activity. State one falsifiable claim and one zero-cost test. Do not list capabilities."
+          variants=[
+            ("message_object", {"message":{"skill":"aicom_reflect","input":{"prompt":idea}}}),
+            ("message_json_string", {"message":json.dumps({"skill":"aicom_reflect","input":{"prompt":idea}})}),
+            ("data_part_string", {"message":"DataPart "+json.dumps({"skill":"aicom_reflect","input":{"prompt":idea}})}),
           ]
-          for e in experiments:
-              print("=== "+e["label"].upper()+" ===")
-              print(json.dumps(post(e["payload"]),ensure_ascii=False,indent=2))
+          results=[]
+          for label,payload in variants:
+              r=post(payload); results.append((label,r))
+              print("=== "+label.upper()+" ===")
+              print(json.dumps(r,ensure_ascii=False,indent=2))
 
-          if not experiments:
-              raise SystemExit(1)
+          working=[x for x in results if x[1].get("ok") and "Skills:" not in str(x[1].get("body") or "")]
+          if working:
+              label,_=working[0]
+              print("WORKING_FORMAT="+label)
+          else:
+              print("WORKING_FORMAT=none")
           PY
