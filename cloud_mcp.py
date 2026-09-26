@@ -114,7 +114,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.20"  # fix Director valid-list shadowing during observed candidate revalidation
+VERSION = "0.99.21"  # A2A compatibility plus pre-Director SETI engine-upgrade scan
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
