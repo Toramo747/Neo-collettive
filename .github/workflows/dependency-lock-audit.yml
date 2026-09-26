@@ -1,0 +1,70 @@
+name: Dependency lock and license audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "requirements.txt"
+      - "tools/dependency_audit.py"
+      - ".github/workflows/dependency-lock-audit.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dependency-lock-audit
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate hash-locked runtime requirements
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/lock-tools
+          /tmp/lock-tools/bin/python -m pip install --upgrade pip
+          /tmp/lock-tools/bin/python -m pip install "pip-tools==7.6.1"
+          /tmp/lock-tools/bin/pip-compile             --generate-hashes             --resolver=backtracking             --strip-extras             --output-file=requirements.lock             requirements.txt
+          grep -q -- "--hash=sha256:" requirements.lock
+          echo "requirements.lock generated with hashes"
+
+      - name: Install locked runtime tree and audit licenses
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/runtime-audit
+          /tmp/runtime-audit/bin/python -m pip install --upgrade pip
+          /tmp/runtime-audit/bin/python -m pip install --require-hashes -r requirements.lock
+          /tmp/runtime-audit/bin/python tools/dependency_audit.py --write THIRD_PARTY_LICENSES.md --check
+
+      - name: Commit lock and license inventory
+        run: |
+          set -euo pipefail
+          git config user.name "NEO Dependency Audit"
+          git config user.email "actions@users.noreply.github.com"
+          git add requirements.lock THIRD_PARTY_LICENSES.md
+          if git diff --cached --quiet; then
+            echo "Lock and license inventory already current"
+            exit 0
+          fi
+          git commit -m "deps: lock runtime tree and audit licenses [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt * 3))
+          done
+          echo "Failed to publish dependency audit after 3 attempts" >&2
+          exit 1
