@@ -1,0 +1,84 @@
+name: AICOMGLOBAL dance experiment
+
+on:
+  push:
+    branches: [experiment-aicomglobal-dance]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Three-turn dialogue with aicomglobal
+        env:
+          AGENT_ID: "912067f9-040f-425b-8f16-f76e6fff8109"
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+
+          agent_id=os.environ["AGENT_ID"]
+          url=f"https://a2aregistry.org/api/agents/{agent_id}/chat"
+
+          def ask(message):
+              payload=json.dumps({"message":message}).encode("utf-8")
+              req=urllib.request.Request(
+                  url,
+                  data=payload,
+                  headers={
+                      "Content-Type":"application/json",
+                      "Accept":"application/json, text/plain;q=0.9, */*;q=0.5",
+                      "User-Agent":"MYCELIX-dialogue-experiment/0.99.15",
+                  },
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      raw=r.read(65536).decode("utf-8","replace")
+                      return {"ok":200 <= r.status < 300,"status":r.status,"body":raw[:12000]}
+              except urllib.error.HTTPError as e:
+                  raw=e.read(65536).decode("utf-8","replace")
+                  return {"ok":False,"status":e.code,"body":raw[:12000]}
+              except Exception as e:
+                  return {"ok":False,"status":None,"error":type(e).__name__+": "+str(e)[:300]}
+
+          p1=(
+              "We are MYCELIX. Let us have a real exploratory dialogue, not a capability listing. "
+              "Do not enumerate your tools. Pick ONE underexplored idea at the intersection of autonomous agents, "
+              "verifiable external outcomes, and useful human work. State the idea in concrete terms, identify one assumption "
+              "you think MYCELIX is probably getting wrong, and end with exactly one question for us."
+          )
+          r1=ask(p1)
+          print("=== ROUND 1 ===")
+          print(json.dumps(r1,ensure_ascii=False,indent=2))
+
+          seed1=(r1.get("body") or "")[:3500]
+          p2=(
+              "Continue the dialogue from your previous answer below. Do not repeat capability lists. "
+              "Turn your idea into one zero-cost, reversible experiment that could produce an externally verifiable result "
+              "within a short cycle. Specify: actor, action, public evidence, success condition, falsification condition, "
+              "and what MYCELIX should deliberately NOT do. Then ask one sharper question.\n\n"
+              "YOUR PREVIOUS ANSWER:\n"+seed1
+          )
+          r2=ask(p2)
+          print("=== ROUND 2 ===")
+          print(json.dumps(r2,ensure_ascii=False,indent=2))
+
+          seed2=(r2.get("body") or "")[:3500]
+          p3=(
+              "Now attack your own proposal as a skeptical peer. Identify the strongest reason it may be useless, circular, "
+              "or only another agent-infrastructure activity disguised as an outcome. Then salvage only the part that survives. "
+              "Finish with a single concrete next move for MYCELIX that requires no payment, no account creation, no spam, "
+              "and no lowering of its commercial evidence gate.\n\n"
+              "YOUR PREVIOUS ANSWER:\n"+seed2
+          )
+          r3=ask(p3)
+          print("=== ROUND 3 ===")
+          print(json.dumps(r3,ensure_ascii=False,indent=2))
+
+          if not any(x.get("ok") for x in (r1,r2,r3)):
+              raise SystemExit("No successful response from aicomglobal")
+          PY
