@@ -445,8 +445,9 @@ jobs:
               raise SystemExit("market cycle validation returned ok=false")
           if int(d.get("cycles_executed") or 0) != 3:
               raise SystemExit("expected exactly 3 completed market cycles")
-          if str(d.get("neo_version") or "") != "0.99.27":
-              raise SystemExit("market cycles did not run on v0.99.27")
+          expected=open("/tmp/neo_version",encoding="utf-8").read().strip()
+          if str(d.get("neo_version") or "") != expected:
+              raise SystemExit(f"market cycles did not run on expected version {expected}")
           print("market_validation_cycles=3")
           print("quality_gate="+str(bool(d.get("quality_gate"))).lower())
           PY
