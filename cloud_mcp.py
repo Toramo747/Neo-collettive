@@ -7,6 +7,7 @@ import aicomglobal_adapter as aicomglobal
 import base64
 import html
 import json
+import logging
 import os
 import re
 import secrets
@@ -45,6 +46,8 @@ from search_providers import (
     provider_diagnostics,
     search_with_fallback as provider_search_with_fallback,
 )
+
+LOGGER = logging.getLogger("mycelix")
 
 from seti_radar import (
     SETI_ENGINE_VERSION,
@@ -116,7 +119,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.23"  # BUSL release, fresh readiness telemetry and bounded SETI retry
+VERSION = "0.99.24"  # consistent SETI readiness telemetry and parser-fix recovery
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -9733,6 +9736,23 @@ def _seti_interview_prompt() -> str:
     )
 
 
+def _assert_seti_readiness_telemetry(summary: dict, context: str) -> bool:
+    """Fail-open runtime assertion for public readiness telemetry only."""
+    row=summary if isinstance(summary,dict) else {}
+    counts=row.get("reason_counts") if isinstance(row.get("reason_counts"),dict) else {}
+    ready=int(row.get("ready_now") or 0)
+    eligible=int(row.get("eligible") or 0)
+    reason_ready=int(counts.get("ready") or 0)
+    reason_total=sum(int(v or 0) for v in counts.values())
+    ok=bool(row.get("invariant_ok")) and reason_ready==ready and reason_total==eligible
+    if not ok:
+        LOGGER.warning(
+            "TELEMETRY_INCONSISTENT context=%s ready_now=%s reason_ready=%s eligible=%s reason_total=%s",
+            context,ready,reason_ready,eligible,reason_total,
+        )
+    return ok
+
+
 async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     """Interview a small bounded batch of quarantined candidates per SETI scan."""
     candidates=SETI_PRIVATE_STATE.get("candidates") or {}
@@ -10048,6 +10068,7 @@ async def _seti_cycle_if_due() -> dict | None:
             datetime.now(timezone.utc).isoformat(),
             SETI_FOLLOWUP_MIN_SECONDS,
         )
+        _assert_seti_readiness_telemetry(readiness_summary,"pre_interview_selection")
         policy=_load_policy()
         bounded_active=bool(policy.get("seti_bounded_active_enabled",False))
         max_interviews=max(1,min(3,int(policy.get("seti_max_interviews_per_scan") or 1)))
@@ -10069,6 +10090,7 @@ async def _seti_cycle_if_due() -> dict | None:
             SETI_FOLLOWUP_MIN_SECONDS,
             attempted_keys=attempted_keys,
         )
+        _assert_seti_readiness_telemetry(readiness_summary,"post_interview_selection")
         private_checkpoint=await _checkpoint_seti_private_to_render()
         full_safety={
             "target_http_requests":bool(interview_result.get("target_request_attempts")),
@@ -10108,6 +10130,9 @@ async def _seti_cycle_if_due() -> dict | None:
             "high_interest_eligibility_reason_counts":eligibility_summary.get("high_interest_reason_counts") or {},
             "interview_ready_now_count":readiness_summary.get("ready_now",0),
             "interview_readiness_reason_counts":readiness_summary.get("reason_counts") or {},
+            "interview_readiness_invariant_ok":bool(readiness_summary.get("invariant_ok")),
+            "interview_candidate_states":readiness_summary.get("candidate_states") or [],
+            "ready_now_computed_at":readiness_summary.get("ready_now_computed_at"),
             "interview_attempted":bool(interview_result.get("attempted")),
             "last_interview_status":interview_result.get("status"),
             "last_interview_score":interview_result.get("score"),
@@ -10176,6 +10201,8 @@ async def _seti_cycle_if_due() -> dict | None:
                 "in_cooldown":readiness_summary.get("in_cooldown") or [],
                 "attempted_this_cycle":readiness_summary.get("attempted_this_cycle") or [],
                 "interview_readiness_reason_counts":readiness_summary.get("reason_counts") or {},
+                "interview_readiness_invariant_ok":bool(readiness_summary.get("invariant_ok")),
+                "interview_candidate_states":readiness_summary.get("candidate_states") or [],
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "interview_attempted_count":interview_result.get("attempted_count",0),
@@ -10254,9 +10281,13 @@ async def _autopilot_cycle() -> None:
                         SETI_FOLLOWUP_MIN_SECONDS,
                         attempted_keys=retry_attempted_keys,
                     )
+                    _assert_seti_readiness_telemetry(retry_readiness,"engine_upgrade_retry")
                     summary.update({
                         "interview_ready_now":retry_readiness.get("ready_now",0),
                         "ready_now_computed_at":retry_readiness.get("ready_now_computed_at"),
+                        "interview_readiness_reason_counts":retry_readiness.get("reason_counts") or {},
+                        "interview_readiness_invariant_ok":bool(retry_readiness.get("invariant_ok")),
+                        "interview_candidate_states":retry_readiness.get("candidate_states") or [],
                         "blocked_auth":retry_readiness.get("blocked_auth") or [],
                         "in_cooldown":retry_readiness.get("in_cooldown") or [],
                         "attempted_this_cycle":retry_readiness.get("attempted_this_cycle") or [],
@@ -10278,6 +10309,11 @@ async def _autopilot_cycle() -> None:
                         "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
                         "engine_upgrade_retry":True,
                     })
+                    seti_state["interview_ready_now_count"]=retry_readiness.get("ready_now",0)
+                    seti_state["interview_readiness_reason_counts"]=retry_readiness.get("reason_counts") or {}
+                    seti_state["interview_readiness_invariant_ok"]=bool(retry_readiness.get("invariant_ok"))
+                    seti_state["interview_candidate_states"]=retry_readiness.get("candidate_states") or []
+                    seti_state["ready_now_computed_at"]=retry_readiness.get("ready_now_computed_at")
                     seti_state["last_summary"]=summary
                     seti_state["private_checkpoint"]={
                         "ok":bool(private_checkpoint.get("ok")),

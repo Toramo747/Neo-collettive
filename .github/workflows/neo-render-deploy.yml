@@ -315,6 +315,13 @@ jobs:
               and bool(s.get("ready_now_computed_at"))
           )
           if ok:
+              counts=s.get("interview_readiness_reason_counts") or {}
+              if int(counts.get("ready") or 0)!=int(s.get("interview_ready_now") or 0):
+                  raise SystemExit("SETI readiness invariant failed: ready count")
+              if sum(int(v or 0) for v in counts.values())!=int(s.get("eligible_candidates") or 0):
+                  raise SystemExit("SETI readiness invariant failed: eligible total")
+              if s.get("interview_readiness_invariant_ok") is not True:
+                  raise SystemExit("SETI readiness invariant flag false")
               print(json.dumps({
                   "interview_ready_now":s.get("interview_ready_now"),
                   "ready_now_computed_at":s.get("ready_now_computed_at"),
@@ -323,6 +330,9 @@ jobs:
                   "attempted_this_cycle":s.get("attempted_this_cycle"),
                   "last_interview_status":s.get("last_interview_status"),
                   "failure_reason_counts":s.get("interview_failure_reason_counts"),
+                  "reason_counts":s.get("interview_readiness_reason_counts"),
+                  "candidate_states":s.get("interview_candidate_states"),
+                  "invariant_ok":s.get("interview_readiness_invariant_ok"),
                   "admitted_count":s.get("interview_admitted_count"),
               },ensure_ascii=False,indent=2))
               sys.exit(0)

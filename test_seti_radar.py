@@ -532,6 +532,51 @@ class SetiRadarTests(unittest.TestCase):
         self.assertEqual(set(attempted["attempted_this_cycle"]),{"auth-peer","cool-peer"})
 
 
+    def test_readiness_reason_counts_invariant_only_counts_eligible(self):
+        candidates={
+            "ready":{"classification":"INTERESTING","max_score":70,"url":"https://ready.example.ai/a2a"},
+            "auth":{"classification":"INTERESTING","max_score":70,"url":"https://auth.example.ai/a2a"},
+            "noise":{"classification":"WEAK_SIGNAL","max_score":20,"url":"https://github.com/acme/noise"},
+        }
+        interviews={
+            "auth":{"status":"PARKED","attempts":1,"reason":"AUTH_REQUIRED","followup_state":"AUTH_BLOCKED"},
+        }
+        summary=summarize_interview_readiness(candidates,interviews,{},"2026-09-26T10:30:00+00:00",3600)
+        self.assertEqual(summary["eligible"],2)
+        self.assertEqual(summary["ready_now"],1)
+        self.assertEqual(summary["reason_counts"].get("ready"),summary["ready_now"])
+        self.assertEqual(sum(summary["reason_counts"].values()),summary["eligible"])
+        self.assertNotIn("ineligible",summary["reason_counts"])
+        self.assertTrue(summary["invariant_ok"])
+
+    def test_pre_fix_json_parser_exhaustion_gets_one_recovery_retry(self):
+        candidate={"classification":"INTERESTING","max_score":80,"url":"https://json.example.ai/.well-known/agent-card.json"}
+        prior={
+            "status":"PARKED",
+            "attempts":3,
+            "reason":"JSON_RESPONSE_REQUIRED",
+            "last_attempt_utc":"2026-09-26T05:13:00+00:00",
+            "attempt_history":[
+                {"attempt":1,"timestamp_utc":"2026-09-26T04:00:00+00:00","reason":"ReadTimeout"},
+                {"attempt":2,"timestamp_utc":"2026-09-26T04:30:00+00:00","reason":"agent_card_http_503"},
+                {"attempt":3,"timestamp_utc":"2026-09-26T05:13:00+00:00","reason":"JSON_RESPONSE_REQUIRED"},
+            ],
+        }
+        state=seti_candidate_attempt_state(candidate,prior,"2026-09-26T10:30:00+00:00",3600)
+        self.assertTrue(state["ready"])
+        self.assertEqual(state["reason"],"ready")
+        self.assertEqual(state["readiness_detail"],"legacy_json_parser_retry")
+
+        after=dict(prior,last_attempt_utc="2026-09-26T05:30:00+00:00")
+        after["attempt_history"]=list(prior["attempt_history"][:-1])+[
+            {"attempt":3,"timestamp_utc":"2026-09-26T05:30:00+00:00","reason":"JSON_RESPONSE_REQUIRED"}
+        ]
+        self.assertEqual(
+            seti_candidate_attempt_state(candidate,after,"2026-09-26T10:30:00+00:00",3600)["reason"],
+            "attempts_exhausted",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 

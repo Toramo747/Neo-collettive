@@ -11,7 +11,8 @@ from typing import Any, Awaitable, Callable
 from peer_quality import BLOCKED_PEER_CLASSES
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 17
+SETI_ENGINE_VERSION = 18
+A2A_JSON_CONTENT_TYPE_FIX_UTC = "2026-09-26T05:20:10+00:00"
 
 DEFAULT_PASSIVE_QUERIES = [
     'site:reddit.com/r/AI_Agents "A2A" "agent card" "endpoint"',
@@ -1067,6 +1068,29 @@ def interview_candidate_eligibility(candidate: dict) -> dict:
     return {"eligible":False,"reason":"no_explicit_agent_endpoint"}
 
 
+def _legacy_json_parser_retry_due(prior: dict | None) -> bool:
+    """Allow one retry when exhaustion was caused by the pre-v0.99.22 JSON content-type parser."""
+    row=prior if isinstance(prior,dict) else {}
+    if str(row.get("status") or "").upper()!="PARKED":
+        return False
+    if max(0,int(row.get("attempts") or 0))<3:
+        return False
+    history=[x for x in (row.get("attempt_history") or []) if isinstance(x,dict)]
+    latest=history[-1] if history else row
+    reason=str(latest.get("reason") or row.get("reason") or "").upper()
+    if reason!="JSON_RESPONSE_REQUIRED":
+        return False
+    stamp=str(latest.get("timestamp_utc") or row.get("last_attempt_utc") or row.get("interviewed_at_utc") or "").strip()
+    if not stamp:
+        return False
+    try:
+        attempted_at=datetime.fromisoformat(stamp.replace("Z","+00:00")).astimezone(timezone.utc)
+        fixed_at=datetime.fromisoformat(A2A_JSON_CONTENT_TYPE_FIX_UTC).astimezone(timezone.utc)
+    except Exception:
+        return False
+    return attempted_at < fixed_at
+
+
 def seti_candidate_attempt_state(candidate: dict, prior: dict | None, now_utc: str, min_seconds: int = 3600) -> dict:
     """Explain whether an eligible candidate is ready for interview right now."""
     eligibility=interview_candidate_eligibility(candidate)
@@ -1093,6 +1117,15 @@ def seti_candidate_attempt_state(candidate: dict, prior: dict | None, now_utc: s
     if block_reason=="AUTH_REQUIRED":
         return {"ready":False,"reason":"auth_required","attempts":attempts}
     if status=="PARKED" and attempts>=3:
+        if _legacy_json_parser_retry_due(prior):
+            return {
+                "ready":True,
+                "reason":"ready",
+                "readiness_detail":"legacy_json_parser_retry",
+                "attempts":attempts,
+                "eligibility_reason":eligibility.get("reason"),
+                "contact_mode":eligibility.get("contact_mode"),
+            }
         return {"ready":False,"reason":"attempts_exhausted","attempts":attempts}
     if status=="PARKED" and not seti_retry_ready(prior,now_utc,min_seconds):
         return {"ready":False,"reason":"rate_limited","attempts":attempts}
@@ -1113,39 +1146,57 @@ def summarize_interview_readiness(
     min_seconds: int = 3600,
     attempted_keys: set[str] | None = None,
 ) -> dict:
-    """Recompute non-sensitive interview readiness at selection time."""
+    """Compute all interview-readiness telemetry from one eligible-candidate pass and one instant."""
     counts={}
     ready=0
     eligible=0
     blocked_auth=[]
     in_cooldown=[]
     attempted_this_cycle=[]
+    candidate_states=[]
     attempted={str(x) for x in (attempted_keys or set())}
     try:
         now=datetime.fromisoformat(str(now_utc).replace("Z","+00:00")).astimezone(timezone.utc)
     except Exception:
         now=datetime.now(timezone.utc)
+    computed_at=now.isoformat()
 
     for key,candidate in (candidates or {}).items():
         if not isinstance(candidate,dict):
             continue
+        eligibility=interview_candidate_eligibility(candidate)
+        if not eligibility.get("eligible"):
+            continue
+
+        eligible += 1
         skey=str(key)
         prior=(interviews or {}).get(key) if isinstance((interviews or {}).get(key),dict) else {}
-        eligibility=interview_candidate_eligibility(candidate)
-        if eligibility.get("eligible"):
-            eligible += 1
-
         if skey in attempted:
-            state={"ready":False,"reason":"attempted_this_cycle"}
+            state={"ready":False,"reason":"attempted_this_cycle","attempts":int(prior.get("attempts") or 0)}
             attempted_this_cycle.append(skey)
         else:
-            state=seti_candidate_attempt_state(candidate,prior,now_utc,min_seconds)
+            state=seti_candidate_attempt_state(candidate,prior,computed_at,min_seconds)
 
         reason=str(state.get("reason") or "unknown")
         counts[reason]=counts.get(reason,0)+1
-        if state.get("ready"):
+        is_ready=bool(state.get("ready"))
+        if is_ready:
             ready += 1
-            continue
+
+        last_history=(prior.get("attempt_history") or []) if isinstance(prior.get("attempt_history"),list) else []
+        last_attempt=last_history[-1] if last_history and isinstance(last_history[-1],dict) else {}
+        candidate_states.append({
+            "candidate":"SETI-"+skey[:8],
+            "ready":is_ready,
+            "reason":reason,
+            "readiness_detail":str(state.get("readiness_detail") or ""),
+            "attempts":int(prior.get("attempts") or state.get("attempts") or 0),
+            "prior_reason":str(prior.get("reason") or ""),
+            "followup_state":str(prior.get("followup_state") or ""),
+            "last_attempt_utc":str(prior.get("last_attempt_utc") or prior.get("interviewed_at_utc") or ""),
+            "last_attempt_reason":str(last_attempt.get("reason") or prior.get("reason") or ""),
+            "last_http_status":last_attempt.get("http_status",prior.get("http_status")),
+        })
 
         if reason=="auth_required":
             blocked_auth.append(skey)
@@ -1161,16 +1212,22 @@ def summarize_interview_readiness(
                     cooldown_until=None
             in_cooldown.append({"candidate":skey,"cooldown_until":cooldown_until})
 
+    reason_counts=dict(sorted(counts.items()))
+    invariant_ok=(
+        int(reason_counts.get("ready") or 0)==ready
+        and sum(int(v or 0) for v in reason_counts.values())==eligible
+    )
     return {
         "eligible":eligible,
         "ready_now":ready,
-        "ready_now_computed_at":now.isoformat(),
+        "ready_now_computed_at":computed_at,
         "blocked_auth":blocked_auth,
         "in_cooldown":in_cooldown,
         "attempted_this_cycle":attempted_this_cycle,
-        "reason_counts":dict(sorted(counts.items())),
+        "reason_counts":reason_counts,
+        "candidate_states":candidate_states,
+        "invariant_ok":invariant_ok,
     }
-
 
 def summarize_candidate_eligibility(candidates: dict) -> dict:
     """Return non-sensitive eligibility telemetry for the public SETI summary."""
