@@ -182,17 +182,25 @@ def market_scout_terms(cycle: int, count: int = 6) -> list[dict]:
 
 
 def seti_market_catalog(candidates: dict | None, interviews: dict | None) -> list[dict]:
-    """Convert public Agent Cards into market observations; never initiates payment."""
+    """Convert current or historical public Agent Cards into market observations; never initiates payment."""
     candidates=candidates if isinstance(candidates,dict) else {}
     interviews=interviews if isinstance(interviews,dict) else {}
     out=[]
-    for key,candidate in candidates.items():
-        if not isinstance(candidate,dict):
-            continue
-        url=str(candidate.get("agent_card_url") or candidate.get("url") or "").strip()
-        if not url.startswith("https://") or "agent-card" not in url:
-            continue
+    keys=list(dict.fromkeys([*candidates.keys(),*interviews.keys()]))
+    for key in keys:
+        candidate=candidates.get(key) if isinstance(candidates.get(key),dict) else {}
         prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
+        url=str(
+            candidate.get("agent_card_url")
+            or candidate.get("url")
+            or prior.get("agent_card_url")
+            or prior.get("endpoint")
+            or ""
+        ).strip()
+        if not url.startswith("https://"):
+            continue
+        # Historical interviews can preserve the negotiated JSON-RPC endpoint rather
+        # than the original Agent Card. Keep it as a verifiable public market source.
         state=str(prior.get("followup_state") or "").upper()
         peer_class=str(prior.get("peer_class") or "").upper()
         reason=str(prior.get("reason") or "").upper()
@@ -207,19 +215,20 @@ def seti_market_catalog(candidates: dict | None, interviews: dict | None) -> lis
         capabilities=[]
         for value in (
             candidate.get("title"),candidate.get("description"),candidate.get("snippet"),
-            prior.get("capability_excerpt"),
+            prior.get("capability_excerpt"),prior.get("response_excerpt"),
         ):
             if str(value or "").strip():
                 capabilities.append(str(value).strip()[:300])
         out.append({
             "candidate":"SETI-"+str(key)[:8],
             "url":url,
-            "observed_at_utc":_utc(str(prior.get("last_attempt_utc") or candidate.get("last_seen_utc") or "")),
+            "observed_at_utc":_utc(str(prior.get("last_attempt_utc") or prior.get("interviewed_at_utc") or candidate.get("last_seen_utc") or "")),
             "category":"ai_tools",
             "capabilities":capabilities[:4],
             "pricing_model":pricing,
             "http_status":prior.get("http_status"),
             "payment_performed":False,
+            "historical_interview_only":not bool(candidate),
         })
     return out
 
