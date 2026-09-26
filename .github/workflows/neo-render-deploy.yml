@@ -96,6 +96,11 @@ jobs:
           print("source runtime-literal validation passed")
           PY
 
+      - name: Install locked test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+
       - name: Run regression tests
         run: |
           set -euo pipefail
