@@ -67,18 +67,17 @@ jobs:
             exit 0
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            echo "${tag} tag already exists; creating release from existing tag"
+            echo "${tag} tag already exists"
             git fetch --tags origin
-            gh release create "${tag}" \
-              --verify-tag \
-              --title "${tag}" \
-              --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
           else
-            gh release create "${tag}" \
-              --target "${TARGET_SHA}" \
-              --title "${tag}" \
-              --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
+            echo "Creating lightweight tag ${tag} at ${TARGET_SHA}"
+            git tag "${tag}" "${TARGET_SHA}"
+            git push origin "refs/tags/${tag}"
           fi
+          gh release create "${tag}" \
+            --verify-tag \
+            --title "${tag}" \
+            --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
 
       - name: Publish current version to official MCP Registry
         if: steps.freshness.outputs.skip != 'true'
