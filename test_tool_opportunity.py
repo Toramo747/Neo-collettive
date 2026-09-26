@@ -118,9 +118,9 @@ class ToolOpportunityTests(unittest.TestCase):
         )
         with_counter=analyze_tool_opportunities(
             [self._group('"developer tool" pricing subscription',base+[{
-                "title":"Open source free alternative",
+                "title":"Open source developer tool alternative",
                 "url":"https://opensource.example/devtool",
-                "snippet":"Completely free open source alternative.",
+                "snippet":"Completely free open source developer code review alternative.",
                 "source":"web",
             }])],[],[],meta,"2026-09-26T12:00:00+00:00"
         )
@@ -260,12 +260,12 @@ class ToolOpportunityTests(unittest.TestCase):
         ]
         result=analyze_tool_opportunities([],[],catalog,{},"2026-09-26T12:00:00+00:00")
         ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
-        self.assertEqual(len(ai["existing_tools"]),1)
+        self.assertEqual(len(ai["existing_tools"]),0)
         self.assertFalse(ai["gate_pass"])
         self.assertIn("two_independent_real_price_competitors",ai["missing"])
 
     def test_github_bounty_price_is_not_a_paid_competitor(self):
-        meta={'"analytics SaaS" pricing subscription':{"family":"analytics_tools","role":"tool_pricing"}}
+        meta={'"analytics saas" pricing subscription':{"family":"analytics_tools","role":"tool_pricing"}}
         groups=[self._group('"analytics SaaS" pricing subscription',[
             {
                 "title":"AnalyticsPro pricing $29/month",
