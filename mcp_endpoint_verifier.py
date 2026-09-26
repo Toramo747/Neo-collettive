@@ -26,8 +26,8 @@ MAX_REDIRECTS = 3
 MAX_RESPONSE_BYTES = 256 * 1024
 CONNECT_TIMEOUT = 5.0
 READ_TIMEOUT = 8.0
-PER_CALLER_LIMIT = 6
-GLOBAL_LIMIT = 30
+PER_CALLER_LIMIT = 10
+GLOBAL_LIMIT = 60
 RATE_WINDOW_SECONDS = 60.0
 
 _BLOCKED_HOSTS = {
@@ -140,6 +140,10 @@ def _trim_window(q: deque[float], now: float) -> None:
 def consume_rate_limit(bucket: str) -> None:
     now = time.monotonic()
     _trim_window(_GLOBAL_CALLS, now)
+    for stale_bucket in list(_CALLER_CALLS):
+        _trim_window(_CALLER_CALLS[stale_bucket], now)
+        if not _CALLER_CALLS[stale_bucket]:
+            _CALLER_CALLS.pop(stale_bucket, None)
     caller = _CALLER_CALLS[bucket]
     _trim_window(caller, now)
     if len(_GLOBAL_CALLS) >= GLOBAL_LIMIT:
