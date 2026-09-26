@@ -108,6 +108,8 @@ async def main() -> int:
             {"action": "live_utility", "subject": "a2a"},
             {"action": "live_utility", "subject": "mcp"},
             {"action": "discover_external_agents", "capability": "web_research", "need_id": 1},
+            {"action": "discover_external_agents", "capability": "casper-tools", "need_id": 1},
+            {"action": "discover_external_agents", "capability": "mcp", "need_id": 1},
         ], 1):
             req = {
                 "jsonrpc": "2.0",
