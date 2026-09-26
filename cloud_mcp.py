@@ -113,7 +113,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.16"  # read-only AICOMGLOBAL discovery and peer registry
+VERSION = "0.99.17"  # activate AICOMGLOBAL discovery immediately via SETI engine revision
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
