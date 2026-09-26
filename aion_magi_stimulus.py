@@ -186,7 +186,10 @@ async def main() -> int:
             example_obj = {}
             pathwren["example_error"] = type(exc).__name__ + ":" + str(exc)[:300]
 
-        if live_casper_endpoint:
+        pathwren_target = live_casper_endpoint or "https://neo-collettive.onrender.com/mcp"
+        pathwren["target"] = pathwren_target
+        pathwren["control_only"] = live_casper_endpoint is None
+        if pathwren_target:
             # Prefer a documented score or lint example; adapt only its target URL field.
             def walk(obj):
                 if isinstance(obj, dict):
@@ -214,7 +217,7 @@ async def main() -> int:
                         "message": {
                             "role": "ROLE_USER",
                             "messageId": "mycelix-pathwren-score-msg",
-                            "parts": [{"text": json.dumps({"skill": "score", "url": live_casper_endpoint})}],
+                            "parts": [{"text": json.dumps({"skill": "score", "url": pathwren_target})}],
                         }
                     },
                 }
@@ -224,7 +227,7 @@ async def main() -> int:
                     if isinstance(obj, dict):
                         for k, v in list(obj.items()):
                             if k.lower() in {"url", "endpoint", "target", "target_url", "mcp_url"} and isinstance(v, str):
-                                obj[k] = live_casper_endpoint
+                                obj[k] = pathwren_target
                             else:
                                 replace_target(v)
                     elif isinstance(obj, list):
