@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrea Gava
 import asyncio
 import hashlib
 import json

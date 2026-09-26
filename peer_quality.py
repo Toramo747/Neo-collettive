@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrea Gava
 """Bounded peer-response classification for MYCELIX SETI.
 
 Classification is behavioral and task-scoped. It does not verify identity, truth,

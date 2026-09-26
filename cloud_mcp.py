@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrea Gava
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
 import a2a_peer as peer_a2a

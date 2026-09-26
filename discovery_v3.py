@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrea Gava
 """Problem-first discovery helpers for NEO/MYCELIX.
 
 Pure stdlib so query attribution and observed-pain extraction can be regression-tested

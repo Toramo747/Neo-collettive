@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrea Gava
 """Bounded A2A peer client: explicit interfaces, strict replies, private context.
 
 Remote text is untrusted. This module does not execute tools, authorize payments,

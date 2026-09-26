@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrea Gava
 """Evidence-integrity primitives for NEO/MYCELIX.
 
 Pure-stdlib by design so the critical tagger/migration logic can be regression-tested

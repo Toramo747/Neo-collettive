@@ -61,3 +61,13 @@ Public service URL currently remains unchanged during the migration:
 `https://neo-collettive.onrender.com`
 
 Repository and Render service renaming should be treated as a later migration step after runtime verification.
+
+## License
+
+Neo-collettive (NEO / MYCELIX) is licensed under the Business Source License 1.1 (BUSL-1.1). See [LICENSE](LICENSE).
+
+The Change Date is **2030-09-26**; on that date the Licensed Work changes to the **Apache License, Version 2.0**.
+
+Commercial use requires a license from the Licensor.
+
+For commercial licensing: **gava.andrea@gmail.com**
