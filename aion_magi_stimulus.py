@@ -138,6 +138,122 @@ async def main() -> int:
                 structured_actions.append({"request": data, "error": type(exc).__name__ + ":" + str(exc)[:300]})
             await asyncio.sleep(1)
 
+        # Resolve a currently-live casper-tools MCP endpoint with a read-only initialize.
+        casper_candidates = [
+            "https://determines-product-administration-farmer.trycloudflare.com/mcp",
+            "https://determines-product-administration-farmer.trycloudflare.com",
+            "https://virtue-hardly-skills-calling.trycloudflare.com/mcp",
+        ]
+        casper_resolution = []
+        live_casper_endpoint = None
+        for candidate_url in casper_candidates:
+            init_body = {
+                "jsonrpc": "2.0",
+                "id": "mycelix-casper-init",
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "MYCELIX-readonly-probe", "version": "1.0"},
+                },
+            }
+            try:
+                cr = await client.post(
+                    candidate_url,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream",
+                    },
+                    json=init_body,
+                )
+                body_text = cr.text[:12000]
+                row = {"url": candidate_url, "status": cr.status_code, "body": body_text}
+                casper_resolution.append(row)
+                if cr.status_code in range(200, 300) and ("serverInfo" in body_text or "casper" in body_text.lower()):
+                    live_casper_endpoint = candidate_url
+                    break
+            except Exception as exc:
+                casper_resolution.append({"url": candidate_url, "error": type(exc).__name__ + ":" + str(exc)[:300]})
+
+        # Retrieve Pathwren's own ready-to-send examples and execute only a read-only MCP score/lint
+        # against the resolved public endpoint. No credentials, writes, or payments.
+        pathwren = {"example_status": None, "selected_request": None, "result": None}
+        try:
+            ex = await client.get("https://www.pathwren.workers.dev/a2a/example.json")
+            pathwren["example_status"] = ex.status_code
+            example_obj = ex.json() if ex.status_code == 200 else {}
+        except Exception as exc:
+            example_obj = {}
+            pathwren["example_error"] = type(exc).__name__ + ":" + str(exc)[:300]
+
+        if live_casper_endpoint:
+            # Prefer a documented score or lint example; adapt only its target URL field.
+            def walk(obj):
+                if isinstance(obj, dict):
+                    yield obj
+                    for v in obj.values():
+                        yield from walk(v)
+                elif isinstance(obj, list):
+                    for v in obj:
+                        yield from walk(v)
+
+            selected = None
+            for node in walk(example_obj):
+                blob = json.dumps(node, ensure_ascii=False).lower()
+                if ("score" in blob or "lint" in blob) and ("skill" in blob or "method" in blob):
+                    selected = json.loads(json.dumps(node))
+                    break
+
+            # Deterministic fallback from Pathwren's published skill contract.
+            if not isinstance(selected, dict) or "jsonrpc" not in selected:
+                selected = {
+                    "jsonrpc": "2.0",
+                    "id": "mycelix-pathwren-score",
+                    "method": "message/send",
+                    "params": {
+                        "message": {
+                            "role": "ROLE_USER",
+                            "messageId": "mycelix-pathwren-score-msg",
+                            "parts": [{"text": json.dumps({"skill": "score", "url": live_casper_endpoint})}],
+                        }
+                    },
+                }
+            else:
+                # Replace any obvious target/url field without changing the advertised envelope shape.
+                def replace_target(obj):
+                    if isinstance(obj, dict):
+                        for k, v in list(obj.items()):
+                            if k.lower() in {"url", "endpoint", "target", "target_url", "mcp_url"} and isinstance(v, str):
+                                obj[k] = live_casper_endpoint
+                            else:
+                                replace_target(v)
+                    elif isinstance(obj, list):
+                        for v in obj:
+                            replace_target(v)
+                replace_target(selected)
+            pathwren["selected_request"] = selected
+            try:
+                pr = await client.post(
+                    "https://www.pathwren.workers.dev/a2a/score",
+                    headers={"Content-Type": "application/json", "Accept": "application/json"},
+                    json=selected,
+                )
+                try:
+                    pb = pr.json()
+                except Exception:
+                    pb = {"raw": pr.text[:20000]}
+                pathwren["result"] = {"status": pr.status_code, "body": pb}
+            except Exception as exc:
+                pathwren["result"] = {"error": type(exc).__name__ + ":" + str(exc)[:300]}
+
+        # Look for an AION action explicitly intended for needs/matches/evidence.
+        aion_card = discovery.get("https://aion-agent-core-live.onrender.com/.well-known/agent-card.json", {}).get("body") or {}
+        candidate_return_actions = []
+        for skill in aion_card.get("skills") or []:
+            blob = json.dumps(skill, ensure_ascii=False).lower()
+            if any(term in blob for term in ("need", "match", "evidence", "result", "offer")):
+                candidate_return_actions.append(skill)
+
         for turn, prompt in enumerate(PROMPTS, 1):
             payload, headers = send_request(interface, prompt, context_id=context_id, task_id=task_id)
             try:
@@ -182,6 +298,10 @@ async def main() -> int:
         "discovery": discovery,
         "structured_need_probe": structured,
         "structured_actions": structured_actions,
+        "casper_resolution": casper_resolution,
+        "live_casper_endpoint": live_casper_endpoint,
+        "pathwren": pathwren,
+        "aion_candidate_return_actions": candidate_return_actions,
         "turns_attempted": len(transcript),
         "transcript": transcript,
     }
