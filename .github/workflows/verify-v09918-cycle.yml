@@ -1,0 +1,68 @@
+name: Verify v0.99.18 completed cycle
+
+on:
+  push:
+    branches: [verify-v09918-once]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Poll completed production cycle
+        run: |
+          set -u
+          for i in $(seq 1 18); do
+            curl -fsS --max-time 20 https://neo-collettive.onrender.com/api/autopilot/status > /tmp/status.json || true
+            set +e
+            python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path("/tmp/status.json")
+          if not p.exists() or not p.read_text().strip():
+              raise SystemExit(2)
+          d=json.loads(p.read_text())
+          ap=d.get("autopilot") or {}
+          s=ap.get("seti") or {}
+          sm=s.get("last_summary") or {}
+          out={
+              "neo_version":d.get("neo_version"),
+              "cycles_completed":ap.get("cycles_completed"),
+              "running":ap.get("running"),
+              "last_started_utc":ap.get("last_started_utc"),
+              "last_finished_utc":ap.get("last_finished_utc"),
+              "last_error":ap.get("last_error"),
+              "seti_engine_version":s.get("engine_version"),
+              "seti_last_scan_utc":s.get("last_scan_utc"),
+              "seti_last_error":s.get("last_error"),
+              "aicomglobal_status":sm.get("aicomglobal_status"),
+              "aicomglobal_attempted":sm.get("aicomglobal_attempted"),
+              "aicomglobal_candidates":sm.get("aicomglobal_candidates"),
+              "aicomglobal_sources":sm.get("aicomglobal_candidate_sources"),
+              "peer_registry_count":sm.get("peer_registry_count"),
+              "peer_registry_status_counts":sm.get("peer_registry_status_counts"),
+              "interview_status":sm.get("last_interview_status"),
+              "eligible_candidates":sm.get("eligible_candidates"),
+              "interview_ready_now":sm.get("interview_ready_now"),
+          }
+          print(json.dumps(out,sort_keys=True))
+          ready=(
+              str(d.get("neo_version"))=="0.99.18"
+              and not bool(ap.get("running"))
+              and not ap.get("last_error")
+              and int(ap.get("cycles_completed") or 0)>=367
+              and int(s.get("engine_version") or 0)>=15
+              and sm.get("aicomglobal_attempted") is not None
+          )
+          raise SystemExit(0 if ready else 3)
+          PY
+            rc=$?
+            set -e
+            if [ "$rc" -eq 0 ]; then exit 0; fi
+            sleep 10
+          done
+          echo "completed v0.99.18 cycle with AICOMGLOBAL telemetry not observed" >&2
+          exit 1
