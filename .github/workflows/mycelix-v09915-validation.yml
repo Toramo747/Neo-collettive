@@ -1,0 +1,69 @@
+name: MYCELIX v0.99.15 cycle deadline validation
+
+on:
+  push:
+    branches: [mycelix-cycle-deadline-v09915]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install -q -r requirements.txt pytest
+
+      - name: Compile
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py
+
+      - name: Run full pytest suite with network blocked
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import socket
+          import pytest
+          def blocked(*args, **kwargs):
+              raise RuntimeError("network disabled during tests")
+          socket.create_connection=blocked
+          socket.socket.connect=blocked
+          raise SystemExit(pytest.main(["-q"]))
+          PY
+
+      - name: Verify cycle deadlines and unchanged commercial gate
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          src=open("cloud_mcp.py",encoding="utf-8").read()
+          checks=(
+              'VERSION = "0.99.15"',
+              "AGENT_PROBE_TIMEOUT_SECONDS",
+              "WEB_RESEARCH_TIMEOUT_SECONDS",
+              "AUTOPILOT_CYCLE_TIMEOUT_SECONDS",
+              "timeout=AGENT_PROBE_TIMEOUT_SECONDS",
+              "timeout=WEB_RESEARCH_TIMEOUT_SECONDS",
+              "timeout=AUTOPILOT_CYCLE_TIMEOUT_SECONDS",
+              "agent_probe_deadline_exceeded",
+              "web_research_deadline_exceeded",
+              "len(domains)>=3",
+              "len(fresh_domains)>=2",
+              "len(strong_domains)>=1",
+              '"PAID_DEMAND" in tags',
+              '("BUY_INTENT" in tags or "PAIN" in tags)',
+          )
+          missing=[x for x in checks if x not in src]
+          if missing:
+              raise SystemExit("missing checks: "+repr(missing))
+          print("version=0.99.15")
+          print("cycle_deadlines_present=true")
+          print("gate_thresholds_unchanged=true")
+          PY
