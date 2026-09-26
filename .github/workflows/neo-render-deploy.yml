@@ -186,8 +186,8 @@ jobs:
               then
                 render_ready=1
               else
-                render_ready=0
                 rc=$?
+                render_ready=0
                 if [ "$rc" -eq 20 ]; then
                   echo "Render marked deploy $deploy_id as failed before health changed." >&2
                   exit 7
@@ -205,6 +205,7 @@ jobs:
           profile=d.get("runtime_profile") or {}
           ok=(
               str(d.get("version") or "") == os.environ["EXPECTED"]
+              and str(d.get("commit") or "") == os.environ.get("GITHUB_SHA","")
               and str(profile.get("profile_id") or "") == "mycelix-prod-main"
               and str(profile.get("deployment_role") or "") == "production"
           )
