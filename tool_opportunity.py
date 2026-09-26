@@ -74,7 +74,7 @@ CATEGORY_CONFIGS = {
 }
 
 PAYMENT_MARKERS = (
-    "pricing", "price", "subscription", "paid plan", "pro plan", "per month",
+    "pricing", "subscription", "paid plan", "pro plan", "per month",
     "/month", "/mo", "monthly", "annual plan", "purchase", "payment required",
     "payment_required", "x402", "starts at", "free trial",
 )
@@ -89,7 +89,8 @@ COUNTER_MARKERS = (
     "self-hosted free", "self hosted free",
 )
 PRICE_RE = re.compile(
-    r"(?:(?:USD|EUR|GBP)\s*)?[$€£]\s?\d+(?:[.,]\d+)?|"
+    r"(?:[$€£]\s?\d+(?:[.,]\d+)?)|"
+    r"\b(?:USD|EUR|GBP)\s+\d+(?:[.,]\d+)?\b|"
     r"\b\d+(?:[.,]\d+)?\s?(?:USD|EUR|GBP)(?:\s*/\s*(?:mo|month|yr|year))?",
     re.I,
 )
@@ -182,7 +183,7 @@ def market_scout_terms(cycle: int, count: int = 6) -> list[dict]:
 
 
 def seti_market_catalog(candidates: dict | None, interviews: dict | None) -> list[dict]:
-    """Convert current or historical public Agent Cards into market observations; never initiates payment."""
+    """Convert verified current Agent Cards or historical contacted A2A endpoints into market observations."""
     candidates=candidates if isinstance(candidates,dict) else {}
     interviews=interviews if isinstance(interviews,dict) else {}
     out=[]
@@ -190,17 +191,24 @@ def seti_market_catalog(candidates: dict | None, interviews: dict | None) -> lis
     for key in keys:
         candidate=candidates.get(key) if isinstance(candidates.get(key),dict) else {}
         prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
-        url=str(
-            candidate.get("agent_card_url")
-            or candidate.get("url")
-            or prior.get("agent_card_url")
-            or prior.get("endpoint")
-            or ""
-        ).strip()
+        prior_endpoint=str(prior.get("endpoint") or prior.get("agent_card_url") or "").strip()
+        card_url=str(candidate.get("agent_card_url") or "").strip()
+        candidate_url=str(candidate.get("url") or "").strip()
+        explicit_candidate=bool(
+            card_url
+            or "/.well-known/agent-card" in candidate_url.lower()
+            or "/.well-known/agent.json" in candidate_url.lower()
+            or candidate_url.lower().rstrip("/").endswith(("/a2a","/a2a/v1","/a2a/jsonrpc"))
+        )
+        if prior_endpoint:
+            url=prior_endpoint
+        elif explicit_candidate:
+            url=card_url or candidate_url
+        else:
+            continue
         if not url.startswith("https://"):
             continue
-        # Historical interviews can preserve the negotiated JSON-RPC endpoint rather
-        # than the original Agent Card. Keep it as a verifiable public market source.
+
         state=str(prior.get("followup_state") or "").upper()
         peer_class=str(prior.get("peer_class") or "").upper()
         reason=str(prior.get("reason") or "").upper()
@@ -314,7 +322,7 @@ def analyze_tool_opportunities(
         raw={
             "url":url,
             "title":str(item.get("candidate") or "SETI Agent Card"),
-            "text":" ".join(item.get("capabilities") or [])+" "+pricing,
+            "text":" ".join(item.get("capabilities") or [])+(" "+pricing if pricing=="PAYMENT_REQUIRED" else ""),
             "source":"seti-agent-card",
             "observed_at_utc":item.get("observed_at_utc") or observed_at,
         }
