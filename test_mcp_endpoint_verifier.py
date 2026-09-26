@@ -45,6 +45,8 @@ class VerifierSecurityTests(unittest.IsolatedAsyncioTestCase):
             "172.16.0.1",
             "192.168.1.1",
             "169.254.169.254",
+            "100.64.0.1",
+            "100.100.100.200",
             "::1",
             "fc00::1",
             "fe80::1",
