@@ -1,0 +1,32 @@
+name: AION MAGI Stimulus
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "aion_magi_stimulus.py"
+      - ".github/workflows/aion-magi-stimulus.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stimulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes -r requirements.lock
+      - name: Stimulate AION MAGI
+        run: python aion_magi_stimulus.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aion-magi-stimulus
+          path: runtime/aion-magi-stimulus.json
+          if-no-files-found: warn
