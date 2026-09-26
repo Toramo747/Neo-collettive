@@ -18,6 +18,7 @@ jobs:
           set -euo pipefail
           for i in $(seq 1 20); do
             curl -fsS --max-time 20 https://neo-collettive.onrender.com/api/autopilot/status > /tmp/status.json || true
+            set +e
             python - <<'PY'
           import json, pathlib
           p=pathlib.Path("/tmp/status.json")
@@ -43,6 +44,7 @@ jobs:
           raise SystemExit(0 if ready else 3)
           PY
             rc=$?
+            set -e
             if [ "$rc" -eq 0 ]; then exit 0; fi
             sleep 12
           done
