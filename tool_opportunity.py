@@ -63,6 +63,14 @@ CATEGORY_CONFIGS = {
         "build_days": 9,
         "distribution": "Security communities + GitHub + direct SaaS",
     },
+    "mcp_reliability": {
+        "title": "MCP Registry Liveness & Conformance Verifier",
+        "target_user": "teams publishing or consuming MCP servers through public registries",
+        "problem": "Registry presence does not prove that an MCP endpoint is live, conformant, discoverable or usable by a standard client.",
+        "aliases": ["MCP server monitoring", "MCP conformance testing", "MCP endpoint monitoring"],
+        "build_days": 5,
+        "distribution": "MCP Registry + GitHub + developer communities",
+    },
     "productivity_tools": {
         "title": "Workflow Handoff Cleaner",
         "target_user": "small teams moving repetitive work between productivity tools",
@@ -129,6 +137,7 @@ def _family_from_text(text: str) -> str:
         "analytics_tools":("analytics","dashboard","reporting","business intelligence"),
         "customer_support":("customer support","helpdesk","ticketing","support automation"),
         "cybersecurity_tools":("cybersecurity","security operations","soc ","vulnerability","security automation"),
+        "mcp_reliability":("mcp","model context protocol","mcp server","mcp endpoint","registry liveness"),
         "productivity_tools":("productivity","task automation","workflow productivity"),
         "marketing_seo":("seo","marketing automation","content marketing","keyword"),
     }
@@ -144,6 +153,7 @@ FAMILY_RELEVANCE_MARKERS = {
     "analytics_tools": ("analytics","report","reporting","dashboard","business intelligence","bi "),
     "customer_support": ("customer support","support","helpdesk","ticket","inbox"),
     "cybersecurity_tools": ("security","cybersecurity","vulnerability","soc","audit","mcp"),
+    "mcp_reliability": ("mcp","model context protocol","registry","liveness","conformance","endpoint monitoring"),
     "productivity_tools": ("productivity","workflow","automation","task"),
     "marketing_seo": ("seo","marketing","keyword","content marketing"),
 }
