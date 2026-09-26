@@ -40,6 +40,20 @@ on:
       - "test_seti_radar.py"
       - "tool_opportunity.py"
       - "test_tool_opportunity.py"
+      - "neo_dialect.py"
+      - "neo_dialect_security.py"
+      - "neo_dialect_seti_probe.py"
+      - "neo_dialect_council.py"
+      - "dialect_peer_harness.py"
+      - "test_neo_dialect.py"
+      - "test_neo_dialect_security.py"
+      - "test_neo_dialect_seti_probe.py"
+      - "test_neo_dialect_council.py"
+      - "test_dialect_peer_harness.py"
+      - "docs/neo-dialect.md"
+      - "schemas/neo-dialect/1.0/**"
+      - "runtime/neo-dialect-peer-report.json"
+      - "requirements.lock"
       - "neo_policy.json"
       - "render.yaml"
       - "Dockerfile"
@@ -85,7 +99,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py
 
       - name: Build Docker image in GitHub CI
         run: |
@@ -306,6 +320,31 @@ jobs:
           if discovery.get("registry_enabled") is not True:
               raise SystemExit("public registry advertisement not enabled")
           print("A2A v1 discovery surface smoke test passed")
+          PY
+
+      - name: Smoke test neo-dialect surface
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
+          grep -q "neo-dialect/1.0" /tmp/neo-dialect.md
+          curl --fail --show-error --silent --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --fail --show-error --silent --max-time 30             "https://neo-collettive.onrender.com/api/council" > /tmp/council.json
+          curl --fail --show-error --silent --max-time 30             "https://neo-collettive.onrender.com/council/neo-dialect/example" > /tmp/dialect-example.json
+          python - <<'PY'
+          import json
+          card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
+          council=json.load(open("/tmp/council.json",encoding="utf-8"))
+          example=json.load(open("/tmp/dialect-example.json",encoding="utf-8"))
+          extensions=((card.get("capabilities") or {}).get("extensions") or [])
+          if not any(str(x.get("params",{}).get("dialect_version") or "")=="neo-dialect/1.0" for x in extensions if isinstance(x,dict)):
+              raise SystemExit("neo-dialect extension missing from Agent Card")
+          d=council.get("neo_dialect") or {}
+          if str(d.get("dialect_version") or "")!="neo-dialect/1.0":
+              raise SystemExit("neo-dialect council report missing")
+          types=[x.get("message",{}).get("type") for x in (example.get("transcript") or [])]
+          if types != ["HELLO","CAPABILITIES","PROPOSE","COUNTER","AGREE","RESULT","BYE"]:
+              raise SystemExit("neo-dialect example transcript incomplete")
+          print("neo-dialect smoke passed")
           PY
 
       - name: Verify post-deploy SETI retry

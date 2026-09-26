@@ -5,6 +5,7 @@ import asyncio
 import neo_dialect
 import neo_dialect_security
 import neo_dialect_seti_probe
+import neo_dialect_council
 import a2a_peer as peer_a2a
 import aicomglobal_adapter as aicomglobal
 import base64
@@ -10899,6 +10900,31 @@ async def api_run_market_cycles(request: Request):
     },status_code=200 if executed==requested else 409)
 
 
+def _neo_dialect_peer_report() -> dict:
+    try:
+        with open("runtime/neo-dialect-peer-report.json","r",encoding="utf-8") as fh:
+            data=json.load(fh)
+        return data if isinstance(data,dict) else {"status":"INVALID_REPORT"}
+    except Exception as exc:
+        return {"status":"REPORT_UNAVAILABLE","error":type(exc).__name__}
+
+
+def _neo_dialect_council_bundle() -> dict:
+    return neo_dialect_council.bundle(
+        _neo_dialect_peer_report(),
+        AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
+    )
+
+
+async def council_neo_dialect_example(request: Request):
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "dialect_version":neo_dialect.DIALECT_VERSION,
+        "transcript":neo_dialect_council.redact(neo_dialect_council.example_transcript()),
+    })
+
+
 async def api_council(request: Request):
     data=AUTOPILOT_STATE.get("tool_opportunities") or {}
     return JSONResponse({
@@ -10908,6 +10934,7 @@ async def api_council(request: Request):
         "latest_debate":((data.get("council_transcripts") or [{}])[0] if data.get("council_transcripts") else {}),
         "history":list(AUTOPILOT_STATE.get("council_history") or [])[-10:],
         "external_peer_policy":"Only SETI-admitted peers may participate in council collaboration.",
+        "neo_dialect":_neo_dialect_council_bundle(),
     })
 
 
@@ -10915,9 +10942,11 @@ async def council_page(request: Request):
     data=AUTOPILOT_STATE.get("tool_opportunities") or {}
     top=data.get("top5") or []
     transcripts=data.get("council_transcripts") or []
+    dialect=_neo_dialect_council_bundle()
     body='<section class="card"><span class="tag">TOOL COUNCIL</span><h2>Commercial Tool Opportunities</h2><p>URL-grounded market evidence. Build is authorized only when rank #1 passes the tool gate.</p></section>'
     body+='<section class="card"><h2>Top 5</h2><pre>'+html.escape(json.dumps(top,ensure_ascii=False,indent=2,default=str))+'</pre></section>'
     body+='<section class="card"><h2>Latest debate</h2><pre>'+html.escape(json.dumps(transcripts[:5],ensure_ascii=False,indent=2,default=str))+'</pre></section>'
+    body+='<section class="card"><span class="tag">NEO-DIALECT/1.0</span><h2>Dialect Test Transcripts</h2><p>Internal, real-provider harness, hostile-peer and SETI external-probe records. Sensitive values are redacted.</p><p><a class="btn" href="/council/neo-dialect/example">Full example transcript</a></p><pre>'+html.escape(json.dumps(dialect,ensure_ascii=False,indent=2,default=str))+'</pre></section>'
     return layout("Council",body)
 
 
@@ -11318,16 +11347,32 @@ mcp_app = mcp.streamable_http_app(
 
 
 @asynccontextmanager
+async def _startup_neo_dialect_probe() -> None:
+    await asyncio.sleep(2)
+    try:
+        await _neo_dialect_probe_seti_candidates(limit=2)
+        _save_local_state()
+    except Exception as exc:
+        state=dict(AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {})
+        state["startup_error"]=type(exc).__name__+":"+str(exc)[:180]
+        state["startup_error_utc"]=datetime.now(timezone.utc).isoformat()
+        AUTOPILOT_STATE["neo_dialect_seti_probe"]=state
+
+
 async def lifespan(app: Starlette):
     autopilot_task = None
     advertisement_task = None
+    dialect_probe_task = None
     async with mcp.session_manager.run():
         if AUTOPILOT_ENABLED:
             autopilot_task = asyncio.create_task(_autopilot_loop())
         advertisement_task = asyncio.create_task(_advertise_public_agent())
+        dialect_probe_task = asyncio.create_task(_startup_neo_dialect_probe())
         try:
             yield
         finally:
+            if dialect_probe_task and not dialect_probe_task.done():
+                dialect_probe_task.cancel()
             if advertisement_task and not advertisement_task.done():
                 advertisement_task.cancel()
             if autopilot_task:
@@ -11368,6 +11413,7 @@ app = Starlette(
         Route("/api/outcomes", api_outcomes, methods=["GET"]),
         Route("/council", council_page, methods=["GET"]),
         Route("/api/council", api_council, methods=["GET"]),
+        Route("/council/neo-dialect/example", council_neo_dialect_example, methods=["GET"]),
         Route("/api/market/run-cycles", api_run_market_cycles, methods=["POST"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
