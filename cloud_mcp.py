@@ -113,7 +113,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.17"  # activate AICOMGLOBAL discovery immediately via SETI engine revision
+VERSION = "0.99.18"  # guard malformed provider result shapes before SETI activation
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -7945,7 +7945,14 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "Il traguardo e una catena verificabile domanda -> prodotto/servizio -> utente -> pagamento -> erogazione -> soddisfazione -> margine. "
         "Non dichiarare guadagni certi e non eseguire azioni finanziarie o irreversibili.\n\nOBIETTIVO:\n" + goal
     )
-    web_source_count = sum(len(x.get("results") or []) for x in web_research if isinstance(x, dict))
+    def _result_rows(value: Any) -> list:
+        return value if isinstance(value,list) else []
+
+    web_source_count = sum(
+        len(_result_rows(x.get("results")))
+        for x in web_research
+        if isinstance(x,dict)
+    )
     AUTOPILOT_STATE["query_execution"]={
         "planned":search_strategy.get("query_plan") or [],
         "executed":[
