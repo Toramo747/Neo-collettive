@@ -325,6 +325,10 @@ AUTOPILOT_STATE: dict[str, Any] = {
         "observed_improved_total": 0,
     },
     "venture_measurements": [],
+    "runtime_snapshot": {
+        "last_published_utc": None,
+        "status": "UNKNOWN",
+    },
     "outcome_control": {
         "schema_v":1,
         "cycle":0,
@@ -394,6 +398,7 @@ def _state_payload() -> dict:
         "jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") or {},
         "venture_metrics": AUTOPILOT_STATE.get("venture_metrics") or {},
         "venture_measurements": list(AUTOPILOT_STATE.get("venture_measurements") or [])[-50:],
+        "runtime_snapshot": AUTOPILOT_STATE.get("runtime_snapshot") or {},
         "outcome_control": AUTOPILOT_STATE.get("outcome_control") or {},
         "outcome_history": list(AUTOPILOT_STATE.get("outcome_history") or [])[-40:],
         "seti": AUTOPILOT_STATE.get("seti") or {},
@@ -9343,6 +9348,47 @@ def _iso_age_seconds(value: str | None) -> float | None:
         return None
 
 
+def _runtime_snapshot_freshness() -> dict:
+    raw=dict(AUTOPILOT_STATE.get("runtime_snapshot") or {})
+    last=str(raw.get("last_published_utc") or "").strip()
+    age=_iso_age_seconds(last)
+    stale=age is None or age > 3600
+    return {
+        "status":"STALE" if stale else "FRESH",
+        "stale":stale,
+        "max_age_seconds":3600,
+        "age_seconds":age,
+        "last_published_utc":last or None,
+    }
+
+
+async def api_runtime_snapshot_published(request: Request):
+    if HEARTBEAT_TOKEN:
+        supplied=(request.headers.get("x-neo-heartbeat-token") or "").strip()
+        if supplied != HEARTBEAT_TOKEN:
+            return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
+    try:
+        payload=await request.json()
+    except Exception:
+        payload={}
+    snapshot_utc=str((payload or {}).get("snapshot_utc") or "").strip()
+    try:
+        parsed=datetime.fromisoformat(snapshot_utc.replace("Z","+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_snapshot_utc"},status_code=400)
+    AUTOPILOT_STATE["runtime_snapshot"]={
+        "last_published_utc":parsed.isoformat(),
+        "status":"FRESH",
+    }
+    _save_local_state()
+    checkpoint=await _checkpoint_state_to_render()
+    return JSONResponse({
+        "ok":True,
+        "snapshot":_runtime_snapshot_freshness(),
+        "checkpoint":{"ok":bool(checkpoint.get("ok")),"status":checkpoint.get("status")},
+    })
+
+
 async def api_self_improvement_proposal(request: Request):
     proposal = _self_improvement_proposal()
     return JSONResponse({"ok": True, "neo_version": VERSION, "proposal": proposal})
@@ -10281,6 +10327,7 @@ async def api_autopilot_status(request: Request):
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
+    state["runtime_snapshot"] = _runtime_snapshot_freshness()
     return JSONResponse({"ok": True, "neo_version": VERSION, "runtime_profile": dict(RUNTIME_IDENTITY), "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
 
@@ -10623,11 +10670,13 @@ async def system(request: Request):
 
 
 async def health(request: Request):
+    snapshot=_runtime_snapshot_freshness()
     return JSONResponse({
         "status":"ok",
         "service":"neo-collective",
         "version":VERSION,
         "runtime_profile":dict(RUNTIME_IDENTITY),
+        "runtime_snapshot":snapshot,
     })
 
 
@@ -10701,6 +10750,7 @@ app = Starlette(
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/api/outcomes", api_outcomes, methods=["GET"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
+        Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),

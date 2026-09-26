@@ -7,6 +7,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "neo_latest_result.json"
       - ".github/workflows/jarvis-runtime-snapshot-v2.yml"
 
 permissions:
@@ -14,7 +15,7 @@ permissions:
 
 concurrency:
   group: jarvis-runtime-snapshot
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   snapshot:
@@ -112,4 +113,36 @@ jobs:
             exit 0
           fi
           git commit -m "runtime: update Jarvis diagnostics"
-          git push origin HEAD:runtime-snapshots
+          for attempt in 1 2 3; do
+            git fetch origin runtime-snapshots
+            if git rebase origin/runtime-snapshots && git push origin HEAD:runtime-snapshots; then
+              exit 0
+            fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt * 3))
+          done
+          echo "Failed to publish runtime snapshot after 3 attempts" >&2
+          exit 1
+
+      - name: Record snapshot freshness
+        shell: bash
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          snapshot_utc="$(python - <<'PY'
+          import json
+          print(json.load(open("/tmp/jarvis-runtime-snapshot.json",encoding="utf-8"))["snapshot_utc"])
+          PY
+          )"
+          payload="$(python - <<PY
+          import json
+          print(json.dumps({"snapshot_utc":"$snapshot_utc"}))
+          PY
+          )"
+          if [ -n "${HEARTBEAT_TOKEN}" ]; then
+            curl --fail --silent --show-error --retry 3 --retry-delay 3 --max-time 30               -X POST -H "Content-Type: application/json"               -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}"               --data "${payload}"               "https://neo-collettive.onrender.com/api/runtime/snapshot-published"
+          else
+            echo "NEO_HEARTBEAT_TOKEN not configured; cannot persist snapshot freshness" >&2
+            exit 2
+          fi
