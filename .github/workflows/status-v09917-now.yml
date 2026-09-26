@@ -40,6 +40,17 @@ jobs:
             "peer_registry_count":sm.get("peer_registry_count"),
             "peer_registry_status_counts":sm.get("peer_registry_status_counts"),
             "query_executed_count":len(((ap.get("query_execution") or {}).get("executed") or [])),
+            "eligible_candidates":sm.get("eligible_candidates"),
+            "high_interest_eligible":sm.get("high_interest_eligible"),
+            "interview_ready_now":sm.get("interview_ready_now"),
+            "interview_attempted":sm.get("interview_attempted"),
+            "last_interview_status":sm.get("last_interview_status"),
+            "interview_attempted_count":sm.get("interview_attempted_count"),
+            "interview_admitted_count":sm.get("interview_admitted_count"),
+            "interview_parked_count":sm.get("interview_parked_count"),
+            "admitted_agent_count":sm.get("admitted_agent_count"),
+            "interview_failure_reason_counts":sm.get("interview_failure_reason_counts"),
+            "interview_peer_class_counts":sm.get("interview_peer_class_counts"),
           }
           print(json.dumps(out,indent=2,sort_keys=True))
           PY
