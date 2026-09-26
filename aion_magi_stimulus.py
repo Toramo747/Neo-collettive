@@ -12,6 +12,24 @@ from a2a_peer import Interface, parse_reply, send_request
 ENDPOINT = "https://aion-agent-core-live.onrender.com/a2a/v1"
 OUT = Path("runtime/aion-magi-stimulus.json")
 
+async def discover(client: httpx.AsyncClient) -> dict:
+    out = {}
+    for url in [
+        "https://aion-agent-core-live.onrender.com/needs",
+        "https://aion-agent-core-live.onrender.com/.well-known/agent-card.json",
+    ]:
+        try:
+            r = await client.get(url)
+            try:
+                body = r.json()
+            except Exception:
+                body = {"raw": r.text[:10000]}
+            out[url] = {"status": r.status_code, "body": body}
+        except Exception as exc:
+            out[url] = {"error": type(exc).__name__ + ":" + str(exc)[:300]}
+    return out
+
+
 PROMPTS = [
     (
         "MYCELIX responding to AION/MAGI open need. You said MAGI needs discovery/matching research "
@@ -36,9 +54,55 @@ PROMPTS = [
 async def main() -> int:
     interface = Interface(ENDPOINT, "1.0", None)
     transcript = []
+    discovery = {}
     context_id = None
     task_id = None
     async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
+        discovery = await discover(client)
+
+        # First try one structured A2A action against the public need exposed by AION.
+        structured_payload = {
+            "jsonrpc": "2.0",
+            "id": "mycelix-magi-need-1",
+            "method": "SendMessage",
+            "params": {
+                "message": {
+                    "messageId": "mycelix-magi-need-1-msg",
+                    "role": "ROLE_USER",
+                    "parts": [{
+                        "data": {
+                            "action": "live_utility",
+                            "need_id": 1,
+                            "requester": "MYCELIX",
+                            "intent": "respond_to_open_need",
+                            "constraints": {
+                                "cost_usd": 0,
+                                "payments_allowed": False,
+                                "account_creation_allowed": False,
+                            },
+                            "request": (
+                                "Return the exact zero-cost task MAGI wants MYCELIX to perform, "
+                                "including success criterion and machine-verifiable evidence."
+                            ),
+                        }
+                    }],
+                }
+            },
+        }
+        try:
+            sr = await client.post(
+                ENDPOINT,
+                headers={"A2A-Version": "1.0", "Content-Type": "application/json", "Accept": "application/json"},
+                json=structured_payload,
+            )
+            try:
+                sb = sr.json()
+            except Exception:
+                sb = {"raw": sr.text[:10000]}
+            structured = {"http_status": sr.status_code, "body": sb}
+        except Exception as exc:
+            structured = {"error": type(exc).__name__ + ":" + str(exc)[:300]}
+
         for turn, prompt in enumerate(PROMPTS, 1):
             payload, headers = send_request(interface, prompt, context_id=context_id, task_id=task_id)
             try:
@@ -80,6 +144,8 @@ async def main() -> int:
         "payments_allowed": False,
         "seti_criteria_changed": False,
         "commercial_gate_changed": False,
+        "discovery": discovery,
+        "structured_need_probe": structured,
         "turns_attempted": len(transcript),
         "transcript": transcript,
     }
