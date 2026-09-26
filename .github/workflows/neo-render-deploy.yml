@@ -45,6 +45,10 @@ on:
       - "neo_dialect_seti_probe.py"
       - "neo_dialect_council.py"
       - "dialect_peer_harness.py"
+      - "mcp_endpoint_verifier.py"
+      - "test_mcp_endpoint_verifier.py"
+      - "verify_mcp_endpoint_live_probe.py"
+      - "server.json"
       - "test_neo_dialect.py"
       - "test_neo_dialect_security.py"
       - "test_neo_dialect_seti_probe.py"
@@ -104,7 +108,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py
 
       - name: Build Docker image in GitHub CI
         run: |
@@ -351,6 +355,56 @@ jobs:
           if types != ["HELLO","CAPABILITIES","PROPOSE","COUNTER","AGREE","RESULT","BYE"]:
               raise SystemExit("neo-dialect example transcript incomplete")
           print("neo-dialect smoke passed")
+          PY
+
+      - name: Verify Pathwren remains 100/100
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import httpx
+
+          payload={
+              "jsonrpc":"2.0",
+              "id":"mycelix-pathwren-release",
+              "method":"message/send",
+              "params":{"message":{
+                  "role":"ROLE_USER",
+                  "messageId":"mycelix-pathwren-release-msg",
+                  "parts":[{"text":json.dumps({
+                      "skill":"score_card",
+                      "url":"https://neo-collettive.onrender.com/mcp"
+                  })}],
+              }},
+          }
+          r=httpx.post(
+              "https://www.pathwren.workers.dev/a2a/score",
+              json=payload,
+              headers={"Content-Type":"application/json","Accept":"application/json"},
+              timeout=45,
+          )
+          r.raise_for_status()
+          data=r.json()
+          found=[]
+          def walk(value):
+              if isinstance(value,dict):
+                  verdict=value.get("verdict")
+                  if isinstance(verdict,dict) and "score" in verdict:
+                      found.append(verdict)
+                  for v in value.values():
+                      walk(v)
+              elif isinstance(value,list):
+                  for v in value:
+                      walk(v)
+          walk(data)
+          if not found:
+              raise SystemExit("Pathwren verdict missing")
+          verdict=found[0]
+          print(json.dumps(verdict,ensure_ascii=False,indent=2))
+          if int(verdict.get("score") or -1)!=100:
+              raise SystemExit("Pathwren score regressed below 100")
+          if int(verdict.get("warnings") or 0)!=0:
+              raise SystemExit("Pathwren warnings regressed above zero")
           PY
 
       - name: Verify post-deploy SETI retry
