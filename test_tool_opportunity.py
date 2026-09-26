@@ -150,5 +150,23 @@ class ToolOpportunityTests(unittest.TestCase):
         self.assertFalse(rows[0]["payment_performed"])
 
 
+    def test_seti_historical_payment_peer_survives_candidate_pruning(self):
+        rows=seti_market_catalog({},{
+            "959e9e41deadbeef":{
+                "endpoint":"https://paid-peer.example/a2a",
+                "followup_state":"PAYMENT_BLOCKED",
+                "peer_class":"PAYMENT_REQUIRED",
+                "last_attempt_utc":"2026-09-26T09:58:15+00:00",
+                "http_status":200,
+                "response_excerpt":"Payment required for this capability.",
+            }
+        })
+        self.assertEqual(rows[0]["candidate"],"SETI-959e9e41")
+        self.assertEqual(rows[0]["pricing_model"],"PAYMENT_REQUIRED")
+        self.assertTrue(rows[0]["historical_interview_only"])
+        self.assertFalse(rows[0]["payment_performed"])
+
+
+
 if __name__=="__main__":
     unittest.main()
