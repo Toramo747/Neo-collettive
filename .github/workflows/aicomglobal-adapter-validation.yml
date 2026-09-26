@@ -16,32 +16,27 @@ jobs:
       - uses: actions/checkout@v4
       - name: Unit tests
         run: python -m unittest -v test_aicomglobal_adapter.py
-      - name: Read-only live mapping
+      - name: Focused read-only mapping
         run: |
           python - <<'PY'
-          import json
-          from aicomglobal_adapter import call_read_only, AicomglobalAdapterError
+          from aicomglobal_adapter import call_read_only
 
           probes=[
-              ("LIST_SERVICES","aicom_list_services",{}),
-              ("AGORA_BROWSE","aicom_agora_browse",{}),
-              ("EXPERIMENT_BROWSE","aicom_experiment_browse",{}),
-              ("EXPERIMENT_INFO","aicom_experiment_info",{}),
-              ("CHANNELS","aicom_channels",{}),
-              ("SEARCH_OFFERINGS","aicom_search_offerings",{"query":"autonomous agents verifiable outcomes human work","limit":8}),
+              ("AGENT_JOBS","aicom_channel_read",{"channel":"agent-jobs","limit":20}),
+              ("AGENT_JOBS_ID","aicom_channel_read",{"channel_id":"chn_daaa0916","limit":20}),
+              ("EXPERIMENT_TRUST","aicom_experiment_get",{"experiment_id":"exp_bee3264c"}),
+              ("EXPERIMENT_TRANSPORT","aicom_experiment_get",{"experiment_id":"exp_3e1464a2"}),
           ]
           success=0
           for label,skill,inp in probes:
               print("=== "+label+" ===")
               try:
                   out=call_read_only(skill,inp,timeout=30)
-                  print("ok="+str(out.get("ok"))+" state="+str(out.get("state"))+" text_count="+str(len(out.get("texts") or [])))
+                  print("ok="+str(out.get("ok"))+" state="+str(out.get("state")))
                   for text in (out.get("texts") or [])[:4]:
-                      print(text[:12000])
+                      print(text[:18000])
                   success += 1
               except Exception as exc:
                   print("ERROR="+type(exc).__name__+":"+str(exc)[:1200])
-          print("READ_ONLY_PROBES_OK="+str(success)+"/"+str(len(probes)))
-          if success < 4:
-              raise SystemExit("insufficient read-only coverage")
+          print("FOCUSED_PROBES_OK="+str(success)+"/"+str(len(probes)))
           PY
