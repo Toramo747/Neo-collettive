@@ -147,6 +147,7 @@ jobs:
           echo "A new or intentionally unpublished version must be published explicitly with workflow_dispatch publish=true."
 
       - name: Verify public registry entry
+        if: steps.existing.outputs.exact_match == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish == true)
         run: |
           set -euo pipefail
           python - <<'PY'
