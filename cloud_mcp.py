@@ -4,6 +4,7 @@
 import asyncio
 import neo_dialect
 import neo_dialect_security
+import neo_dialect_seti_probe
 import a2a_peer as peer_a2a
 import aicomglobal_adapter as aicomglobal
 import base64
@@ -411,6 +412,7 @@ def _state_payload() -> dict:
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
         "neo_dialect_peers": AUTOPILOT_STATE.get("neo_dialect_peers") or {},
         "neo_dialect_events": list(AUTOPILOT_STATE.get("neo_dialect_events") or [])[-160:],
+        "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
         "search_provider_state": AUTOPILOT_STATE.get("search_provider_state") or {},
@@ -522,6 +524,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["neo_dialect_peers"]=payload.get("neo_dialect_peers") or {}
     if isinstance(payload.get("neo_dialect_events"), list):
         AUTOPILOT_STATE["neo_dialect_events"]=[x for x in payload.get("neo_dialect_events")[-160:] if isinstance(x,dict)]
+    if isinstance(payload.get("neo_dialect_seti_probe"), dict):
+        AUTOPILOT_STATE["neo_dialect_seti_probe"]=payload.get("neo_dialect_seti_probe") or {}
     if isinstance(payload.get("jarvis_dialogue_history"), list):
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
     migration_changed = False
@@ -10359,6 +10363,110 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
     }
 
 
+async def _neo_dialect_probe_seti_candidates(limit: int = 2) -> dict:
+    """One-shot dialect probe. It never mutates SETI interviews or admission."""
+    state=dict(AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {})
+    peers=dict(state.get("peers") or {})
+    skipped=dict(state.get("skipped") or {})
+    candidates=SETI_PRIVATE_STATE.get("candidates") or {}
+    interviews=SETI_PRIVATE_STATE.get("interviews") or {}
+    rows=[]
+    sent=0
+    now=datetime.now(timezone.utc).isoformat()
+
+    for key,candidate in candidates.items():
+        if sent>=max(1,min(int(limit or 1),3)):
+            break
+        if not isinstance(candidate,dict):
+            continue
+        prior=interviews.get(key) if isinstance(interviews.get(key),dict) else {}
+        check=neo_dialect_seti_probe.eligibility(candidate,prior,key in peers)
+        if not check.get("eligible"):
+            reason=str(check.get("reason") or "INELIGIBLE")
+            if reason=="AUTH_OR_PAYMENT_BLOCKED":
+                skipped[str(key)]={
+                    "status":"SKIPPED",
+                    "reason":reason,
+                    "observed_at_utc":now,
+                }
+            continue
+
+        conv_id="seti-probe-"+secrets.token_hex(8)
+        hello=neo_dialect.hello(conv_id,PUBLIC_BASE_URL+"/neo-dialect/1.0")
+        transcript=[{"direction":"MYCELIX_TO_PEER","message":hello}]
+        result_row={
+            "candidate":"SETI-"+str(key)[:8],
+            "candidate_key":str(key),
+            "agent_card_url":str(check.get("agent_card_url") or ""),
+            "probed_at_utc":now,
+            "hello_sent":False,
+            "dialect_status":"NO_RESPONSE",
+            "transcript":transcript,
+        }
+        budget=peer_a2a.RequestBudget(limit=2)
+        try:
+            eligibility_data=interview_candidate_eligibility(candidate)
+            resolved=await _seti_resolve_interview_endpoint(candidate,eligibility_data,budget)
+            if not resolved.get("ok"):
+                result_row["error"]=str(resolved.get("reason") or "RESOLUTION_FAILED")[:240]
+            else:
+                interface=peer_a2a.Interface(**resolved["interface"])
+                answer=await peer_a2a.exchange_peer(
+                    interface,
+                    json.dumps(hello,ensure_ascii=False,separators=(",",":")),
+                    {},
+                    budget,
+                )
+                result_row["hello_sent"]=bool(answer.get("post_started") or answer.get("delivery_unknown"))
+                response_text=_response_text(answer)
+                validation=neo_dialect.validate_text(
+                    response_text,
+                    expected_type="CAPABILITIES",
+                    expected_conversation_id=conv_id,
+                    conversation_bytes=0,
+                )
+                result_row["dialect_status"]=neo_dialect_seti_probe.classify(answer,validation)
+                result_row["validation_event"]=validation.get("event")
+                result_row["validation_error"]=validation.get("error")
+                result_row["http_status"]=answer.get("status")
+                result_row["protocol_ok"]=bool(answer.get("protocol_ok"))
+                transcript.append({
+                    "direction":"PEER_TO_MYCELIX",
+                    "response":response_text[:2000],
+                    "validation":{
+                        "ok":bool(validation.get("ok")),
+                        "event":validation.get("event"),
+                        "error":validation.get("error"),
+                    },
+                })
+        except Exception as exc:
+            result_row["error"]=type(exc).__name__+":"+str(exc)[:180]
+
+        peers[str(key)]=result_row
+        rows.append(result_row)
+        sent+=1
+
+    state.update({
+        "last_run_utc":now,
+        "peers":dict(list(peers.items())[-64:]),
+        "skipped":dict(list(skipped.items())[-64:]),
+        "last_results":rows,
+        "hello_sent_total":sum(1 for x in peers.values() if isinstance(x,dict) and x.get("hello_sent")),
+        "understood_total":sum(1 for x in peers.values() if isinstance(x,dict) and x.get("dialect_status")=="UNDERSTOOD_DIALECT"),
+        "fallback_total":sum(1 for x in peers.values() if isinstance(x,dict) and x.get("dialect_status")=="FALLBACK_A2A"),
+        "no_response_total":sum(1 for x in peers.values() if isinstance(x,dict) and x.get("dialect_status")=="NO_RESPONSE"),
+    })
+    AUTOPILOT_STATE["neo_dialect_seti_probe"]=state
+    return {
+        "attempted":len(rows),
+        "hello_sent":sum(1 for x in rows if x.get("hello_sent")),
+        "understood":sum(1 for x in rows if x.get("dialect_status")=="UNDERSTOOD_DIALECT"),
+        "fallback":sum(1 for x in rows if x.get("dialect_status")=="FALLBACK_A2A"),
+        "no_response":sum(1 for x in rows if x.get("dialect_status")=="NO_RESPONSE"),
+        "results":rows,
+    }
+
+
 async def _seti_cycle_if_due() -> dict | None:
     state=dict(AUTOPILOT_STATE.get("seti") or {})
     if not SETI_ENABLED:
@@ -10441,6 +10549,7 @@ async def _seti_cycle_if_due() -> dict | None:
             attempted_keys=attempted_keys,
         )
         _assert_seti_readiness_telemetry(readiness_summary,"post_interview_selection")
+        dialect_probe=await _neo_dialect_probe_seti_candidates(limit=2)
         private_checkpoint=await _checkpoint_seti_private_to_render()
         full_safety={
             "target_http_requests":bool(interview_result.get("target_request_attempts")),
@@ -10553,6 +10662,13 @@ async def _seti_cycle_if_due() -> dict | None:
                 "interview_readiness_reason_counts":readiness_summary.get("reason_counts") or {},
                 "interview_readiness_invariant_ok":bool(readiness_summary.get("invariant_ok")),
                 "interview_candidate_states":readiness_summary.get("candidate_states") or [],
+                "neo_dialect_probe":{
+                    "attempted":dialect_probe.get("attempted",0),
+                    "hello_sent":dialect_probe.get("hello_sent",0),
+                    "understood":dialect_probe.get("understood",0),
+                    "fallback":dialect_probe.get("fallback",0),
+                    "no_response":dialect_probe.get("no_response",0),
+                },
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
                 "interview_attempted_count":interview_result.get("attempted_count",0),
