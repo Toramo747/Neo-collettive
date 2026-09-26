@@ -320,6 +320,31 @@ class ToolOpportunityTests(unittest.TestCase):
             self.assertFalse(rows[0]["gate_pass"])
             self.assertIn("two_independent_real_price_competitors",rows[0]["missing"])
 
+    def test_free_usage_evidence_never_changes_score_or_gate(self):
+        base=analyze_tool_opportunities([],[],[],{},"2026-09-26T12:00:00+00:00")
+        with_usage=analyze_tool_opportunities(
+            [],[],[],{},"2026-09-26T12:00:00+00:00",
+            usage_evidence={
+                "calls":1000,
+                "live":900,
+                "not_live":100,
+                "domains":{"example.com":{"checks":1000,"live":900,"not_live":100}},
+                "payment_signal":False,
+            },
+        )
+        def row(result):
+            for x in result["top5"]:
+                if x["family"]=="mcp_reliability":
+                    return x
+            from tool_opportunity import CATEGORY_CONFIGS
+            self.assertIn("mcp_reliability",CATEGORY_CONFIGS)
+            return None
+        a=row(base)
+        b=row(with_usage)
+        if a is not None and b is not None:
+            self.assertEqual(a["monetization_score"],b["monetization_score"])
+            self.assertEqual(a["gate_pass"],b["gate_pass"])
+            self.assertFalse(b["usage_evidence"].get("payment_signal"))
     def test_source_coverage_reports_zero_and_errors(self):
         result=analyze_tool_opportunities(
             [],[],[],{},"2026-09-26T12:00:00+00:00",
