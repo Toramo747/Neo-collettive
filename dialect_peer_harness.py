@@ -107,8 +107,8 @@ class GitHubModelsProvider(Provider):
             body = r.text[:1200]
             if r.status_code == 403:
                 raise StopHarness("GITHUB_MODELS_403:" + body[:500])
-            if r.status_code == 410:
-                raise StopHarness("GITHUB_MODELS_410:" + body[:500])
+            if r.status_code in {404, 410}:
+                raise StopHarness(f"GITHUB_MODELS_RETIRED_OR_UNAVAILABLE_{r.status_code}:" + body[:500])
             if r.status_code == 429:
                 last_error = "GITHUB_MODELS_RATE_LIMIT:" + body[:500]
                 if attempt >= MAX_RETRIES:
