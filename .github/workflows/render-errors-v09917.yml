@@ -1,0 +1,24 @@
+name: Snapshot NEO Render errors
+
+on:
+  push:
+    branches: [verify-v09917-runtime]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  errors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Read sanitized NEO errors
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 'https://neo-collettive.onrender.com/api/render/errors?target=neo&limit=20' > /tmp/errors.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/errors.json"))
+          print(json.dumps(d,ensure_ascii=False,indent=2)[:60000])
+          PY
