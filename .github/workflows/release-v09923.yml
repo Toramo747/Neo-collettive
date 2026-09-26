@@ -1,4 +1,4 @@
-name: Release v0.99.23
+name: Release Current Version
 
 on:
   workflow_run:
@@ -17,27 +17,36 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Verify release version
+
+      - name: Resolve release version from source
         run: |
           set -euo pipefail
           python - <<'PY'
-          import re
+          import os,re
           s=open("cloud_mcp.py",encoding="utf-8").read()
           m=re.search(r'^VERSION = "([^"]+)"',s,re.M)
-          if not m or m.group(1)!="0.99.23":
-              raise SystemExit("not the v0.99.23 release commit")
+          if not m:
+              raise SystemExit("VERSION not found in cloud_mcp.py")
+          version=m.group(1).strip()
+          if not re.fullmatch(r'\d+\.\d+\.\d+',version):
+              raise SystemExit("invalid release VERSION: "+version)
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as fh:
+              fh.write("RELEASE_VERSION="+version+"\n")
+          print("release_version="+version)
           PY
+
       - name: Create tag and GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if gh release view v0.99.23 >/dev/null 2>&1; then
-            echo "v0.99.23 release already exists"
+          tag="v${RELEASE_VERSION}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "${tag} release already exists"
             exit 0
           fi
-          gh release create v0.99.23 \
+          gh release create "${tag}" \
             --target "${TARGET_SHA}" \
-            --title "v0.99.23" \
+            --title "${tag}" \
             --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
