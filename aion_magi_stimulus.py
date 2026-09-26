@@ -217,7 +217,7 @@ async def main() -> int:
                         "message": {
                             "role": "ROLE_USER",
                             "messageId": "mycelix-pathwren-score-msg",
-                            "parts": [{"text": json.dumps({"skill": "score", "url": pathwren_target})}],
+                            "parts": [{"text": json.dumps({"skill": "score_card", "url": pathwren_target})}],
                         }
                     },
                 }
