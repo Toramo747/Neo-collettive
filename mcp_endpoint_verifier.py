@@ -12,7 +12,6 @@ import hashlib
 import ipaddress
 import json
 import socket
-import ssl
 import time
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timezone
@@ -467,7 +466,12 @@ async def verify_endpoint(
         init_ok = False
         try:
             init = await _bounded_request(client, "POST", requested_url, json_body=initialize)
-            checks["tls_http"] = {
+            checks["tls"] = {
+                "ok": True,
+                "certificate_validation": "system_ca_via_httpx",
+                "host": _hostname(str(init.get("url") or requested_url)),
+            }
+            checks["http"] = {
                 "ok": True,
                 "status": init.get("status"),
                 "latency_ms": init.get("latency_ms"),
@@ -490,7 +494,8 @@ async def verify_endpoint(
             if not init_ok:
                 errors.append("initialize_failed")
         except VerificationError as exc:
-            checks["tls_http"] = {"ok": False, "error": exc.code, "detail": exc.detail}
+            checks["tls"] = {"ok": False, "error": exc.code, "detail": exc.detail}
+            checks["http"] = {"ok": False, "error": exc.code, "detail": exc.detail}
             checks["initialize"] = {"ok": False, "error": exc.code}
             errors.append(exc.code)
 
@@ -555,6 +560,17 @@ async def verify_endpoint(
             if registry_url and requested_url != registry_url:
                 comparison = "registered_endpoint_differs_from_checked_url"
 
+        latency_values = []
+        for key in ("http", "initialize", "tools_list"):
+            value = checks.get(key) if isinstance(checks.get(key), dict) else {}
+            latency = value.get("latency_ms")
+            if isinstance(latency, (int, float)):
+                latency_values.append(float(latency))
+        for row in (discovery.get("checks") or []):
+            latency = row.get("latency_ms") if isinstance(row, dict) else None
+            if isinstance(latency, (int, float)):
+                latency_values.append(float(latency))
+
         _record_usage(domain, live, errors)
         return {
             "ok": live and tools_ok,
@@ -571,6 +587,7 @@ async def verify_endpoint(
                 "valid_input_schemas": valid_schemas,
                 "invalid_input_schemas": invalid_schemas,
                 "discovery_present": discovery.get("present"),
+                "total_observed_latency_ms": round(sum(latency_values), 2),
             },
             "errors": errors,
             "read_only": True,
