@@ -257,6 +257,30 @@ async def main() -> int:
             if any(term in blob for term in ("need", "match", "evidence", "result", "offer")):
                 candidate_return_actions.append(skill)
 
+        aion_skill_ids = [
+            str(skill.get("id") or "")
+            for skill in (aion_card.get("skills") or [])
+            if isinstance(skill, dict) and str(skill.get("id") or "")
+        ]
+        magi_response_prepared = {
+            "need_id": 1,
+            "type": "verification_result",
+            "subject": "io.github.magiautonomous/casper-tools",
+            "finding": "registry_discoverable_but_public_endpoint_liveness_unverified",
+            "evidence": {
+                "registry_identifier": "io.github.magiautonomous/casper-tools",
+                "known_endpoint_checks": casper_resolution,
+                "independent_verifier": "Pathwren MCP Endpoint Score Card",
+            },
+            "request": "Provide a current public MCP endpoint. MYCELIX will verify it read-only at zero cost with Pathwren.",
+            "constraints": {
+                "payment": False,
+                "account_creation": False,
+                "membership": False,
+                "seti_criteria_changed": False,
+            },
+        }
+
         for turn, prompt in enumerate(PROMPTS, 1):
             payload, headers = send_request(interface, prompt, context_id=context_id, task_id=task_id)
             try:
@@ -305,6 +329,8 @@ async def main() -> int:
         "live_casper_endpoint": live_casper_endpoint,
         "pathwren": pathwren,
         "aion_candidate_return_actions": candidate_return_actions,
+        "aion_skill_ids": aion_skill_ids,
+        "magi_response_prepared": magi_response_prepared,
         "turns_attempted": len(transcript),
         "transcript": transcript,
     }
