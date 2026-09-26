@@ -10161,7 +10161,15 @@ async def _autopilot_cycle() -> None:
             int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
         )
         completed=False
+        seti_pre_run=False
         try:
+            seti_state=AUTOPILOT_STATE.get("seti") or {}
+            if int(seti_state.get("engine_version") or 0) != int(SETI_ENGINE_VERSION):
+                await _seti_cycle_if_due()
+                seti_pre_run=(
+                    int((AUTOPILOT_STATE.get("seti") or {}).get("engine_version") or 0)
+                    == int(SETI_ENGINE_VERSION)
+                )
             result = await asyncio.wait_for(
                 director_run(AUTOPILOT_GOAL, 0.0, 5, 3),
                 timeout=AUTOPILOT_CYCLE_TIMEOUT_SECONDS,
@@ -10183,7 +10191,8 @@ async def _autopilot_cycle() -> None:
                 AUTOPILOT_STATE["thesis_history"]=history[-30:]
                 AUTOPILOT_STATE["active_thesis"]=None
 
-            await _seti_cycle_if_due()
+            if not seti_pre_run:
+                await _seti_cycle_if_due()
             council=outcome_council(
                 result=result,
                 seti=AUTOPILOT_STATE.get("seti") or {},
