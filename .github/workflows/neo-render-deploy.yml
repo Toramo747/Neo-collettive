@@ -428,21 +428,27 @@ jobs:
               raise SystemExit("Pathwren warnings regressed above zero")
           PY
 
-      - name: Verify post-deploy SETI retry
+      - name: Verify post-deploy SETI readiness
         run: |
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
+          expect_engine_retry=0
+          if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA^" "$GITHUB_SHA" | grep -qx 'seti_radar.py'; then
+            expect_engine_retry=1
+          fi
+          echo "expect_seti_engine_retry=$expect_engine_retry"
           for i in $(seq 1 30); do
             curl --fail --silent --show-error --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/seti-status.json
-            if EXPECTED="$expected" python - <<'PY'
+            if EXPECTED="$expected" EXPECT_ENGINE_RETRY="$expect_engine_retry" python - <<'PY'
           import json,os,sys
           d=json.load(open("/tmp/seti-status.json",encoding="utf-8"))
           s=((d.get("autopilot") or {}).get("seti") or {}).get("last_summary") or {}
+          expect_retry=os.environ.get("EXPECT_ENGINE_RETRY")=="1"
           ok=(
               str(d.get("neo_version") or "")==os.environ["EXPECTED"]
-              and bool(s.get("engine_upgrade_retry"))
               and bool(s.get("ready_now_computed_at"))
+              and (not expect_retry or bool(s.get("engine_upgrade_retry")))
           )
           if ok:
               counts=s.get("interview_readiness_reason_counts") or {}
@@ -472,7 +478,7 @@ jobs:
               break
             fi
             if [ "$i" -eq 30 ]; then
-              echo "SETI engine-upgrade retry telemetry not observed" >&2
+              echo "SETI readiness telemetry not observed or invariant failed" >&2
               cat /tmp/seti-status.json
               exit 8
             fi
