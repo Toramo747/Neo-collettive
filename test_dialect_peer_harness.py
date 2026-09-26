@@ -2,7 +2,7 @@ import asyncio
 import unittest
 
 import neo_dialect as nd
-from dialect_peer_harness import Provider, CallResult, SpendBudget, run_once
+from dialect_peer_harness import Provider, CallResult, CallBudget, run_once
 
 class Scripted(Provider):
     provider="Fake"
@@ -24,10 +24,8 @@ class Scripted(Provider):
 
 class HarnessTests(unittest.TestCase):
     def test_full_sequence(self):
-        old_cap=SpendBudget().cap
         p=Scripted()
-        b=SpendBudget()
-        b.cap=10
+        b=CallBudget()
         row=asyncio.run(run_once(p,1,b))
         self.assertTrue(row["completed"])
         self.assertTrue(row["dialect_adopted"])
