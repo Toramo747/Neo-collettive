@@ -1,4 +1,4 @@
-name: Snapshot v0.99.18 runtime now
+name: Snapshot v0.99.18 runtime after cycle
 
 on:
   push:
@@ -39,6 +39,7 @@ jobs:
             "aicomglobal_sources":sm.get("aicomglobal_candidate_sources"),
             "peer_registry_count":sm.get("peer_registry_count"),
             "peer_registry_status_counts":sm.get("peer_registry_status_counts"),
+            "query_executed_count":len(((ap.get("query_execution") or {}).get("executed") or [])),
           }
           print(json.dumps(out,indent=2,sort_keys=True))
           PY
