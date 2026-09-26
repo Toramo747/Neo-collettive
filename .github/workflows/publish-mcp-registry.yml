@@ -58,6 +58,9 @@ jobs:
           curl -L --fail --show-error --silent             "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz"             | tar xz mcp-publisher
           ./mcp-publisher --version
 
+      - name: Validate with official publisher
+        run: ./mcp-publisher validate server.json
+
       - name: Authenticate with GitHub OIDC
         run: ./mcp-publisher login github-oidc
 
