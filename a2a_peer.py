@@ -273,9 +273,15 @@ def _request_sync(method: str, url: str, payload: dict | None, headers: dict, ti
         data = response.read(65537)
         if len(data) > 65536:
             raise ValueError("RESPONSE_TOO_LARGE")
-        if "json" not in response.getheader("Content-Type", "").lower():
+        content_type=response.getheader("Content-Type", "").lower()
+        if "json" not in content_type:
+            stripped=data.lstrip()
+            if not stripped.startswith((b"{",b"[")):
+                raise ValueError("JSON_RESPONSE_REQUIRED")
+        try:
+            result["body"] = json.loads(data)
+        except (json.JSONDecodeError, UnicodeDecodeError):
             raise ValueError("JSON_RESPONSE_REQUIRED")
-        result["body"] = json.loads(data)
     except Exception as exc:
         result["error"] = str(exc)[:160] if isinstance(exc, ValueError) else type(exc).__name__
     finally:
