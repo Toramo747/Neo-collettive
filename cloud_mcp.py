@@ -132,7 +132,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.29"  # neo-dialect/1.0 integration
+VERSION = "0.99.30"  # neo-dialect startup/deploy identity fix
+DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -11321,6 +11322,7 @@ async def health(request: Request):
         "status":"ok",
         "service":"neo-collective",
         "version":VERSION,
+        "commit":DEPLOY_COMMIT,
         "runtime_profile":dict(RUNTIME_IDENTITY),
         "runtime_snapshot":snapshot,
     })
@@ -11346,7 +11348,6 @@ mcp_app = mcp.streamable_http_app(
 )
 
 
-@asynccontextmanager
 async def _startup_neo_dialect_probe() -> None:
     await asyncio.sleep(2)
     try:
