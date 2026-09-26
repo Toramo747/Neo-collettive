@@ -1,0 +1,88 @@
+name: Publish MCP Registry
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,re,os
+          source=open("cloud_mcp.py",encoding="utf-8").read()
+          m=re.search(r'^VERSION = "([^"]+)"',source,re.M)
+          if not m:
+              raise SystemExit("VERSION not found")
+          version=m.group(1)
+          with open("server.json",encoding="utf-8") as fh:
+              data=json.load(fh)
+          data["version"]=version
+          with open("server.json","w",encoding="utf-8") as fh:
+              json.dump(data,fh,ensure_ascii=False,indent=2)
+              fh.write("\n")
+          print("registry_version="+version)
+          PY
+
+      - name: Validate server manifest shape
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,re
+          d=json.load(open("server.json",encoding="utf-8"))
+          assert d["$schema"]=="https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
+          assert d["name"]=="io.github.Toramo747/mycelix"
+          assert re.fullmatch(r"\d+\.\d+\.\d+",d["version"])
+          assert d["repository"]["url"]=="https://github.com/Toramo747/Neo-collettive"
+          assert d["repository"]["source"]=="github"
+          assert d["repository"]["id"]=="1376364556"
+          assert d["remotes"]==[{"type":"streamable-http","url":"https://neo-collettive.onrender.com/mcp"}]
+          print("server.json structural checks passed")
+          PY
+
+      - name: Install official MCP publisher
+        run: |
+          set -euo pipefail
+          curl -L --fail --show-error --silent             "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz"             | tar xz mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish server.json
+
+      - name: Verify public registry entry
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,time,urllib.parse,urllib.request
+          name="io.github.Toramo747/mycelix"
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/"+urllib.parse.quote(name,safe="")
+          last=None
+          for _ in range(12):
+              try:
+                  with urllib.request.urlopen(url,timeout=15) as r:
+                      last=json.load(r)
+                  server=last.get("server") if isinstance(last,dict) and isinstance(last.get("server"),dict) else last
+                  if isinstance(server,dict) and server.get("name")==name:
+                      print(json.dumps(last,ensure_ascii=False,indent=2))
+                      raise SystemExit(0)
+              except Exception as exc:
+                  last={"error":type(exc).__name__+":"+str(exc)}
+              time.sleep(5)
+          print(json.dumps(last,ensure_ascii=False,indent=2))
+          raise SystemExit("registry entry not visible after publish")
+          PY
