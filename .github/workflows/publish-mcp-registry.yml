@@ -2,6 +2,12 @@ name: Publish MCP Registry
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish if this exact version is not already public"
+        required: false
+        default: false
+        type: boolean
   release:
     types: [published]
   workflow_run:
@@ -31,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json,re
+          import json,re,os
           source=open("cloud_mcp.py",encoding="utf-8").read()
           m=re.search(r'^VERSION = "([^"]+)"',source,re.M)
           if not m:
@@ -43,6 +49,8 @@ jobs:
           with open("server.json","w",encoding="utf-8") as fh:
               json.dump(data,fh,ensure_ascii=False,indent=2)
               fh.write("\n")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as fh:
+              fh.write("REGISTRY_VERSION="+version+"\n")
           print("registry_version="+version)
           PY
 
@@ -67,33 +75,52 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json,os,re,urllib.parse,urllib.request
-          source=open("cloud_mcp.py",encoding="utf-8").read()
-          version=re.search(r'^VERSION = "([^"]+)"',source,re.M).group(1)
+          import json,os,time,urllib.parse,urllib.request,urllib.error
           name="io.github.Toramo747/mycelix"
+          version=os.environ["REGISTRY_VERSION"]
           expected_remote="https://neo-collettive.onrender.com/mcp"
-          url="https://registry.modelcontextprotocol.io/v0.1/servers/"+urllib.parse.quote(name,safe="")
-          exists=False
-          try:
-              with urllib.request.urlopen(url,timeout=15) as r:
-                  payload=json.load(r)
-              server=payload.get("server") if isinstance(payload,dict) and isinstance(payload.get("server"),dict) else payload
-              if isinstance(server,dict):
-                  remotes=server.get("remotes") or []
-                  exists=(
-                      server.get("name")==name
+          url=(
+              "https://registry.modelcontextprotocol.io/v0.1/servers/"
+              +urllib.parse.quote(name,safe="")
+              +"/versions/"
+              +urllib.parse.quote(version,safe="")
+          )
+          delays=[0,2,4,8,16]
+          last=None
+          exact=False
+          for delay in delays:
+              if delay:
+                  time.sleep(delay)
+              try:
+                  with urllib.request.urlopen(url,timeout=15) as r:
+                      last=json.load(r)
+                  server=last.get("server") if isinstance(last,dict) else None
+                  meta=last.get("_meta",{}) if isinstance(last,dict) else {}
+                  official=meta.get("io.modelcontextprotocol.registry/official",{}) if isinstance(meta,dict) else {}
+                  remotes=server.get("remotes") or [] if isinstance(server,dict) else []
+                  exact=(
+                      isinstance(server,dict)
+                      and server.get("name")==name
                       and str(server.get("version") or "")==version
                       and any(isinstance(x,dict) and x.get("type")=="streamable-http" and x.get("url")==expected_remote for x in remotes)
+                      and official.get("status")=="active"
                   )
-          except Exception:
-              exists=False
+                  if exact:
+                      print(json.dumps(last,ensure_ascii=False,indent=2))
+                      break
+              except urllib.error.HTTPError as exc:
+                  last={"http_status":exc.code,"reason":str(exc)}
+              except Exception as exc:
+                  last={"error":type(exc).__name__+":"+str(exc)}
           with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as fh:
-              fh.write("exact_match="+("true" if exists else "false")+"\n")
-          print("registry_exact_match="+str(exists).lower())
+              fh.write("exact_match="+("true" if exact else "false")+"\n")
+          print("registry_exact_match="+str(exact).lower())
+          if not exact:
+              print(json.dumps(last,ensure_ascii=False,indent=2))
           PY
 
       - name: Install official MCP publisher
-        if: steps.existing.outputs.exact_match != 'true'
+        if: steps.existing.outputs.exact_match != 'true' && github.event_name == 'workflow_dispatch' && inputs.publish == true
         run: |
           set -euo pipefail
           curl -L --fail --show-error --silent \
@@ -102,48 +129,67 @@ jobs:
           ./mcp-publisher --version
 
       - name: Validate with official publisher
-        if: steps.existing.outputs.exact_match != 'true'
+        if: steps.existing.outputs.exact_match != 'true' && github.event_name == 'workflow_dispatch' && inputs.publish == true
         run: ./mcp-publisher validate server.json
 
       - name: Authenticate with GitHub OIDC
-        if: steps.existing.outputs.exact_match != 'true'
+        if: steps.existing.outputs.exact_match != 'true' && github.event_name == 'workflow_dispatch' && inputs.publish == true
         run: ./mcp-publisher login github-oidc
 
       - name: Publish server.json
-        if: steps.existing.outputs.exact_match != 'true'
+        if: steps.existing.outputs.exact_match != 'true' && github.event_name == 'workflow_dispatch' && inputs.publish == true
         run: ./mcp-publisher publish server.json
+
+      - name: Refuse implicit re-publish
+        if: steps.existing.outputs.exact_match != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.publish == true)
+        run: |
+          echo "Exact registry version is not public. Automatic re-publish is disabled."
+          echo "A new or intentionally unpublished version must be published explicitly with workflow_dispatch publish=true."
 
       - name: Verify public registry entry
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json,re,time,urllib.parse,urllib.request
-          source=open("cloud_mcp.py",encoding="utf-8").read()
-          version=re.search(r'^VERSION = "([^"]+)"',source,re.M).group(1)
+          import json,os,time,urllib.parse,urllib.request,urllib.error
           name="io.github.Toramo747/mycelix"
+          version=os.environ["REGISTRY_VERSION"]
           expected_remote="https://neo-collettive.onrender.com/mcp"
-          url="https://registry.modelcontextprotocol.io/v0.1/servers/"+urllib.parse.quote(name,safe="")
+          url=(
+              "https://registry.modelcontextprotocol.io/v0.1/servers/"
+              +urllib.parse.quote(name,safe="")
+              +"/versions/"
+              +urllib.parse.quote(version,safe="")
+          )
+          delays=[0,2,4,8,16,30]
           last=None
-          for _ in range(12):
+          for delay in delays:
+              if delay:
+                  time.sleep(delay)
               try:
                   with urllib.request.urlopen(url,timeout=15) as r:
                       last=json.load(r)
-                  server=last.get("server") if isinstance(last,dict) and isinstance(last.get("server"),dict) else last
-                  remotes=(server or {}).get("remotes") or [] if isinstance(server,dict) else []
+                  server=last.get("server") if isinstance(last,dict) else None
+                  meta=last.get("_meta",{}) if isinstance(last,dict) else {}
+                  official=meta.get("io.modelcontextprotocol.registry/official",{}) if isinstance(meta,dict) else {}
+                  remotes=server.get("remotes") or [] if isinstance(server,dict) else []
                   ok=(
                       isinstance(server,dict)
                       and server.get("name")==name
                       and str(server.get("version") or "")==version
                       and any(isinstance(x,dict) and x.get("type")=="streamable-http" and x.get("url")==expected_remote for x in remotes)
+                      and official.get("status")=="active"
                   )
                   if ok:
+                      print("registry_name="+server["name"])
+                      print("registry_version="+str(server["version"]))
+                      print("registry_remote="+expected_remote)
+                      print("registry_status="+str(official.get("status")))
                       print(json.dumps(last,ensure_ascii=False,indent=2))
                       raise SystemExit(0)
-              except SystemExit:
-                  raise
+              except urllib.error.HTTPError as exc:
+                  last={"http_status":exc.code,"reason":str(exc)}
               except Exception as exc:
                   last={"error":type(exc).__name__+":"+str(exc)}
-              time.sleep(5)
           print(json.dumps(last,ensure_ascii=False,indent=2))
-          raise SystemExit("registry entry/version/remote not visible after publish")
+          raise SystemExit("registry exact version not visible/active after verification retries")
           PY
