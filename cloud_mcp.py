@@ -114,7 +114,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.19"  # add precise runtime exception location diagnostics
+VERSION = "0.99.20"  # fix Director valid-list shadowing during observed candidate revalidation
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -8008,7 +8008,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         if not OBSERVED_CANDIDATE_REVALIDATION_ENABLED:
             validated_existing.append(candidate)
             continue
-        valid,reason=validate_observed_candidate(
+        candidate_valid,reason=validate_observed_candidate(
             candidate,
             reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
             require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
@@ -8016,7 +8016,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             reject_vendor_content=VENDOR_CONTENT_GUARD_ENABLED,
             require_web_buyer_voice=WEB_BUYER_VOICE_GUARD_ENABLED,
         )
-        if valid:
+        if candidate_valid:
             validated_existing.append(candidate)
         else:
             purge_reasons[reason]=int(purge_reasons.get(reason) or 0)+1
