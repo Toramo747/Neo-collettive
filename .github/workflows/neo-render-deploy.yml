@@ -372,6 +372,32 @@ jobs:
           },ensure_ascii=False,indent=2))
           PY
 
+      - name: Run three market validation cycles
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          args=(-X POST --fail --show-error --silent --max-time 600)
+          if [ -n "${HEARTBEAT_TOKEN}" ]; then
+            args+=(-H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}")
+          fi
+          curl "${args[@]}" \
+            "https://neo-collettive.onrender.com/api/market/run-cycles?count=3" \
+            > /tmp/market-cycles.json
+          cat /tmp/market-cycles.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/market-cycles.json",encoding="utf-8"))
+          if not d.get("ok"):
+              raise SystemExit("market cycle validation returned ok=false")
+          if int(d.get("cycles_executed") or 0) != 3:
+              raise SystemExit("expected exactly 3 completed market cycles")
+          if str(d.get("neo_version") or "") != "0.99.27":
+              raise SystemExit("market cycles did not run on v0.99.27")
+          print("market_validation_cycles=3")
+          print("quality_gate="+str(bool(d.get("quality_gate"))).lower())
+          PY
+
       - name: Dispatch fresh Jarvis snapshot
         env:
           GH_TOKEN: ${{ github.token }}
