@@ -1,9 +1,9 @@
 {
-  "captured_at_utc": "2026-09-26T10:43:35.439809+00:00",
+  "captured_at_utc": "2026-09-26T10:48:38.889095+00:00",
   "snapshot_schema": 6,
   "brand": "MYCELIX",
   "brand_tagline": "Collective Intelligence Network",
-  "neo_version": "0.99.23",
+  "neo_version": "0.99.24",
   "runtime_profile": {
     "profile_id": "mycelix-prod-main",
     "deployment_role": "production",
@@ -59,7 +59,7 @@
     "busy": true,
     "cooldown": false,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 1533.679419,
+    "last_started_age_seconds": 2567.146738,
     "cycles_completed": 372,
     "last_started_utc": "2026-09-26T10:02:46.261534+00:00",
     "last_finished_utc": "2026-09-26T05:22:03.024057+00:00",
@@ -69,35 +69,46 @@
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "36235432625",
+    "github_run_id": "36236743031",
     "github_run_attempt": "1",
-    "source_commit": "ce613b200e993fbc6bd1047eb03372628a7cb585",
+    "source_commit": "50e8a6a1ae1ebd0184183534873de45216a990cf",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
-    "running": true,
-    "cycles_completed": 372,
-    "last_started_utc": "2026-09-26T10:02:46.261534+00:00",
-    "last_finished_utc": "2026-09-26T05:22:03.024057+00:00",
+    "running": false,
+    "cycles_completed": 373,
+    "last_started_utc": "2026-09-26T10:46:23.725628+00:00",
+    "last_finished_utc": "2026-09-26T10:48:26.884501+00:00",
     "last_status": "SELECT",
     "last_error": null,
     "stagnation_cycles": 0,
     "recent_sectors": [
-      "website_quality",
-      "it_hygiene",
-      "data_analytics",
-      "document_ops",
-      "micro_saas",
-      "reporting_compliance",
       "cybersecurity_ops",
       "data_cleanup",
       "small_business_admin",
       "local_business_ops",
       "productivity",
-      "ai_tools"
+      "ai_tools",
+      "developer_tools",
+      "hr_ops",
+      "lead_ops",
+      "content_ops",
+      "seo_marketing",
+      "ecommerce_ops"
     ],
     "family_performance": {
+      "ai_tools": {
+        "score": 0,
+        "observations": 1,
+        "best_gap_score": 0,
+        "qualified_hits": 0,
+        "last_gap_score": 0,
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_signal_types": [],
+        "no_progress_streak": 1
+      },
       "manual_data_entry": {
         "score": 95,
         "observations": 1,
@@ -112,17 +123,6 @@
           "PAIN"
         ],
         "no_progress_streak": 0
-      },
-      "ai_tools": {
-        "score": 0,
-        "observations": 1,
-        "best_gap_score": 0,
-        "qualified_hits": 0,
-        "last_gap_score": 0,
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_signal_types": [],
-        "no_progress_streak": 1
       },
       "workflow_automation": {
         "score": 5,
@@ -230,12 +230,12 @@
       "queries": [
         "manual data entry budget hiring contractor -site:github.com -site:itechdata.ai -site:reddit.com",
         "manual data entry will pay fixed price hourly -site:github.com -site:itechdata.ai -site:reddit.com",
-        "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
-        "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
+        "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+        "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
       ],
       "query_plan": [
         {
@@ -277,60 +277,60 @@
           "intent_class": ""
         },
         {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
+          "sector": "developer_tools",
+          "family": "developer_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "data_cleanup",
-          "family": "data_cleanup",
+          "sector": "hr_ops",
+          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "small_business_admin",
-          "family": "workflow_automation",
+          "sector": "lead_ops",
+          "family": "crm_lead_ops",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "local_business_ops",
-          "family": "local_business_tools",
+          "sector": "content_ops",
+          "family": "content_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "productivity_tools",
-          "sector": "productivity",
-          "search_alias_used": "productivity tools"
+          "family": "marketing_seo",
+          "sector": "seo_marketing",
+          "search_alias_used": "marketing seo"
         },
         {
-          "query": "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ai_tools",
-          "sector": "ai_tools",
-          "search_alias_used": "ai tools"
+          "family": "ecommerce_tools",
+          "sector": "ecommerce_ops",
+          "search_alias_used": "ecommerce tools"
         }
       ],
       "query_budget": {
@@ -340,34 +340,34 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "cybersecurity_ops",
-        "data_cleanup",
-        "small_business_admin",
-        "local_business_ops",
-        "productivity",
-        "ai_tools"
+        "developer_tools",
+        "hr_ops",
+        "lead_ops",
+        "content_ops",
+        "seo_marketing",
+        "ecommerce_ops"
       ],
       "sector_families": {
-        "cybersecurity_ops": "cybersecurity_tools",
-        "data_cleanup": "data_cleanup",
-        "small_business_admin": "workflow_automation",
-        "local_business_ops": "local_business_tools",
-        "productivity": "productivity_tools",
-        "ai_tools": "ai_tools"
+        "developer_tools": "developer_tools",
+        "hr_ops": "hr_tools",
+        "lead_ops": "crm_lead_ops",
+        "content_ops": "content_tools",
+        "seo_marketing": "marketing_seo",
+        "ecommerce_ops": "ecommerce_tools"
       },
       "recent_sector_memory": [
-        "website_quality",
-        "it_hygiene",
-        "data_analytics",
-        "document_ops",
-        "micro_saas",
-        "reporting_compliance",
         "cybersecurity_ops",
         "data_cleanup",
         "small_business_admin",
         "local_business_ops",
         "productivity",
-        "ai_tools"
+        "ai_tools",
+        "developer_tools",
+        "hr_ops",
+        "lead_ops",
+        "content_ops",
+        "seo_marketing",
+        "ecommerce_ops"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
@@ -2696,23 +2696,23 @@
       },
       "912067f9-040f-425b-8f16-f76e6fff8109": {
         "agent": "aicomglobal",
-        "observations": 1671,
-        "accepted": 1312,
-        "transport_success": 1312,
-        "relevance_total": 173440.0,
-        "avg_relevance": 103.79,
-        "trust": 82.81,
+        "observations": 1672,
+        "accepted": 1313,
+        "transport_success": 1313,
+        "relevance_total": 173570.0,
+        "avg_relevance": 103.81,
+        "trust": 82.82,
         "stages": {
           "research": {
-            "observations": 1639,
-            "accepted": 1280,
-            "transport_success": 1280,
-            "relevance_total": 170457.0,
-            "avg_relevance": 104.0,
-            "trust": 82.48,
+            "observations": 1640,
+            "accepted": 1281,
+            "transport_success": 1281,
+            "relevance_total": 170587.0,
+            "avg_relevance": 104.02,
+            "trust": 82.49,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 14,
@@ -2751,27 +2751,27 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "11f57018-eba7-4be8-9807-f925d7599889": {
         "agent": "AUX Evidence and Certification",
-        "observations": 1637,
-        "accepted": 1284,
-        "transport_success": 1284,
-        "relevance_total": 137660.0,
-        "avg_relevance": 84.09,
-        "trust": 82.75,
+        "observations": 1638,
+        "accepted": 1285,
+        "transport_success": 1285,
+        "relevance_total": 137762.0,
+        "avg_relevance": 84.1,
+        "trust": 82.76,
         "stages": {
           "research": {
-            "observations": 1608,
-            "accepted": 1260,
-            "transport_success": 1260,
-            "relevance_total": 135511.0,
-            "avg_relevance": 84.27,
-            "trust": 82.69,
+            "observations": 1609,
+            "accepted": 1261,
+            "transport_success": 1261,
+            "relevance_total": 135613.0,
+            "avg_relevance": 84.28,
+            "trust": 82.7,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 19,
@@ -2799,27 +2799,27 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "f4e6aa34-a7a6-45af-87ad-7875f4169715": {
         "agent": "GRITH Gate",
-        "observations": 1640,
-        "accepted": 1304,
-        "transport_success": 1304,
-        "relevance_total": 142343.0,
-        "avg_relevance": 86.79,
-        "trust": 83.61,
+        "observations": 1641,
+        "accepted": 1305,
+        "transport_success": 1305,
+        "relevance_total": 142449.0,
+        "avg_relevance": 86.81,
+        "trust": 83.62,
         "stages": {
           "research": {
-            "observations": 1616,
-            "accepted": 1261,
-            "transport_success": 1280,
-            "relevance_total": 140621.0,
-            "avg_relevance": 87.02,
-            "trust": 82.66,
+            "observations": 1617,
+            "accepted": 1262,
+            "transport_success": 1281,
+            "relevance_total": 140727.0,
+            "avg_relevance": 87.03,
+            "trust": 82.67,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 8,
@@ -2858,7 +2858,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "dfd885d4-6153-4a5b-b8ea-65fc7f83e8f6": {
         "agent": "HORIZON SHIELD KIRA",
@@ -3165,23 +3165,23 @@
       },
       "49cc94ea-76bb-4b48-a127-68a3d3f81caa": {
         "agent": "AION SUPREME Temple Gateway",
-        "observations": 1636,
-        "accepted": 1238,
-        "transport_success": 1238,
-        "relevance_total": 123650.0,
-        "avg_relevance": 75.58,
-        "trust": 80.54,
+        "observations": 1637,
+        "accepted": 1239,
+        "transport_success": 1239,
+        "relevance_total": 123741.0,
+        "avg_relevance": 75.59,
+        "trust": 80.55,
         "stages": {
           "research": {
-            "observations": 1593,
-            "accepted": 1207,
-            "transport_success": 1207,
-            "relevance_total": 120350.0,
-            "avg_relevance": 75.55,
-            "trust": 80.62,
-            "last_quality_ok": false,
-            "last_quality_reason": "request failed",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "observations": 1594,
+            "accepted": 1208,
+            "transport_success": 1208,
+            "relevance_total": 120441.0,
+            "avg_relevance": 75.56,
+            "trust": 80.63,
+            "last_quality_ok": true,
+            "last_quality_reason": "accepted for research",
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 19,
@@ -3218,9 +3218,9 @@
           }
         },
         "last_stage": "research",
-        "last_quality_ok": false,
-        "last_quality_reason": "all A2A transports failed quality/transport checks",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_quality_ok": true,
+        "last_quality_reason": "accepted",
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "bb1d9393-3987-41f9-9ce5-8c050f339356": {
         "agent": "Sirenic",
@@ -3350,23 +3350,23 @@
       },
       "1dd2d167-4594-427f-9191-de5de234fefb": {
         "agent": "LeadProof Sales Agent",
-        "observations": 1599,
-        "accepted": 1271,
-        "transport_success": 1271,
-        "relevance_total": 127263.0,
-        "avg_relevance": 79.59,
-        "trust": 83.59,
+        "observations": 1600,
+        "accepted": 1272,
+        "transport_success": 1272,
+        "relevance_total": 127359.0,
+        "avg_relevance": 79.6,
+        "trust": 83.6,
         "stages": {
           "research": {
-            "observations": 1554,
-            "accepted": 1236,
-            "transport_success": 1236,
-            "relevance_total": 123935.0,
-            "avg_relevance": 79.75,
-            "trust": 83.63,
+            "observations": 1555,
+            "accepted": 1237,
+            "transport_success": 1237,
+            "relevance_total": 124031.0,
+            "avg_relevance": 79.76,
+            "trust": 83.64,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 18,
@@ -3405,7 +3405,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "125be81b-7326-41cd-85a2-7e0c2aa031b8": {
         "agent": "colegal-public-assistant",
@@ -3631,12 +3631,12 @@
       },
       "e20b3eb4-59e7-4580-a19b-f0fbe5456fd3": {
         "agent": "ArgonautWorks Bounty Signal",
-        "observations": 637,
-        "accepted": 590,
-        "transport_success": 590,
-        "relevance_total": 47752.0,
-        "avg_relevance": 74.96,
-        "trust": 94.1,
+        "observations": 638,
+        "accepted": 591,
+        "transport_success": 591,
+        "relevance_total": 47836.0,
+        "avg_relevance": 74.98,
+        "trust": 94.11,
         "stages": {
           "ui_ux": {
             "observations": 3,
@@ -3650,15 +3650,15 @@
             "last_seen_utc": "2026-09-24T04:26:13.221264+00:00"
           },
           "research": {
-            "observations": 633,
-            "accepted": 587,
-            "transport_success": 587,
-            "relevance_total": 47601.0,
-            "avg_relevance": 75.2,
-            "trust": 94.19,
+            "observations": 634,
+            "accepted": 588,
+            "transport_success": 588,
+            "relevance_total": 47685.0,
+            "avg_relevance": 75.21,
+            "trust": 94.2,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 1,
@@ -3675,7 +3675,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "433192d2-a60c-49a3-a06f-9f8a583a0773": {
         "agent": "Rafid Property Intelligence",
@@ -3727,23 +3727,23 @@
       },
       "182acf69-880f-4669-8167-b3db64d785a8": {
         "agent": "Scry Wallet Intelligence",
-        "observations": 948,
-        "accepted": 940,
-        "transport_success": 940,
-        "relevance_total": 103714.0,
-        "avg_relevance": 109.4,
-        "trust": 99.32,
+        "observations": 949,
+        "accepted": 941,
+        "transport_success": 941,
+        "relevance_total": 103830.0,
+        "avg_relevance": 109.41,
+        "trust": 99.33,
         "stages": {
           "research": {
-            "observations": 935,
-            "accepted": 927,
-            "transport_success": 927,
-            "relevance_total": 102400.0,
-            "avg_relevance": 109.52,
+            "observations": 936,
+            "accepted": 928,
+            "transport_success": 928,
+            "relevance_total": 102516.0,
+            "avg_relevance": 109.53,
             "trust": 99.32,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 11,
@@ -3771,7 +3771,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "6b3257f8-47b8-4ecf-8720-34e80edea2bc": {
         "agent": "ToolScout Software Recommendation Agent",
@@ -3827,23 +3827,23 @@
       },
       "bcd593db-899c-4663-8c3d-247880471e1c": {
         "agent": "Flux · APEX on X1 & Arc",
-        "observations": 623,
-        "accepted": 613,
-        "transport_success": 613,
-        "relevance_total": 73132.0,
-        "avg_relevance": 117.39,
+        "observations": 624,
+        "accepted": 614,
+        "transport_success": 614,
+        "relevance_total": 73256.0,
+        "avg_relevance": 117.4,
         "trust": 98.72,
         "stages": {
           "research": {
-            "observations": 614,
-            "accepted": 601,
-            "transport_success": 604,
-            "relevance_total": 72120.0,
-            "avg_relevance": 117.46,
-            "trust": 98.4,
+            "observations": 615,
+            "accepted": 602,
+            "transport_success": 605,
+            "relevance_total": 72244.0,
+            "avg_relevance": 117.47,
+            "trust": 98.41,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "ui_ux": {
             "observations": 1,
@@ -3871,7 +3871,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       "4b0ed4fa-60ae-4b40-bede-d6b5c6447d80": {
         "agent": "TravelFinder by BeachFinder",
@@ -3960,23 +3960,23 @@
       },
       "56e20288-8a32-4a67-af21-49381a4c357a": {
         "agent": "The Korova Milk Bar",
-        "observations": 502,
-        "accepted": 502,
-        "transport_success": 502,
-        "relevance_total": 41562.0,
+        "observations": 503,
+        "accepted": 503,
+        "transport_success": 503,
+        "relevance_total": 41642.0,
         "avg_relevance": 82.79,
         "trust": 100.0,
         "stages": {
           "research": {
-            "observations": 500,
-            "accepted": 500,
-            "transport_success": 500,
-            "relevance_total": 41418.0,
-            "avg_relevance": 82.84,
+            "observations": 501,
+            "accepted": 501,
+            "transport_success": 501,
+            "relevance_total": 41498.0,
+            "avg_relevance": 82.83,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 1,
@@ -4004,7 +4004,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       }
     },
     "build_history": [
@@ -8858,6 +8858,65 @@
         "intent_confidence": 0.2,
         "commercial_intent": false,
         "reasons": []
+      },
+      {
+        "evaluated_at_utc": "2026-09-26T10:47:02.734952+00:00",
+        "decision": "PARK",
+        "trust_score": 0,
+        "identity_status": "anonymous",
+        "agent_id": "",
+        "source_count": 0,
+        "unsupported_inference": true,
+        "intent_primary": "CONNECTIVITY",
+        "intent_secondary": [
+          "COMMERCIAL",
+          "CONTACT"
+        ],
+        "intent_confidence": 0.98,
+        "commercial_intent": true,
+        "reasons": [
+          "agent_identity_missing",
+          "agent_card_missing",
+          "capability_interview_incomplete",
+          "claim_has_no_explicit_support",
+          "unsupported_inference_detected",
+          "falsification_condition_missing"
+        ]
+      },
+      {
+        "evaluated_at_utc": "2026-09-26T10:47:03.455413+00:00",
+        "decision": "PARK",
+        "trust_score": 40,
+        "identity_status": "self_declared",
+        "agent_id": "chatgpt-research-session-7e1c9a",
+        "source_count": 0,
+        "unsupported_inference": false,
+        "intent_primary": "RESEARCH",
+        "intent_secondary": [
+          "CONNECTIVITY",
+          "DISCOVERY"
+        ],
+        "intent_confidence": 0.98,
+        "commercial_intent": false,
+        "reasons": [
+          "identity_is_self_declared",
+          "agent_card_missing",
+          "capability_interview_incomplete"
+        ]
+      },
+      {
+        "evaluated_at_utc": "2026-09-26T10:47:04.327394+00:00",
+        "decision": "ALLOW_BOUNDED",
+        "trust_score": 86,
+        "identity_status": "verified",
+        "agent_id": "synthetic-verified-agent",
+        "source_count": 2,
+        "unsupported_inference": false,
+        "intent_primary": "UNKNOWN",
+        "intent_secondary": [],
+        "intent_confidence": 0.2,
+        "commercial_intent": false,
+        "reasons": []
       }
     ],
     "agent_demand_observatory": {
@@ -9376,10 +9435,10 @@
     ],
     "a2a_discovery": {
       "registry_enabled": true,
-      "last_registration_utc": "2026-09-26T10:02:46.355939+00:00",
+      "last_registration_utc": "2026-09-26T10:46:23.735882+00:00",
       "last_registration_ok": true,
       "last_registration_status": 200,
-      "last_registration_reason": "published_via:allagents",
+      "last_registration_reason": "published_via:community_a2a_registry,allagents",
       "manifest_url": "https://neo-collettive.onrender.com/.well-known/agent-card.json",
       "registries": {
         "a2a_registry": {
@@ -9388,9 +9447,9 @@
           "reason": "404 Not Found"
         },
         "community_a2a_registry": {
-          "ok": false,
-          "status": null,
-          "reason": "ReadTimeout: "
+          "ok": true,
+          "status": 200,
+          "reason": "existing_listing_found"
         },
         "allagents": {
           "ok": true,
@@ -9401,23 +9460,6 @@
       }
     },
     "jarvis_dialogue_history": [
-      {
-        "created_at_utc": "2026-09-25T20:41:41.435791+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [
-          "reduce repetitive manual work around manual data entry need help looking for pain point -site:remoteok.com",
-          "reduce repetitive manual work around manual data entry manual workaround frustrating -site:remoteok.com"
-        ],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
       {
         "created_at_utc": "2026-09-25T20:48:34.241446+00:00",
         "neo_status": "SELECT",
@@ -9606,23 +9648,111 @@
         ],
         "build_tests_passed": false,
         "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-26T10:47:47.323534+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [
+          "manual data entry budget hiring contractor -site:github.com -site:itechdata.ai -site:reddit.com",
+          "manual data entry will pay fixed price hourly -site:github.com -site:itechdata.ai -site:reddit.com"
+        ],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
       }
     ],
     "jarvis_runtime": {
       "last_request_utc": "2026-09-21T09:19:40.909607+00:00",
-      "last_response_utc": "2026-09-26T10:04:05.903829+00:00",
+      "last_response_utc": "2026-09-26T10:47:47.284093+00:00",
       "last_ok": true,
       "last_status": 200,
       "last_attempt": 1,
       "last_phase": "review",
       "last_reason": null,
-      "requests_total": 555,
-      "success_total": 535,
+      "requests_total": 557,
+      "success_total": 537,
       "failure_total": 20,
-      "last_payload_bytes": 48906,
+      "last_payload_bytes": 51934,
       "last_payload_mode": "embedded_core_remote_advisory"
     },
     "commercial_evidence_memory": [
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": false,
+        "quarantine_reason": "generic_or_nonconcrete_problem",
+        "context_type": "observed",
+        "signal_reverted": null,
+        "domain": "github.com",
+        "source": "github-issues-routed",
+        "family": "ai_tools",
+        "problem_key_raw": "ai_tools:generic_technology",
+        "problem_key": "ai_tools:generic_technology",
+        "thesis_bound": false,
+        "problem_id": "",
+        "thesis_id": "",
+        "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "query_role": "discovery",
+        "query_intent": "pain",
+        "intent_class": "paid_automation",
+        "title": "Agentic OS Conductor Log",
+        "snippet": "This is the pinned run log for the **Agentic OS Conductor** — the privileged, locally-run routine (Claude Code Desktop, workspace `C:\\ClaudeCodeDesktop\\Claude_AI_OS_Routine`) that supervises all FFC agentic automation.\n\n**Do not close this issue.** Every conductor run posts comments here; this issue",
+        "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
+        "strong_markers": [
+          "budget"
+        ],
+        "weak_markers": [
+          "workflow",
+          "automation"
+        ],
+        "signal_types": [
+          "PAID_DEMAND",
+          "PAIN"
+        ],
+        "last_seen_epoch": 1790419663.5341833,
+        "first_seen_epoch": 1790367700.6050544,
+        "seen_count": 5
+      },
+      {
+        "schema_v": 2,
+        "tagger_v": 3,
+        "migration_v": 2,
+        "gate_eligible": true,
+        "quarantine_reason": null,
+        "domain": "remoteok.com",
+        "source": "remoteok-api",
+        "family": "manual_data_entry",
+        "problem_key_raw": "manual_data_entry:general",
+        "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
+        "thesis_bound": true,
+        "problem_id": "manual_data_entry:buyers:teams_experiencing_the_observed_problem_reduce_repetitive_manual_work_ar",
+        "thesis_id": "th-1d755d8725e7",
+        "query": "teams experiencing the observed problem:reduce repetitive manual work around manual data entry freelance hiring budget",
+        "query_role": "paid_market",
+        "title": "Data Entry Administrator",
+        "snippet": "Hiring Data Entry Administrator at PulseMediaNL Skills: data entry infosec education customer support dev marketing admin microsoft exec content writing ops excel digital nomad About PulseMediaNL PulseMediaNL is a forward-thinking digital media company committed to delivering high-quality content, i",
+        "url": "https://remoteok.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
+        "strong_markers": [
+          "hiring"
+        ],
+        "weak_markers": [
+          "customer"
+        ],
+        "signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND"
+        ],
+        "last_seen_epoch": 1790419663.5341833,
+        "first_seen_epoch": 1790223896.9365456,
+        "seen_count": 48
+      },
       {
         "schema_v": 2,
         "tagger_v": 3,
@@ -9656,43 +9786,6 @@
         "last_seen_epoch": 1790416880.720247,
         "first_seen_epoch": 1790223484.9022217,
         "seen_count": 24
-      },
-      {
-        "schema_v": 2,
-        "tagger_v": 3,
-        "migration_v": 2,
-        "gate_eligible": false,
-        "quarantine_reason": "generic_or_nonconcrete_problem",
-        "context_type": "observed",
-        "signal_reverted": null,
-        "domain": "github.com",
-        "source": "github-issues-routed",
-        "family": "ai_tools",
-        "problem_key_raw": "ai_tools:generic_technology",
-        "problem_key": "ai_tools:generic_technology",
-        "thesis_bound": false,
-        "problem_id": "",
-        "thesis_id": "",
-        "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "query_role": "discovery",
-        "query_intent": "pain",
-        "intent_class": "paid_automation",
-        "title": "Agentic OS Conductor Log",
-        "snippet": "This is the pinned run log for the **Agentic OS Conductor** — the privileged, locally-run routine (Claude Code Desktop, workspace `C:\\ClaudeCodeDesktop\\Claude_AI_OS_Routine`) that supervises all FFC agentic automation.\n\n**Do not close this issue.** Every conductor run posts comments here; this issue",
-        "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
-        "strong_markers": [
-          "budget"
-        ],
-        "weak_markers": [
-          "workflow",
-          "automation"
-        ],
-        "signal_types": [
-          "PAID_DEMAND"
-        ],
-        "last_seen_epoch": 1790399983.3190246,
-        "first_seen_epoch": 1790367700.6050544,
-        "seen_count": 4
       },
       {
         "schema_v": 2,
@@ -10410,39 +10503,6 @@
         "seen_count": 14,
         "context_type": "product_launch",
         "signal_reverted": "seller_launch"
-      },
-      {
-        "schema_v": 2,
-        "tagger_v": 3,
-        "migration_v": 2,
-        "gate_eligible": true,
-        "quarantine_reason": null,
-        "domain": "remoteok.com",
-        "source": "remoteok-api",
-        "family": "manual_data_entry",
-        "problem_key_raw": "manual_data_entry:general",
-        "problem_key": "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry",
-        "thesis_bound": true,
-        "problem_id": "manual_data_entry:buyers:teams_experiencing_the_observed_problem_reduce_repetitive_manual_work_ar",
-        "thesis_id": "th-1d755d8725e7",
-        "query": "teams experiencing the observed problem:reduce repetitive manual work around manual data entry freelance hiring budget",
-        "query_role": "paid_market",
-        "title": "Data Entry Administrator",
-        "snippet": "Hiring Data Entry Administrator at PulseMediaNL Skills: data entry infosec education customer support dev marketing admin microsoft exec content writing ops excel digital nomad About PulseMediaNL PulseMediaNL is a forward-thinking digital media company committed to delivering high-quality content, i",
-        "url": "https://remoteok.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
-        "strong_markers": [
-          "hiring"
-        ],
-        "weak_markers": [
-          "customer"
-        ],
-        "signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "last_seen_epoch": 1790284861.7204163,
-        "first_seen_epoch": 1790223896.9365456,
-        "seen_count": 46
       },
       {
         "schema_v": 2,
@@ -11997,7 +12057,7 @@
       "rows": 77,
       "changed": 3,
       "quarantined": 71,
-      "rejected_current": 6
+      "rejected_current": 39
     },
     "active_thesis": null,
     "thesis_history": [
@@ -12923,6 +12983,19 @@
       }
     ],
     "problem_performance": {
+      "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
+        "family": "manual_data_entry",
+        "last_domains": 1,
+        "last_strong_domains": 1,
+        "last_gap_score": 70,
+        "last_signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND"
+        ],
+        "qualified": false,
+        "no_progress_streak": 0,
+        "near_gate": false
+      },
       "manual_data_entry:manual_data_entry": {
         "family": "manual_data_entry",
         "last_domains": 3,
@@ -12983,19 +13056,6 @@
         "last_signal_types": [],
         "qualified": false,
         "no_progress_streak": 1,
-        "near_gate": false
-      },
-      "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
-        "family": "manual_data_entry",
-        "last_domains": 1,
-        "last_strong_domains": 1,
-        "last_gap_score": 70,
-        "last_signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "qualified": false,
-        "no_progress_streak": 0,
         "near_gate": false
       },
       "analytics_tools:business_intelligence": {
@@ -13101,60 +13161,60 @@
           "intent_class": ""
         },
         {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
+          "sector": "developer_tools",
+          "family": "developer_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "data_cleanup",
-          "family": "data_cleanup",
+          "sector": "hr_ops",
+          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "small_business_admin",
-          "family": "workflow_automation",
+          "sector": "lead_ops",
+          "family": "crm_lead_ops",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "local_business_ops",
-          "family": "local_business_tools",
+          "sector": "content_ops",
+          "family": "content_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "productivity_tools",
-          "sector": "productivity",
-          "search_alias_used": "productivity tools"
+          "family": "marketing_seo",
+          "sector": "seo_marketing",
+          "search_alias_used": "marketing seo"
         },
         {
-          "query": "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ai_tools",
-          "sector": "ai_tools",
-          "search_alias_used": "ai tools"
+          "family": "ecommerce_tools",
+          "sector": "ecommerce_ops",
+          "search_alias_used": "ecommerce tools"
         }
       ],
       "executed": [
@@ -13199,65 +13259,65 @@
           "agent_search_completed": true
         },
         {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
+          "sector": "developer_tools",
+          "family": "developer_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "data_cleanup",
-          "family": "data_cleanup",
+          "sector": "hr_ops",
+          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "small_business_admin",
-          "family": "workflow_automation",
+          "sector": "lead_ops",
+          "family": "crm_lead_ops",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "local_business_ops",
-          "family": "local_business_tools",
+          "sector": "content_ops",
+          "family": "content_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "productivity_tools",
-          "sector": "productivity",
-          "search_alias_used": "productivity tools",
+          "family": "marketing_seo",
+          "sector": "seo_marketing",
+          "search_alias_used": "marketing seo",
           "agent_search_completed": true
         },
         {
-          "query": "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ai_tools",
-          "sector": "ai_tools",
-          "search_alias_used": "ai tools",
+          "family": "ecommerce_tools",
+          "sector": "ecommerce_ops",
+          "search_alias_used": "ecommerce tools",
           "agent_search_completed": true
         }
       ]
@@ -13265,7 +13325,7 @@
     "venture_metrics": {},
     "outcome_control": {
       "schema_v": 1,
-      "cycle": 369,
+      "cycle": 373,
       "mode": "external_results_only",
       "wins": [],
       "new_wins": [],
@@ -13279,11 +13339,11 @@
           "proof": {
             "seti_admitted_after_3_round_gate": 0,
             "inbound_completed_3_round": [],
-            "eligible_candidates": 2,
-            "interview_ready_now": 2,
-            "last_interview_status": "PARKED"
+            "eligible_candidates": 0,
+            "interview_ready_now": 0,
+            "last_interview_status": "NO_ELIGIBLE_CANDIDATE"
           },
-          "next_action": "Run the bounded 3-round interview on the next interview-ready public Agent Card."
+          "next_action": "Find one public HTTPS Agent Card that passes preflight and can answer three substantive rounds."
         },
         "market_closer": {
           "agent": "Market Closer",
@@ -13312,7 +13372,7 @@
           "proof": {
             "wins": [],
             "new_wins": [],
-            "cycle": 369
+            "cycle": 373
           },
           "next_action": "Do not add features. Spend the next cycle only on peer 3/3 or the active thesis gate/missing evidence."
         }
@@ -13322,14 +13382,6 @@
       "rule": "A version, scan, candidate, build, or internal score is not a result by itself."
     },
     "outcome_history": [
-      {
-        "cycle": 348,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
       {
         "cycle": 349,
         "overall_status": "WORKING",
@@ -13481,41 +13533,50 @@
         "new_wins": [],
         "peer_status": "PURSUE",
         "market_status": "PURSUE"
+      },
+      {
+        "cycle": 373,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
       }
     ],
     "seti": {
       "enabled": true,
-      "mode": "passive",
+      "mode": "bounded_active",
       "every_cycles": 6,
-      "last_scan_utc": "2026-09-26T05:12:07.929507+00:00",
+      "last_scan_utc": "2026-09-26T10:48:23.138925+00:00",
       "last_error": null,
       "last_summary": {
-        "search_results_seen": 35,
+        "search_results_seen": 41,
         "source_counts": {
           "brave-search": 5,
           "brave-search-declared-endpoint": 2,
-          "hn-algolia-routed": 10,
-          "github-issues-routed": 13,
-          "bing-rss-free": 2,
-          "github-issues-routed-declared-endpoint": 3
+          "bing-rss-free": 6,
+          "hn-algolia-routed": 11,
+          "github-issues-routed": 12,
+          "stackexchange-routed": 3,
+          "github-issues-routed-declared-endpoint": 2
         },
         "machine_like_results": 10,
         "registry_checks": 10,
-        "known_space_filtered": 2,
-        "signals_returned": 8,
+        "known_space_filtered": 1,
+        "signals_returned": 9,
         "registry_candidates": 12,
         "registry_candidate_sources": {
           "global_a2a_registry": 12
         },
-        "registry_candidate_errors": 1,
+        "registry_candidate_errors": 0,
         "tiza_candidates": 0,
         "tiza_candidate_sources": {},
-        "tiza_candidate_errors": 0,
-        "tiza_attempted": false,
-        "tiza_skipped": true,
+        "tiza_candidate_errors": 1,
+        "tiza_attempted": true,
+        "tiza_skipped": false,
         "tiza_status": "backoff",
         "tiza_consecutive_failures": 1,
-        "tiza_next_retry_cycle": 370,
+        "tiza_next_retry_cycle": 379,
         "aicomglobal_enabled": true,
         "aicomglobal_candidates": 1,
         "aicomglobal_candidate_sources": {
@@ -13528,37 +13589,44 @@
         "aicomglobal_skipped": false,
         "aicomglobal_status": "available",
         "aicomglobal_consecutive_failures": 0,
-        "aicomglobal_next_retry_cycle": 367,
-        "peer_registry_count": 21,
+        "aicomglobal_next_retry_cycle": 373,
+        "peer_registry_count": 20,
         "peer_registry_status_counts": {
-          "DOCS_ONLY": 11,
+          "DOCS_ONLY": 10,
           "PAID_ONLY": 8,
           "READY": 1,
           "READY_READONLY": 1
         },
-        "tiza_error_samples": [],
-        "interesting": 6,
-        "high_interest": 3,
+        "tiza_error_samples": [
+          {
+            "error": "ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)",
+            "query": ""
+          }
+        ],
+        "interesting": 3,
+        "high_interest": 2,
         "private_candidates": 24,
         "private_reobserved": 6,
         "private_max_score": 100,
         "private_max_source_diversity": 2,
-        "eligible_candidates": 2,
+        "eligible_candidates": 0,
         "high_interest_eligible": 0,
         "eligibility_reason_counts": {
-          "below_interview_interest": 5,
+          "below_interview_interest": 7,
           "indexed_artifact_not_agent_endpoint": 16,
-          "no_explicit_agent_endpoint": 1,
-          "public_agent_card": 2
+          "no_explicit_agent_endpoint": 1
         },
         "high_interest_eligibility_reason_counts": {
           "indexed_artifact_not_agent_endpoint": 4
         },
         "interview_ready_now": 0,
-        "interview_readiness_reason_counts": {
-          "ineligible": 22,
-          "ready": 2
-        },
+        "ready_now_computed_at": "2026-09-26T10:48:26.459181+00:00",
+        "blocked_auth": [],
+        "in_cooldown": [],
+        "attempted_this_cycle": [],
+        "interview_readiness_reason_counts": {},
+        "interview_readiness_invariant_ok": true,
+        "interview_candidate_states": [],
         "interview_attempted": false,
         "last_interview_status": "NO_ELIGIBLE_CANDIDATE",
         "interview_attempted_count": 0,
@@ -13572,9 +13640,10 @@
         "interview_failure_reason_counts": {},
         "interview_peer_class_counts": {},
         "interview_peer_class_migration": {
-          "changed": 0,
+          "changed": 2,
           "counts": {
-            "AUTH_REQUIRED": 3,
+            "AUTH_REQUIRED": 4,
+            "COLLABORATIVE": 1,
             "COMMERCIAL_SERVICE": 1,
             "LOW_VALUE": 16,
             "PAYMENT_REQUIRED": 1
@@ -13585,15 +13654,15 @@
         "interview_parked_count": 0,
         "admitted_agent_count": 0,
         "safety": {
-          "target_http_requests": true,
-          "active_probe": true,
+          "target_http_requests": false,
+          "active_probe": false,
           "messages_sent": false,
           "message_delivery_not_guaranteed": true,
           "port_scan": false,
           "bounded_research_only": true,
           "commercial_actions": false,
           "tool_execution_requested": false,
-          "discovery_index_tool_called": false
+          "discovery_index_tool_called": true
         },
         "scan_safety": {
           "target_http_requests": false,
@@ -13607,17 +13676,9 @@
           "explicit_public_a2a_endpoint_only": true,
           "max_interviews_per_scan": 3,
           "commercial_or_third_party_actions": false
-        },
-        "engine_upgrade_retry": true,
-        "ready_now_computed_at": "2026-09-26T10:02:46.805824+00:00",
-        "blocked_auth": [
-          "e1b2e487d6657325f27b4433"
-        ],
-        "in_cooldown": [],
-        "attempted_this_cycle": [],
-        "engine_upgrade_retry_readiness": true
+        }
       },
-      "signal_memory_count": 0
+      "signal_memory_count": 9
     }
   },
   "manual_run": {
@@ -13628,12 +13689,12 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-26T10:04:05.904126+00:00",
-    "neo_version": "0.99.23",
+    "timestamp_utc": "2026-09-26T10:47:47.323706+00:00",
+    "neo_version": "0.99.24",
     "status": "SELECT",
     "next_gate": "SELECT: raccogli evidenza convergente e prepara un candidato testabile.",
     "valid_external_answers": 0,
-    "web_source_count": 0,
+    "web_source_count": 36,
     "evidence_scout_count": 6,
     "search_strategy": {
       "mode": "evidence_integrity_query_budget",
@@ -13641,12 +13702,12 @@
       "queries": [
         "manual data entry budget hiring contractor -site:github.com -site:itechdata.ai -site:reddit.com",
         "manual data entry will pay fixed price hourly -site:github.com -site:itechdata.ai -site:reddit.com",
-        "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
-        "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
-        "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
+        "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+        "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+        "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))"
       ],
       "query_plan": [
         {
@@ -13688,60 +13749,60 @@
           "intent_class": ""
         },
         {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
+          "sector": "developer_tools",
+          "family": "developer_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "data_cleanup",
-          "family": "data_cleanup",
+          "sector": "hr_ops",
+          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "small_business_admin",
-          "family": "workflow_automation",
+          "sector": "lead_ops",
+          "family": "crm_lead_ops",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "local_business_ops",
-          "family": "local_business_tools",
+          "sector": "content_ops",
+          "family": "content_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "productivity_tools",
-          "sector": "productivity",
-          "search_alias_used": "productivity tools"
+          "family": "marketing_seo",
+          "sector": "seo_marketing",
+          "search_alias_used": "marketing seo"
         },
         {
-          "query": "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ai_tools",
-          "sector": "ai_tools",
-          "search_alias_used": "ai tools"
+          "family": "ecommerce_tools",
+          "sector": "ecommerce_ops",
+          "search_alias_used": "ecommerce tools"
         }
       ],
       "query_budget": {
@@ -13751,34 +13812,34 @@
       },
       "planned_query_count": 8,
       "sectors": [
-        "cybersecurity_ops",
-        "data_cleanup",
-        "small_business_admin",
-        "local_business_ops",
-        "productivity",
-        "ai_tools"
+        "developer_tools",
+        "hr_ops",
+        "lead_ops",
+        "content_ops",
+        "seo_marketing",
+        "ecommerce_ops"
       ],
       "sector_families": {
-        "cybersecurity_ops": "cybersecurity_tools",
-        "data_cleanup": "data_cleanup",
-        "small_business_admin": "workflow_automation",
-        "local_business_ops": "local_business_tools",
-        "productivity": "productivity_tools",
-        "ai_tools": "ai_tools"
+        "developer_tools": "developer_tools",
+        "hr_ops": "hr_tools",
+        "lead_ops": "crm_lead_ops",
+        "content_ops": "content_tools",
+        "seo_marketing": "marketing_seo",
+        "ecommerce_ops": "ecommerce_tools"
       },
       "recent_sector_memory": [
-        "website_quality",
-        "it_hygiene",
-        "data_analytics",
-        "document_ops",
-        "micro_saas",
-        "reporting_compliance",
         "cybersecurity_ops",
         "data_cleanup",
         "small_business_admin",
         "local_business_ops",
         "productivity",
-        "ai_tools"
+        "ai_tools",
+        "developer_tools",
+        "hr_ops",
+        "lead_ops",
+        "content_ops",
+        "seo_marketing",
+        "ecommerce_ops"
       ],
       "stagnation_cycles": 0,
       "exploration_slots": 4,
@@ -13882,6 +13943,17 @@
       }
     },
     "family_performance": {
+      "ai_tools": {
+        "score": 0,
+        "observations": 1,
+        "best_gap_score": 0,
+        "qualified_hits": 0,
+        "last_gap_score": 0,
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_signal_types": [],
+        "no_progress_streak": 1
+      },
       "manual_data_entry": {
         "score": 95,
         "observations": 1,
@@ -13896,17 +13968,6 @@
           "PAIN"
         ],
         "no_progress_streak": 0
-      },
-      "ai_tools": {
-        "score": 0,
-        "observations": 1,
-        "best_gap_score": 0,
-        "qualified_hits": 0,
-        "last_gap_score": 0,
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_signal_types": [],
-        "no_progress_streak": 1
       },
       "workflow_automation": {
         "score": 5,
@@ -14037,6 +14098,204 @@
     "quarantined_evidence_items": 71,
     "rejected_current_results": [
       {
+        "reason": "no_demand_signal",
+        "url": "https://parseur.com/blog/manual-data-entry",
+        "title": "Manual Data Entry - Challenges and solutions in 2026 | Parseur®",
+        "query_role": "paid_market"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.jotform.com/blog/manual-data-entry/",
+        "title": "Understanding manual data entry | Jotform Blog",
+        "query_role": "paid_market"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.ziprecruiter.com/Jobs/Work-From-Home-Manual-Data-Entry",
+        "title": "$16-$25/hr Work From Home Manual Data Entry Jobs Hiring Now",
+        "query_role": "paid_market"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://parseur.com/blog/manual-data-entry",
+        "title": "Manual Data Entry - Challenges and solutions in 2026 | Parseur®",
+        "query_role": "paid_market"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.jotform.com/blog/manual-data-entry/",
+        "title": "Understanding manual data entry | Jotform Blog",
+        "query_role": "paid_market"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.ziprecruiter.com/Jobs/Work-From-Home-Manual-Data-Entry",
+        "title": "$16-$25/hr Work From Home Manual Data Entry Jobs Hiring Now",
+        "query_role": "paid_market"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://creao.ai/",
+        "title": "Show HN: Creao – Vibe coding product for founders",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/ioccc-src/mkiocccentry/issues/723",
+        "title": "Question: Issues that aren’t really major issues but are still issues",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://www.greptile.com/content-library/14-best-developer-productivity-tools",
+        "title": "Best Developer Productivity Tools 2026: 14 AI Developer Tools Compared | Greptile",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://dev.to/ruppysuppy/7-tools-that-make-me-productive-as-a-software-engineer-4p3l",
+        "title": "7 Tools that Make Me Productive as a Software Engineer - DEV Community",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/ioccc-src/mkiocccentry/issues/723",
+        "title": "Question: Issues that aren’t really major issues but are still issues",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://usealmanac.com/",
+        "title": "Launch HN: Almanac (YC S26) – AI that knows your company",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://news.ycombinator.com/item?id=47781835",
+        "title": "Veevo Health: building preventive CT heart scans (progress and challenges)",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://optareach.com/",
+        "title": "Show HN: OptaReach – multi-platform lead generation and outreach",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "github_noise",
+        "url": "https://github.com/dwvshell/Richard/issues/1",
+        "title": "DWVSCPS ENERGY FAMILY TRUST™ – OWNERSHIP\nR. E. STOCKFORD JR / 15389089 CANADA INC.\nTrademark: DWV STOCKFORD CONTAMINATE PIPELINE SHELL INC™\nPatent-Pending (Government of Canada)\nTR",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://www.reddit.com/r/smallbusiness/comments/1q73y0k/struggling_with_client_followups_in_my_small/",
+        "title": "r/smallbusiness on Reddit: Struggling with client follow-ups in my small business — how do you handle it?",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.reddit.com/r/CRM/comments/1sly1rq/how_do_you_currently_manage_followups_and/",
+        "title": "r/CRM on Reddit: How do you currently manage follow-ups and commitments to clients?",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "github_noise",
+        "url": "https://github.com/dwvshell/Richard/issues/1",
+        "title": "DWVSCPS ENERGY FAMILY TRUST™ – OWNERSHIP\nR. E. STOCKFORD JR / 15389089 CANADA INC.\nTrademark: DWV STOCKFORD CONTAMINATE PIPELINE SHELL INC™\nPatent-Pending (Government of Canada)\nTR",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/Christian-Gennari/Nostos-Rebirth/issues/497",
+        "title": "product(spike): define the purpose and workflow of Brain and Writing Studio",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://repurpose.io/",
+        "title": "#1 automated content repurposing & distribution platform.",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.reddit.com/r/GrowthHacking/comments/1rzo7j2/what_content_repurposing_tool_do_marketers/",
+        "title": "r/GrowthHacking on Reddit: What content repurposing tool do marketers actually use versus just talking about",
+        "query_role": "discovery"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://wave.subworkflow.ai/",
+        "title": "Show HN: Wave – Layered gradient wave backgrounds using Three.js and shaders",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://news.ycombinator.com/item?id=49826029",
+        "title": "Ask HN: I just talked to an AI-obsessed client, and I need a shower afterwards",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://github.com/digitopvn/anymd/issues/1",
+        "title": "Reposition AnyMD as the web context layer for AI agents",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://stackoverflow.com/questions/79925469/should-i-migrate-from-a-react-spa-using-react-helmet-for-seo-to-next-js-and-sp",
+        "title": "Should I migrate from a React SPA (using React Helmet for SEO) to Next.js and split the project into a marketing site (SEO) and an authenticated app?",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://stackoverflow.com/questions/27502455/how-to-scrape-websites-filtering-by-its-keywords-in-metadata",
+        "title": "How to scrape websites filtering by its keywords in metadata?",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://stackoverflow.com/questions/76979856/r-look-for-a-specific-string-inside-string-and-summarize",
+        "title": "R Look for a Specific string inside string and summarize",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://ai-rete-rag.com/",
+        "title": "Show HN: AI·rete·RAG – a Rete rule engine decides, RAG explains why",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://news.ycombinator.com/item?id=49776683",
+        "title": "Karen Nikoghosyan Is Building AI Operating Layers for Multichannel Commerce",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/bitrefill/awesome-agentic-payments",
+        "title": "Awesome-agentic-payments – A curated list of tools for agentic payments/commerce",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://stackoverflow.com/questions/76979856/r-look-for-a-specific-string-inside-string-and-summarize",
+        "title": "R Look for a Specific string inside string and summarize",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://stackoverflow.com/questions/42701569/magento2-extensions-installation-from-github",
+        "title": "Magento2 extensions installation from gitHub",
+        "query_role": "buyer"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://stackoverflow.com/questions/79470621/how-to-use-azure-ai-openai-to-generate-responses-from-a-model-using-a-set-of-dat",
+        "title": "How to use Azure AI OpenAI to generate responses from a model using a set of data inputs?",
+        "query_role": "buyer"
+      },
+      {
         "reason": "no_family",
         "url": "https://keepup.finance/",
         "title": "Show HN: KeepUp – Verified net worth rankings for everyone",
@@ -14055,78 +14314,219 @@
         "query_role": "scout"
       },
       {
-        "reason": "no_family",
-        "url": "https://github.com/bingxche/sglang-ci-bot/issues/207",
-        "title": "[CI Monitor] Daily Report - 2026-09-26",
+        "reason": "weak_family_relevance",
+        "url": "https://github.com/pnpm/pnpm/issues/15277",
+        "title": "Unimplemented feature requests across the backlog (pre-2022 to 2026)",
+        "query_role": "scout"
+      },
+      {
+        "reason": "github_noise",
+        "url": "https://github.com/craigbalding/safeyolo/issues/621",
+        "title": "Expand black-box acceptance for Python and Rust proxies",
         "query_role": "scout"
       },
       {
         "reason": "github_no_buyer_problem_context",
-        "url": "https://github.com/darktable-org/darktable/issues/21554",
-        "title": "Startup crash (SIGABRT) in image_cache_allocate when an image's group_id references a deleted image",
-        "query_role": "scout"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://github.com/anecoicastudio/athanor/issues/80",
-        "title": "Release train: what production is behind on — migrations, function deploy status, Vault, flags",
+        "url": "https://github.com/zbynekdrlik/songplayer/issues/147",
+        "title": "Genlock 2/6 — boundary-paced emission: clock_video=false, wall-clock grid scheduler (catch-up ≤8, resync, re-latch, starvation repeat), 30 fps grid per output",
         "query_role": "scout"
       }
     ],
     "ingestion_diagnostics": {
       "enabled": true,
       "raw_results_by_source": {
-        "bing-rss": 0,
-        "github": 3,
-        "hn": 3,
-        "stackexchange": 0
+        "bing-rss": 8,
+        "brave-search": 12,
+        "github": 21,
+        "hn": 13,
+        "remoteok-api": 2,
+        "stackexchange": 6
       },
       "rejected_by_reason": {
-        "github_no_buyer_problem_context": 1,
-        "no_demand_signal": 1,
-        "no_family": 3,
-        "weak_family_relevance": 1
+        "github_no_buyer_problem_context": 5,
+        "github_noise": 3,
+        "no_demand_signal": 11,
+        "no_family": 5,
+        "weak_family_relevance": 15
       },
       "self_contamination_rejected": 0,
       "rejected_by_source": {
-        "github": {
-          "github_no_buyer_problem_context": 1,
+        "brave-search": {
+          "no_demand_signal": 9,
           "no_family": 1,
-          "weak_family_relevance": 1
+          "weak_family_relevance": 2
+        },
+        "github": {
+          "github_no_buyer_problem_context": 4,
+          "github_noise": 3,
+          "weak_family_relevance": 2
         },
         "hn": {
+          "github_no_buyer_problem_context": 1,
           "no_demand_signal": 1,
-          "no_family": 2
+          "no_family": 4,
+          "weak_family_relevance": 6
+        },
+        "stackexchange": {
+          "no_demand_signal": 1,
+          "weak_family_relevance": 5
         }
       },
       "rejected_by_query_class": {
-        "scout": {
+        "convergence": {
+          "no_demand_signal": 6
+        },
+        "desire": {
           "github_no_buyer_problem_context": 1,
           "no_demand_signal": 1,
-          "no_family": 3,
+          "no_family": 2,
+          "weak_family_relevance": 8
+        },
+        "explore": {
+          "github_no_buyer_problem_context": 3,
+          "github_noise": 2,
+          "no_demand_signal": 3,
+          "no_family": 1,
+          "weak_family_relevance": 6
+        },
+        "scout": {
+          "github_no_buyer_problem_context": 1,
+          "github_noise": 1,
+          "no_demand_signal": 1,
+          "no_family": 2,
           "weak_family_relevance": 1
         }
       },
       "query_relevance_pass_by_source": {
         "bing-rss": 0,
-        "github": 0,
-        "hn": 0,
-        "stackexchange": 0
+        "brave-search": 12,
+        "github": 7,
+        "hn": 9,
+        "remoteok-api": 2,
+        "stackexchange": 6
       },
-      "query_relevance_pass_by_source_and_class": {},
+      "query_relevance_pass_by_source_and_class": {
+        "brave-search": {
+          "convergence": 6,
+          "explore": 6
+        },
+        "github": {
+          "desire": 1,
+          "explore": 6
+        },
+        "hn": {
+          "desire": 5,
+          "explore": 4
+        },
+        "remoteok-api": {
+          "convergence": 2
+        },
+        "stackexchange": {
+          "desire": 6
+        }
+      },
       "observed_candidates_purged": 0,
       "observed_candidates_purged_by_reason": {},
       "new_signal_rows": 0,
       "new_signal_rows_by_source": {},
       "new_signal_rows_by_query_class": {},
       "new_signal_rows_by_provider": {},
-      "rows_by_intent_class": {},
-      "buyer_signals_by_query_intent": {},
+      "rows_by_intent_class": {
+        "paid_automation": 1,
+        "switching": 1
+      },
+      "buyer_signals_by_query_intent": {
+        "pain": {
+          "BUY_INTENT": 2,
+          "PAID_DEMAND": 3
+        }
+      },
       "intent_review_sample": [
         {
-          "title": "Show HN: Recoonlytics – clean and analyze messy data in seconds",
-          "url": "https://recoonlytics.com/",
-          "source": "hn",
+          "title": "Data Entry Administrator",
+          "url": "https://remoteOK.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
+          "source": "remoteok-api",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": [
+            "BUY_INTENT",
+            "PAID_DEMAND"
+          ]
+        },
+        {
+          "title": "Manual Data Entry - Challenges and solutions in 2026 | Parseur®",
+          "url": "https://parseur.com/blog/manual-data-entry",
+          "source": "brave-search",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "Understanding manual data entry | Jotform Blog",
+          "url": "https://www.jotform.com/blog/manual-data-entry/",
+          "source": "brave-search",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "$16-$25/hr Work From Home Manual Data Entry Jobs Hiring Now",
+          "url": "https://www.ziprecruiter.com/Jobs/Work-From-Home-Manual-Data-Entry",
+          "source": "brave-search",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "Data Entry Administrator",
+          "url": "https://remoteOK.com/remote-jobs/remote-data-entry-administrator-pulsemedianl-1135903",
+          "source": "remoteok-api",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": [
+            "BUY_INTENT",
+            "PAID_DEMAND"
+          ]
+        },
+        {
+          "title": "Manual Data Entry - Challenges and solutions in 2026 | Parseur®",
+          "url": "https://parseur.com/blog/manual-data-entry",
+          "source": "brave-search",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "Understanding manual data entry | Jotform Blog",
+          "url": "https://www.jotform.com/blog/manual-data-entry/",
+          "source": "brave-search",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "$16-$25/hr Work From Home Manual Data Entry Jobs Hiring Now",
+          "url": "https://www.ziprecruiter.com/Jobs/Work-From-Home-Manual-Data-Entry",
+          "source": "brave-search",
+          "query_intent": "pain",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "Agentic OS Conductor Log",
+          "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
+          "source": "github",
+          "query_intent": "pain",
+          "intent_class": "paid_automation",
+          "signal_types": [
+            "PAID_DEMAND",
+            "PAIN"
+          ]
+        },
+        {
+          "title": "r/CRM on Reddit: How do you currently manage follow-ups and commitments to clients?",
+          "url": "https://www.reddit.com/r/CRM/comments/1sly1rq/how_do_you_currently_manage_followups_and/",
+          "source": "brave-search",
           "query_intent": "pain",
           "intent_class": "",
           "signal_types": []
@@ -14134,11 +14534,13 @@
       ],
       "search_provider": {
         "name": "brave",
-        "calls_cycle": 0,
-        "calls_day": 10,
-        "errors": 0,
-        "fallbacks": 0,
-        "fallback_reasons": {}
+        "calls_cycle": 8,
+        "calls_day": 8,
+        "errors": 2,
+        "fallbacks": 2,
+        "fallback_reasons": {
+          "HTTPStatusError:429": 2
+        }
       },
       "revalidation": {
         "attempted": 0,
@@ -14149,6 +14551,39 @@
       "diagnostic_errors": 0
     },
     "problem_clusters": {
+      "ai_tools:generic_technology": {
+        "family": "ai_tools",
+        "gate_eligible": false,
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 0,
+        "independent_domains": 0,
+        "fresh_independent_domains": 0,
+        "strong_commercial_domains": 0,
+        "disconfirm_domains": 0,
+        "quarantined_rows": 5,
+        "signal_types": [],
+        "domains": []
+      },
+      "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
+        "family": "manual_data_entry",
+        "gate_eligible": true,
+        "qualified": false,
+        "commercially_actionable": true,
+        "gap_score": 70,
+        "independent_domains": 1,
+        "fresh_independent_domains": 1,
+        "strong_commercial_domains": 1,
+        "disconfirm_domains": 4,
+        "quarantined_rows": 5,
+        "signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND"
+        ],
+        "domains": [
+          "remoteok.com"
+        ]
+      },
       "manual_data_entry:manual_data_entry": {
         "family": "manual_data_entry",
         "gate_eligible": true,
@@ -14168,20 +14603,6 @@
           "itechdata.ai",
           "reddit.com"
         ]
-      },
-      "ai_tools:generic_technology": {
-        "family": "ai_tools",
-        "gate_eligible": false,
-        "qualified": false,
-        "commercially_actionable": false,
-        "gap_score": 0,
-        "independent_domains": 0,
-        "fresh_independent_domains": 0,
-        "strong_commercial_domains": 0,
-        "disconfirm_domains": 0,
-        "quarantined_rows": 5,
-        "signal_types": [],
-        "domains": []
       },
       "workflow_automation:workflow_automation": {
         "family": "workflow_automation",
@@ -14327,25 +14748,6 @@
         "signal_types": [],
         "domains": []
       },
-      "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
-        "family": "manual_data_entry",
-        "gate_eligible": true,
-        "qualified": false,
-        "commercially_actionable": true,
-        "gap_score": 70,
-        "independent_domains": 1,
-        "fresh_independent_domains": 1,
-        "strong_commercial_domains": 1,
-        "disconfirm_domains": 4,
-        "quarantined_rows": 5,
-        "signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "domains": [
-          "remoteok.com"
-        ]
-      },
       "analytics_tools:business_intelligence": {
         "family": "analytics_tools",
         "gate_eligible": true,
@@ -14446,6 +14848,58 @@
       }
     },
     "clusters": {
+      "ai_tools": {
+        "qualified": false,
+        "commercially_actionable": false,
+        "gap_score": 0,
+        "independent_domains": 0,
+        "strong_commercial_domains": 0,
+        "signal_types": [],
+        "domains": [],
+        "signals": [
+          {
+            "domain": "github.com",
+            "source": "github-issues-routed",
+            "title": "Agentic OS Conductor Log",
+            "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
+            "signal_types": [
+              "PAID_DEMAND",
+              "PAIN"
+            ]
+          },
+          {
+            "domain": "sidenotepro.com",
+            "source": "hn-algolia-routed",
+            "title": "Show HN: SideNote Pro – Native Windows 11 AI beside your work",
+            "url": "https://sidenotepro.com/",
+            "signal_types": []
+          },
+          {
+            "domain": "news.ycombinator.com",
+            "source": "hackernews",
+            "title": "Show HN: PlaceCall (YC W26) – agentic API to call businesses and get things done",
+            "url": "https://news.ycombinator.com/item?id=49831231",
+            "signal_types": []
+          },
+          {
+            "domain": "news.ycombinator.com",
+            "source": "hackernews",
+            "title": "Karen Nikoghosyan Is Building AI Operating Layers for Multichannel Commerce",
+            "url": "https://news.ycombinator.com/item?id=49776683",
+            "signal_types": [
+              "COMPETITION",
+              "PAID_DEMAND"
+            ]
+          },
+          {
+            "domain": "github.com",
+            "source": "github-issues",
+            "title": "AI Agent Radar 周榜 · 2026-W39",
+            "url": "https://github.com/apiiskan/ai-agent-radar/issues/69",
+            "signal_types": []
+          }
+        ]
+      },
       "manual_data_entry": {
         "qualified": false,
         "commercially_actionable": true,
@@ -14518,57 +14972,6 @@
             "signal_types": [
               "DISCONFIRM"
             ]
-          }
-        ]
-      },
-      "ai_tools": {
-        "qualified": false,
-        "commercially_actionable": false,
-        "gap_score": 0,
-        "independent_domains": 0,
-        "strong_commercial_domains": 0,
-        "signal_types": [],
-        "domains": [],
-        "signals": [
-          {
-            "domain": "github.com",
-            "source": "github-issues-routed",
-            "title": "Agentic OS Conductor Log",
-            "url": "https://github.com/FreeForCharity/FFC-Cloudflare-Automation/issues/719",
-            "signal_types": [
-              "PAID_DEMAND"
-            ]
-          },
-          {
-            "domain": "sidenotepro.com",
-            "source": "hn-algolia-routed",
-            "title": "Show HN: SideNote Pro – Native Windows 11 AI beside your work",
-            "url": "https://sidenotepro.com/",
-            "signal_types": []
-          },
-          {
-            "domain": "news.ycombinator.com",
-            "source": "hackernews",
-            "title": "Show HN: PlaceCall (YC W26) – agentic API to call businesses and get things done",
-            "url": "https://news.ycombinator.com/item?id=49831231",
-            "signal_types": []
-          },
-          {
-            "domain": "news.ycombinator.com",
-            "source": "hackernews",
-            "title": "Karen Nikoghosyan Is Building AI Operating Layers for Multichannel Commerce",
-            "url": "https://news.ycombinator.com/item?id=49776683",
-            "signal_types": [
-              "COMPETITION",
-              "PAID_DEMAND"
-            ]
-          },
-          {
-            "domain": "github.com",
-            "source": "github-issues",
-            "title": "AI Agent Radar 周榜 · 2026-W39",
-            "url": "https://github.com/apiiskan/ai-agent-radar/issues/69",
-            "signal_types": []
           }
         ]
       },
@@ -15199,6 +15602,19 @@
       }
     ],
     "problem_performance": {
+      "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
+        "family": "manual_data_entry",
+        "last_domains": 1,
+        "last_strong_domains": 1,
+        "last_gap_score": 70,
+        "last_signal_types": [
+          "BUY_INTENT",
+          "PAID_DEMAND"
+        ],
+        "qualified": false,
+        "no_progress_streak": 0,
+        "near_gate": false
+      },
       "manual_data_entry:manual_data_entry": {
         "family": "manual_data_entry",
         "last_domains": 3,
@@ -15259,19 +15675,6 @@
         "last_signal_types": [],
         "qualified": false,
         "no_progress_streak": 1,
-        "near_gate": false
-      },
-      "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
-        "family": "manual_data_entry",
-        "last_domains": 1,
-        "last_strong_domains": 1,
-        "last_gap_score": 70,
-        "last_signal_types": [
-          "BUY_INTENT",
-          "PAID_DEMAND"
-        ],
-        "qualified": false,
-        "no_progress_streak": 0,
         "near_gate": false
       },
       "analytics_tools:business_intelligence": {
@@ -15341,62 +15744,10 @@
       "rows": 77,
       "changed": 3,
       "quarantined": 71,
-      "rejected_current": 6
+      "rejected_current": 39
     },
     "evidence_contract_schema_v": 1,
-    "observed_pain_candidates": [
-      {
-        "hypothesis_schema_v": 7,
-        "family": "manual_data_entry",
-        "customer": "teams experiencing the observed problem",
-        "job": "reduce repetitive manual work around manual data entry",
-        "pain": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, an",
-        "term": "manual data entry",
-        "search_aliases": [
-          "manual data entry",
-          "reduce repetitive manual work around manual data entry"
-        ],
-        "source_url": "https://itechdata.ai/manual-data-entry/",
-        "source_domain": "itechdata.ai",
-        "source_title": "What Is Manual Data Entry? Why Do Companies Still Use It?",
-        "source_query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
-        "source_role": "buyer",
-        "source": "brave-search",
-        "source_snippet": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, and many more.",
-        "relevance_score": 100,
-        "pain_markers": [
-          "manual"
-        ],
-        "buy_markers": [],
-        "paid_markers": [],
-        "evidence_contract": {
-          "schema_v": 1,
-          "actor": "teams experiencing the observed problem",
-          "process": "reduce repetitive manual work around manual data entry",
-          "pain": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, an",
-          "frequency": [],
-          "cost_or_impact": [],
-          "buyer_signal": [],
-          "source_fact": "Manual data entry is a significant day-to-day operation for companies across industries like education, medical, legal, architecture, real estate, restaurant, fashion, an",
-          "inference": "teams experiencing the observed problem may pay to solve reduce repetitive manual work around manual data entry because the source reports an operational pain.",
-          "confidence": 0.72,
-          "context_type": "operational",
-          "source_query": "manual data entry need help looking for pain point -site:github.com -site:reddit.com",
-          "skeptic": {
-            "passed": true,
-            "reasons": [],
-            "checks": {
-              "source_fact_present": true,
-              "fact_inference_separated": true,
-              "operational_pain_supported": true,
-              "process_grounded_in_source_fact": true,
-              "launch_customer_pain_supported": true
-            }
-          }
-        },
-        "priority": 73
-      }
-    ],
+    "observed_pain_candidates": [],
     "query_execution": {
       "planned": [
         {
@@ -15438,60 +15789,60 @@
           "intent_class": ""
         },
         {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
+          "sector": "developer_tools",
+          "family": "developer_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "data_cleanup",
-          "family": "data_cleanup",
+          "sector": "hr_ops",
+          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "small_business_admin",
-          "family": "workflow_automation",
+          "sector": "lead_ops",
+          "family": "crm_lead_ops",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "local_business_ops",
-          "family": "local_business_tools",
+          "sector": "content_ops",
+          "family": "content_tools",
           "query_intent": "pain",
           "intent_class": ""
         },
         {
-          "query": "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "productivity_tools",
-          "sector": "productivity",
-          "search_alias_used": "productivity tools"
+          "family": "marketing_seo",
+          "sector": "seo_marketing",
+          "search_alias_used": "marketing seo"
         },
         {
-          "query": "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ai_tools",
-          "sector": "ai_tools",
-          "search_alias_used": "ai tools"
+          "family": "ecommerce_tools",
+          "sector": "ecommerce_ops",
+          "search_alias_used": "ecommerce tools"
         }
       ],
       "executed": [
@@ -15536,65 +15887,65 @@
           "agent_search_completed": true
         },
         {
-          "query": "cybersecurity automation SMB (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "developer productivity tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "cybersecurity_ops",
-          "family": "cybersecurity_tools",
+          "sector": "developer_tools",
+          "family": "developer_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "data cleanup service (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "HR workflow automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "data_cleanup",
-          "family": "data_cleanup",
+          "sector": "hr_ops",
+          "family": "hr_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "small business admin automation (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "CRM follow up workflow (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "small_business_admin",
-          "family": "workflow_automation",
+          "sector": "lead_ops",
+          "family": "crm_lead_ops",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "appointment admin software (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
+          "query": "content repurposing tool (\"I need\" OR \"we are struggling\" OR \"looking for help\") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)",
           "class": "explore",
           "role": "discovery",
-          "sector": "local_business_ops",
-          "family": "local_business_tools",
+          "sector": "content_ops",
+          "family": "content_tools",
           "query_intent": "pain",
           "intent_class": "",
           "agent_search_completed": true
         },
         {
-          "query": "\"productivity tools\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
+          "query": "\"marketing seo\" (\"is there a tool\" OR \"looking for software\" OR \"any recommendations\")",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "solution_search",
-          "family": "productivity_tools",
-          "sector": "productivity",
-          "search_alias_used": "productivity tools",
+          "family": "marketing_seo",
+          "sector": "seo_marketing",
+          "search_alias_used": "marketing seo",
           "agent_search_completed": true
         },
         {
-          "query": "\"ai tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
+          "query": "\"ecommerce tools\" (\"hire someone to automate\" OR (\"budget\" AND automate))",
           "class": "desire",
           "role": "buyer",
           "query_intent": "desire",
           "intent_class": "paid_automation",
-          "family": "ai_tools",
-          "sector": "ai_tools",
-          "search_alias_used": "ai tools",
+          "family": "ecommerce_tools",
+          "sector": "ecommerce_ops",
+          "search_alias_used": "ecommerce tools",
           "agent_search_completed": true
         }
       ]
@@ -15618,23 +15969,23 @@
     "agent_trust_top": [
       {
         "agent": "The Korova Milk Bar",
-        "observations": 502,
-        "accepted": 502,
-        "transport_success": 502,
-        "relevance_total": 41562.0,
+        "observations": 503,
+        "accepted": 503,
+        "transport_success": 503,
+        "relevance_total": 41642.0,
         "avg_relevance": 82.79,
         "trust": 100.0,
         "stages": {
           "research": {
-            "observations": 500,
-            "accepted": 500,
-            "transport_success": 500,
-            "relevance_total": 41418.0,
-            "avg_relevance": 82.84,
+            "observations": 501,
+            "accepted": 501,
+            "transport_success": 501,
+            "relevance_total": 41498.0,
+            "avg_relevance": 82.83,
             "trust": 100.0,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 1,
@@ -15662,7 +16013,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       {
         "agent": "HORIZON SHIELD KIRA",
@@ -16079,23 +16430,23 @@
       },
       {
         "agent": "Scry Wallet Intelligence",
-        "observations": 948,
-        "accepted": 940,
-        "transport_success": 940,
-        "relevance_total": 103714.0,
-        "avg_relevance": 109.4,
-        "trust": 99.32,
+        "observations": 949,
+        "accepted": 941,
+        "transport_success": 941,
+        "relevance_total": 103830.0,
+        "avg_relevance": 109.41,
+        "trust": 99.33,
         "stages": {
           "research": {
-            "observations": 935,
-            "accepted": 927,
-            "transport_success": 927,
-            "relevance_total": 102400.0,
-            "avg_relevance": 109.52,
+            "observations": 936,
+            "accepted": 928,
+            "transport_success": 928,
+            "relevance_total": 102516.0,
+            "avg_relevance": 109.53,
             "trust": 99.32,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "security": {
             "observations": 11,
@@ -16123,27 +16474,27 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       },
       {
         "agent": "Flux · APEX on X1 & Arc",
-        "observations": 623,
-        "accepted": 613,
-        "transport_success": 613,
-        "relevance_total": 73132.0,
-        "avg_relevance": 117.39,
+        "observations": 624,
+        "accepted": 614,
+        "transport_success": 614,
+        "relevance_total": 73256.0,
+        "avg_relevance": 117.4,
         "trust": 98.72,
         "stages": {
           "research": {
-            "observations": 614,
-            "accepted": 601,
-            "transport_success": 604,
-            "relevance_total": 72120.0,
-            "avg_relevance": 117.46,
-            "trust": 98.4,
+            "observations": 615,
+            "accepted": 602,
+            "transport_success": 605,
+            "relevance_total": 72244.0,
+            "avg_relevance": 117.47,
+            "trust": 98.41,
             "last_quality_ok": true,
             "last_quality_reason": "accepted for research",
-            "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+            "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
           },
           "ui_ux": {
             "observations": 1,
@@ -16171,7 +16522,7 @@
         "last_stage": "research",
         "last_quality_ok": true,
         "last_quality_reason": "accepted",
-        "last_seen_utc": "2026-09-26T02:53:28.734814+00:00"
+        "last_seen_utc": "2026-09-26T10:47:31.490718+00:00"
       }
     ],
     "jarvis": {
