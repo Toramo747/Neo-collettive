@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Andrea Gava
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
+import neo_dialect
 import a2a_peer as peer_a2a
 import aicomglobal_adapter as aicomglobal
 import base64
@@ -128,7 +129,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.28"  # targeted competitor research and money-first market flow
+VERSION = "0.99.29"  # neo-dialect/1.0 integration
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -407,6 +408,8 @@ def _state_payload() -> dict:
         "agent_demand_observatory": AUTOPILOT_STATE.get("agent_demand_observatory") or {},
         "boundary_events": list(AUTOPILOT_STATE.get("boundary_events") or [])[-40:],
         "a2a_discovery": AUTOPILOT_STATE.get("a2a_discovery") or {},
+        "neo_dialect_peers": AUTOPILOT_STATE.get("neo_dialect_peers") or {},
+        "neo_dialect_events": list(AUTOPILOT_STATE.get("neo_dialect_events") or [])[-160:],
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
         "search_provider_state": AUTOPILOT_STATE.get("search_provider_state") or {},
@@ -514,6 +517,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         current.update(payload.get("a2a_discovery") or {})
         current["manifest_url"]=PUBLIC_BASE_URL+"/.well-known/agent-card.json"
         AUTOPILOT_STATE["a2a_discovery"]=current
+    if isinstance(payload.get("neo_dialect_peers"), dict):
+        AUTOPILOT_STATE["neo_dialect_peers"]=payload.get("neo_dialect_peers") or {}
+    if isinstance(payload.get("neo_dialect_events"), list):
+        AUTOPILOT_STATE["neo_dialect_events"]=[x for x in payload.get("neo_dialect_events")[-160:] if isinstance(x,dict)]
     if isinstance(payload.get("jarvis_dialogue_history"), list):
         AUTOPILOT_STATE["jarvis_dialogue_history"] = payload.get("jarvis_dialogue_history")[-12:]
     migration_changed = False
@@ -982,6 +989,14 @@ def _neo_agent_card() -> dict:
             "streaming":False,
             "pushNotifications":False,
             "extendedAgentCard":False,
+            "extensions":[
+                {
+                    "uri":PUBLIC_BASE_URL+"/neo-dialect/1.0",
+                    "description":"Optional neo-dialect/1.0 structured message format over standard A2A.",
+                    "required":False,
+                    "params":{"dialect_version":neo_dialect.DIALECT_VERSION},
+                }
+            ],
         },
         "securitySchemes":{},
         "securityRequirements":[],
@@ -1396,6 +1411,51 @@ async def a2a_agent_card(request: Request):
     return JSONResponse(_neo_agent_card())
 
 
+def _neo_dialect_inbound_reply(inbound_text: str, payload: dict, request: Request) -> str | None:
+    stripped=str(inbound_text or "").strip()
+    if not stripped.startswith("{") or "neo-dialect/1.0" not in stripped:
+        return None
+    sender=_a2a_sender(payload,request)
+    peer_key=str(sender.get("agent_id") or _a2a_thread_id(payload,sender) or "anonymous")[:500]
+    profiles=dict(AUTOPILOT_STATE.get("neo_dialect_peers") or {})
+    profile=dict(profiles.get(peer_key) or {})
+    checked=neo_dialect.validate_text(
+        stripped,
+        conversation_bytes=int(profile.get("conversation_bytes") or 0),
+    )
+    profile.update({
+        "peer":peer_key,
+        "handshake_at_utc":profile.get("handshake_at_utc") or datetime.now(timezone.utc).isoformat(),
+        "valid_messages":int(profile.get("valid_messages") or 0)+(1 if checked.get("ok") else 0),
+        "invalid_messages":int(profile.get("invalid_messages") or 0)+(0 if checked.get("ok") else 1),
+        "conversation_bytes":int(profile.get("conversation_bytes") or 0)+int(checked.get("bytes") or 0),
+    })
+    if not checked.get("ok"):
+        profile["handshake_outcome"]="REJECTED_"+str(checked.get("event") or "SCHEMA_INVALID")
+        _neo_dialect_record_event(peer_key,str(checked.get("event") or "SCHEMA_INVALID"),{"error":checked.get("error")})
+        profiles[peer_key]=profile
+        AUTOPILOT_STATE["neo_dialect_peers"]=profiles
+        conv=str((checked.get("data") or {}).get("conversation_id") or profile.get("conversation_id") or ("neo-"+secrets.token_hex(8)))
+        return json.dumps(neo_dialect.bye(conv,str(checked.get("event") or "SCHEMA_INVALID"),"rejected"),ensure_ascii=False,separators=(",",":"))
+    data=checked["data"]
+    profile["conversation_id"]=data["conversation_id"]
+    profile["negotiated_dialect"]=neo_dialect.DIALECT_VERSION
+    profile["handshake_outcome"]="INBOUND_VALID"
+    profile["onboarding_completed"]=True
+    profiles[peer_key]=profile
+    AUTOPILOT_STATE["neo_dialect_peers"]=profiles
+    _neo_dialect_record_event(peer_key,"VALID",{"type":data["type"]})
+    if data["type"]=="HELLO":
+        return json.dumps(
+            neo_dialect.capabilities(data["conversation_id"],"MYCELIX",["structured-a2a-exchange","public-evidence-review"]),
+            ensure_ascii=False,separators=(",",":"),
+        )
+    return json.dumps(
+        neo_dialect.bye(data["conversation_id"],"structured message recorded as data","completed"),
+        ensure_ascii=False,separators=(",",":"),
+    )
+
+
 async def a2a_endpoint(request: Request):
     try:
         payload=await request.json()
@@ -1422,6 +1482,27 @@ async def a2a_endpoint(request: Request):
         },status_code=404)
 
     inbound_text=_a2a_inbound_text(payload)
+    dialect_reply=_neo_dialect_inbound_reply(inbound_text,payload,request)
+    if dialect_reply is not None:
+        message_id="neo-dialect-reply-"+secrets.token_hex(8)
+        sender=_a2a_sender(payload,request)
+        context_id=_a2a_thread_id(payload,sender)
+        _save_local_state()
+        result={
+            "role":"agent",
+            "messageId":message_id,
+            "contextId":context_id,
+            "parts":([{"text":dialect_reply}] if requested_version=="1.0" else [{"kind":"text","text":dialect_reply}]),
+            "metadata":{
+                "neo_version":VERSION,
+                "a2a_version":requested_version,
+                "neo_dialect":neo_dialect.DIALECT_VERSION,
+                "treated_as":"untrusted_structured_data",
+            },
+        }
+        if requested_version=="0.3":
+            result["kind"]="message"
+        return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
     security_verdict=classify_inbound_security(inbound_text)
     if security_verdict.get("blocked"):
         event=_record_inbound_security_event(payload,request,security_verdict)
@@ -2487,14 +2568,109 @@ def _a2a_timeout(transport_name: str) -> httpx.Timeout:
     return httpx.Timeout(connect=connect,read=read,write=min(15.0,total),pool=min(10.0,total))
 
 
+def _neo_dialect_peer_key(agent: dict, interface: peer_a2a.Interface) -> str:
+    return str(agent.get("id") or agent.get("agent_id") or interface.url)[:500]
+
+
+def _neo_dialect_record_event(peer_key: str, event: str, detail: dict | None = None) -> None:
+    rows=list(AUTOPILOT_STATE.get("neo_dialect_events") or [])
+    rows.append({
+        "timestamp_utc":datetime.now(timezone.utc).isoformat(),
+        "peer":peer_key,
+        "event":event,
+        "detail":detail or {},
+    })
+    AUTOPILOT_STATE["neo_dialect_events"]=rows[-160:]
+
+
+async def _neo_dialect_handshake(agent: dict, interface: peer_a2a.Interface) -> tuple[dict,dict]:
+    prior=agent.get("_peer_context") if isinstance(agent.get("_peer_context"),dict) else {}
+    peer_key=_neo_dialect_peer_key(agent,interface)
+    profiles=dict(AUTOPILOT_STATE.get("neo_dialect_peers") or {})
+    profile=dict(profiles.get(peer_key) or {})
+    if agent.get("_neo_dialect_disabled"):
+        return prior,profile
+    if profile.get("onboarding_completed"):
+        return prior,profile
+
+    conv_id="neo-"+secrets.token_hex(8)
+    hello=neo_dialect.hello(conv_id,PUBLIC_BASE_URL+"/neo-dialect/1.0")
+    answer=await peer_a2a.exchange_peer(
+        interface,
+        json.dumps(hello,ensure_ascii=False,separators=(",",":")),
+        prior,
+        agent.get("_peer_budget"),
+    )
+    response_text=_response_text(answer)
+    validation=neo_dialect.validate_text(
+        response_text,
+        expected_type="CAPABILITIES",
+        expected_conversation_id=conv_id,
+        conversation_bytes=0,
+    )
+    adopted=bool(validation.get("ok"))
+    outcome="ADOPTED" if adopted else "FALLBACK_A2A"
+    profile.update({
+        "peer":peer_key,
+        "negotiated_dialect":neo_dialect.DIALECT_VERSION if adopted else "a2a-standard",
+        "handshake_outcome":outcome,
+        "handshake_at_utc":datetime.now(timezone.utc).isoformat(),
+        "onboarding_completed":True,
+        "conversation_id":conv_id,
+        "valid_messages":int(profile.get("valid_messages") or 0)+(1 if adopted else 0),
+        "invalid_messages":int(profile.get("invalid_messages") or 0)+(0 if adopted else 1),
+        "conversation_bytes":int(validation.get("bytes") or 0),
+        "fallback_activated":not adopted,
+        "last_error":None if adopted else str(validation.get("error") or answer.get("quality_reason") or answer.get("peer_state") or "handshake_not_confirmed")[:240],
+    })
+    profiles[peer_key]=profile
+    AUTOPILOT_STATE["neo_dialect_peers"]=profiles
+    _neo_dialect_record_event(peer_key,outcome,{
+        "validation_event":validation.get("event"),
+        "error":validation.get("error"),
+        "peer_state":answer.get("peer_state"),
+    })
+    return (answer.get("peer_context") if isinstance(answer.get("peer_context"),dict) else prior),profile
+
+
 async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     if agent.get("_peer_interface"):
         interface = peer_a2a.Interface(**agent["_peer_interface"])
+        prior,profile=await _neo_dialect_handshake(agent,interface)
+        outbound=question
+        if profile.get("negotiated_dialect")==neo_dialect.DIALECT_VERSION:
+            outbound=json.dumps(
+                neo_dialect.propose(
+                    str(profile.get("conversation_id") or ("neo-"+secrets.token_hex(8))),
+                    "peer-exchange",
+                    {"message":str(question)[:4000]},
+                    {"response":"structured neo-dialect/1.0 message"},
+                ),
+                ensure_ascii=False,separators=(",",":"),
+            )
         answer = await peer_a2a.exchange_peer(
-            interface, question, agent.get("_peer_context"), agent.get("_peer_budget")
+            interface, outbound, prior, agent.get("_peer_budget")
         )
         answer["agent"] = agent.get("name") or "SETI peer"
         answer["agent_id"] = agent.get("id") or agent.get("agent_id") or ""
+        answer["neo_dialect"]=dict(profile)
+        if profile.get("negotiated_dialect")==neo_dialect.DIALECT_VERSION:
+            peer_key=_neo_dialect_peer_key(agent,interface)
+            profiles=dict(AUTOPILOT_STATE.get("neo_dialect_peers") or {})
+            current=dict(profiles.get(peer_key) or profile)
+            checked=neo_dialect.validate_text(
+                _response_text(answer),
+                expected_conversation_id=current.get("conversation_id"),
+                conversation_bytes=int(current.get("conversation_bytes") or 0),
+            )
+            current["valid_messages"]=int(current.get("valid_messages") or 0)+(1 if checked.get("ok") else 0)
+            current["invalid_messages"]=int(current.get("invalid_messages") or 0)+(0 if checked.get("ok") else 1)
+            current["conversation_bytes"]=int(current.get("conversation_bytes") or 0)+int(checked.get("bytes") or 0)
+            profiles[peer_key]=current
+            AUTOPILOT_STATE["neo_dialect_peers"]=profiles
+            if not checked.get("ok"):
+                _neo_dialect_record_event(peer_key,str(checked.get("event") or "SCHEMA_INVALID"),{"error":checked.get("error")})
+            answer["neo_dialect"]=dict(current)
         if answer.get("quality_ok"):
             answer["quality_ok"], answer["quality_reason"] = _quality_check(answer, question)
         return answer
@@ -10007,7 +10183,8 @@ async def _seti_interview_one_candidate(max_interviews: int = 3) -> dict:
         answer=await _ask_a2a_transport(
             {"name":"SETI candidate "+key[:8],"url":endpoint,
              "_peer_interface":resolved["interface"],
-             "_peer_context":prior.get("peer_context"),"_peer_budget":peer_budget},
+             "_peer_context":prior.get("peer_context"),"_peer_budget":peer_budget,
+             "_neo_dialect_disabled":True},
             interview_prompt,
         )
         slot_used=bool(answer.get("post_started") or answer.get("delivery_unknown"))
