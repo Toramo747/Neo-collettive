@@ -6903,19 +6903,20 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
             diagnostics["github_issues"]["errors"].append((type(e).__name__+":"+str(e))[:240])
             return []
 
-    async def mcp_registry(family: str, term: str):
+    async def mcp_registry_batch():
         diagnostics["mcp_registry"]["requests"]+=1
         try:
             headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION}
-            async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=True,headers=headers) as client:
-                r=await client.get(MCP_REGISTRY+"/v0.1/servers",params={"search":term,"limit":4})
+            async with httpx.AsyncClient(timeout=max(min(TIMEOUT,25),20),follow_redirects=True,headers=headers) as client:
+                r=await client.get(MCP_REGISTRY+"/v0.1/servers",params={"limit":100})
                 if not r.is_success:
-                    diagnostics["mcp_registry"]["errors"].append(f"http_{r.status_code}:{term}"[:240])
+                    diagnostics["mcp_registry"]["errors"].append(f"http_{r.status_code}:catalog")
                     return []
                 data=r.json()
             items=(data.get("servers") or data.get("items") or data.get("data") or []) if isinstance(data,dict) else (data if isinstance(data,list) else [])
+            diagnostics["mcp_registry"]["records_read"]+=len(items)
             out=[]
-            for raw in items[:4]:
+            for raw in items[:100]:
                 obj=raw.get("server",raw) if isinstance(raw,dict) else {}
                 if not isinstance(obj,dict):
                     continue
@@ -6923,18 +6924,30 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
                 url=str(obj.get("websiteUrl") or repo.get("url") or obj.get("url") or "").strip()
                 if not url:
                     continue
+                title=str(obj.get("title") or obj.get("name") or "MCP server")
+                desc=str(obj.get("description") or "")
+                low=(title+" "+desc).lower()
+                matched=None
+                for term_row in terms:
+                    tokens=[x for x in re.findall(r"[a-z0-9]+",str(term_row["term"]).lower()) if x not in {"tool","saas","software","app","automation"}]
+                    if any(tok in low for tok in tokens):
+                        matched=term_row
+                        break
+                if not matched:
+                    continue
                 out.append({
-                    "family":family,
+                    "family":matched["family"],
                     "source":"mcp-registry",
-                    "query":term,
-                    "title":obj.get("title") or obj.get("name") or "MCP server",
+                    "query":matched["term"],
+                    "title":title,
                     "url":url,
-                    "text":obj.get("description") or "",
+                    "text":desc,
                     "date":obj.get("updatedAt") or obj.get("publishedAt"),
                 })
-            diagnostics["mcp_registry"]["records_read"]+=len(out)
+                if len(out)>=12:
+                    break
             if items and not out:
-                diagnostics["mcp_registry"]["errors"].append("parser:no_public_url_in_registry_records")
+                diagnostics["mcp_registry"]["errors"].append("parser:no_relevant_public_registry_records")
             return out
         except Exception as e:
             diagnostics["mcp_registry"]["errors"].append((type(e).__name__+":"+str(e))[:240])
@@ -6942,7 +6955,7 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
 
     gh,mcp_rows=await asyncio.gather(
         asyncio.gather(*(github(x["family"],x["term"]) for x in terms)),
-        asyncio.gather(*(mcp_registry(x["family"],x["term"]) for x in terms)),
+        mcp_registry_batch(),
     )
     for key in ("github_issues","mcp_registry"):
         if diagnostics[key]["records_read"]==0 and not diagnostics[key]["errors"]:
@@ -6951,7 +6964,7 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
 
     out=[]
     seen=set()
-    for batch in list(gh)+list(mcp_rows):
+    for batch in list(gh)+[mcp_rows]:
         for item in batch:
             key=str(item.get("url") or "")
             if not key or key in seen:
@@ -10516,7 +10529,7 @@ async def _autopilot_loop() -> None:
 
 
 async def api_run_market_cycles(request: Request):
-    """Authenticated bounded validation runner; never bypasses commercial/payment guardrails."""
+    """Authenticated bounded validation runner; waits for an active cycle and never bypasses gates."""
     if HEARTBEAT_TOKEN:
         supplied=(request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or "").strip()
         if supplied != HEARTBEAT_TOKEN:
@@ -10525,23 +10538,42 @@ async def api_run_market_cycles(request: Request):
         requested=max(1,min(int(request.query_params.get("count") or "1"),3))
     except ValueError:
         requested=1
+
+    async def wait_idle(max_seconds: int = 180) -> bool:
+        deadline=asyncio.get_running_loop().time()+max_seconds
+        while AUTOPILOT_LOCK.locked() and asyncio.get_running_loop().time()<deadline:
+            await asyncio.sleep(1)
+        return not AUTOPILOT_LOCK.locked()
+
     before=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    executed=0
+    errors=[]
     for _ in range(requested):
+        if not await wait_idle():
+            errors.append("autopilot_busy_timeout")
+            break
+        cycle_before=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
         await _autopilot_cycle()
+        cycle_after=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+        if cycle_after<=cycle_before:
+            errors.append("cycle_did_not_advance")
+            break
+        executed+=cycle_after-cycle_before
     after=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
     data=AUTOPILOT_STATE.get("tool_opportunities") or {}
     return JSONResponse({
-        "ok":True,
+        "ok":executed==requested,
         "neo_version":VERSION,
         "requested":requested,
         "cycles_completed_before":before,
         "cycles_completed_after":after,
-        "cycles_executed":max(0,after-before),
+        "cycles_executed":executed,
+        "errors":errors,
         "quality_gate":bool(data.get("top_gate_pass")),
         "source_coverage":data.get("source_coverage") or {},
         "top5":data.get("top5") or [],
         "council_transcripts":data.get("council_transcripts") or [],
-    })
+    },status_code=200 if executed==requested else 409)
 
 
 async def api_council(request: Request):
