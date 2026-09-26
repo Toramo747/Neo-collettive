@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Andrea Gava
 import unittest
 
-from tool_opportunity import analyze_tool_opportunities, seti_market_catalog
+from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog
 
 
 class ToolOpportunityTests(unittest.TestCase):
@@ -292,6 +292,16 @@ class ToolOpportunityTests(unittest.TestCase):
             self.assertTrue(thesis["target_user"])
             self.assertGreaterEqual(thesis["feasibility"]["estimated_build_days"],1)
             self.assertNotIn(thesis["title"],{"AI / agent utility","Developer workflow tool","API / integration tool"})
+
+    def test_money_first_plan_targets_only_missing_competitors(self):
+        rows=competitor_money_first_plan([
+            {"family":"ai_tools","missing":["two_competitors_with_real_price"]},
+            {"family":"developer_tools","missing":[]},
+        ],6)
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(x["family"]=="ai_tools" for x in rows))
+        self.assertTrue(all(x["role"]=="competitor_pricing" for x in rows))
+        self.assertTrue(all(x["query_intent"]=="money_first_competitor_price" for x in rows))
 
     def test_source_coverage_reports_zero_and_errors(self):
         result=analyze_tool_opportunities(

@@ -203,6 +203,44 @@ def market_query_plan(cycle: int, count: int = 10) -> list[dict]:
     return rows[:max(4,min(int(count or 10),10))]
 
 
+def competitor_money_first_plan(opportunities: list[dict] | None, count: int = 6) -> list[dict]:
+    """Target only theses still missing independent real-price competitors.
+
+    This changes discovery order, never the commercial gate.
+    """
+    rows=[]
+    seen=set()
+    blockers={"two_independent_real_price_competitors","two_competitors_with_real_price","two_existing_paid_tools"}
+    for opp in opportunities or []:
+        if not isinstance(opp,dict):
+            continue
+        family=str(opp.get("family") or "")
+        if family not in CATEGORY_CONFIGS or family in seen:
+            continue
+        missing=set(str(x) for x in (opp.get("missing") or []))
+        if not (missing & blockers):
+            continue
+        seen.add(family)
+        cfg=CATEGORY_CONFIGS[family]
+        alias=str((cfg.get("aliases") or [cfg["title"]])[0])
+        title=str(cfg["title"])
+        for query in (
+            f'"{alias}" alternatives pricing',
+            f'"{alias}" competitors "starts at"',
+        ):
+            rows.append({
+                "query":query,
+                "class":"tool_market",
+                "role":"competitor_pricing",
+                "family":family,
+                "tool_name":title,
+                "query_intent":"money_first_competitor_price",
+            })
+            if len(rows)>=max(1,min(int(count or 6),10)):
+                return rows
+    return rows
+
+
 def market_scout_terms(cycle: int, count: int = 6) -> list[dict]:
     plan=market_query_plan(cycle,10)
     out=[]

@@ -36,6 +36,7 @@ from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
     analyze_tool_opportunities,
     market_query_plan,
+    competitor_money_first_plan,
     market_scout_terms,
     opportunity_candidate,
     seti_market_catalog,
@@ -127,7 +128,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.27"  # source coverage, specific-tool gate, independent real-price evidence
+VERSION = "0.99.28"  # targeted competitor research and money-first market flow
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -7991,6 +7992,28 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             ]
 
     web_research = await bounded_web_research()
+
+    # v0.99.28 money-first second pass: use the remaining public-search budget
+    # only on theses still missing two independent real-price competitors.
+    prior_top5=((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("top5") or [])
+    money_plan=competitor_money_first_plan(prior_top5,6)
+    if money_plan:
+        money_meta={
+            " ".join(str(x.get("query") or "").split()).lower():x
+            for x in money_plan if isinstance(x,dict) and str(x.get("query") or "").strip()
+        }
+        money_groups=await _free_web_research(
+            [x["query"] for x in money_plan],
+            per_query=6,
+            query_meta=money_meta,
+        )
+        web_research.extend(money_groups)
+        query_meta.update(money_meta)
+        search_strategy["money_first_queries"]=money_plan
+        search_strategy["queries"].extend([x["query"] for x in money_plan])
+        search_strategy["planned_query_count"]=len(search_strategy["queries"])
+        search_strategy["policy"]="money-first: verify real competitor pricing before broader market activity; no login scraping; no payment"
+
     source_diagnostics=dict(AUTOPILOT_STATE.get("market_source_diagnostics") or {})
     for key in ("pricing_pages","product_hunt","extension_marketplaces"):
         source_diagnostics.setdefault(key,{"requests":0,"records_read":0,"errors":[]})
@@ -8000,7 +8023,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         q=" ".join(str(group.get("query") or "").split()).lower()
         meta=query_meta.get(q) or {}
         role=str(meta.get("role") or "")
-        key="pricing_pages" if role=="tool_pricing" else "product_hunt" if role=="product_hunt" else "extension_marketplaces" if role=="extension_marketplace" else ""
+        key="pricing_pages" if role in {"tool_pricing","competitor_pricing"} else "product_hunt" if role=="product_hunt" else "extension_marketplaces" if role=="extension_marketplace" else ""
         if not key:
             continue
         source_diagnostics[key]["requests"]+=1
