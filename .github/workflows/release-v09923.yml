@@ -19,7 +19,25 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
+      - name: Ensure this is the latest release-relevant deploy
+        id: freshness
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          latest="$(git log -1 --format=%H origin/main -- cloud_mcp.py mcp_endpoint_verifier.py server.json)"
+          echo "target_sha=${TARGET_SHA}"
+          echo "latest_release_relevant_sha=${latest}"
+          if [ "${TARGET_SHA}" != "${latest}" ]; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            echo "A newer release-relevant commit exists; skip this stale deploy release."
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Resolve release version from source
+        if: steps.freshness.outputs.skip != 'true'
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -37,6 +55,7 @@ jobs:
           PY
 
       - name: Create tag and GitHub release
+        if: steps.freshness.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -53,6 +72,7 @@ jobs:
             --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
 
       - name: Publish current version to official MCP Registry
+        if: steps.freshness.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
