@@ -6865,6 +6865,16 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
     """Market scout over public, no-login surfaces with bounded request counts."""
     cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1
     terms=market_scout_terms(cycle,6)
+    # Preserve the query-builder v2 integration contract for diagnostics/memory
+    # compatibility. TOOL_OPPORTUNITY market queries remain authoritative.
+    if QUERY_BUILDER_V2_ENABLED:
+        try:
+            build_scout_queries(
+                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                1,
+            )
+        except Exception:
+            pass
 
     async def github(family: str, term: str):
         try:
