@@ -303,6 +303,23 @@ class ToolOpportunityTests(unittest.TestCase):
         self.assertTrue(all(x["role"]=="competitor_pricing" for x in rows))
         self.assertTrue(all(x["query_intent"]=="money_first_competitor_price" for x in rows))
 
+    def test_mcp_reliability_thesis_registered_without_changing_gate(self):
+        result=analyze_tool_opportunities([],[],[],{},"2026-09-26T12:00:00+00:00")
+        rows=[x for x in result["top5"] if x["family"]=="mcp_reliability"]
+        if not rows:
+            # Top5 is rank-limited; inspect direct empty analysis by reusing the public
+            # category through its generated query plan in a separate assertion below.
+            from tool_opportunity import CATEGORY_CONFIGS, market_query_plan
+            self.assertIn("mcp_reliability",CATEGORY_CONFIGS)
+            self.assertEqual(
+                CATEGORY_CONFIGS["mcp_reliability"]["title"],
+                "MCP Registry Liveness & Conformance Verifier",
+            )
+            self.assertTrue(any(x.get("family")=="mcp_reliability" for x in market_query_plan(0,10)+market_query_plan(5,10)))
+        else:
+            self.assertFalse(rows[0]["gate_pass"])
+            self.assertIn("two_independent_real_price_competitors",rows[0]["missing"])
+
     def test_source_coverage_reports_zero_and_errors(self):
         result=analyze_tool_opportunities(
             [],[],[],{},"2026-09-26T12:00:00+00:00",
