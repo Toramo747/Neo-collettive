@@ -102,10 +102,10 @@ def normalize_registry_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         packages = [x for x in (server.get("packages") or []) if isinstance(x, dict)]
         if remotes:
             access_class = "remote"
-        elif packages:
-            access_class = "package_only"
         elif other_remotes:
             access_class = "remote_unverifiable_transport"
+        elif packages:
+            access_class = "package_only"
         else:
             access_class = "metadata_only"
         normalized.append({

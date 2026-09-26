@@ -36,12 +36,14 @@ class RegistryHealthListingTests(unittest.TestCase):
             row("d/deprecated", status="deprecated", remotes=[{"type":"streamable-http","url":"https://d.example/mcp"}]),
             row("e/sse", remotes=[{"type":"sse","url":"https://e.example/sse"}]),
             row("f/meta"),
+            row("g/sse-plus-package", remotes=[{"type":"sse","url":"https://g.example/sse"}], packages=[{"registryType":"npm","identifier":"g"}]),
         ])
         by_name={x["name"]:x for x in rows}
-        self.assertEqual(set(by_name), {"a/remote","b/pkg","e/sse","f/meta"})
+        self.assertEqual(set(by_name), {"a/remote","b/pkg","e/sse","f/meta","g/sse-plus-package"})
         self.assertEqual(by_name["a/remote"]["access_class"], "remote")
         self.assertEqual(by_name["b/pkg"]["access_class"], "package_only")
         self.assertEqual(by_name["e/sse"]["access_class"], "remote_unverifiable_transport")
+        self.assertEqual(by_name["g/sse-plus-package"]["access_class"], "remote_unverifiable_transport")
         self.assertEqual(by_name["f/meta"]["access_class"], "metadata_only")
 
     def test_opt_out_matches_exact_name_or_remote(self):
