@@ -140,9 +140,26 @@ jobs:
           print(json.dumps({"snapshot_utc":"$snapshot_utc"}))
           PY
           )"
-          if [ -n "${HEARTBEAT_TOKEN}" ]; then
-            curl --fail --silent --show-error --retry 3 --retry-delay 3 --max-time 30               -X POST -H "Content-Type: application/json"               -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}"               --data "${payload}"               "https://neo-collettive.onrender.com/api/runtime/snapshot-published"
-          else
-            echo "NEO_HEARTBEAT_TOKEN not configured; cannot persist snapshot freshness" >&2
-            exit 2
-          fi
+          for attempt in $(seq 1 18); do
+            if [ -n "${HEARTBEAT_TOKEN}" ]; then
+              code="$(curl --silent --show-error --max-time 30 -o /tmp/snapshot-published.json -w '%{http_code}' \
+                -X POST -H "Content-Type: application/json" \
+                -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
+                --data "${payload}" \
+                "https://neo-collettive.onrender.com/api/runtime/snapshot-published" || true)"
+            else
+              code="$(curl --silent --show-error --max-time 30 -o /tmp/snapshot-published.json -w '%{http_code}' \
+                -X POST -H "Content-Type: application/json" \
+                --data "${payload}" \
+                "https://neo-collettive.onrender.com/api/runtime/snapshot-published" || true)"
+            fi
+            if [ "${code}" = "200" ]; then
+              cat /tmp/snapshot-published.json
+              exit 0
+            fi
+            echo "snapshot freshness endpoint returned HTTP ${code}; retry ${attempt}/18"
+            sleep 10
+          done
+          echo "Could not record snapshot freshness after deployment grace period" >&2
+          cat /tmp/snapshot-published.json || true
+          exit 1

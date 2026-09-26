@@ -46,6 +46,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: neo-render-deploy
@@ -296,6 +297,76 @@ jobs:
               raise SystemExit("public registry advertisement not enabled")
           print("A2A v1 discovery surface smoke test passed")
           PY
+
+      - name: Verify post-deploy SETI retry
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          for i in $(seq 1 30); do
+            curl --fail --silent --show-error --max-time 30 \
+              "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/seti-status.json
+            if EXPECTED="$expected" python - <<'PY'
+          import json,os,sys
+          d=json.load(open("/tmp/seti-status.json",encoding="utf-8"))
+          s=((d.get("autopilot") or {}).get("seti") or {}).get("last_summary") or {}
+          ok=(
+              str(d.get("neo_version") or "")==os.environ["EXPECTED"]
+              and bool(s.get("engine_upgrade_retry"))
+              and bool(s.get("ready_now_computed_at"))
+          )
+          if ok:
+              print(json.dumps({
+                  "interview_ready_now":s.get("interview_ready_now"),
+                  "ready_now_computed_at":s.get("ready_now_computed_at"),
+                  "blocked_auth":s.get("blocked_auth"),
+                  "in_cooldown":s.get("in_cooldown"),
+                  "attempted_this_cycle":s.get("attempted_this_cycle"),
+                  "last_interview_status":s.get("last_interview_status"),
+                  "failure_reason_counts":s.get("interview_failure_reason_counts"),
+                  "admitted_count":s.get("interview_admitted_count"),
+              },ensure_ascii=False,indent=2))
+              sys.exit(0)
+          sys.exit(1)
+          PY
+            then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "SETI engine-upgrade retry telemetry not observed" >&2
+              cat /tmp/seti-status.json
+              exit 8
+            fi
+            sleep 10
+          done
+          curl --fail --silent --show-error --max-time 30 \
+            "https://neo-collettive.onrender.com/api/seti/interviews" > /tmp/seti-interviews.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/seti-interviews.json",encoding="utf-8"))
+          rows=d.get("interviews") or []
+          print(json.dumps({
+              "neo_version":d.get("neo_version"),
+              "interviews":[{
+                  "candidate":x.get("candidate"),
+                  "status":x.get("status"),
+                  "attempts":x.get("attempts"),
+                  "http_status":x.get("http_status"),
+                  "peer_state":x.get("peer_state"),
+                  "reason":x.get("reason"),
+                  "quality_reason":x.get("quality_reason"),
+                  "followup_state":x.get("followup_state"),
+                  "admitted":x.get("admitted"),
+              } for x in rows[-8:]]
+          },ensure_ascii=False,indent=2))
+          PY
+
+      - name: Dispatch fresh Jarvis snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run jarvis-runtime-snapshot-v2.yml --ref main
+          echo "Jarvis runtime snapshot workflow dispatched"
 
       - name: Roll back failed application commit
         if: failure()

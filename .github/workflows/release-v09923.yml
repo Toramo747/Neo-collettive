@@ -1,0 +1,43 @@
+name: Release v0.99.23
+
+on:
+  workflow_run:
+    workflows: ["NEO Render Deploy"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Verify release version
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          s=open("cloud_mcp.py",encoding="utf-8").read()
+          m=re.search(r'^VERSION = "([^"]+)"',s,re.M)
+          if not m or m.group(1)!="0.99.23":
+              raise SystemExit("not the v0.99.23 release commit")
+          PY
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if gh release view v0.99.23 >/dev/null 2>&1; then
+            echo "v0.99.23 release already exists"
+            exit 0
+          fi
+          gh release create v0.99.23 \
+            --target "${TARGET_SHA}" \
+            --title "v0.99.23" \
+            --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
