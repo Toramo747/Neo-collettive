@@ -153,23 +153,31 @@ jobs:
           if not match:
               sys.exit(1)
           status=str(match.get("status") or "")
+          commit=((match.get("commit") or {}).get("id") or "")
+          expected_sha=os.environ.get("GITHUB_SHA","")
           print("render_deploy_status="+status)
+          print("render_deploy_commit="+str(commit))
           if status in {"build_failed","update_failed","canceled","cancelled"}:
               print(json.dumps(match,ensure_ascii=False,default=str))
               sys.exit(20)
+          if status!="live" or str(commit)!=expected_sha:
+              sys.exit(1)
           sys.exit(0)
           PY
               then
-                :
+                render_ready=1
               else
+                render_ready=0
                 rc=$?
                 if [ "$rc" -eq 20 ]; then
                   echo "Render marked deploy $deploy_id as failed before health changed." >&2
                   exit 7
                 fi
               fi
+            else
+              render_ready=0
             fi
-            if curl --fail --silent --show-error --max-time 30 \
+            if [ "$render_ready" -eq 1 ] && curl --fail --silent --show-error --max-time 30 \
               "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
               cat /tmp/health.json
               if EXPECTED="$expected" python - <<'PY'
@@ -184,7 +192,7 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
               then
-                echo "NEO v$expected is live"
+                echo "NEO v$expected is live on commit $GITHUB_SHA"
                 exit 0
               fi
             fi
