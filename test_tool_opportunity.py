@@ -216,5 +216,72 @@ class ToolOpportunityTests(unittest.TestCase):
 
 
 
+    def test_seti_payment_required_is_one_signal_not_real_price_competitor(self):
+        catalog=[{
+            "candidate":"SETI-959e9e41",
+            "url":"https://aion-agent-core-live.onrender.com/a2a/v1",
+            "observed_at_utc":"2026-09-26T09:58:15+00:00",
+            "category":"ai_tools",
+            "capabilities":["Commercial capability requires payment before execution."],
+            "pricing_model":"PAYMENT_REQUIRED",
+            "http_status":200,
+            "payment_performed":False,
+        }]
+        result=analyze_tool_opportunities([],[],catalog,{},"2026-09-26T12:00:00+00:00")
+        ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
+        self.assertEqual(len(ai["payment_signals"]),1)
+        self.assertEqual(ai["payment_signals"][0]["price"],"PAYMENT_REQUIRED")
+        self.assertEqual(ai["existing_tools"],[])
+        self.assertFalse(ai["gate_pass"])
+        self.assertIn("two_competitors_with_real_price",ai["missing"])
+
+    def test_same_host_multiple_agent_cards_count_as_one_payment_seller(self):
+        catalog=[
+            {
+                "candidate":"SETI-a",
+                "url":"https://vendor.example/a2a/one",
+                "observed_at_utc":"2026-09-26T10:00:00+00:00",
+                "category":"ai_tools",
+                "capabilities":["Diagnostic starts at USD 49."],
+                "pricing_model":"FREE_OR_UNPRICED",
+                "http_status":200,
+                "payment_performed":False,
+            },
+            {
+                "candidate":"SETI-b",
+                "url":"https://vendor.example/a2a/two",
+                "observed_at_utc":"2026-09-26T10:01:00+00:00",
+                "category":"ai_tools",
+                "capabilities":["Repair starts at USD 99."],
+                "pricing_model":"FREE_OR_UNPRICED",
+                "http_status":200,
+                "payment_performed":False,
+            },
+        ]
+        result=analyze_tool_opportunities([],[],catalog,{},"2026-09-26T12:00:00+00:00")
+        ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
+        self.assertEqual(len(ai["existing_tools"]),1)
+        self.assertFalse(ai["gate_pass"])
+        self.assertIn("two_independent_payment_signals",ai["missing"])
+
+    def test_thesis_is_specific_and_has_target_user_build_days(self):
+        result=analyze_tool_opportunities([],[],[],{},"2026-09-26T12:00:00+00:00")
+        for thesis in result["top5"]:
+            self.assertTrue(thesis["tool_name"])
+            self.assertTrue(thesis["target_user"])
+            self.assertGreaterEqual(thesis["feasibility"]["estimated_build_days"],1)
+            self.assertNotIn(thesis["title"],{"AI / agent utility","Developer workflow tool","API / integration tool"})
+
+    def test_source_coverage_reports_zero_and_errors(self):
+        result=analyze_tool_opportunities(
+            [],[],[],{},"2026-09-26T12:00:00+00:00",
+            source_diagnostics={"mcp_registry":{"errors":["http_503:test"]}}
+        )
+        coverage=result["source_coverage"]
+        self.assertEqual(coverage["mcp_registry"]["records_read"],0)
+        self.assertEqual(coverage["mcp_registry"]["errors"],["http_503:test"])
+        self.assertEqual(coverage["seti"]["records_read"],0)
+
+
 if __name__=="__main__":
     unittest.main()
