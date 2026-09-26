@@ -1,0 +1,50 @@
+name: Verify v0.99.17 runtime state
+
+on:
+  push:
+    branches: [verify-v09917-runtime]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Poll production status read-only
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            curl -fsS --max-time 20 https://neo-collettive.onrender.com/api/autopilot/status > /tmp/status.json || true
+            python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path("/tmp/status.json")
+          if not p.exists() or not p.read_text().strip():
+              print("status=unavailable")
+              raise SystemExit(2)
+          d=json.loads(p.read_text())
+          ap=d.get("autopilot") or {}
+          s=ap.get("seti") or {}
+          sm=s.get("last_summary") or {}
+          print("neo_version="+str(d.get("neo_version")))
+          print("cycles_completed="+str(ap.get("cycles_completed")))
+          print("running="+str(ap.get("running")))
+          print("last_finished_utc="+str(ap.get("last_finished_utc")))
+          print("seti_engine_version="+str(s.get("engine_version")))
+          print("aicomglobal_status="+str(sm.get("aicomglobal_status")))
+          print("aicomglobal_attempted="+str(sm.get("aicomglobal_attempted")))
+          print("aicomglobal_candidates="+str(sm.get("aicomglobal_candidates")))
+          print("aicomglobal_sources="+json.dumps(sm.get("aicomglobal_candidate_sources") or {},sort_keys=True))
+          print("peer_registry_count="+str(sm.get("peer_registry_count")))
+          print("peer_registry_status_counts="+json.dumps(sm.get("peer_registry_status_counts") or {},sort_keys=True))
+          ready=(str(d.get("neo_version"))=="0.99.17" and int(s.get("engine_version") or 0)>=15 and "aicomglobal_status" in sm)
+          raise SystemExit(0 if ready else 3)
+          PY
+            rc=$?
+            if [ "$rc" -eq 0 ]; then exit 0; fi
+            sleep 12
+          done
+          echo "v0.99.17 SETI/AICOMGLOBAL state did not become observable" >&2
+          exit 1
