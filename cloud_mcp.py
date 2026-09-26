@@ -10056,6 +10056,19 @@ async def _seti_cycle_if_due() -> dict | None:
             if bounded_active
             else {"attempted":False,"attempted_count":0,"admitted":False,"admitted_count":0,"parked_count":0,"status":"PASSIVE_POLICY","results":[]}
         )
+        attempted_keys={
+            str(x.get("candidate_key"))
+            for x in (interview_result.get("results") or [])
+            if isinstance(x,dict) and x.get("candidate_key")
+        }
+        readiness_summary=summarize_interview_readiness(
+            SETI_PRIVATE_STATE.get("candidates") or {},
+            SETI_PRIVATE_STATE.get("interviews") or {},
+            SETI_PRIVATE_STATE.get("admitted") or {},
+            datetime.now(timezone.utc).isoformat(),
+            SETI_FOLLOWUP_MIN_SECONDS,
+            attempted_keys=attempted_keys,
+        )
         private_checkpoint=await _checkpoint_seti_private_to_render()
         full_safety={
             "target_http_requests":bool(interview_result.get("target_request_attempts")),
@@ -10158,6 +10171,10 @@ async def _seti_cycle_if_due() -> dict | None:
                 "eligibility_reason_counts":eligibility_summary.get("reason_counts") or {},
                 "high_interest_eligibility_reason_counts":eligibility_summary.get("high_interest_reason_counts") or {},
                 "interview_ready_now":readiness_summary.get("ready_now",0),
+                "ready_now_computed_at":readiness_summary.get("ready_now_computed_at"),
+                "blocked_auth":readiness_summary.get("blocked_auth") or [],
+                "in_cooldown":readiness_summary.get("in_cooldown") or [],
+                "attempted_this_cycle":readiness_summary.get("attempted_this_cycle") or [],
                 "interview_readiness_reason_counts":readiness_summary.get("reason_counts") or {},
                 "interview_attempted":bool(interview_result.get("attempted")),
                 "last_interview_status":interview_result.get("status"),
@@ -10224,7 +10241,26 @@ async def _autopilot_cycle() -> None:
                     private_checkpoint=await _checkpoint_seti_private_to_render()
                     seti_state=dict(AUTOPILOT_STATE.get("seti") or {})
                     summary=dict(seti_state.get("last_summary") or {})
+                    retry_attempted_keys={
+                        str(x.get("candidate_key"))
+                        for x in (retry_result.get("results") or [])
+                        if isinstance(x,dict) and x.get("candidate_key")
+                    }
+                    retry_readiness=summarize_interview_readiness(
+                        SETI_PRIVATE_STATE.get("candidates") or {},
+                        SETI_PRIVATE_STATE.get("interviews") or {},
+                        SETI_PRIVATE_STATE.get("admitted") or {},
+                        datetime.now(timezone.utc).isoformat(),
+                        SETI_FOLLOWUP_MIN_SECONDS,
+                        attempted_keys=retry_attempted_keys,
+                    )
                     summary.update({
+                        "interview_ready_now":retry_readiness.get("ready_now",0),
+                        "ready_now_computed_at":retry_readiness.get("ready_now_computed_at"),
+                        "blocked_auth":retry_readiness.get("blocked_auth") or [],
+                        "in_cooldown":retry_readiness.get("in_cooldown") or [],
+                        "attempted_this_cycle":retry_readiness.get("attempted_this_cycle") or [],
+                        "engine_upgrade_retry_readiness":True,
                         "interview_attempted":bool(retry_result.get("attempted")),
                         "last_interview_status":retry_result.get("status"),
                         "interview_attempted_count":retry_result.get("attempted_count",0),

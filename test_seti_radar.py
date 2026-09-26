@@ -491,6 +491,47 @@ class SetiRadarTests(unittest.TestCase):
         self.assertGreater(rows2[0]["agent_likelihood_score"],60)
 
 
+    def test_readiness_recomputed_after_auth_block_and_cooldown(self):
+        now="2026-09-26T08:00:00+00:00"
+        candidates={
+            "auth-peer":{
+                "classification":"INTERESTING","max_score":80,
+                "url":"https://auth.example.ai/.well-known/agent-card.json",
+            },
+            "cool-peer":{
+                "classification":"INTERESTING","max_score":80,
+                "url":"https://cool.example.ai/.well-known/agent-card.json",
+            },
+        }
+        initial=summarize_interview_readiness(candidates,{}, {}, now,3600)
+        self.assertEqual(initial["ready_now"],2)
+
+        interviews={
+            "auth-peer":{
+                "status":"PARKED","attempts":1,"reason":"AUTH_REQUIRED",
+                "followup_state":"AUTH_BLOCKED","last_attempt_utc":now,
+            },
+            "cool-peer":{
+                "status":"PARKED","attempts":1,"reason":"JSON_RESPONSE_REQUIRED",
+                "followup_state":"RETRY_TRANSPORT","last_attempt_utc":now,
+            },
+        }
+        after=summarize_interview_readiness(
+            candidates,interviews,{}, "2026-09-26T08:10:00+00:00",3600
+        )
+        self.assertEqual(after["ready_now"],0)
+        self.assertEqual(after["blocked_auth"],["auth-peer"])
+        self.assertEqual(after["in_cooldown"][0]["candidate"],"cool-peer")
+        self.assertEqual(after["in_cooldown"][0]["cooldown_until"],"2026-09-26T09:00:00+00:00")
+        self.assertTrue(after["ready_now_computed_at"])
+
+        attempted=summarize_interview_readiness(
+            candidates,{}, {}, now,3600,attempted_keys={"auth-peer","cool-peer"}
+        )
+        self.assertEqual(attempted["ready_now"],0)
+        self.assertEqual(set(attempted["attempted_this_cycle"]),{"auth-peer","cool-peer"})
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, unquote
 from typing import Any, Awaitable, Callable
 
@@ -1105,24 +1105,71 @@ def seti_candidate_attempt_state(candidate: dict, prior: dict | None, now_utc: s
     }
 
 
-def summarize_interview_readiness(candidates: dict, interviews: dict, admitted: dict, now_utc: str, min_seconds: int = 3600) -> dict:
-    """Non-sensitive readiness summary for public runtime telemetry."""
+def summarize_interview_readiness(
+    candidates: dict,
+    interviews: dict,
+    admitted: dict,
+    now_utc: str,
+    min_seconds: int = 3600,
+    attempted_keys: set[str] | None = None,
+) -> dict:
+    """Recompute non-sensitive interview readiness at selection time."""
     counts={}
     ready=0
     eligible=0
+    blocked_auth=[]
+    in_cooldown=[]
+    attempted_this_cycle=[]
+    attempted={str(x) for x in (attempted_keys or set())}
+    try:
+        now=datetime.fromisoformat(str(now_utc).replace("Z","+00:00")).astimezone(timezone.utc)
+    except Exception:
+        now=datetime.now(timezone.utc)
+
     for key,candidate in (candidates or {}).items():
         if not isinstance(candidate,dict):
             continue
+        skey=str(key)
         prior=(interviews or {}).get(key) if isinstance((interviews or {}).get(key),dict) else {}
-        state=seti_candidate_attempt_state(candidate,prior,now_utc,min_seconds)
-        if state.get("eligibility_reason") or state.get("reason")!="ineligible":
-            if interview_candidate_eligibility(candidate).get("eligible"):
-                eligible += 1
+        eligibility=interview_candidate_eligibility(candidate)
+        if eligibility.get("eligible"):
+            eligible += 1
+
+        if skey in attempted:
+            state={"ready":False,"reason":"attempted_this_cycle"}
+            attempted_this_cycle.append(skey)
+        else:
+            state=seti_candidate_attempt_state(candidate,prior,now_utc,min_seconds)
+
         reason=str(state.get("reason") or "unknown")
         counts[reason]=counts.get(reason,0)+1
         if state.get("ready"):
             ready += 1
-    return {"eligible":eligible,"ready_now":ready,"reason_counts":dict(sorted(counts.items()))}
+            continue
+
+        if reason=="auth_required":
+            blocked_auth.append(skey)
+        elif reason=="rate_limited":
+            last=str(prior.get("last_attempt_utc") or prior.get("interviewed_at_utc") or "").strip()
+            cooldown_until=None
+            if last:
+                try:
+                    then=datetime.fromisoformat(last.replace("Z","+00:00")).astimezone(timezone.utc)
+                    seconds=max(max(0,int(min_seconds or 0)),max(0,int(prior.get("retry_after_seconds") or 0)))
+                    cooldown_until=(then+timedelta(seconds=seconds)).isoformat()
+                except Exception:
+                    cooldown_until=None
+            in_cooldown.append({"candidate":skey,"cooldown_until":cooldown_until})
+
+    return {
+        "eligible":eligible,
+        "ready_now":ready,
+        "ready_now_computed_at":now.isoformat(),
+        "blocked_auth":blocked_auth,
+        "in_cooldown":in_cooldown,
+        "attempted_this_cycle":attempted_this_cycle,
+        "reason_counts":dict(sorted(counts.items())),
+    }
 
 
 def summarize_candidate_eligibility(candidates: dict) -> dict:
