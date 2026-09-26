@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "PROPOSE"
+    },
+    "dialect_version": {
+      "const": "neo-dialect/1.0"
+    },
+    "conversation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "proposal_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240
+    },
+    "offer": {},
+    "requested": {}
+  },
+  "required": [
+    "type",
+    "dialect_version",
+    "conversation_id",
+    "message_id",
+    "timestamp",
+    "proposal_id",
+    "subject",
+    "offer",
+    "requested"
+  ],
+  "additionalProperties": false,
+  "$id": "https://neo-collettive.onrender.com/schemas/neo-dialect/1.0/propose.json",
+  "title": "neo-dialect/1.0 PROPOSE"
+}

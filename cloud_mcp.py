@@ -125,7 +125,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
 VERSION = "0.99.28"  # targeted competitor research and money-first market flow
@@ -10977,6 +10977,15 @@ async def system(request: Request):
     return layout("System", body)
 
 
+async def neo_dialect_spec(request: Request):
+    try:
+        with open("docs/neo-dialect.md","r",encoding="utf-8") as fh:
+            content=fh.read()
+    except Exception:
+        return PlainTextResponse("neo-dialect/1.0 specification unavailable",status_code=503)
+    return PlainTextResponse(content,media_type="text/markdown; charset=utf-8")
+
+
 async def health(request: Request):
     snapshot=_runtime_snapshot_freshness()
     return JSONResponse({
@@ -11076,6 +11085,7 @@ app = Starlette(
         Route("/agent", agent_chat, methods=["GET"]),
         Route("/collective", collective, methods=["GET"]),
         Route("/system", system, methods=["GET"]),
+        Route("/neo-dialect/1.0", neo_dialect_spec, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
         Route("/api/discover", api_discover, methods=["GET"]),
         Route("/api/collective", api_collective, methods=["GET"]),
