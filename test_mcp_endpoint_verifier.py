@@ -152,6 +152,28 @@ class VerifierSecurityTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("caller",serialized.replace("anonymous aggregate metrics only; no caller ip or personal identifier stored",""))
         self.assertFalse(data["payment_signal"])
 
+    def test_internal_usage_is_excluded_from_external_metrics(self):
+        v._record_usage("scan.example", True, [], usage_scope="internal_registry_health")
+        external=v.usage_metrics_snapshot()
+        internal=v.internal_usage_metrics_snapshot()
+        self.assertEqual(external["calls"],0)
+        self.assertEqual(internal["calls"],1)
+        self.assertEqual(internal["scope"],"internal_registry_health")
+
+    async def test_request_pacer_serializes_same_host(self):
+        pacer=v.RequestPacer(max_concurrency=4,per_host=1,min_host_interval=0)
+        active=0
+        peak=0
+        async def one():
+            nonlocal active,peak
+            async with pacer.slot("same.example"):
+                active+=1
+                peak=max(peak,active)
+                await __import__("asyncio").sleep(0.01)
+                active-=1
+        await __import__("asyncio").gather(*(one() for _ in range(4)))
+        self.assertEqual(peak,1)
+
     def test_schema_sanity(self):
         self.assertTrue(v._schema_sane({"type":"object","properties":{},"required":[]}))
         self.assertFalse(v._schema_sane({"type":"string"}))

@@ -14,6 +14,7 @@ import json
 import socket
 import time
 from collections import Counter, defaultdict, deque
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote, urljoin, urlparse
@@ -38,14 +39,60 @@ _BLOCKED_HOSTS = {
 }
 _GLOBAL_CALLS: deque[float] = deque()
 _CALLER_CALLS: dict[str, deque[float]] = defaultdict(deque)
-_METRICS = {
-    "calls": 0,
-    "live": 0,
-    "not_live": 0,
-    "rate_limited": 0,
-    "error_types": Counter(),
-    "domains": defaultdict(lambda: {"checks": 0, "live": 0, "not_live": 0}),
-}
+def _new_metrics() -> dict[str, Any]:
+    return {
+        "calls": 0,
+        "live": 0,
+        "not_live": 0,
+        "rate_limited": 0,
+        "error_types": Counter(),
+        "domains": defaultdict(lambda: {"checks": 0, "live": 0, "not_live": 0}),
+    }
+
+
+_METRICS = _new_metrics()  # External/public verify_mcp_endpoint usage only.
+_INTERNAL_METRICS = _new_metrics()  # GitHub Actions health scans; never commercial demand.
+
+
+class RequestPacer:
+    """Shared request-level concurrency and per-host pacing for bounded scans."""
+
+    def __init__(self, max_concurrency: int = 4, per_host: int = 1, min_host_interval: float = 1.0):
+        self._global = asyncio.Semaphore(max(1, int(max_concurrency)))
+        self._per_host_limit = max(1, int(per_host))
+        self._host_semaphores: dict[str, asyncio.Semaphore] = {}
+        self._last_request: dict[str, float] = {}
+        self._guard = asyncio.Lock()
+        self.min_host_interval = max(0.0, float(min_host_interval))
+
+    async def _host_semaphore(self, host: str) -> asyncio.Semaphore:
+        async with self._guard:
+            if host not in self._host_semaphores:
+                self._host_semaphores[host] = asyncio.Semaphore(self._per_host_limit)
+            return self._host_semaphores[host]
+
+    @asynccontextmanager
+    async def slot(self, host: str):
+        host = str(host or "unknown").lower()
+        sem = await self._host_semaphore(host)
+        async with self._global:
+            async with sem:
+                async with self._guard:
+                    last = self._last_request.get(host)
+                if last is not None:
+                    wait = self.min_host_interval - (time.monotonic() - last)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                try:
+                    yield
+                finally:
+                    async with self._guard:
+                        self._last_request[host] = time.monotonic()
+
+
+@asynccontextmanager
+async def _unpaced_slot():
+    yield
 
 
 class VerificationError(RuntimeError):
@@ -151,38 +198,54 @@ def consume_rate_limit(bucket: str) -> None:
     caller.append(now)
 
 
+def _reset_metrics(metrics: dict[str, Any]) -> None:
+    metrics["calls"] = 0
+    metrics["live"] = 0
+    metrics["not_live"] = 0
+    metrics["rate_limited"] = 0
+    metrics["error_types"].clear()
+    metrics["domains"].clear()
+
+
 def reset_runtime_state_for_tests() -> None:
     _GLOBAL_CALLS.clear()
     _CALLER_CALLS.clear()
-    _METRICS["calls"] = 0
-    _METRICS["live"] = 0
-    _METRICS["not_live"] = 0
-    _METRICS["rate_limited"] = 0
-    _METRICS["error_types"].clear()
-    _METRICS["domains"].clear()
+    _reset_metrics(_METRICS)
+    _reset_metrics(_INTERNAL_METRICS)
 
 
-def usage_metrics_snapshot() -> dict[str, Any]:
+def _metrics_snapshot(metrics: dict[str, Any], scope: str) -> dict[str, Any]:
     return {
-        "calls": int(_METRICS["calls"]),
-        "live": int(_METRICS["live"]),
-        "not_live": int(_METRICS["not_live"]),
-        "rate_limited": int(_METRICS["rate_limited"]),
-        "error_types": dict(_METRICS["error_types"]),
-        "domains": {k: dict(v) for k, v in _METRICS["domains"].items()},
+        "calls": int(metrics["calls"]),
+        "live": int(metrics["live"]),
+        "not_live": int(metrics["not_live"]),
+        "rate_limited": int(metrics["rate_limited"]),
+        "error_types": dict(metrics["error_types"]),
+        "domains": {k: dict(v) for k, v in metrics["domains"].items()},
+        "scope": scope,
         "privacy": "anonymous aggregate metrics only; no caller IP or personal identifier stored",
         "payment_signal": False,
     }
 
 
-def _record_usage(domain: str, live: bool, errors: list[str]) -> None:
-    _METRICS["calls"] += 1
-    _METRICS["live" if live else "not_live"] += 1
-    row = _METRICS["domains"][domain or "unknown"]
+def usage_metrics_snapshot() -> dict[str, Any]:
+    """External/public tool usage only. Internal registry scans are excluded."""
+    return _metrics_snapshot(_METRICS, "external")
+
+
+def internal_usage_metrics_snapshot() -> dict[str, Any]:
+    return _metrics_snapshot(_INTERNAL_METRICS, "internal_registry_health")
+
+
+def _record_usage(domain: str, live: bool, errors: list[str], *, usage_scope: str = "external") -> None:
+    metrics = _INTERNAL_METRICS if usage_scope == "internal_registry_health" else _METRICS
+    metrics["calls"] += 1
+    metrics["live" if live else "not_live"] += 1
+    row = metrics["domains"][domain or "unknown"]
     row["checks"] += 1
     row["live" if live else "not_live"] += 1
     for code in sorted(set(errors)):
-        _METRICS["error_types"][code] += 1
+        metrics["error_types"][code] += 1
 
 
 async def _bounded_request(
@@ -193,12 +256,15 @@ async def _bounded_request(
     json_body: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     max_redirects: int = MAX_REDIRECTS,
+    user_agent: str | None = None,
+    request_pacer: RequestPacer | None = None,
+    request_counts: Counter | None = None,
 ) -> dict[str, Any]:
     current = url
     history: list[dict[str, Any]] = []
     clean_headers = {
         "Accept": "application/json, text/event-stream",
-        "User-Agent": "MYCELIX-MCP-Verifier/1.0",
+        "User-Agent": str(user_agent or "MYCELIX-MCP-Verifier/1.0"),
     }
     if method.upper() == "POST":
         clean_headers["Content-Type"] = "application/json"
@@ -211,50 +277,54 @@ async def _bounded_request(
         target = await validate_public_https(current)
         started = time.perf_counter()
         try:
-            async with client.stream(
-                method.upper(),
-                current,
-                json=json_body if method.upper() == "POST" else None,
-                headers=clean_headers,
-                follow_redirects=False,
-            ) as response:
-                latency_ms = round((time.perf_counter() - started) * 1000, 2)
-                if response.status_code in {301, 302, 303, 307, 308}:
-                    location = response.headers.get("location")
-                    if not location:
-                        raise VerificationError("redirect_without_location")
-                    if hop >= max_redirects:
-                        raise VerificationError("too_many_redirects")
-                    nxt = urljoin(current, location)
-                    await validate_public_https(nxt)
-                    history.append({"status": response.status_code, "from": current, "to": nxt})
-                    current = nxt
-                    continue
+            slot = request_pacer.slot(target["host"]) if request_pacer is not None else _unpaced_slot()
+            async with slot:
+                if request_counts is not None:
+                    request_counts[target["host"]] += 1
+                async with client.stream(
+                    method.upper(),
+                    current,
+                    json=json_body if method.upper() == "POST" else None,
+                    headers=clean_headers,
+                    follow_redirects=False,
+                ) as response:
+                    latency_ms = round((time.perf_counter() - started) * 1000, 2)
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("location")
+                        if not location:
+                            raise VerificationError("redirect_without_location")
+                        if hop >= max_redirects:
+                            raise VerificationError("too_many_redirects")
+                        nxt = urljoin(current, location)
+                        await validate_public_https(nxt)
+                        history.append({"status": response.status_code, "from": current, "to": nxt})
+                        current = nxt
+                        continue
 
-                total = 0
-                chunks: list[bytes] = []
-                async for chunk in response.aiter_bytes():
-                    total += len(chunk)
-                    if total > MAX_RESPONSE_BYTES:
-                        raise VerificationError("response_too_large")
-                    chunks.append(chunk)
-                raw = b"".join(chunks)
-                text = raw.decode("utf-8", "replace")
-                return {
-                    "url": current,
-                    "host": target["host"],
-                    "resolved_ips": target["resolved_ips"],
-                    "status": response.status_code,
-                    "headers": {
-                        "content-type": response.headers.get("content-type"),
-                        "mcp-session-id": response.headers.get("mcp-session-id"),
-                        "mcp-protocol-version": response.headers.get("mcp-protocol-version"),
-                    },
-                    "body": text,
-                    "bytes": total,
-                    "latency_ms": latency_ms,
-                    "redirects": history,
-                }
+                    total = 0
+                    chunks: list[bytes] = []
+                    async for chunk in response.aiter_bytes():
+                        total += len(chunk)
+                        if total > MAX_RESPONSE_BYTES:
+                            raise VerificationError("response_too_large")
+                        chunks.append(chunk)
+                    raw = b"".join(chunks)
+                    text = raw.decode("utf-8", "replace")
+                    return {
+                        "url": current,
+                        "host": target["host"],
+                        "resolved_ips": target["resolved_ips"],
+                        "status": response.status_code,
+                        "headers": {
+                            "content-type": response.headers.get("content-type"),
+                            "mcp-session-id": response.headers.get("mcp-session-id"),
+                            "mcp-protocol-version": response.headers.get("mcp-protocol-version"),
+                        },
+                        "body": text,
+                        "bytes": total,
+                        "latency_ms": latency_ms,
+                        "redirects": history,
+                    }
         except VerificationError:
             raise
         except httpx.TransportError as exc:
@@ -357,7 +427,14 @@ async def resolve_registry_name(client: httpx.AsyncClient, name: str) -> dict[st
     }
 
 
-async def _check_discovery(client: httpx.AsyncClient, target_url: str) -> dict[str, Any]:
+async def _check_discovery(
+    client: httpx.AsyncClient,
+    target_url: str,
+    *,
+    user_agent: str | None = None,
+    request_pacer: RequestPacer | None = None,
+    request_counts: Counter | None = None,
+) -> dict[str, Any]:
     parsed = urlparse(target_url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
     candidates = [
@@ -368,7 +445,10 @@ async def _check_discovery(client: httpx.AsyncClient, target_url: str) -> dict[s
     checks = []
     for candidate in candidates:
         try:
-            r = await _bounded_request(client, "GET", candidate, max_redirects=MAX_REDIRECTS)
+            r = await _bounded_request(
+                client, "GET", candidate, max_redirects=MAX_REDIRECTS,
+                user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
+            )
             ok = int(r.get("status") or 0) == 200 and bool((r.get("body") or "").strip())
             checks.append({
                 "url": candidate,
@@ -388,13 +468,21 @@ async def verify_endpoint(
     registry_name: str | None = None,
     caller: str | None = None,
     client_version: str = "unknown",
+    usage_scope: str = "external",
+    user_agent: str | None = None,
+    request_pacer: RequestPacer | None = None,
+    enforce_rate_limit: bool = True,
 ) -> dict[str, Any]:
+    if usage_scope not in {"external", "internal_registry_health"}:
+        raise ValueError("invalid_usage_scope")
     bucket = caller_bucket(caller)
-    consume_rate_limit(bucket)
+    if enforce_rate_limit:
+        consume_rate_limit(bucket)
     started_at = _utcnow()
     errors: list[str] = []
     registry: dict[str, Any] | None = None
     requested_url = str(url or "").strip()
+    request_counts: Counter = Counter()
     timeout = httpx.Timeout(connect=CONNECT_TIMEOUT, read=READ_TIMEOUT, write=READ_TIMEOUT, pool=CONNECT_TIMEOUT)
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client:
@@ -405,7 +493,7 @@ async def verify_endpoint(
                     requested_url = registry["remote_url"]
             except VerificationError as exc:
                 errors.append(exc.code)
-                _record_usage("registry:"+str(registry_name), False, errors)
+                _record_usage("registry:"+str(registry_name), False, errors, usage_scope=usage_scope)
                 return {
                     "ok": False,
                     "live": False,
@@ -413,12 +501,12 @@ async def verify_endpoint(
                     "input": {"url": url, "registry_name": registry_name},
                     "checks": {"registry": {"ok": False, "error": exc.code, "detail": exc.detail}},
                     "errors": errors,
-                    "usage_metrics": usage_metrics_snapshot(),
+                    "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
                 }
 
         if not requested_url:
             errors.append("url_or_registry_name_required")
-            _record_usage("unknown", False, errors)
+            _record_usage("unknown", False, errors, usage_scope=usage_scope)
             return {
                 "ok": False,
                 "live": False,
@@ -426,7 +514,7 @@ async def verify_endpoint(
                 "input": {"url": url, "registry_name": registry_name},
                 "checks": {},
                 "errors": errors,
-                "usage_metrics": usage_metrics_snapshot(),
+                "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
             }
 
         domain = _hostname(requested_url) or "unknown"
@@ -437,7 +525,7 @@ async def verify_endpoint(
         except VerificationError as exc:
             errors.append(exc.code)
             checks["dns_ssrf"] = {"ok": False, "error": exc.code, "detail": exc.detail}
-            _record_usage(domain, False, errors)
+            _record_usage(domain, False, errors, usage_scope=usage_scope)
             return {
                 "ok": False,
                 "live": False,
@@ -447,7 +535,7 @@ async def verify_endpoint(
                 "checks": checks,
                 "errors": errors,
                 "comparison": "registered_but_not_reachable" if registry else None,
-                "usage_metrics": usage_metrics_snapshot(),
+                "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
             }
 
         initialize = {
@@ -465,7 +553,10 @@ async def verify_endpoint(
         server_info = None
         init_ok = False
         try:
-            init = await _bounded_request(client, "POST", requested_url, json_body=initialize)
+            init = await _bounded_request(
+                client, "POST", requested_url, json_body=initialize,
+                user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
+            )
             checks["tls"] = {
                 "ok": True,
                 "certificate_validation": "system_ca_via_httpx",
@@ -515,7 +606,10 @@ async def verify_endpoint(
                     "method": "notifications/initialized",
                     "params": {},
                 }
-                await _bounded_request(client, "POST", requested_url, json_body=initialized, headers=headers)
+                await _bounded_request(
+                    client, "POST", requested_url, json_body=initialized, headers=headers,
+                    user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
+                )
             except VerificationError:
                 # Some stateless implementations legitimately ignore this notification.
                 pass
@@ -526,7 +620,10 @@ async def verify_endpoint(
                     "method": "tools/list",
                     "params": {},
                 }
-                listed = await _bounded_request(client, "POST", requested_url, json_body=listing, headers=headers)
+                listed = await _bounded_request(
+                    client, "POST", requested_url, json_body=listing, headers=headers,
+                    user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
+                )
                 payload = _json_payload(listed)
                 result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
                 tools = result.get("tools") if isinstance(result.get("tools"), list) else []
@@ -550,7 +647,10 @@ async def verify_endpoint(
         else:
             checks["tools_list"] = {"ok": False, "skipped": "initialize_failed"}
 
-        discovery = await _check_discovery(client, requested_url)
+        discovery = await _check_discovery(
+            client, requested_url, user_agent=user_agent,
+            request_pacer=request_pacer, request_counts=request_counts,
+        )
         checks["discovery"] = discovery
         live = bool(init_ok)
         comparison = None
@@ -571,7 +671,7 @@ async def verify_endpoint(
             if isinstance(latency, (int, float)):
                 latency_values.append(float(latency))
 
-        _record_usage(domain, live, errors)
+        _record_usage(domain, live, errors, usage_scope=usage_scope)
         return {
             "ok": live and tools_ok,
             "live": live,
@@ -593,5 +693,7 @@ async def verify_endpoint(
             "read_only": True,
             "remote_tools_called": False,
             "credentials_forwarded": False,
-            "usage_metrics": usage_metrics_snapshot(),
+            "usage_scope": usage_scope,
+            "request_counts_by_host": dict(request_counts),
+            "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
         }
