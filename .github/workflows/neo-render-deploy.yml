@@ -47,6 +47,11 @@ on:
       - "dialect_peer_harness.py"
       - "mcp_endpoint_verifier.py"
       - "test_mcp_endpoint_verifier.py"
+      - "registry_health.py"
+      - "registry_health_scan.py"
+      - "test_registry_health.py"
+      - "data/registry-health/latest-summary.json"
+      - "data/registry-health/latest-servers.json"
       - "verify_mcp_endpoint_live_probe.py"
       - "server.json"
       - "test_neo_dialect.py"
@@ -108,7 +113,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py
 
       - name: Build Docker image in GitHub CI
         run: |
@@ -356,6 +361,22 @@ jobs:
               raise SystemExit("neo-dialect example transcript incomplete")
           print("neo-dialect smoke passed")
           PY
+
+      - name: Smoke test Registry Health static pages
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "https://neo-collettive.onrender.com/registry-health" > /tmp/registry-health.html
+          curl --fail --silent --show-error --max-time 30 \
+            "https://neo-collettive.onrender.com/registry-health/about" > /tmp/registry-health-about.html
+          grep -q "MCP Registry Health" /tmp/registry-health.html
+          grep -q "Disabled pending Andrea Gava" /tmp/registry-health.html
+          grep -q "Opt-out and corrections" /tmp/registry-health-about.html
+          if grep -q "Per-server observations" /tmp/registry-health.html; then
+            echo "Per-server table unexpectedly enabled" >&2
+            exit 1
+          fi
+          echo "Registry Health aggregate/about surfaces healthy; server table disabled"
 
       - name: Verify Pathwren remains 100/100
         run: |

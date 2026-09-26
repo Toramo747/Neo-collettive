@@ -133,7 +133,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.32"  # MCP endpoint verifier + official registry publication
+VERSION = "0.99.33"  # MCP Registry Health report + static status surface
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -11397,6 +11397,74 @@ async def health(request: Request):
     })
 
 
+REGISTRY_HEALTH_SERVER_TABLE_ENABLED = str(
+    os.getenv("REGISTRY_HEALTH_SERVER_TABLE_ENABLED","false")
+).strip().lower() in {"1","true","yes","on"}
+
+
+def _registry_health_static_json(path: str) -> dict:
+    try:
+        with open(path,"r",encoding="utf-8") as fh:
+            value=json.load(fh)
+        return value if isinstance(value,dict) else {}
+    except Exception:
+        return {}
+
+
+async def registry_health_page(request: Request):
+    summary=_registry_health_static_json("data/registry-health/latest-summary.json")
+    rows_payload=_registry_health_static_json("data/registry-health/latest-servers.json")
+    body='<section class="card"><span class="tag">MCP REGISTRY HEALTH</span><h2>Official Registry Health Report</h2>'
+    body+='<p>Read-only measurements are performed from GitHub Actions. Production Render does not scan remote MCP servers.</p></section>'
+    if not summary:
+        body+='<section class="card"><h2>Aggregate status</h2><p>No completed Registry Health dataset is bundled in this deployment yet.</p></section>'
+    else:
+        categories=summary.get("categories") or {}
+        body+='<section class="card"><h2>Aggregate status</h2>'
+        body+='<p>Active/latest servers: <strong>'+html.escape(str(summary.get("servers_total") or 0))+'</strong> · '
+        body+='HTTPS remotes: <strong>'+html.escape(str(summary.get("remote_verifiable") or 0))+'</strong> · '
+        body+='Package-only: <strong>'+html.escape(str(summary.get("package_only") or 0))+'</strong> · '
+        body+='Scanned: <strong>'+html.escape(str(summary.get("scanned") or 0))+'</strong></p>'
+        body+='<table><thead><tr><th>Category</th><th>Count</th><th>Share</th></tr></thead><tbody>'
+        for key in ("OK","OK_WITH_ISSUES","AUTH_REQUIRED","SERVER_ERROR","NOT_MCP","UNREACHABLE","INTERMITTENT"):
+            row=categories.get(key) if isinstance(categories.get(key),dict) else {}
+            body+='<tr><td>'+html.escape(key)+'</td><td>'+html.escape(str(row.get("count") or 0))+'</td><td>'+html.escape(str(row.get("percent_of_scanned") or 0))+'%</td></tr>'
+        body+='</tbody></table>'
+        latency=summary.get("latency_ms") or {}
+        body+='<p>Discovery present: '+html.escape(str(summary.get("discovery_present") or 0))
+        body+=' · Invalid schemas: '+html.escape(str(summary.get("invalid_input_schemas") or 0))
+        body+=' · TLS failures: '+html.escape(str(summary.get("tls_failures") or 0))
+        body+=' · Median latency: '+html.escape(str(latency.get("median")))+' ms'
+        body+=' · p90: '+html.escape(str(latency.get("p90")))+' ms</p></section>'
+
+    if REGISTRY_HEALTH_SERVER_TABLE_ENABLED:
+        rows=rows_payload.get("servers") or []
+        body+='<section class="card"><h2>Per-server observations</h2><table><thead><tr><th>Server</th><th>Category</th><th>Last verification</th></tr></thead><tbody>'
+        for row in rows:
+            if not isinstance(row,dict):
+                continue
+            probe=row.get("probe2") if isinstance(row.get("probe2"),dict) else row.get("probe1") if isinstance(row.get("probe1"),dict) else {}
+            body+='<tr><td>'+html.escape(str(row.get("name") or ""))+'</td><td>'+html.escape(str(row.get("category") or ""))+'</td><td>'+html.escape(str(probe.get("timestamp") or ""))+'</td></tr>'
+        body+='</tbody></table></section>'
+    else:
+        body+='<section class="card"><h2>Per-server table</h2><p><strong>Disabled pending Andrea Gava\'s approval.</strong> No per-server negative listing is shown on this page.</p></section>'
+    body+='<section class="card"><p><a class="btn" href="/registry-health/about">Methodology, opt-out and corrections</a></p></section>'
+    return layout("MCP Registry Health",body)
+
+
+async def registry_health_about(request: Request):
+    body='<section class="card"><span class="tag">METHODOLOGY</span><h2>MCP Registry Health</h2>'
+    body+='<p>The census uses the official MCP Registry active/latest entries and verifies only declared public HTTPS streamable-http remotes.</p>'
+    body+='<p>Checks are read-only: DNS/SSRF safety, TLS, MCP initialize, tools/list schema sanity and discovery metadata. Remote tools are never called and credentials are never forwarded.</p>'
+    body+='<p>Non-OK and non-AUTH_REQUIRED results receive a second observation no earlier than six hours later. Disagreement becomes INTERMITTENT.</p>'
+    body+='<p>A GitHub Actions result is a network-vantage observation, not a claim that an endpoint is unreachable from every network.</p></section>'
+    body+='<section class="card"><h2>Opt-out and corrections</h2>'
+    body+='<p>Server owners can request opt-out or correction through the public contact channels of the Toramo747/Neo-collettive repository, identifying the Registry server name and affected endpoint.</p>'
+    body+='<p>Opt-outs are recorded in <code>data/registry-health/opt-out.txt</code>. Historical datasets are not silently rewritten.</p>'
+    body+='<p>Dataset license: CC BY 4.0, attribution to Andrea Gava / MYCELIX. Source code remains under BUSL-1.1.</p></section>'
+    return layout("Registry Health About",body)
+
+
 async def api_discover(request: Request):
     q = (request.query_params.get("q") or "cybersecurity").strip()
     return JSONResponse(await discover_data(q, 10))
@@ -11503,6 +11571,8 @@ app = Starlette(
         Route("/system", system, methods=["GET"]),
         Route("/neo-dialect/1.0", neo_dialect_spec, methods=["GET"]),
         Route("/.well-known/mcp.json", mcp_discovery_document, methods=["GET"]),
+        Route("/registry-health", registry_health_page, methods=["GET"]),
+        Route("/registry-health/about", registry_health_about, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
         Route("/api/discover", api_discover, methods=["GET"]),
         Route("/api/collective", api_collective, methods=["GET"]),
