@@ -12,60 +12,68 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-TOOL_OPPORTUNITY_SCHEMA_VERSION = 1
+TOOL_OPPORTUNITY_SCHEMA_VERSION = 2
 
 CATEGORY_CONFIGS = {
     "ai_tools": {
-        "title": "AI / agent utility",
+        "title": "A2A Delivery Verifier",
+        "target_user": "teams operating A2A/MCP agents in production",
         "problem": "Teams need focused AI/agent utilities with clearer capability boundaries, pricing and interoperability.",
         "aliases": ["AI agent tool", "AI assistant SaaS", "agent automation"],
         "build_days": 6,
         "distribution": "Product Hunt + MCP/A2A registries + direct web",
     },
     "developer_tools": {
-        "title": "Developer workflow tool",
+        "title": "CI Failure Replay",
+        "target_user": "software teams debugging CI/CD and developer-tool failures",
         "problem": "Developers pay for tools that remove friction in debugging, testing, code review and delivery workflows.",
         "aliases": ["developer tool", "code review tool", "developer productivity"],
         "build_days": 7,
         "distribution": "VS Code Marketplace + GitHub + Product Hunt",
     },
     "integration_api": {
-        "title": "API / integration tool",
+        "title": "Webhook Contract Monitor",
+        "target_user": "integration teams maintaining APIs, webhooks and SaaS connectors",
         "problem": "Businesses buy integration tooling when existing connectors are costly, incomplete or difficult to operate.",
         "aliases": ["API integration tool", "workflow integration SaaS", "webhook automation"],
         "build_days": 8,
         "distribution": "MCP Registry + integration marketplaces + direct web",
     },
     "analytics_tools": {
-        "title": "Analytics / reporting tool",
+        "title": "Report Drift Monitor",
+        "target_user": "operations and analytics teams producing recurring business reports",
         "problem": "Teams pay for analytics and reporting tools but still report gaps in workflow, data access and pricing.",
         "aliases": ["analytics SaaS", "reporting tool", "dashboard software"],
         "build_days": 7,
         "distribution": "Product Hunt + direct SaaS + extension marketplaces",
     },
     "customer_support": {
-        "title": "Customer support tool",
+        "title": "Support Reply Triage",
+        "target_user": "support teams handling repetitive ticket and inbox triage",
         "problem": "Support teams pay for ticketing, triage and knowledge tools while seeking lower-cost or better integrated alternatives.",
         "aliases": ["customer support software", "helpdesk SaaS", "support automation tool"],
         "build_days": 8,
         "distribution": "Product Hunt + SaaS directories + direct web",
     },
     "cybersecurity_tools": {
-        "title": "Security operations tool",
+        "title": "MCP Session Audit Logger",
+        "target_user": "security teams auditing MCP/agent interactions and operational controls",
         "problem": "Security teams buy focused operational tools when suites are expensive, noisy or miss a concrete workflow.",
         "aliases": ["security operations tool", "cybersecurity SaaS", "security automation"],
         "build_days": 9,
         "distribution": "Security communities + GitHub + direct SaaS",
     },
     "productivity_tools": {
-        "title": "Productivity automation tool",
+        "title": "Workflow Handoff Cleaner",
+        "target_user": "small teams moving repetitive work between productivity tools",
         "problem": "Users pay for focused productivity automation when broad suites leave repetitive work or integration gaps.",
         "aliases": ["productivity tool", "workflow productivity SaaS", "automation app"],
         "build_days": 5,
         "distribution": "Product Hunt + Chrome Web Store + direct web",
     },
     "marketing_seo": {
-        "title": "Marketing / SEO tool",
+        "title": "SEO Change Guard",
+        "target_user": "marketing teams monitoring SEO workflow changes and regressions",
         "problem": "Marketing teams buy recurring tooling and frequently compare price, limits and missing workflow features.",
         "aliases": ["SEO software", "marketing automation tool", "content marketing SaaS"],
         "build_days": 7,
@@ -251,7 +259,8 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
     low=(title+" "+text).lower()
     signal_types=[]
     price_match=PRICE_RE.search(title+" "+text)
-    if price_match or any(x in low for x in PAYMENT_MARKERS):
+    explicit_payment_required=("payment_required" in low or "payment required" in low)
+    if price_match or explicit_payment_required:
         signal_types.append("PAYMENT")
     if any(x in low for x in DISSATISFACTION_MARKERS):
         signal_types.extend(["DISSATISFACTION","GAP"])
@@ -274,7 +283,11 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         "title":title,
         "excerpt":text[:500],
         "signal_types":sorted(set(signal_types)),
-        "price":price_match.group(0)[:80] if price_match else ("paid/pricing page" if "PAYMENT" in signal_types else None),
+        "price":price_match.group(0)[:80] if price_match else ("PAYMENT_REQUIRED" if explicit_payment_required else None),
+        "real_price":bool(price_match),
+        "payment_required":bool(explicit_payment_required and not price_match),
+        "vendor":str(raw.get("vendor") or "").strip()[:120] or None,
+        "coverage_source":str(raw.get("coverage_source") or "").strip()[:80] or None,
     }
 
 
@@ -284,10 +297,18 @@ def analyze_tool_opportunities(
     seti_catalog: list[dict] | None,
     query_meta: dict[str,dict] | None = None,
     now_utc: str | None = None,
+    source_diagnostics: dict | None = None,
 ) -> dict:
     """Build and rank TOOL_OPPORTUNITY theses from URL-grounded public signals only."""
     observed_at=_utc(now_utc)
     query_meta=query_meta or {}
+    source_diagnostics=source_diagnostics if isinstance(source_diagnostics,dict) else {}
+    coverage_names=("seti","mcp_registry","extension_marketplaces","pricing_pages","github_issues","product_hunt")
+    coverage={name:{"records_read":0,"errors":[],"payment_signals_real_price":0,"payment_required_signals":0,"dissatisfaction_signals":0} for name in coverage_names}
+    for name,diag in source_diagnostics.items():
+        if name not in coverage or not isinstance(diag,dict):
+            continue
+        coverage[name]["errors"]=[str(x)[:240] for x in (diag.get("errors") or [])[:12]]
     by_family={k:[] for k in CATEGORY_CONFIGS}
 
     for group in web_research or []:
@@ -300,17 +321,29 @@ def analyze_tool_opportunities(
             if not isinstance(item,dict):
                 continue
             chosen=family or _family_from_text(str(item.get("title") or "")+" "+str(item.get("snippet") or ""))
-            row=_source_row(item,chosen,observed_at)
+            role=str(meta.get("role") or "")
+            coverage_source=("pricing_pages" if role=="tool_pricing" else "product_hunt" if role=="product_hunt" else "extension_marketplaces" if role=="extension_marketplace" else "")
+            enriched=dict(item)
+            enriched["coverage_source"]=coverage_source
+            row=_source_row(enriched,chosen,observed_at)
             if row and chosen in by_family:
                 by_family[chosen].append(row)
+                if coverage_source in coverage:
+                    coverage[coverage_source]["records_read"]+=1
 
     for item in scouts or []:
         if not isinstance(item,dict):
             continue
         family=str(item.get("family") or "") or _family_from_text(str(item.get("title") or "")+" "+str(item.get("text") or ""))
-        row=_source_row(item,family,observed_at)
+        enriched=dict(item)
+        source_low=str(item.get("source") or "").lower()
+        coverage_source="mcp_registry" if source_low.startswith("mcp-registry") else "github_issues" if "github-issues" in source_low else ""
+        enriched["coverage_source"]=coverage_source
+        row=_source_row(enriched,family,observed_at)
         if row and family in by_family:
             by_family[family].append(row)
+            if coverage_source in coverage:
+                coverage[coverage_source]["records_read"]+=1
 
     for item in seti_catalog or []:
         if not isinstance(item,dict):
@@ -324,6 +357,7 @@ def analyze_tool_opportunities(
             "title":str(item.get("candidate") or "SETI Agent Card"),
             "text":" ".join(item.get("capabilities") or [])+(" "+pricing if pricing=="PAYMENT_REQUIRED" else ""),
             "source":"seti-agent-card",
+            "coverage_source":"seti",
             "observed_at_utc":item.get("observed_at_utc") or observed_at,
         }
         row=_source_row(raw,"ai_tools",observed_at)
@@ -334,6 +368,7 @@ def analyze_tool_opportunities(
             row["seti_candidate"]=item.get("candidate")
             row["payment_performed"]=False
             by_family["ai_tools"].append(row)
+            coverage["seti"]["records_read"]+=1
 
     opportunities=[]
     for family,cfg in CATEGORY_CONFIGS.items():
@@ -342,11 +377,17 @@ def analyze_tool_opportunities(
             unique.setdefault(row["url"],row)
         sources=list(unique.values())
         payments=[x for x in sources if "PAYMENT" in x["signal_types"]]
+        real_payments=[x for x in payments if bool(x.get("real_price"))]
         dissatisfaction=[x for x in sources if "DISSATISFACTION" in x["signal_types"]]
         gaps=[x for x in sources if "GAP" in x["signal_types"]]
         trends=[x for x in sources if "TREND" in x["signal_types"]]
         counters=[x for x in sources if "COUNTER" in x["signal_types"]]
 
+        def seller_key(row: dict) -> str:
+            vendor=str(row.get("vendor") or "").strip().lower()
+            return ("vendor:"+vendor) if vendor else ("domain:"+str(row.get("domain") or "").strip().lower())
+        payment_keys=sorted({seller_key(x) for x in payments if seller_key(x)})
+        real_payment_keys=sorted({seller_key(x) for x in real_payments if seller_key(x)})
         payment_domains=sorted({x["domain"] for x in payments})
         dissatisfaction_domains=sorted({x["domain"] for x in dissatisfaction})
         gap_domains=sorted({x["domain"] for x in gaps})
@@ -354,7 +395,7 @@ def analyze_tool_opportunities(
         counter_domains=sorted({x["domain"] for x in counters})
         source_domains=sorted({x["domain"] for x in sources})
 
-        score=min(50,len(payment_domains)*25)
+        score=min(50,len(payment_keys)*25)
         score+=min(30,len(dissatisfaction_domains)*15)
         score+=min(10,len(gap_domains)*10)
         score+=min(10,len(trend_domains)*5)
@@ -362,10 +403,20 @@ def analyze_tool_opportunities(
         score=max(0,min(100,score))
 
         existing_tools=[]
-        for row in payments:
-            item={"tool":row["title"][:120],"domain":row["domain"],"price":row.get("price") or "paid signal","url":row["url"],"date":row["date"]}
-            if item["domain"] not in {x["domain"] for x in existing_tools}:
-                existing_tools.append(item)
+        seen_sellers=set()
+        for row in real_payments:
+            key=seller_key(row)
+            if not key or key in seen_sellers:
+                continue
+            seen_sellers.add(key)
+            existing_tools.append({
+                "tool":row["title"][:120],
+                "vendor":row.get("vendor"),
+                "domain":row["domain"],
+                "price":row.get("price"),
+                "url":row["url"],
+                "date":row["date"],
+            })
 
         documented_gaps=[
             {"gap":x["excerpt"][:260],"url":x["url"],"date":x["date"]}
@@ -387,8 +438,11 @@ def analyze_tool_opportunities(
             {"url":x["url"],"date":x["date"],"domain":x["domain"],"excerpt":x["excerpt"][:260]}
             for x in counters[:8]
         ]
+        thesis_specific=bool(str(cfg.get("title") or "").strip() and str(cfg.get("target_user") or "").strip())
         gate_pass=bool(
-            len(payment_domains)>=2
+            thesis_specific
+            and len(payment_keys)>=2
+            and len(real_payment_keys)>=2
             and len(dissatisfaction_domains)>=1
             and len(gap_domains)>=1
             and len(source_domains)>=3
@@ -396,7 +450,9 @@ def analyze_tool_opportunities(
             and score>=60
         )
         missing=[]
-        if len(payment_domains)<2: missing.append("two_independent_payment_signals")
+        if not thesis_specific: missing.append("specific_tool_name_and_target_user")
+        if len(payment_keys)<2: missing.append("two_independent_payment_signals")
+        if len(real_payment_keys)<2: missing.append("two_competitors_with_real_price")
         if len(dissatisfaction_domains)<1: missing.append("dissatisfaction_signal")
         if len(gap_domains)<1: missing.append("documented_gap")
         if len(source_domains)<3: missing.append("three_independent_source_domains")
@@ -408,6 +464,8 @@ def analyze_tool_opportunities(
             "type":"TOOL_OPPORTUNITY",
             "family":family,
             "title":cfg["title"],
+            "tool_name":cfg["title"],
+            "target_user":cfg["target_user"],
             "problem":cfg["problem"],
             "existing_tools":existing_tools[:6],
             "documented_gaps":documented_gaps,
@@ -425,10 +483,23 @@ def analyze_tool_opportunities(
             "monetization_score":score,
             "score_rule":"URL-grounded payment + dissatisfaction + gap + trend signals minus URL-grounded counter-signals only",
             "gate_pass":gate_pass,
-            "gate_rule":"2 independent payment domains + 1 dissatisfaction/gap + 3 source domains + 2 paid tools + score >= 60",
+            "gate_rule":"specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
             "missing":missing,
         }
         opportunities.append(opportunity)
+
+    for family_rows in by_family.values():
+        for row in family_rows:
+            src=str(row.get("coverage_source") or "")
+            if src not in coverage:
+                continue
+            if "PAYMENT" in row.get("signal_types",[]):
+                if row.get("real_price"):
+                    coverage[src]["payment_signals_real_price"]+=1
+                elif row.get("payment_required"):
+                    coverage[src]["payment_required_signals"]+=1
+            if "DISSATISFACTION" in row.get("signal_types",[]):
+                coverage[src]["dissatisfaction_signals"]+=1
 
     opportunities.sort(
         key=lambda x:(int(x["gate_pass"]),int(x["monetization_score"]),len(x["payment_signals"]),len(x["sources"])),
@@ -444,7 +515,8 @@ def analyze_tool_opportunities(
         "top_gate_pass":bool(top5 and top5[0].get("gate_pass")),
         "council_transcripts":transcripts,
         "seti_market_catalog":[dict(x) for x in (seti_catalog or [])][:32],
-        "gate_rule":"The top tool opportunity alone may authorize build, and only after >=2 independent payment signals plus the documented quality conditions.",
+        "source_coverage":coverage,
+        "gate_rule":"The top specific tool opportunity alone may authorize build, only with >=2 independent payment sellers/domains, >=2 competitors with real price+URL, and the documented quality conditions.",
     }
 
 
@@ -497,7 +569,7 @@ def opportunity_candidate(opportunity: dict | None) -> dict:
     return {
         "status":"PILOT_READY",
         "family":row.get("family"),
-        "problem_key":"tool_opportunity:"+str(row.get("family") or "unknown"),
+        "problem_key":"tool_opportunity:"+re.sub(r"[^a-z0-9]+","_",str(row.get("tool_name") or row.get("title") or "unknown").lower()).strip("_"),
         "name":row.get("title"),
         "offer":row.get("problem"),
         "price":"not set; no payment action authorized",
