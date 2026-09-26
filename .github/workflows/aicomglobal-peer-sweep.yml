@@ -1,0 +1,163 @@
+name: AICOMGLOBAL peer sweep
+
+on:
+  push:
+    branches: [experiment-aicomglobal-peer-sweep]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Probe public peers safely
+        run: |
+          python - <<'PY'
+          import json, urllib.request, urllib.error, uuid, re
+
+          targets=[
+            {
+              "name":"AICOMGLOBAL",
+              "kind":"a2a",
+              "card":"https://aicomglobal.com/.well-known/agent-card.json",
+              "endpoint":"https://aicomglobal.com/a2a",
+              "mode":"aicom_datapart"
+            },
+            {
+              "name":"AION SUPREME",
+              "kind":"a2a",
+              "card":"https://aion-agent-core-live.onrender.com/.well-known/agent-card.json",
+              "endpoint":"https://aion-agent-core-live.onrender.com/a2a/v1",
+              "mode":"aion_v1"
+            },
+            {
+              "name":"SolFromCulture",
+              "kind":"docs_only",
+              "docs":"https://culture.sbs/llms.txt"
+            },
+            {
+              "name":"SignalMend",
+              "kind":"web_only",
+              "docs":"https://signalmend-repair.pages.dev/"
+            },
+            {
+              "name":"Agent Exchange",
+              "kind":"paid_card_only",
+              "card":"https://store.agentexchange.work/.well-known/agent-card.json"
+            },
+            {
+              "name":"Codex Autonomous Worker",
+              "kind":"a2a_card",
+              "card":"https://codex-autonomous-worker.rwdburley.chatgpt.site/.well-known/agent-card.json",
+              "endpoint":"https://codex-autonomous-worker.rwdburley.chatgpt.site/a2a"
+            },
+            {
+              "name":"MERCURY",
+              "kind":"paid_card_only",
+              "card":"https://network.mercury-hq.com/.well-known/agent-card.json"
+            },
+            {
+              "name":"Nihira-Nyx",
+              "kind":"discovery_only",
+              "docs":"https://github.com/Phuderoso/letter-of-hope-for-ais"
+            }
+          ]
+
+          def fetch(url, method="GET", data=None, headers=None, timeout=30):
+              hdr={"User-Agent":"MYCELIX-peer-sweep/0.99.15","Accept":"application/json,text/plain,*/*"}
+              if headers: hdr.update(headers)
+              req=urllib.request.Request(url,data=data,headers=hdr,method=method)
+              try:
+                  with urllib.request.urlopen(req,timeout=timeout) as r:
+                      body=r.read(262144).decode("utf-8","replace")
+                      return {"ok":200<=r.status<300,"status":r.status,"body":body[:50000],"headers":dict(r.headers)}
+              except urllib.error.HTTPError as e:
+                  return {"ok":False,"status":e.code,"body":e.read(262144).decode("utf-8","replace")[:50000]}
+              except Exception as e:
+                  return {"ok":False,"status":None,"error":type(e).__name__+":"+str(e)[:500]}
+
+          def aicom_probe(endpoint):
+              payload={
+                "jsonrpc":"2.0","id":str(uuid.uuid4()),"method":"message/send",
+                "params":{"message":{
+                  "role":"user","kind":"message","messageId":str(uuid.uuid4()),
+                  "parts":[{"kind":"data","data":{"skill":"aicom_list_services","input":{}}}]
+                }}
+              }
+              return fetch(endpoint,"POST",json.dumps(payload).encode(),{"Content-Type":"application/json"})
+
+          def aion_probe(endpoint):
+              payload={
+                "jsonrpc":"2.0","id":str(uuid.uuid4()),"method":"SendMessage",
+                "params":{"message":{
+                  "role":"ROLE_USER","message_id":str(uuid.uuid4()),
+                  "parts":[{"text":"MYCELIX public peer health probe. Return a short capability/status response only; do not create accounts, join memberships, spend funds, publish, or mutate external state."}]
+                }}
+              }
+              return fetch(endpoint,"POST",json.dumps(payload).encode(),{"Content-Type":"application/json","A2A-Version":"1.0"})
+
+          def generic_a2a_probe(endpoint):
+              payload={
+                "jsonrpc":"2.0","id":str(uuid.uuid4()),"method":"message/send",
+                "params":{"message":{
+                  "role":"user","kind":"message","messageId":str(uuid.uuid4()),
+                  "parts":[{"kind":"text","text":"MYCELIX capability probe only. Reply with current capabilities/status; do not create accounts, publish, purchase, or mutate external state."}]
+                }}
+              }
+              return fetch(endpoint,"POST",json.dumps(payload).encode(),{"Content-Type":"application/json"})
+
+          results=[]
+          for t in targets:
+              row={"name":t["name"],"kind":t["kind"]}
+              if t.get("card"):
+                  c=fetch(t["card"])
+                  row["card_status"]=c.get("status")
+                  row["card_ok"]=c.get("ok")
+                  row["card_excerpt"]=(c.get("body") or c.get("error") or "")[:3000]
+              if t.get("docs"):
+                  d=fetch(t["docs"])
+                  row["docs_status"]=d.get("status")
+                  row["docs_ok"]=d.get("ok")
+                  row["docs_excerpt"]=(d.get("body") or d.get("error") or "")[:3000]
+              if t.get("mode")=="aicom_datapart":
+                  p=aicom_probe(t["endpoint"])
+                  row["probe_status"]=p.get("status"); row["probe_ok"]=p.get("ok")
+                  row["probe_excerpt"]=(p.get("body") or p.get("error") or "")[:5000]
+              elif t.get("mode")=="aion_v1":
+                  p=aion_probe(t["endpoint"])
+                  body=p.get("body") or ""
+                  rpc_ok=False
+                  try:
+                      parsed=json.loads(body)
+                      rpc_ok=bool(p.get("ok") and not parsed.get("error") and parsed.get("result") is not None)
+                  except Exception:
+                      pass
+                  row["probe_status"]=p.get("status"); row["probe_ok"]=rpc_ok
+                  row["probe_excerpt"]=(body or p.get("error") or "")[:5000]
+              elif t["kind"]=="a2a_card" and t.get("endpoint"):
+                  p=generic_a2a_probe(t["endpoint"])
+                  body=p.get("body") or ""
+                  rpc_ok=False
+                  try:
+                      parsed=json.loads(body)
+                      rpc_ok=bool(p.get("ok") and not parsed.get("error") and parsed.get("result") is not None)
+                  except Exception:
+                      pass
+                  row["probe_status"]=p.get("status"); row["probe_ok"]=rpc_ok
+                  row["probe_excerpt"]=(body or p.get("error") or "")[:5000]
+              results.append(row)
+
+          print("=== PEER_SWEEP_JSON ===")
+          print(json.dumps(results,ensure_ascii=False,indent=2))
+          print("=== SUMMARY ===")
+          for r in results:
+              print(
+                r["name"]+
+                " | card="+str(r.get("card_status"))+"/"+str(r.get("card_ok"))+
+                " | docs="+str(r.get("docs_status"))+"/"+str(r.get("docs_ok"))+
+                " | probe="+str(r.get("probe_status"))+"/"+str(r.get("probe_ok"))
+              )
+          PY
