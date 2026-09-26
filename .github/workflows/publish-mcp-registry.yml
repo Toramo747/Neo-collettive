@@ -4,24 +4,34 @@ on:
   workflow_dispatch:
   release:
     types: [published]
+  workflow_run:
+    workflows: ["NEO Render Deploy"]
+    types: [completed]
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: publish-mcp-registry
+  cancel-in-progress: false
+
 jobs:
   publish:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Resolve release version
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json,re,os
+          import json,re
           source=open("cloud_mcp.py",encoding="utf-8").read()
           m=re.search(r'^VERSION = "([^"]+)"',source,re.M)
           if not m:
@@ -52,27 +62,66 @@ jobs:
           print("server.json structural checks passed")
           PY
 
-      - name: Install official MCP publisher
+      - name: Check whether this exact version is already public
+        id: existing
         run: |
           set -euo pipefail
-          curl -L --fail --show-error --silent             "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz"             | tar xz mcp-publisher
+          python - <<'PY'
+          import json,os,re,urllib.parse,urllib.request
+          source=open("cloud_mcp.py",encoding="utf-8").read()
+          version=re.search(r'^VERSION = "([^"]+)"',source,re.M).group(1)
+          name="io.github.Toramo747/mycelix"
+          expected_remote="https://neo-collettive.onrender.com/mcp"
+          url="https://registry.modelcontextprotocol.io/v0.1/servers/"+urllib.parse.quote(name,safe="")
+          exists=False
+          try:
+              with urllib.request.urlopen(url,timeout=15) as r:
+                  payload=json.load(r)
+              server=payload.get("server") if isinstance(payload,dict) and isinstance(payload.get("server"),dict) else payload
+              if isinstance(server,dict):
+                  remotes=server.get("remotes") or []
+                  exists=(
+                      server.get("name")==name
+                      and str(server.get("version") or "")==version
+                      and any(isinstance(x,dict) and x.get("type")=="streamable-http" and x.get("url")==expected_remote for x in remotes)
+                  )
+          except Exception:
+              exists=False
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as fh:
+              fh.write("exact_match="+("true" if exists else "false")+"\n")
+          print("registry_exact_match="+str(exists).lower())
+          PY
+
+      - name: Install official MCP publisher
+        if: steps.existing.outputs.exact_match != 'true'
+        run: |
+          set -euo pipefail
+          curl -L --fail --show-error --silent \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+            | tar xz mcp-publisher
           ./mcp-publisher --version
 
       - name: Validate with official publisher
+        if: steps.existing.outputs.exact_match != 'true'
         run: ./mcp-publisher validate server.json
 
       - name: Authenticate with GitHub OIDC
+        if: steps.existing.outputs.exact_match != 'true'
         run: ./mcp-publisher login github-oidc
 
       - name: Publish server.json
+        if: steps.existing.outputs.exact_match != 'true'
         run: ./mcp-publisher publish server.json
 
       - name: Verify public registry entry
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json,time,urllib.parse,urllib.request
+          import json,re,time,urllib.parse,urllib.request
+          source=open("cloud_mcp.py",encoding="utf-8").read()
+          version=re.search(r'^VERSION = "([^"]+)"',source,re.M).group(1)
           name="io.github.Toramo747/mycelix"
+          expected_remote="https://neo-collettive.onrender.com/mcp"
           url="https://registry.modelcontextprotocol.io/v0.1/servers/"+urllib.parse.quote(name,safe="")
           last=None
           for _ in range(12):
@@ -80,12 +129,21 @@ jobs:
                   with urllib.request.urlopen(url,timeout=15) as r:
                       last=json.load(r)
                   server=last.get("server") if isinstance(last,dict) and isinstance(last.get("server"),dict) else last
-                  if isinstance(server,dict) and server.get("name")==name:
+                  remotes=(server or {}).get("remotes") or [] if isinstance(server,dict) else []
+                  ok=(
+                      isinstance(server,dict)
+                      and server.get("name")==name
+                      and str(server.get("version") or "")==version
+                      and any(isinstance(x,dict) and x.get("type")=="streamable-http" and x.get("url")==expected_remote for x in remotes)
+                  )
+                  if ok:
                       print(json.dumps(last,ensure_ascii=False,indent=2))
                       raise SystemExit(0)
+              except SystemExit:
+                  raise
               except Exception as exc:
                   last={"error":type(exc).__name__+":"+str(exc)}
               time.sleep(5)
           print(json.dumps(last,ensure_ascii=False,indent=2))
-          raise SystemExit("registry entry not visible after publish")
+          raise SystemExit("registry entry/version/remote not visible after publish")
           PY
