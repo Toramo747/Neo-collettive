@@ -350,3 +350,93 @@ def dataset_csv(rows: list[dict[str, Any]]) -> str:
             "probe2_at_utc": (row.get("probe2") or {}).get("timestamp"),
         })
     return buf.getvalue()
+
+
+def _fmt_pct(count: int, total: int) -> str:
+    return f"{(100.0*count/total):.1f}%" if total else "0.0%"
+
+
+def render_report(summary: dict[str, Any], scan_date: str) -> str:
+    """Render an aggregate-only English report draft."""
+    scanned=int(summary.get("scanned") or 0)
+    categories=summary.get("categories") if isinstance(summary.get("categories"),dict) else {}
+    def count(name: str) -> int:
+        row=categories.get(name)
+        return int((row or {}).get("count") or 0) if isinstance(row,dict) else 0
+
+    protocols=summary.get("protocol_versions") if isinstance(summary.get("protocol_versions"),dict) else {}
+    protocol_rows=sorted(protocols.items(),key=lambda kv:(-int(kv[1]),str(kv[0])))
+    protocol_text=", ".join(f"`{k}`: {int(v)}" for k,v in protocol_rows) or "No negotiated protocol version recorded."
+    lat=summary.get("latency_ms") if isinstance(summary.get("latency_ms"),dict) else {}
+    discovery=int(summary.get("discovery_present") or 0)
+    invalid=int(summary.get("invalid_input_schemas") or 0)
+    tls_failures=int(summary.get("tls_failures") or 0)
+
+    findings=[
+        f"{int(summary.get('remote_verifiable') or 0)} of {int(summary.get('servers_total') or 0)} active/latest Registry servers declared a remotely verifiable HTTPS streamable-http endpoint.",
+        f"{count('OK')} scanned remotes were classified OK after the two-probe policy; {count('AUTH_REQUIRED')} required authentication and were counted separately from downtime.",
+        f"Discovery metadata was observed for {discovery} of {scanned} scanned remotes ({_fmt_pct(discovery,scanned)}).",
+        f"The scan observed {invalid} invalid tool input schemas and {tls_failures} TLS-validation failures across the final observations.",
+        f"Observed aggregate request latency had a median of {lat.get('median')} ms and p90 of {lat.get('p90')} ms across {int(lat.get('samples') or 0)} samples.",
+    ]
+
+    category_lines=[]
+    for name in FINAL_CATEGORIES:
+        n=count(name)
+        category_lines.append(f"| {name} | {n} | {_fmt_pct(n,scanned)} |")
+
+    return f"""# MCP Registry Health Report — {scan_date}
+
+**Draft — not published externally.**
+
+This report summarizes a read-only GitHub Actions measurement of the official MCP Registry. It contains aggregate results only; no server is named negatively.
+
+## Registry census
+
+- Active/latest servers: **{int(summary.get('servers_total') or 0)}**
+- HTTPS streamable-http remotes: **{int(summary.get('remote_verifiable') or 0)}**
+- Package-only entries: **{int(summary.get('package_only') or 0)}**
+- Other remote transports not verified: **{int(summary.get('remote_unverifiable_transport') or 0)}**
+- Metadata-only entries: **{int(summary.get('metadata_only') or 0)}**
+- Opted out of probing: **{int(summary.get('opted_out') or 0)}**
+
+## Final remote-health categories
+
+| Category | Count | Share of scanned remotes |
+|---|---:|---:|
+{chr(10).join(category_lines)}
+
+## Protocol and conformance observations
+
+- Negotiated protocol versions: {protocol_text}
+- Invalid tool input schemas observed: **{invalid}**
+- Discovery document present: **{discovery}/{scanned} ({_fmt_pct(discovery,scanned)})**
+- TLS-validation failures: **{tls_failures}**
+- Aggregate observed latency: median **{lat.get('median')} ms**, p90 **{lat.get('p90')} ms**
+
+## Key findings
+
+""" + "\n".join(f"- {x}" for x in findings) + f"""
+
+## Methodology and data
+
+- [Methodology](../registry-health/methodology.md)
+- [JSON dataset](../../data/registry-health/{scan_date}/registry-health.json)
+- [CSV dataset](../../data/registry-health/{scan_date}/registry-health.csv)
+- [Registry snapshot](../../data/registry-health/{scan_date}/registry-snapshot.json)
+
+Dataset license: CC BY 4.0, attribution to Andrea Gava / MYCELIX. Code remains under its existing BUSL-1.1 license.
+"""
+
+
+def render_social_draft(summary: dict[str, Any], scan_date: str) -> str:
+    scanned=int(summary.get("scanned") or 0)
+    remote=int(summary.get("remote_verifiable") or 0)
+    total=int(summary.get("servers_total") or 0)
+    return "\n".join([
+        f"MCP Registry Health Report — {scan_date} [DRAFT — NOT PUBLISHED]",
+        f"We measured {total} active/latest Registry entries, including {remote} remotely verifiable HTTPS MCP servers.",
+        f"{scanned} remotes were evaluated read-only from GitHub Actions with no tool calls and no credentials.",
+        "Non-OK results use a second observation at least six hours later; authenticated endpoints are counted separately from downtime.",
+        "Methodology and CC BY 4.0 dataset are prepared for review before any external publication.",
+    ]) + "\n"

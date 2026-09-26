@@ -5,6 +5,8 @@ from registry_health import (
     final_category,
     is_opted_out,
     normalize_registry_rows,
+    render_report,
+    render_social_draft,
 )
 
 
@@ -75,6 +77,23 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertEqual(classify_verification(issue),"OK_WITH_ISSUES")
         self.assertEqual(classify_verification(dead),"UNREACHABLE")
         self.assertEqual(classify_verification(not_mcp),"NOT_MCP")
+
+    def test_report_is_aggregate_only(self):
+        summary={
+            "servers_total":10,"remote_verifiable":6,"package_only":4,
+            "remote_unverifiable_transport":0,"metadata_only":0,"opted_out":0,
+            "scanned":6,
+            "categories":{"OK":{"count":4},"AUTH_REQUIRED":{"count":1},"UNREACHABLE":{"count":1}},
+            "protocol_versions":{"2025-11-25":4},
+            "invalid_input_schemas":1,"discovery_present":3,"tls_failures":1,
+            "latency_ms":{"median":120.0,"p90":400.0,"samples":5},
+        }
+        report=render_report(summary,"2026-09-26")
+        self.assertIn("MCP Registry Health Report",report)
+        self.assertIn("aggregate results only",report)
+        self.assertNotIn("example.com",report)
+        social=render_social_draft(summary,"2026-09-26")
+        self.assertEqual(len([x for x in social.splitlines() if x.strip()]),5)
 
     def test_second_probe_disagreement_is_intermittent(self):
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"OK"}),"INTERMITTENT")
