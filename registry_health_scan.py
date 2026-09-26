@@ -240,13 +240,7 @@ async def first_phase() -> Path:
     _write_json(outdir/"scan-state.json",state)
     _write_json(DATA_ROOT/"latest-summary.json",aggregate)
     _write_json(DATA_ROOT/"latest-servers.json",{"generated_at_utc":aggregate["generated_at_utc"],"servers":rows})
-    month=outdir.name[:7]
-    report_path=Path("docs/reports")/(month+"-mcp-registry-health.md")
-    social_path=Path("docs/reports")/(month+"-mcp-registry-health-social-draft.md")
-    report_path.parent.mkdir(parents=True,exist_ok=True)
-    report_path.write_text(render_report(aggregate,outdir.name),encoding="utf-8")
-    social_path.write_text(render_social_draft(aggregate,outdir.name),encoding="utf-8")
-    print(json.dumps({"outdir":str(outdir),"summary":aggregate,"report":str(report_path),"social":str(social_path)},ensure_ascii=False))
+    print(json.dumps({"outdir":str(outdir),"summary":aggregate,"report_status":"pending_second_probe"},ensure_ascii=False))
     return outdir
 
 
@@ -327,7 +321,13 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
     _write_json(outdir/"scan-state.json",state)
     _write_json(DATA_ROOT/"latest-summary.json",aggregate)
     _write_json(DATA_ROOT/"latest-servers.json",{"generated_at_utc":aggregate["generated_at_utc"],"servers":rows})
-    print(json.dumps({"outdir":str(outdir),"summary":aggregate},ensure_ascii=False))
+    month=outdir.name[:7]
+    report_path=Path("docs/reports")/(month+"-mcp-registry-health.md")
+    social_path=Path("docs/reports")/(month+"-mcp-registry-health-social-draft.md")
+    report_path.parent.mkdir(parents=True,exist_ok=True)
+    report_path.write_text(render_report(aggregate,outdir.name),encoding="utf-8")
+    social_path.write_text(render_social_draft(aggregate,outdir.name),encoding="utf-8")
+    print(json.dumps({"outdir":str(outdir),"summary":aggregate,"report":str(report_path),"social":str(social_path)},ensure_ascii=False))
     return outdir
 
 
