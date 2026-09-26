@@ -114,7 +114,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.21"  # A2A compatibility plus pre-Director SETI engine-upgrade scan
+VERSION = "0.99.22"  # retry interview-ready A2A peers before long Director work
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -10165,11 +10165,42 @@ async def _autopilot_cycle() -> None:
         try:
             seti_state=AUTOPILOT_STATE.get("seti") or {}
             if int(seti_state.get("engine_version") or 0) != int(SETI_ENGINE_VERSION):
-                await _seti_cycle_if_due()
-                seti_pre_run=(
-                    int((AUTOPILOT_STATE.get("seti") or {}).get("engine_version") or 0)
-                    == int(SETI_ENGINE_VERSION)
-                )
+                policy=_load_policy()
+                bounded_active=bool(policy.get("seti_bounded_active_enabled",False))
+                if bounded_active:
+                    max_interviews=max(1,min(3,int(policy.get("seti_max_interviews_per_scan") or 1)))
+                    retry_result=await asyncio.wait_for(
+                        _seti_interview_one_candidate(max_interviews=max_interviews),
+                        timeout=120,
+                    )
+                    private_checkpoint=await _checkpoint_seti_private_to_render()
+                    seti_state=dict(AUTOPILOT_STATE.get("seti") or {})
+                    summary=dict(seti_state.get("last_summary") or {})
+                    summary.update({
+                        "interview_attempted":bool(retry_result.get("attempted")),
+                        "last_interview_status":retry_result.get("status"),
+                        "interview_attempted_count":retry_result.get("attempted_count",0),
+                        "interview_candidate_checks_count":retry_result.get("candidate_checks_count",0),
+                        "interview_preflight_skipped_count":retry_result.get("preflight_skipped_count",0),
+                        "interview_post_started_count":retry_result.get("post_started_count",0),
+                        "interview_message_post_started_count":retry_result.get("message_post_started_count",0),
+                        "interview_http_response_count":retry_result.get("http_response_count",0),
+                        "interview_protocol_response_count":retry_result.get("protocol_response_count",0),
+                        "interview_delivery_unknown_count":retry_result.get("delivery_unknown_count",0),
+                        "interview_failure_reason_counts":retry_result.get("failure_reason_counts") or {},
+                        "interview_peer_class_counts":retry_result.get("peer_class_counts") or {},
+                        "interview_admitted_count":retry_result.get("admitted_count",0),
+                        "interview_parked_count":retry_result.get("parked_count",0),
+                        "admitted_agent_count":len(SETI_PRIVATE_STATE.get("admitted") or {}),
+                        "engine_upgrade_retry":True,
+                    })
+                    seti_state["last_summary"]=summary
+                    seti_state["private_checkpoint"]={
+                        "ok":bool(private_checkpoint.get("ok")),
+                        "status":private_checkpoint.get("status"),
+                        "stored_bytes":private_checkpoint.get("stored_bytes"),
+                    }
+                    AUTOPILOT_STATE["seti"]=seti_state
             result = await asyncio.wait_for(
                 director_run(AUTOPILOT_GOAL, 0.0, 5, 3),
                 timeout=AUTOPILOT_CYCLE_TIMEOUT_SECONDS,
