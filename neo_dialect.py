@@ -28,6 +28,7 @@ _INJECTION_RE = re.compile(
     r"execute\s+(?:this|the following|command)|"
     r"change\s+(?:your\s+)?(?:goal|objective|policy)|"
     r"reveal\s+(?:secret|token|password|memory|configuration)|"
+    r"(?:show|send|give)\s+(?:me\s+)?(?:your\s+)?(?:internal\s+)?(?:secret|token|password|memory|configuration|config)|"
     r"system\s+prompt|developer\s+message|"
     r"bypass\s+(?:policy|guardrail|restriction))",
     re.I,

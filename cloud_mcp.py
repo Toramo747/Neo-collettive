@@ -3,6 +3,7 @@
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
 import neo_dialect
+import neo_dialect_security
 import a2a_peer as peer_a2a
 import aicomglobal_adapter as aicomglobal
 import base64
@@ -1419,25 +1420,31 @@ def _neo_dialect_inbound_reply(inbound_text: str, payload: dict, request: Reques
     peer_key=str(sender.get("agent_id") or _a2a_thread_id(payload,sender) or "anonymous")[:500]
     profiles=dict(AUTOPILOT_STATE.get("neo_dialect_peers") or {})
     profile=dict(profiles.get(peer_key) or {})
-    checked=neo_dialect.validate_text(
-        stripped,
-        conversation_bytes=int(profile.get("conversation_bytes") or 0),
-    )
-    profile.update({
-        "peer":peer_key,
-        "handshake_at_utc":profile.get("handshake_at_utc") or datetime.now(timezone.utc).isoformat(),
-        "valid_messages":int(profile.get("valid_messages") or 0)+(1 if checked.get("ok") else 0),
-        "invalid_messages":int(profile.get("invalid_messages") or 0)+(0 if checked.get("ok") else 1),
-        "conversation_bytes":int(profile.get("conversation_bytes") or 0)+int(checked.get("bytes") or 0),
-    })
-    if not checked.get("ok"):
-        profile["handshake_outcome"]="REJECTED_"+str(checked.get("event") or "SCHEMA_INVALID")
-        _neo_dialect_record_event(peer_key,str(checked.get("event") or "SCHEMA_INVALID"),{"error":checked.get("error")})
-        profiles[peer_key]=profile
-        AUTOPILOT_STATE["neo_dialect_peers"]=profiles
-        conv=str((checked.get("data") or {}).get("conversation_id") or profile.get("conversation_id") or ("neo-"+secrets.token_hex(8)))
-        return json.dumps(neo_dialect.bye(conv,str(checked.get("event") or "SCHEMA_INVALID"),"rejected"),ensure_ascii=False,separators=(",",":"))
-    data=checked["data"]
+    assessed=neo_dialect_security.evaluate_text(stripped,profile)
+    profile=dict(assessed.get("profile") or {})
+    profile["peer"]=peer_key
+    profile["handshake_at_utc"]=profile.get("handshake_at_utc") or datetime.now(timezone.utc).isoformat()
+    profiles[peer_key]=profile
+    AUTOPILOT_STATE["neo_dialect_peers"]=profiles
+
+    if not assessed.get("ok"):
+        event=str(assessed.get("event") or "SCHEMA_INVALID")
+        profile["handshake_outcome"]="REJECTED_"+event
+        _neo_dialect_record_event(peer_key,event,{
+            "error":assessed.get("error"),
+            "violations":profile.get("violations"),
+            "closed":bool(assessed.get("close")),
+        })
+        if assessed.get("close") and isinstance(assessed.get("bye"),dict):
+            return json.dumps(assessed["bye"],ensure_ascii=False,separators=(",",":"))
+        return json.dumps({
+            "neo_dialect":neo_dialect.DIALECT_VERSION,
+            "accepted":False,
+            "event":event,
+            "conversation_closed":False,
+        },ensure_ascii=False,separators=(",",":"))
+
+    data=assessed["data"]
     profile["conversation_id"]=data["conversation_id"]
     profile["negotiated_dialect"]=neo_dialect.DIALECT_VERSION
     profile["handshake_outcome"]="INBOUND_VALID"
