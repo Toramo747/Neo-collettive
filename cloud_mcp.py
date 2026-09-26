@@ -127,7 +127,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.26"  # tool-opportunity market council and ranked commercial tool gate
+VERSION = "0.99.27"  # source coverage, specific-tool gate, independent real-price evidence
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -6862,21 +6862,21 @@ async def _free_web_research(
 
 
 async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
-    """Market scout over public, no-login surfaces with bounded request counts."""
+    """Market scout over public, no-login surfaces with bounded request counts and source diagnostics."""
     cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1
     terms=market_scout_terms(cycle,6)
-    # Preserve the query-builder v2 integration contract for diagnostics/memory
-    # compatibility. TOOL_OPPORTUNITY market queries remain authoritative.
+    diagnostics={
+        "github_issues":{"requests":0,"records_read":0,"errors":[]},
+        "mcp_registry":{"requests":0,"records_read":0,"errors":[]},
+    }
     if QUERY_BUILDER_V2_ENABLED:
         try:
-            build_scout_queries(
-                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
-                1,
-            )
+            build_scout_queries(AUTOPILOT_STATE.get("commercial_evidence_memory") or [],1)
         except Exception:
             pass
 
     async def github(family: str, term: str):
+        diagnostics["github_issues"]["requests"]+=1
         try:
             headers={"Accept":"application/vnd.github+json","User-Agent":"MYCELIX/"+VERSION}
             async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False,headers=headers) as client:
@@ -6885,9 +6885,10 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
                     params={"q":f'"{term}" is:issue',"sort":"updated","order":"desc","per_page":4},
                 )
                 if not r.is_success:
+                    diagnostics["github_issues"]["errors"].append(f"http_{r.status_code}:{term}"[:240])
                     return []
                 data=r.json()
-            return [{
+            rows=[{
                 "family":family,
                 "source":"github-issues",
                 "query":term,
@@ -6896,12 +6897,22 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
                 "text":x.get("body") or x.get("title") or "",
                 "date":x.get("updated_at") or x.get("created_at"),
             } for x in (data.get("items") or [])[:4] if isinstance(x,dict)]
-        except Exception:
+            diagnostics["github_issues"]["records_read"]+=len(rows)
+            return rows
+        except Exception as e:
+            diagnostics["github_issues"]["errors"].append((type(e).__name__+":"+str(e))[:240])
             return []
 
     async def mcp_registry(family: str, term: str):
+        diagnostics["mcp_registry"]["requests"]+=1
         try:
-            data=await get_json(MCP_REGISTRY+"/v0.1/servers",{"search":term,"limit":4})
+            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION}
+            async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=True,headers=headers) as client:
+                r=await client.get(MCP_REGISTRY+"/v0.1/servers",params={"search":term,"limit":4})
+                if not r.is_success:
+                    diagnostics["mcp_registry"]["errors"].append(f"http_{r.status_code}:{term}"[:240])
+                    return []
+                data=r.json()
             items=(data.get("servers") or data.get("items") or data.get("data") or []) if isinstance(data,dict) else (data if isinstance(data,list) else [])
             out=[]
             for raw in items[:4]:
@@ -6921,14 +6932,23 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
                     "text":obj.get("description") or "",
                     "date":obj.get("updatedAt") or obj.get("publishedAt"),
                 })
+            diagnostics["mcp_registry"]["records_read"]+=len(out)
+            if items and not out:
+                diagnostics["mcp_registry"]["errors"].append("parser:no_public_url_in_registry_records")
             return out
-        except Exception:
+        except Exception as e:
+            diagnostics["mcp_registry"]["errors"].append((type(e).__name__+":"+str(e))[:240])
             return []
 
     gh,mcp_rows=await asyncio.gather(
         asyncio.gather(*(github(x["family"],x["term"]) for x in terms)),
         asyncio.gather(*(mcp_registry(x["family"],x["term"]) for x in terms)),
     )
+    for key in ("github_issues","mcp_registry"):
+        if diagnostics[key]["records_read"]==0 and not diagnostics[key]["errors"]:
+            diagnostics[key]["errors"].append("zero_records:public_query_returned_empty")
+    AUTOPILOT_STATE["market_source_diagnostics"]=diagnostics
+
     out=[]
     seen=set()
     for batch in list(gh)+list(mcp_rows):
@@ -7958,6 +7978,28 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             ]
 
     web_research = await bounded_web_research()
+    source_diagnostics=dict(AUTOPILOT_STATE.get("market_source_diagnostics") or {})
+    for key in ("pricing_pages","product_hunt","extension_marketplaces"):
+        source_diagnostics.setdefault(key,{"requests":0,"records_read":0,"errors":[]})
+    for group in web_research:
+        if not isinstance(group,dict):
+            continue
+        q=" ".join(str(group.get("query") or "").split()).lower()
+        meta=query_meta.get(q) or {}
+        role=str(meta.get("role") or "")
+        key="pricing_pages" if role=="tool_pricing" else "product_hunt" if role=="product_hunt" else "extension_marketplaces" if role=="extension_marketplace" else ""
+        if not key:
+            continue
+        source_diagnostics[key]["requests"]+=1
+        rows=group.get("results") if isinstance(group.get("results"),list) else []
+        source_diagnostics[key]["records_read"]+=len(rows)
+        err=str(group.get("error") or "").strip()
+        if err:
+            source_diagnostics[key]["errors"].append(err[:240])
+    for key in ("pricing_pages","product_hunt","extension_marketplaces"):
+        if source_diagnostics[key]["records_read"]==0 and not source_diagnostics[key]["errors"]:
+            source_diagnostics[key]["errors"].append("zero_records:public_search_returned_empty_or_provider_filtered")
+    AUTOPILOT_STATE["market_source_diagnostics"]=source_diagnostics
     scout_results = [{"ok":True,"query":q,"answers":[],"mcp_candidates":[],"rejected_responses":[],"discovery_errors":[]} for q in searches]
     evidence = []
     seen_answers = set()
@@ -8111,6 +8153,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         demand_evidence,
         seti_catalog,
         query_meta,
+        source_diagnostics=source_diagnostics,
     )
     AUTOPILOT_STATE["tool_opportunities"]=market_analysis
     council_rows=list(market_analysis.get("council_transcripts") or [])
@@ -8131,6 +8174,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     ] if top_opportunity.get("gate_pass") else []
     evidence_quality["tool_opportunity_schema_v"]=TOOL_OPPORTUNITY_SCHEMA_VERSION
     evidence_quality["tool_opportunities_top5"]=market_analysis.get("top5") or []
+    evidence_quality["market_source_coverage"]=market_analysis.get("source_coverage") or {}
 
     ingestion_diag=dict(evidence_quality.get("ingestion_diagnostics") or {})
     ingestion_diag.update(candidate_purge_diagnostics)
@@ -10471,6 +10515,35 @@ async def _autopilot_loop() -> None:
         await asyncio.sleep(AUTOPILOT_INTERVAL_SECONDS)
 
 
+async def api_run_market_cycles(request: Request):
+    """Authenticated bounded validation runner; never bypasses commercial/payment guardrails."""
+    if HEARTBEAT_TOKEN:
+        supplied=(request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or "").strip()
+        if supplied != HEARTBEAT_TOKEN:
+            return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
+    try:
+        requested=max(1,min(int(request.query_params.get("count") or "1"),3))
+    except ValueError:
+        requested=1
+    before=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    for _ in range(requested):
+        await _autopilot_cycle()
+    after=int(AUTOPILOT_STATE.get("cycles_completed") or 0)
+    data=AUTOPILOT_STATE.get("tool_opportunities") or {}
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "requested":requested,
+        "cycles_completed_before":before,
+        "cycles_completed_after":after,
+        "cycles_executed":max(0,after-before),
+        "quality_gate":bool(data.get("top_gate_pass")),
+        "source_coverage":data.get("source_coverage") or {},
+        "top5":data.get("top5") or [],
+        "council_transcripts":data.get("council_transcripts") or [],
+    })
+
+
 async def api_council(request: Request):
     data=AUTOPILOT_STATE.get("tool_opportunities") or {}
     return JSONResponse({
@@ -10931,6 +11004,7 @@ app = Starlette(
         Route("/api/outcomes", api_outcomes, methods=["GET"]),
         Route("/council", council_page, methods=["GET"]),
         Route("/api/council", api_council, methods=["GET"]),
+        Route("/api/market/run-cycles", api_run_market_cycles, methods=["POST"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
