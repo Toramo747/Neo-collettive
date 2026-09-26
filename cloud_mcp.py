@@ -112,7 +112,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.14"  # demand-signal guards and bounded desire experiment
+VERSION = "0.99.15"  # bounded external research and autopilot cycle deadlines
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -162,6 +162,9 @@ SEARCH_PROVIDER_MODE = (os.getenv("NEO_SEARCH_PROVIDER") or "auto").strip().lowe
 SEARCH_MAX_CALLS_PER_CYCLE = max(0,min(100,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_CYCLE","10"))))
 SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_DAY","150"))))
 SEARCH_MIN_INTERVAL_MS = max(0,min(5000,int(os.getenv("NEO_SEARCH_MIN_INTERVAL_MS","1100"))))
+AGENT_PROBE_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_AGENT_PROBE_TIMEOUT_SECONDS","75"))))
+WEB_RESEARCH_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_WEB_RESEARCH_TIMEOUT_SECONDS","75"))))
+AUTOPILOT_CYCLE_TIMEOUT_SECONDS = max(90.0,min(900.0,float(os.getenv("NEO_AUTOPILOT_CYCLE_TIMEOUT_SECONDS","300"))))
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 SETI_EVERY_CYCLES = max(1, min(48, int(os.getenv("NEO_SETI_EVERY_CYCLES", "6"))))
@@ -7735,9 +7738,47 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         )
         return await ask_agents_data(q,question,max_agents)
 
+    async def bounded_agent_probes() -> list[dict]:
+        try:
+            return await asyncio.wait_for(
+                asyncio.gather(*(ask_probe_agents(q) for q in searches)),
+                timeout=AGENT_PROBE_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return [
+                {
+                    "ok": False,
+                    "query": q,
+                    "answers": [],
+                    "mcp_candidates": [],
+                    "rejected_responses": [],
+                    "discovery_errors": [{"error": "agent_probe_deadline_exceeded"}],
+                }
+                for q in searches
+            ]
+
+    async def bounded_web_research() -> list[dict]:
+        try:
+            return await asyncio.wait_for(
+                _free_web_research(web_queries, per_query=6, query_meta=query_meta),
+                timeout=WEB_RESEARCH_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return [
+                {
+                    "ok": False,
+                    "query": q,
+                    "results": [],
+                    "count": 0,
+                    "source_counts": {},
+                    "error": "web_research_deadline_exceeded",
+                }
+                for q in web_queries
+            ]
+
     scout_results, web_research = await asyncio.gather(
-        asyncio.gather(*(ask_probe_agents(q) for q in searches)),
-        _free_web_research(web_queries, per_query=6, query_meta=query_meta),
+        bounded_agent_probes(),
+        bounded_web_research(),
     )
     evidence = []
     seen_answers = set()
@@ -9956,7 +9997,10 @@ async def _autopilot_cycle() -> None:
         )
         completed=False
         try:
-            result = await director_run(AUTOPILOT_GOAL, 0.0, 5, 3)
+            result = await asyncio.wait_for(
+                director_run(AUTOPILOT_GOAL, 0.0, 5, 3),
+                timeout=AUTOPILOT_CYCLE_TIMEOUT_SECONDS,
+            )
             AUTOPILOT_STATE["last_status"] = result.get("status")
             AUTOPILOT_STATE["cycles_completed"] = int(AUTOPILOT_STATE.get("cycles_completed") or 0) + 1
 
