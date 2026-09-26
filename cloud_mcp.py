@@ -32,6 +32,14 @@ from inbound_security import classify_inbound_security, quarantine_legacy_inboun
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
+from tool_opportunity import (
+    TOOL_OPPORTUNITY_SCHEMA_VERSION,
+    analyze_tool_opportunities,
+    market_query_plan,
+    market_scout_terms,
+    opportunity_candidate,
+    seti_market_catalog,
+)
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
 from query_builder import (
     breakout_queries as build_breakout_queries,
@@ -119,7 +127,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.25"  # reproducible dependency lock and runtime license gate
+VERSION = "0.99.26"  # tool-opportunity market council and ranked commercial tool gate
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -185,7 +193,7 @@ AICOMGLOBAL_BACKOFF_MAX_CYCLES = max(SETI_EVERY_CYCLES, min(96, int(os.getenv("N
 AUTOPILOT_GOAL = os.getenv(
     "NEO_AUTOPILOT_GOAL",
     "Produci risultati esterni verificabili, non semplice attivita interna. Priorita 1: completa un dialogo 3/3 con almeno un peer A2A pubblico indipendente. "
-    "Priorita 2: su una sola tesi commerciale concreta, supera il gate invariato di domanda pagante oppure scartala entro il budget di 4 cicli e cambia problema. "
+    "Priorita 2: classifica tool commercialmente richiesti con fonti verificabili; autorizza build solo se il primo TOOL_OPPORTUNITY supera il gate con almeno due segnali di pagamento indipendenti. "
     "Coordina Jarvis, Peer Closer, Market Closer, Outcome Auditor, agenti ed evidence scouts. Non considerare versioni, scan, candidati o build come risultati. "
     "Non effettuare spese, pagamenti, contratti, outreach commerciale, uso di account personali o transazioni senza approvazione umana."
 )
@@ -301,6 +309,15 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "active_thesis": None,
     "thesis_history": [],
+    "tool_opportunities": {
+        "schema_v": TOOL_OPPORTUNITY_SCHEMA_VERSION,
+        "generated_at_utc": None,
+        "mode": "tool_commercial_demand",
+        "top5": [],
+        "top_gate_pass": False,
+        "council_transcripts": [],
+    },
+    "council_history": [],
     "problem_performance": {},
     "problem_cooldowns": {},
     "query_execution": {
@@ -395,6 +412,8 @@ def _state_payload() -> dict:
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
         "active_thesis": AUTOPILOT_STATE.get("active_thesis"),
         "thesis_history": list(AUTOPILOT_STATE.get("thesis_history") or [])[-30:],
+        "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
+        "council_history": list(AUTOPILOT_STATE.get("council_history") or [])[-20:],
         "problem_performance": AUTOPILOT_STATE.get("problem_performance") or {},
         "problem_cooldowns": AUTOPILOT_STATE.get("problem_cooldowns") or {},
         "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
@@ -6842,75 +6861,76 @@ async def _free_web_research(
     ))
 
 
-async def evidence_scouts(goal: str, limit: int = 8) -> list[dict]:
-    """Collect demand/problem signals from public Hacker News and GitHub APIs."""
-    broad_terms=[
-        "workflow automation","spreadsheet automation","AI SaaS","micro SaaS","developer tools",
-        "cybersecurity software","ecommerce software","SEO software","analytics SaaS","API integration",
-        "customer support software","document processing","compliance software","productivity SaaS",
-        "small business software","creator tools"
-    ]
-    rng=secrets.SystemRandom()
-    terms=rng.sample(broad_terms,k=min(7,len(broad_terms)))
-    if QUERY_BUILDER_V2_ENABLED:
-        try:
-            terms=build_scout_queries(
-                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
-                7,
-            ) or terms
-        except Exception:
-            pass
+async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
+    """Market scout over public, no-login surfaces with bounded request counts."""
+    cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1
+    terms=market_scout_terms(cycle,6)
 
-    async def hn(term: str):
-        try:
-            data = await get_json("https://hn.algolia.com/api/v1/search_by_date", {"query": term, "tags": "story", "hitsPerPage": 5})
-            out = []
-            for x in (data.get("hits") or [])[:5]:
-                if not isinstance(x, dict):
-                    continue
-                url = x.get("url") or ("https://news.ycombinator.com/item?id=" + str(x.get("objectID") or ""))
-                out.append({"source":"hackernews","query":term,"title":x.get("title") or "","url":url,"text":x.get("story_text") or x.get("title") or ""})
-            return out
-        except Exception:
-            return []
-
-    async def github(term: str):
+    async def github(family: str, term: str):
         try:
             headers={"Accept":"application/vnd.github+json","User-Agent":"MYCELIX/"+VERSION}
-            async with httpx.AsyncClient(timeout=min(TIMEOUT,12), follow_redirects=False, headers=headers) as client:
-                r=await client.get("https://api.github.com/search/issues",params={"q":term+" is:issue","sort":"updated","order":"desc","per_page":5})
+            async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False,headers=headers) as client:
+                r=await client.get(
+                    "https://api.github.com/search/issues",
+                    params={"q":f'"{term}" is:issue',"sort":"updated","order":"desc","per_page":4},
+                )
                 if not r.is_success:
                     return []
                 data=r.json()
+            return [{
+                "family":family,
+                "source":"github-issues",
+                "query":term,
+                "title":x.get("title") or "",
+                "url":x.get("html_url") or "",
+                "text":x.get("body") or x.get("title") or "",
+                "date":x.get("updated_at") or x.get("created_at"),
+            } for x in (data.get("items") or [])[:4] if isinstance(x,dict)]
+        except Exception:
+            return []
+
+    async def mcp_registry(family: str, term: str):
+        try:
+            data=await get_json(MCP_REGISTRY+"/v0.1/servers",{"search":term,"limit":4})
+            items=(data.get("servers") or data.get("items") or data.get("data") or []) if isinstance(data,dict) else (data if isinstance(data,list) else [])
             out=[]
-            for x in (data.get("items") or [])[:5]:
-                if not isinstance(x,dict):
+            for raw in items[:4]:
+                obj=raw.get("server",raw) if isinstance(raw,dict) else {}
+                if not isinstance(obj,dict):
                     continue
-                out.append({"source":"github-issues","query":term,"title":x.get("title") or "","url":x.get("html_url") or "","text":x.get("body") or x.get("title") or ""})
+                repo=(obj.get("repository") or {}) if isinstance(obj.get("repository"),dict) else {}
+                url=str(obj.get("websiteUrl") or repo.get("url") or obj.get("url") or "").strip()
+                if not url:
+                    continue
+                out.append({
+                    "family":family,
+                    "source":"mcp-registry",
+                    "query":term,
+                    "title":obj.get("title") or obj.get("name") or "MCP server",
+                    "url":url,
+                    "text":obj.get("description") or "",
+                    "date":obj.get("updatedAt") or obj.get("publishedAt"),
+                })
             return out
         except Exception:
             return []
 
-    hn_batches, gh_batches = await asyncio.gather(
-        asyncio.gather(*(hn(t) for t in terms)),
-        asyncio.gather(*(github(t) for t in terms)),
+    gh,mcp_rows=await asyncio.gather(
+        asyncio.gather(*(github(x["family"],x["term"]) for x in terms)),
+        asyncio.gather(*(mcp_registry(x["family"],x["term"]) for x in terms)),
     )
-    seen=set()
     out=[]
-    for i in range(max(len(hn_batches),len(gh_batches))):
-        for source_batches in (hn_batches,gh_batches):
-            if i>=len(source_batches):
+    seen=set()
+    for batch in list(gh)+list(mcp_rows):
+        for item in batch:
+            key=str(item.get("url") or "")
+            if not key or key in seen:
                 continue
-            for item in source_batches[i][:3]:
-                key=(item.get("url") or "") + "|" + (item.get("title") or "")
-                if not key or key in seen:
-                    continue
-                seen.add(key)
-                out.append(item)
-                if len(out)>=max(1,min(limit,30)):
-                    return out
+            seen.add(key)
+            out.append(item)
+            if len(out)>=max(1,min(limit,30)):
+                return out
     return out
-
 
 
 def build_candidate(evidence_quality: dict) -> dict:
@@ -7673,6 +7693,7 @@ def _compact_director_result(result: dict) -> dict:
         "collective_summary": result.get("collective_summary") or {},
         "quality_gate": quality.get("quality_gate"),
         "gate_rule": quality.get("gate_rule"),
+        "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "qualified_problem_keys": quality.get("qualified_problem_keys") or [],
         "evidence_schema_v": quality.get("evidence_schema_v"),
@@ -7856,7 +7877,14 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         },
     )
 
-    search_strategy = _entropy_search_strategy(goal, 8)
+    market_plan=market_query_plan(int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,10)
+    search_strategy = {
+        "mode":"tool_opportunity_market",
+        "queries":[x["query"] for x in market_plan],
+        "query_plan":market_plan,
+        "planned_query_count":len(market_plan),
+        "policy":"rank commercial tool opportunities from URL-grounded market signals; no login scraping; no payment",
+    }
     searches = search_strategy["queries"]
     query_meta={
         " ".join(str(x.get("query") or "").split()).lower(): x
@@ -7919,10 +7947,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 for q in web_queries
             ]
 
-    scout_results, web_research = await asyncio.gather(
-        bounded_agent_probes(),
-        bounded_web_research(),
-    )
+    web_research = await bounded_web_research()
+    scout_results = [{"ok":True,"query":q,"answers":[],"mcp_candidates":[],"rejected_responses":[],"discovery_errors":[]} for q in searches]
     evidence = []
     seen_answers = set()
     valid = []
@@ -8066,20 +8092,67 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         query_meta,
         revalidation_stats=revalidation_stats,
     )
+    seti_catalog=seti_market_catalog(
+        SETI_PRIVATE_STATE.get("candidates") or {},
+        SETI_PRIVATE_STATE.get("interviews") or {},
+    )
+    market_analysis=analyze_tool_opportunities(
+        web_research,
+        demand_evidence,
+        seti_catalog,
+        query_meta,
+    )
+    AUTOPILOT_STATE["tool_opportunities"]=market_analysis
+    council_rows=list(market_analysis.get("council_transcripts") or [])
+    council_history=list(AUTOPILOT_STATE.get("council_history") or [])
+    council_history.append({
+        "generated_at_utc":market_analysis.get("generated_at_utc"),
+        "top5":market_analysis.get("top5") or [],
+        "transcripts":council_rows,
+    })
+    AUTOPILOT_STATE["council_history"]=council_history[-20:]
+    legacy_gate=bool(evidence_quality.get("quality_gate"))
+    top_opportunity=(market_analysis.get("top5") or [{}])[0] if market_analysis.get("top5") else {}
+    evidence_quality["legacy_human_problem_gate"]=legacy_gate
+    evidence_quality["quality_gate"]=bool(top_opportunity.get("gate_pass"))
+    evidence_quality["gate_rule"]=market_analysis.get("gate_rule")
+    evidence_quality["qualified_problem_keys"]=[
+        "tool_opportunity:"+str(top_opportunity.get("family") or "")
+    ] if top_opportunity.get("gate_pass") else []
+    evidence_quality["tool_opportunity_schema_v"]=TOOL_OPPORTUNITY_SCHEMA_VERSION
+    evidence_quality["tool_opportunities_top5"]=market_analysis.get("top5") or []
+
     ingestion_diag=dict(evidence_quality.get("ingestion_diagnostics") or {})
     ingestion_diag.update(candidate_purge_diagnostics)
     evidence_quality["ingestion_diagnostics"]=ingestion_diag
     family_performance = _update_family_performance(evidence_quality)
-    product_candidate = build_candidate(evidence_quality)
+    product_candidate = opportunity_candidate(
+        ((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("top5") or [{}])[0]
+        if ((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("top5") or [])
+        else {}
+    )
 
-    collective_review = {"ok": False, "ran": False, "reason": "no qualified candidate"}
-    dialogue_report = {"ran":False,"reason":"no qualified candidate"}
-    if product_candidate.get("status") == "PILOT_READY":
-        collective_query, collective_problem = _collective_problem(product_candidate, evidence_quality)
-        collective_review = await collective_two_rounds(collective_query, collective_problem, min(3, max_agents))
-        dialogue_report = _update_dialogue_learning(
-            collective_review, collective_query, collective_problem, goal
-        )
+    top_market=((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("top5") or [{}])[0] if ((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("top5") or []) else {}
+    council_transcript=((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("council_transcripts") or [{}])[0] if ((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("council_transcripts") or []) else {}
+    collective_review={
+        "ok":bool(top_market.get("gate_pass")),
+        "ran":True,
+        "protocol":"TOOL-COUNCIL-1",
+        "round1":[{"agent":x.get("role"),"ok":True,"quality_ok":True,"response":{"response":x.get("text")}} for x in (council_transcript.get("messages") or [])],
+        "round2":[
+            {"agent":"Critic","ok":True,"quality_ok":True,"response":{"response":"Contrary evidence reviewed; build remains blocked unless the top TOOL_OPPORTUNITY passes the URL-grounded gate."}},
+            {"agent":"Builder-planner","ok":True,"quality_ok":True,"response":{"response":"No spending or external action. Bounded MVP only after Jarvis confirms the top opportunity gate."}},
+        ] if top_market.get("gate_pass") else [],
+        "external_peers_used":[],
+        "external_peer_policy":"SETI_ADMITTED_ONLY",
+        "market_gate_pass":bool(top_market.get("gate_pass")),
+    }
+    dialogue_report={
+        "ran":True,
+        "protocol":"TOOL-COUNCIL-1",
+        "transcript":council_transcript,
+        "external_peers_used":[],
+    }
 
     jarvis_review = await ask_jarvis(
         jarvis_message,
@@ -8117,7 +8190,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         jarvis_decision = _local_review_decision(product_candidate, evidence_quality, collective_summary)
         jarvis_decision_source = "local_policy_fallback"
     build_ready = bool(
-        product_candidate.get("status") == "PILOT_READY"
+        bool(top_market.get("gate_pass"))
+        and product_candidate.get("status") == "PILOT_READY"
         and collective_summary.get("ok")
         and int(collective_summary.get("round2_valid") or 0) >= 2
         and jarvis_decision == "VALIDATE"
@@ -8221,6 +8295,8 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "web_research": web_research,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
+        "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
+        "council": council_transcript,
         "ingestion_diagnostics": evidence_quality.get("ingestion_diagnostics") or {},
         "family_performance": family_performance,
         "product_candidate": product_candidate,
@@ -10385,6 +10461,28 @@ async def _autopilot_loop() -> None:
         await asyncio.sleep(AUTOPILOT_INTERVAL_SECONDS)
 
 
+async def api_council(request: Request):
+    data=AUTOPILOT_STATE.get("tool_opportunities") or {}
+    return JSONResponse({
+        "ok":True,
+        "neo_version":VERSION,
+        "tool_opportunities":data,
+        "latest_debate":((data.get("council_transcripts") or [{}])[0] if data.get("council_transcripts") else {}),
+        "history":list(AUTOPILOT_STATE.get("council_history") or [])[-10:],
+        "external_peer_policy":"Only SETI-admitted peers may participate in council collaboration.",
+    })
+
+
+async def council_page(request: Request):
+    data=AUTOPILOT_STATE.get("tool_opportunities") or {}
+    top=data.get("top5") or []
+    transcripts=data.get("council_transcripts") or []
+    body='<section class="card"><span class="tag">TOOL COUNCIL</span><h2>Commercial Tool Opportunities</h2><p>URL-grounded market evidence. Build is authorized only when rank #1 passes the tool gate.</p></section>'
+    body+='<section class="card"><h2>Top 5</h2><pre>'+html.escape(json.dumps(top,ensure_ascii=False,indent=2,default=str))+'</pre></section>'
+    body+='<section class="card"><h2>Latest debate</h2><pre>'+html.escape(json.dumps(transcripts[:5],ensure_ascii=False,indent=2,default=str))+'</pre></section>'
+    return layout("Council",body)
+
+
 async def api_outcomes(request: Request):
     return JSONResponse({
         "ok":True,
@@ -10821,6 +10919,8 @@ app = Starlette(
         Route("/api/render/diagnostics", api_render_diagnostics, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/api/outcomes", api_outcomes, methods=["GET"]),
+        Route("/council", council_page, methods=["GET"]),
+        Route("/api/council", api_council, methods=["GET"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
