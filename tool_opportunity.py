@@ -137,6 +137,35 @@ def _family_from_text(text: str) -> str:
     return best[0] if best[1] else "productivity_tools"
 
 
+FAMILY_RELEVANCE_MARKERS = {
+    "ai_tools": ("ai","agent","a2a","mcp","llm"),
+    "developer_tools": ("developer","code","coding","debug","test","testing","ci","vscode","devops"),
+    "integration_api": ("api","integration","webhook","connector","mcp"),
+    "analytics_tools": ("analytics","report","reporting","dashboard","business intelligence","bi "),
+    "customer_support": ("customer support","support","helpdesk","ticket","inbox"),
+    "cybersecurity_tools": ("security","cybersecurity","vulnerability","soc","audit","mcp"),
+    "productivity_tools": ("productivity","workflow","automation","task"),
+    "marketing_seo": ("seo","marketing","keyword","content marketing"),
+}
+
+
+def _row_relevant_to_family(row: dict, family: str) -> bool:
+    text=(" ".join([
+        str(row.get("title") or ""),
+        str(row.get("excerpt") or ""),
+        str(row.get("url") or ""),
+    ])).lower()
+    return any(marker in text for marker in FAMILY_RELEVANCE_MARKERS.get(family, ()))
+
+
+def _competitor_price_row(row: dict, family: str) -> bool:
+    if not bool(row.get("real_price")):
+        return False
+    if str(row.get("coverage_source") or "") not in {"pricing_pages","extension_marketplaces"}:
+        return False
+    return _row_relevant_to_family(row,family)
+
+
 def market_query_plan(cycle: int, count: int = 10) -> list[dict]:
     """Rotate five tool categories and query public market surfaces without login scraping."""
     keys=list(CATEGORY_CONFIGS)
@@ -327,7 +356,8 @@ def analyze_tool_opportunities(
             enriched["coverage_source"]=coverage_source
             row=_source_row(enriched,chosen,observed_at)
             if row and chosen in by_family:
-                by_family[chosen].append(row)
+                if _row_relevant_to_family(row,chosen):
+                    by_family[chosen].append(row)
                 if coverage_source in coverage:
                     coverage[coverage_source]["records_read"]+=1
 
@@ -341,7 +371,8 @@ def analyze_tool_opportunities(
         enriched["coverage_source"]=coverage_source
         row=_source_row(enriched,family,observed_at)
         if row and family in by_family:
-            by_family[family].append(row)
+            if _row_relevant_to_family(row,family):
+                by_family[family].append(row)
             if coverage_source in coverage:
                 coverage[coverage_source]["records_read"]+=1
 
@@ -377,7 +408,7 @@ def analyze_tool_opportunities(
             unique.setdefault(row["url"],row)
         sources=list(unique.values())
         payments=[x for x in sources if "PAYMENT" in x["signal_types"]]
-        real_payments=[x for x in payments if bool(x.get("real_price"))]
+        real_payments=[x for x in payments if _competitor_price_row(x,family)]
         dissatisfaction=[x for x in sources if "DISSATISFACTION" in x["signal_types"]]
         gaps=[x for x in sources if "GAP" in x["signal_types"]]
         trends=[x for x in sources if "TREND" in x["signal_types"]]
@@ -395,7 +426,7 @@ def analyze_tool_opportunities(
         counter_domains=sorted({x["domain"] for x in counters})
         source_domains=sorted({x["domain"] for x in sources})
 
-        score=min(50,len(payment_keys)*25)
+        score=min(50,(len(real_payment_keys)*25))
         score+=min(30,len(dissatisfaction_domains)*15)
         score+=min(10,len(gap_domains)*10)
         score+=min(10,len(trend_domains)*5)
@@ -423,7 +454,11 @@ def analyze_tool_opportunities(
             for x in gaps[:5]
         ]
         payment_signals=[
-            {"url":x["url"],"date":x["date"],"domain":x["domain"],"price":x.get("price"),"source":x["source"]}
+            {
+                "url":x["url"],"date":x["date"],"domain":x["domain"],"price":x.get("price"),
+                "source":x["source"],"coverage_source":x.get("coverage_source"),
+                "real_competitor_price":_competitor_price_row(x,family),
+            }
             for x in payments[:8]
         ]
         dissatisfaction_signals=[
@@ -441,7 +476,6 @@ def analyze_tool_opportunities(
         thesis_specific=bool(str(cfg.get("title") or "").strip() and str(cfg.get("target_user") or "").strip())
         gate_pass=bool(
             thesis_specific
-            and len(payment_keys)>=2
             and len(real_payment_keys)>=2
             and len(dissatisfaction_domains)>=1
             and len(gap_domains)>=1
@@ -451,8 +485,8 @@ def analyze_tool_opportunities(
         )
         missing=[]
         if not thesis_specific: missing.append("specific_tool_name_and_target_user")
-        if len(payment_keys)<2: missing.append("two_independent_payment_signals")
-        if len(real_payment_keys)<2: missing.append("two_competitors_with_real_price")
+        if len(real_payment_keys)<2: missing.append("two_independent_real_price_competitors")
+        if len(existing_tools)<2: missing.append("two_competitors_with_real_price")
         if len(dissatisfaction_domains)<1: missing.append("dissatisfaction_signal")
         if len(gap_domains)<1: missing.append("documented_gap")
         if len(source_domains)<3: missing.append("three_independent_source_domains")
@@ -500,6 +534,14 @@ def analyze_tool_opportunities(
                     coverage[src]["payment_required_signals"]+=1
             if "DISSATISFACTION" in row.get("signal_types",[]):
                 coverage[src]["dissatisfaction_signals"]+=1
+
+    for name,diag in source_diagnostics.items():
+        if name in coverage and isinstance(diag,dict):
+            coverage[name]["records_read"]=max(
+                int(coverage[name].get("records_read") or 0),
+                int(diag.get("records_read") or 0),
+            )
+            coverage[name]["requests"]=int(diag.get("requests") or 0)
 
     opportunities.sort(
         key=lambda x:(int(x["gate_pass"]),int(x["monetization_score"]),len(x["payment_signals"]),len(x["sources"])),
