@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -50,3 +51,12 @@ jobs:
             --target "${TARGET_SHA}" \
             --title "${tag}" \
             --notes "Relicensed under BUSL 1.1 — (c) 2026 Andrea Gava"
+
+      - name: Publish current version to official MCP Registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v${RELEASE_VERSION}"
+          gh workflow run publish-mcp-registry.yml --ref "${tag}"
+          echo "official MCP Registry publication dispatched for ${tag}"
