@@ -1,0 +1,31 @@
+name: AICOMGLOBAL adapter validation
+
+on:
+  push:
+    branches: [experiment-aicomglobal-adapter]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: python -m unittest -v test_aicomglobal_adapter.py
+      - name: Read-only live smoke
+        run: |
+          python - <<'PY'
+          from aicomglobal_adapter import call_read_only
+          out=call_read_only("aicom_list_services",{},timeout=30)
+          print("ok="+str(out.get("ok")))
+          print("state="+str(out.get("state")))
+          print("text_count="+str(len(out.get("texts") or [])))
+          for text in (out.get("texts") or [])[:8]:
+              print(text[:1200])
+          if not out.get("ok"):
+              raise SystemExit(1)
+          PY
