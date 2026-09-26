@@ -426,6 +426,7 @@ def analyze_tool_opportunities(
         "top5":top5,
         "top_gate_pass":bool(top5 and top5[0].get("gate_pass")),
         "council_transcripts":transcripts,
+        "seti_market_catalog":[dict(x) for x in (seti_catalog or [])][:32],
         "gate_rule":"The top tool opportunity alone may authorize build, and only after >=2 independent payment signals plus the documented quality conditions.",
     }
 
