@@ -168,5 +168,53 @@ class ToolOpportunityTests(unittest.TestCase):
 
 
 
+    def test_free_or_unpriced_seti_is_not_payment_signal(self):
+        candidates={
+            "freepeer1234":{
+                "agent_card_url":"https://free.example/.well-known/agent-card.json",
+                "title":"Free peer",
+            }
+        }
+        interviews={
+            "freepeer1234":{
+                "endpoint":"https://free.example/a2a",
+                "http_status":200,
+                "response_excerpt":"Public capability with no commercial terms.",
+                "last_attempt_utc":"2026-09-26T10:00:00+00:00",
+            }
+        }
+        catalog=seti_market_catalog(candidates,interviews)
+        self.assertEqual(catalog[0]["pricing_model"],"FREE_OR_UNPRICED")
+        result=analyze_tool_opportunities([],[],catalog,{}, "2026-09-26T12:00:00+00:00")
+        ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
+        self.assertEqual(ai["payment_signals"],[])
+
+    def test_indexed_github_issue_without_agent_endpoint_is_not_seti_market_catalog(self):
+        rows=seti_market_catalog({
+            "issue1234":{
+                "url":"https://github.com/example/repo/issues/1",
+                "title":"A2A feature request",
+            }
+        },{})
+        self.assertEqual(rows,[])
+
+    def test_explicit_usd_prefix_is_payment_evidence(self):
+        catalog=[{
+            "candidate":"SETI-paid1234",
+            "url":"https://paid.example/a2a",
+            "observed_at_utc":"2026-09-26T10:00:00+00:00",
+            "category":"ai_tools",
+            "capabilities":["Diagnostic starts at USD 49 and repair pilot USD 149."],
+            "pricing_model":"FREE_OR_UNPRICED",
+            "http_status":200,
+            "payment_performed":False,
+        }]
+        result=analyze_tool_opportunities([],[],catalog,{},"2026-09-26T12:00:00+00:00")
+        ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
+        self.assertEqual(len(ai["payment_signals"]),1)
+        self.assertEqual(ai["payment_signals"][0]["domain"],"paid.example")
+
+
+
 if __name__=="__main__":
     unittest.main()
