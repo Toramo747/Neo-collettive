@@ -3,6 +3,7 @@ import unittest
 from registry_health import (
     classify_verification,
     final_category,
+    is_opted_out,
     normalize_registry_rows,
 )
 
@@ -40,6 +41,12 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertEqual(by_name["b/pkg"]["access_class"], "package_only")
         self.assertEqual(by_name["e/sse"]["access_class"], "remote_unverifiable_transport")
         self.assertEqual(by_name["f/meta"]["access_class"], "metadata_only")
+
+    def test_opt_out_matches_exact_name_or_remote(self):
+        server={"name":"a/remote","remotes":[{"url":"https://a.example/mcp"}]}
+        self.assertTrue(is_opted_out(server,{"a/remote"}))
+        self.assertTrue(is_opted_out(server,{"https://a.example/mcp"}))
+        self.assertFalse(is_opted_out(server,{"a"}))
 
     def test_classification_is_mutually_exclusive(self):
         auth={"checks":{"initialize":{"http_status":401,"ok":False}},"errors":["initialize_failed"]}

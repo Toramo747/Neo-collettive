@@ -189,6 +189,15 @@ def read_opt_out(path: Path = OPT_OUT_PATH) -> set[str]:
     return values
 
 
+def is_opted_out(server: dict[str, Any], values: set[str]) -> bool:
+    if str(server.get("name") or "") in values:
+        return True
+    for remote in server.get("remotes") or []:
+        if isinstance(remote, dict) and str(remote.get("url") or "") in values:
+            return True
+    return False
+
+
 def classify_verification(result: dict[str, Any]) -> str:
     checks = result.get("checks") if isinstance(result.get("checks"), dict) else {}
     init = checks.get("initialize") if isinstance(checks.get("initialize"), dict) else {}
