@@ -1,0 +1,49 @@
+name: NEO Dialect Real Peer Harness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "dialect_peer_harness.py"
+      - "test_dialect_peer_harness.py"
+      - ".github/workflows/neo-dialect-peers.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  peer-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      NEO_DIALECT_TEST_BUDGET_USD: "0.60"
+      NEO_DIALECT_TEST_RESERVE_PER_CALL_USD: "0.02"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --require-hashes -r requirements.lock
+      - name: Unit test harness
+        run: python -m unittest -v test_neo_dialect.py test_dialect_peer_harness.py
+      - name: Run real provider peers
+        id: real
+        continue-on-error: true
+        run: python dialect_peer_harness.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neo-dialect-peer-report
+          path: neo_dialect_peer_report.json
+          if-no-files-found: warn
+      - name: Require at least two configured providers
+        if: steps.real.outcome != 'success'
+        run: |
+          echo "Real peer harness did not have at least two configured providers or hit an API error."
+          exit 1
