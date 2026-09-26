@@ -375,11 +375,13 @@ def analyze_tool_opportunities(
     query_meta: dict[str,dict] | None = None,
     now_utc: str | None = None,
     source_diagnostics: dict | None = None,
+    usage_evidence: dict | None = None,
 ) -> dict:
     """Build and rank TOOL_OPPORTUNITY theses from URL-grounded public signals only."""
     observed_at=_utc(now_utc)
     query_meta=query_meta or {}
     source_diagnostics=source_diagnostics if isinstance(source_diagnostics,dict) else {}
+    usage_evidence=usage_evidence if isinstance(usage_evidence,dict) else {}
     coverage_names=("seti","mcp_registry","extension_marketplaces","pricing_pages","github_issues","product_hunt")
     coverage={name:{"records_read":0,"errors":[],"payment_signals_real_price":0,"payment_required_signals":0,"dissatisfaction_signals":0} for name in coverage_names}
     for name,diag in source_diagnostics.items():
@@ -561,6 +563,7 @@ def analyze_tool_opportunities(
             "counter_signals":counter_signals,
             "feasibility":{"estimated_build_days":cfg["build_days"],"basis":"bounded MVP estimate; not part of monetization score"},
             "distribution_channel":cfg["distribution"],
+            "usage_evidence":dict(usage_evidence) if family=="mcp_reliability" else {},
             "sources":sources[:16],
             "monetization_score":score,
             "score_rule":"URL-grounded payment + dissatisfaction + gap + trend signals minus URL-grounded counter-signals only",
