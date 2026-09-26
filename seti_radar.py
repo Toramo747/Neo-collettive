@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable
 from peer_quality import BLOCKED_PEER_CLASSES
 
 SETI_SCHEMA_VERSION = 2
-SETI_ENGINE_VERSION = 14
+SETI_ENGINE_VERSION = 15
 
 DEFAULT_PASSIVE_QUERIES = [
     'site:reddit.com/r/AI_Agents "A2A" "agent card" "endpoint"',
