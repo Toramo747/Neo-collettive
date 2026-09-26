@@ -1,6 +1,7 @@
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
 import a2a_peer as peer_a2a
+import aicomglobal_adapter as aicomglobal
 import base64
 import html
 import json
@@ -112,7 +113,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.15"  # bounded external research and autopilot cycle deadlines
+VERSION = "0.99.16"  # read-only AICOMGLOBAL discovery and peer registry
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -172,6 +173,9 @@ SETI_RESULT_LIMIT = max(3, min(24, int(os.getenv("NEO_SETI_RESULT_LIMIT", "12"))
 SETI_FOLLOWUP_MIN_SECONDS = max(900, min(86400, int(os.getenv("NEO_SETI_FOLLOWUP_MIN_SECONDS", "3600"))))
 TIZA_DISCOVERY_TIMEOUT_SECONDS = max(5.0, min(20.0, float(os.getenv("NEO_TIZA_DISCOVERY_TIMEOUT_SECONDS", "12"))))
 TIZA_BACKOFF_MAX_CYCLES = max(SETI_EVERY_CYCLES, min(96, int(os.getenv("NEO_TIZA_BACKOFF_MAX_CYCLES", "48"))))
+AICOMGLOBAL_READONLY_ENABLED = (os.getenv("NEO_AICOMGLOBAL_READONLY", "1").strip().lower() in {"1","true","yes","on"})
+AICOMGLOBAL_DISCOVERY_TIMEOUT_SECONDS = max(5.0, min(30.0, float(os.getenv("NEO_AICOMGLOBAL_DISCOVERY_TIMEOUT_SECONDS", "15"))))
+AICOMGLOBAL_BACKOFF_MAX_CYCLES = max(SETI_EVERY_CYCLES, min(96, int(os.getenv("NEO_AICOMGLOBAL_BACKOFF_MAX_CYCLES", "48"))))
 AUTOPILOT_GOAL = os.getenv(
     "NEO_AUTOPILOT_GOAL",
     "Produci risultati esterni verificabili, non semplice attivita interna. Priorita 1: completa un dialogo 3/3 con almeno un peer A2A pubblico indipendente. "
@@ -6123,6 +6127,134 @@ async def _seti_tiza_opportunistic(state: dict, current_cycle: int, limit: int) 
         }
 
 
+async def _seti_aicomglobal_opportunistic(state: dict, current_cycle: int, limit: int) -> dict:
+    """Read AICOMGLOBAL commons surfaces without any write, purchase, join, or service execution."""
+    if not AICOMGLOBAL_READONLY_ENABLED:
+        return {"candidates":[],"candidate_count":0,"peer_registry":[],"source_counts":{},"errors":[],"attempted":False,"skipped":True,"skip_reason":"disabled"}
+    health=(state or {}).get("aicomglobal_health") if isinstance(state,dict) else {}
+    if not opportunistic_source_ready(health,current_cycle):
+        return {
+            "candidates":[],"candidate_count":0,"peer_registry":[],"source_counts":{},"errors":[],
+            "attempted":False,"skipped":True,"skip_reason":"circuit_backoff",
+            "next_retry_cycle":int((health or {}).get("next_retry_cycle") or 0),
+        }
+
+    async def invoke(skill: str, data: dict) -> dict:
+        return await asyncio.wait_for(
+            asyncio.to_thread(aicomglobal.call_read_only,skill,data,timeout=AICOMGLOBAL_DISCOVERY_TIMEOUT_SECONDS),
+            timeout=AICOMGLOBAL_DISCOVERY_TIMEOUT_SECONDS+2,
+        )
+
+    errors=[]
+    try:
+        agora,channel,offerings=await asyncio.gather(
+            invoke("aicom_agora_browse",{}),
+            invoke("aicom_channel_read",{"channel":"agent-jobs","limit":20}),
+            invoke("aicom_search_offerings",{"query":"agent interoperability research public A2A","limit":12}),
+            return_exceptions=True,
+        )
+    except Exception as exc:
+        agora=channel=offerings=exc
+
+    def rows(result, key):
+        if isinstance(result,Exception):
+            errors.append({"source":"aicomglobal","error":type(result).__name__+": "+str(result)[:180]})
+            return []
+        try:
+            return aicomglobal.first_collection(result,key)
+        except Exception as exc:
+            errors.append({"source":"aicomglobal","error":type(exc).__name__+": "+str(exc)[:180]})
+            return []
+
+    signals=rows(agora,"signals")
+    messages=rows(channel,"messages")
+    offer_rows=rows(offerings,"results")
+    candidates=[]
+    registry=[]
+    seen=set()
+
+    def add_registry(name, status, endpoint="", source="aicomglobal", reason=""):
+        key=(str(name or "").strip().lower(),str(endpoint or "").strip())
+        if key in seen:
+            return
+        seen.add(key)
+        registry.append({
+            "name":str(name or "unknown")[:180],
+            "status":str(status or "UNKNOWN")[:80],
+            "endpoint":str(endpoint or "")[:1200],
+            "source":source,
+            "reason":str(reason or "")[:220],
+        })
+
+    add_registry("aicomglobal","READY_READONLY",aicomglobal.AICOMGLOBAL_A2A_URL,reason="read_only_commons")
+
+    def maybe_candidate(name, endpoint, description, source, status="READY_READONLY"):
+        endpoint=str(endpoint or "").strip()
+        if status!="READY_READONLY":
+            add_registry(name,status,endpoint,source)
+            return
+        if not endpoint.startswith("https://"):
+            add_registry(name,"DOCS_ONLY",endpoint,source,"no_public_https_a2a_endpoint")
+            return
+        low=endpoint.lower()
+        if not ("/a2a" in low or "/.well-known/agent-card" in low or "/.well-known/agent.json" in low):
+            add_registry(name,"DOCS_ONLY",endpoint,source,"documentation_or_non_a2a_url")
+            return
+        raw={"name":name,"description":description,"url":endpoint}
+        if "/.well-known/" in low:
+            raw={"name":name,"description":description,"agent_card_url":endpoint}
+        candidate=registry_agent_candidate(raw,source)
+        if candidate:
+            candidate["signals"]=list(candidate.get("signals") or [])+["aicomglobal_readonly_discovery"]
+            candidates.append(candidate)
+            add_registry(name,"READY",endpoint,source,"public_free_endpoint")
+        else:
+            add_registry(name,"DOCS_ONLY",endpoint,source,"endpoint_not_seti_eligible")
+
+    for row in offer_rows:
+        status=aicomglobal.classify_listing(row)
+        maybe_candidate(
+            row.get("title") or (row.get("listedBy") or {}).get("displayName") or "offering",
+            row.get("endpoint") or row.get("contact"),
+            row.get("summary") or row.get("whoItsFor") or "",
+            "aicomglobal-offerings",
+            status=status,
+        )
+
+    for row in list(messages)+list(signals):
+        text=" ".join(str(row.get(k) or "") for k in ("title","body","text","description"))
+        name=(row.get("from") or {}).get("displayName") if isinstance(row.get("from"),dict) else row.get("from")
+        name=name or row.get("title") or "commons-peer"
+        blob=text.lower()
+        status="PAID_ONLY" if any(x in blob for x in (" x402"," usdc","wallet-gated","pay $","payment required")) else "READY_READONLY"
+        urls=aicomglobal.explicit_https_urls(text)
+        if not urls:
+            add_registry(name,"DOCS_ONLY","", "aicomglobal-agora","no_explicit_endpoint")
+            continue
+        for url in urls[:3]:
+            maybe_candidate(name,url,text[:900],"aicomglobal-agora",status=status)
+
+    dedup={}
+    for row in candidates:
+        fp=str(row.get("fingerprint") or "")
+        if fp and fp not in dedup:
+            dedup[fp]=row
+    final=list(dedup.values())[:max(1,min(int(limit or 12),24))]
+    return {
+        "candidates":final,
+        "candidate_count":len(final),
+        "peer_registry":registry[:40],
+        "source_counts":{
+            "aicomglobal_agora":len(signals),
+            "aicomglobal_agent_jobs":len(messages),
+            "aicomglobal_offerings":len(offer_rows),
+        },
+        "errors":errors[:8],
+        "attempted":True,
+        "skipped":False,
+    }
+
+
 async def seti_public_search(query: str, limit: int = 6) -> dict:
     """SETI-only passive multi-source search over public indexes."""
     meta={"role":"discovery","class":"seti"}
@@ -9819,9 +9951,10 @@ async def _seti_cycle_if_due() -> dict | None:
             per_query=5,
             registry_checks=min(10,SETI_RESULT_LIMIT),
         )
-        registry_batch,tiza_batch=await asyncio.gather(
+        registry_batch,tiza_batch,aicomglobal_batch=await asyncio.gather(
             _seti_registry_candidate_batch(limit=max(8,SETI_RESULT_LIMIT)),
             _seti_tiza_opportunistic(state,cycles,limit=max(8,SETI_RESULT_LIMIT)),
+            _seti_aicomglobal_opportunistic(state,cycles,limit=max(8,SETI_RESULT_LIMIT)),
         )
         tiza_health=update_opportunistic_source_state(
             state.get("tiza_health") or {},
@@ -9830,11 +9963,19 @@ async def _seti_cycle_if_due() -> dict | None:
             base_backoff_cycles=SETI_EVERY_CYCLES,
             max_backoff_cycles=TIZA_BACKOFF_MAX_CYCLES,
         )
+        aicomglobal_health=update_opportunistic_source_state(
+            state.get("aicomglobal_health") or {},
+            aicomglobal_batch,
+            cycles,
+            base_backoff_cycles=SETI_EVERY_CYCLES,
+            max_backoff_cycles=AICOMGLOBAL_BACKOFF_MAX_CYCLES,
+        )
         memory,enriched=merge_signal_memory(state.get("signal_memory") or {},scan,max_entries=80)
         private_inputs=(
             list(enriched)
             + list(registry_batch.get("candidates") or [])
             + list(tiza_batch.get("candidates") or [])
+            + list(aicomglobal_batch.get("candidates") or [])
         )
         private_state,private_summary=merge_private_candidate_state(
             SETI_PRIVATE_STATE,private_inputs,max_entries=24
@@ -9883,6 +10024,8 @@ async def _seti_cycle_if_due() -> dict | None:
             "last_error":None,
             "signal_memory":memory,
             "tiza_health":tiza_health,
+            "aicomglobal_health":aicomglobal_health,
+            "peer_registry":list(aicomglobal_batch.get("peer_registry") or [])[:40],
             "private_candidate_count":private_summary.get("private_candidates",0),
             "private_high_interest":private_summary.get("private_high_interest",0),
             "private_interesting":private_summary.get("private_interesting",0),
@@ -9926,6 +10069,20 @@ async def _seti_cycle_if_due() -> dict | None:
                 "tiza_status":str(tiza_health.get("status") or "unknown"),
                 "tiza_consecutive_failures":int(tiza_health.get("consecutive_failures") or 0),
                 "tiza_next_retry_cycle":int(tiza_health.get("next_retry_cycle") or 0),
+                "aicomglobal_enabled":bool(AICOMGLOBAL_READONLY_ENABLED),
+                "aicomglobal_candidates":aicomglobal_batch.get("candidate_count",0),
+                "aicomglobal_candidate_sources":aicomglobal_batch.get("source_counts") or {},
+                "aicomglobal_candidate_errors":len(aicomglobal_batch.get("errors") or []),
+                "aicomglobal_attempted":bool(aicomglobal_batch.get("attempted")),
+                "aicomglobal_skipped":bool(aicomglobal_batch.get("skipped")),
+                "aicomglobal_status":str(aicomglobal_health.get("status") or "unknown"),
+                "aicomglobal_consecutive_failures":int(aicomglobal_health.get("consecutive_failures") or 0),
+                "aicomglobal_next_retry_cycle":int(aicomglobal_health.get("next_retry_cycle") or 0),
+                "peer_registry_count":len(aicomglobal_batch.get("peer_registry") or []),
+                "peer_registry_status_counts":{
+                    status:sum(1 for row in (aicomglobal_batch.get("peer_registry") or []) if str((row or {}).get("status") or "")==status)
+                    for status in sorted({str((row or {}).get("status") or "") for row in (aicomglobal_batch.get("peer_registry") or []) if str((row or {}).get("status") or "")})
+                },
                 "tiza_error_samples":[
                     {
                         "error":str(x.get("error") or "")[:220],
