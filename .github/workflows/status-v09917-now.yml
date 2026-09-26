@@ -1,0 +1,44 @@
+name: Snapshot v0.99.17 runtime now
+
+on:
+  push:
+    branches: [verify-v09917-runtime]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Read production status
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 20 https://neo-collettive.onrender.com/api/autopilot/status > /tmp/status.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/status.json"))
+          ap=d.get("autopilot") or {}
+          s=ap.get("seti") or {}
+          sm=s.get("last_summary") or {}
+          out={
+            "neo_version":d.get("neo_version"),
+            "cycles_completed":ap.get("cycles_completed"),
+            "running":ap.get("running"),
+            "last_started_utc":ap.get("last_started_utc"),
+            "last_finished_utc":ap.get("last_finished_utc"),
+            "last_error":ap.get("last_error"),
+            "seti_engine_version":s.get("engine_version"),
+            "seti_last_scan_utc":s.get("last_scan_utc"),
+            "seti_last_error":s.get("last_error"),
+            "aicomglobal_status":sm.get("aicomglobal_status"),
+            "aicomglobal_attempted":sm.get("aicomglobal_attempted"),
+            "aicomglobal_candidates":sm.get("aicomglobal_candidates"),
+            "aicomglobal_sources":sm.get("aicomglobal_candidate_sources"),
+            "peer_registry_count":sm.get("peer_registry_count"),
+            "peer_registry_status_counts":sm.get("peer_registry_status_counts"),
+          }
+          print(json.dumps(out,indent=2,sort_keys=True))
+          PY
