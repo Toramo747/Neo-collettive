@@ -150,23 +150,26 @@ async def main() -> int:
 
     groups=[]
     meta={}
-    for query,url,result,needles,vendor in [
-        ('"MCP server monitoring" pricing subscription',COMPOSIO_PRICING,composio,["$29","mcp","tool calls"],"Composio"),
-        ('"MCP endpoint monitoring" pricing subscription',PORTKEY_PRICING,portkey,["$49","mcp","observability"],"Portkey"),
+    for query,url,result,vendor,expected_price in [
+        ('"MCP server monitoring" pricing subscription',COMPOSIO_PRICING,composio,"Composio","$29"),
+        ('"MCP endpoint monitoring" pricing subscription',PORTKEY_PRICING,portkey,"Portkey","$49"),
     ]:
         key=" ".join(query.split()).lower()
         meta[key]={"family":"mcp_reliability","role":"tool_pricing"}
         rows=[]
         if result.get("ok") and int(result.get("status") or 0)==200:
             text=clean_html(result.get("text") or "")
-            excerpt=around(text,needles)
-            rows.append({
-                "title":vendor+" official pricing "+excerpt[:180],
-                "url":url,
-                "snippet":excerpt,
-                "source":"official-pricing",
-                "vendor":vendor,
-            })
+            low=text.lower()
+            # Pricing pages are seller evidence only. Keep their text factual and
+            # neutral so vendor marketing copy can never masquerade as buyer pain.
+            if expected_price.lower() in low and "mcp" in low:
+                rows.append({
+                    "title":f"{vendor} official MCP-related pricing {expected_price}/month",
+                    "url":url,
+                    "snippet":f"{vendor} official pricing page contains MCP support and a {expected_price}/month paid plan.",
+                    "source":"official-pricing",
+                    "vendor":vendor,
+                })
         groups.append({"query":query,"results":rows})
 
     analysis=analyze_tool_opportunities(groups,scouts,[],meta,observed)
