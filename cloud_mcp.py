@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import time
+import traceback
 import zlib
 import ipaddress
 from datetime import datetime, timezone
@@ -113,7 +114,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.18"  # guard malformed provider result shapes before SETI activation
+VERSION = "0.99.19"  # add precise runtime exception location diagnostics
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
@@ -10208,7 +10209,9 @@ async def _autopilot_cycle() -> None:
             _save_local_state()
             AUTOPILOT_STATE["last_checkpoint"] = await _checkpoint_state_to_render()
         except Exception as e:
-            AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:500]
+            tb=traceback.extract_tb(e.__traceback__)
+            where=(str(tb[-1].filename)+":"+str(tb[-1].lineno)) if tb else ""
+            AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:420] + ((" @ "+where) if where else "")
         finally:
             AUTOPILOT_STATE["running"] = False
             if not completed:
