@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "launched": false,
+  "source_scan_date": "2026-09-27",
+  "source_sample_seed": 2140928784970561500,
+  "source_sample_size": 663,
+  "purpose": "Prepared manual replay of the exact 2026-09-27 SAMPLE for Arena prediction evaluation. This file schedules nothing.",
+  "replay_rule": "workflow_dispatch phase=first, mode=sample, sample_from_scan_date=2026-09-27; after FIRST_PASS use phase=second for that new scan date only after its stored second_probe_not_before_utc.",
+  "windows": [
+    {
+      "label": "evaluate-39-of-40",
+      "not_before_utc": "2026-10-04T19:33:09.788469+00:00",
+      "not_before_italy": "2026-10-04T21:33:09.788469+02:00",
+      "inputs": {
+        "phase": "first",
+        "mode": "sample",
+        "max_minutes": "30",
+        "sample_from_scan_date": "2026-09-27"
+      }
+    },
+    {
+      "label": "evaluate-all-40",
+      "not_before_utc": "2026-10-11T19:33:09.788469+00:00",
+      "not_before_italy": "2026-10-11T21:33:09.788469+02:00",
+      "inputs": {
+        "phase": "first",
+        "mode": "sample",
+        "max_minutes": "30",
+        "sample_from_scan_date": "2026-09-27"
+      }
+    }
+  ]
+}
