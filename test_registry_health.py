@@ -1,6 +1,11 @@
+import asyncio
+import json
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
+import registry_health_scan as rhs
 from registry_health_scan import _sample_budget_seconds, _sample_order, _select_sample_candidates
 from registry_health import (
     classify_verification,
@@ -165,6 +170,55 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertIn('stopped_reason="max_minutes_reached"',source)
         self.assertIn("CHECKPOINT_EVERY_COMPLETIONS = 20",source)
         self.assertIn('subprocess.run(["git","push","origin","HEAD:main"])',source)
+
+    def test_sample_deadline_closes_complete_first_pass(self):
+        listing={
+            "snapshot_at_utc":"2026-09-27T12:00:00+00:00",
+            "servers":[
+                {"name":"a","version":"1","access_class":"remote","remotes":[{"url":"https://a.example/mcp"}]},
+                {"name":"b","version":"1","access_class":"remote","remotes":[{"url":"https://b.example/mcp"}]},
+            ],
+        }
+        probe={
+            "timestamp":"2026-09-27T12:00:01+00:00",
+            "category":"OK_WITH_ISSUES",
+            "request_counts_by_host":{"a.example":1},
+            "usage_scope":"internal_registry_health",
+        }
+        monotonic_values=iter([0.0,0.0,60.1,60.1])
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(rhs,"DATA_ROOT",Path(td)/"registry-health"), \
+             patch.object(rhs,"fetch_complete_registry",AsyncMock(return_value=listing)), \
+             patch.object(rhs,"run_probe",AsyncMock(return_value=probe)), \
+             patch.object(rhs,"read_opt_out",return_value=set()), \
+             patch.object(rhs,"_publish_progress_checkpoint",return_value=None), \
+             patch.object(rhs,"_sample_budget_seconds",return_value=60), \
+             patch.object(rhs,"_monotonic",side_effect=lambda: next(monotonic_values)):
+            outdir=asyncio.run(rhs.first_phase(mode="sample",max_minutes=1))
+            state=json.loads((outdir/"scan-state.json").read_text(encoding="utf-8"))
+            summary=json.loads((outdir/"summary.json").read_text(encoding="utf-8"))
+            latest=json.loads((rhs.DATA_ROOT/"latest-summary.json").read_text(encoding="utf-8"))
+            servers=json.loads((rhs.DATA_ROOT/"latest-servers.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["status"],"FIRST_PASS")
+            self.assertEqual(summary["status"],"FIRST_PASS")
+            self.assertEqual(summary["scope"],"SAMPLE")
+            self.assertEqual(summary["stopped_reason"],"max_minutes_reached")
+            self.assertEqual(latest["generated_at_utc"],summary["generated_at_utc"])
+            self.assertEqual(len(servers["servers"]),1)
+            self.assertEqual(servers["sample_server_names"],state["sample_server_names"])
+
+    def test_second_phase_rejects_non_first_pass_before_time_check(self):
+        with tempfile.TemporaryDirectory() as td:
+            outdir=Path(td)
+            (outdir/"scan-state.json").write_text(json.dumps({
+                "phase":"first",
+                "status":"IN_PROGRESS",
+                "final":False,
+                "second_probe_not_before_utc":"2000-01-01T00:00:00+00:00",
+            }),encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError,"second_probe_requires_FIRST_PASS"):
+                asyncio.run(rhs.second_phase(outdir))
+
 
     def test_exact_sample_can_be_replayed_for_future_arena_evaluation(self):
         servers=[{"name":f"srv-{i:02d}"} for i in range(6)]
