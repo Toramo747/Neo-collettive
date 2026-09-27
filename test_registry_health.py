@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 
+from registry_health_scan import _sample_budget_seconds, _sample_order
 from registry_health import (
     classify_verification,
     final_category,
@@ -113,6 +114,29 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertIn("Commit Registry Health dataset",workflow)
         self.assertIn("if: env.REGISTRY_HEALTH_PHASE == 'second'",workflow)
         self.assertNotIn('GITHUB_RUN_ATTEMPT',workflow)
+
+    def test_sample_mode_has_30_minute_budget_and_seeded_random_order(self):
+        self.assertEqual(_sample_budget_seconds(30),1800)
+        servers=[{"name":f"srv-{i:02d}"} for i in range(12)]
+        a=[x["name"] for x in _sample_order(servers,424242)]
+        b=[x["name"] for x in _sample_order(servers,424242)]
+        self.assertEqual(a,b)
+        self.assertNotEqual(a,[x["name"] for x in servers])
+
+    def test_sample_workflow_inputs_and_checkpoint_contract(self):
+        workflow=Path(".github/workflows/registry-health-scan.yml").read_text(encoding="utf-8")
+        self.assertIn("mode:",workflow)
+        self.assertIn("max_minutes:",workflow)
+        self.assertIn('default: "30"',workflow)
+        self.assertIn("--mode",workflow)
+        self.assertIn("inputs.mode",workflow)
+        self.assertIn('REGISTRY_HEALTH_PUBLISH_CHECKPOINTS: "1"',workflow)
+        source=Path("registry_health_scan.py").read_text(encoding="utf-8")
+        self.assertIn('"scope":scope',source)
+        self.assertIn('"sample_seed":sample_seed',source)
+        self.assertIn('"sample_server_names"',source)
+        self.assertIn('stopped_reason="max_minutes_reached"',source)
+        self.assertIn("CHECKPOINT_EVERY_COMPLETIONS = 20",source)
 
     def test_second_probe_disagreement_is_intermittent(self):
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"OK"}),"INTERMITTENT")

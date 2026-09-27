@@ -16,6 +16,19 @@ on:
         required: false
         default: ""
         type: string
+      mode:
+        description: "Full Registry census or time-bounded random sample"
+        required: true
+        default: sample
+        type: choice
+        options:
+          - sample
+          - full
+      max_minutes:
+        description: "Maximum wall-clock minutes for sample mode"
+        required: true
+        default: "30"
+        type: string
   # Monthly cadence is intentionally disabled pending Andrea Gava approval.
   # schedule:
   #   - cron: "17 3 1 * *"
@@ -65,6 +78,9 @@ jobs:
         run: |
           set -euo pipefail
           args=("$REGISTRY_HEALTH_PHASE")
+          if [ "$REGISTRY_HEALTH_PHASE" = "first" ]; then
+            args+=("--mode" "${{ inputs.mode }}" "--max-minutes" "${{ inputs.max_minutes }}")
+          fi
           if [ "$REGISTRY_HEALTH_PHASE" = "second" ] && [ -n "${{ inputs.scan_date }}" ]; then
             args+=("--scan-date" "${{ inputs.scan_date }}")
           fi

@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import random
 import re
+import secrets
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -36,6 +38,9 @@ MIN_SECOND_PROBE_SECONDS = 6 * 60 * 60
 PROBE_WALL_TIMEOUT_SECONDS = 45
 CHECKPOINT_EVERY_COMPLETIONS = 20
 CHECKPOINT_PUBLISH_ENV = "REGISTRY_HEALTH_PUBLISH_CHECKPOINTS"
+SCOPE_FULL = "FULL"
+SCOPE_SAMPLE = "SAMPLE"
+DEFAULT_SAMPLE_MINUTES = 30
 
 
 def runtime_version() -> str:
@@ -191,9 +196,29 @@ def _write_first_progress_checkpoint(
     _publish_progress_checkpoint(outdir,state)
 
 
-async def first_phase() -> Path:
+def _sample_budget_seconds(max_minutes: int) -> int:
+    """Return the hard wall-clock budget for a sample run."""
+    return max(60, min(int(max_minutes) * 60, 6 * 60 * 60))
+
+
+def _sample_order(remote_servers: list[dict[str, Any]], seed: int) -> list[dict[str, Any]]:
+    """Deterministically randomize Registry remotes from a recorded seed."""
+    items=list(remote_servers)
+    random.Random(int(seed)).shuffle(items)
+    return items
+
+
+async def first_phase(mode: str = "full", max_minutes: int = DEFAULT_SAMPLE_MINUTES) -> Path:
     started=time.monotonic()
     started_utc=datetime.now(timezone.utc)
+    mode=str(mode or "full").strip().lower()
+    if mode not in {"full","sample"}:
+        raise ValueError("invalid_scan_mode")
+    scope=SCOPE_SAMPLE if mode=="sample" else SCOPE_FULL
+    sample_seed=secrets.randbits(63) if scope==SCOPE_SAMPLE else None
+    budget_seconds=_sample_budget_seconds(max_minutes) if scope==SCOPE_SAMPLE else None
+    deadline=(started+budget_seconds) if budget_seconds is not None else None
+
     ua=scanner_user_agent()
     timeout=httpx.Timeout(connect=5.0,read=12.0,write=8.0,pool=5.0)
     async with httpx.AsyncClient(
@@ -215,12 +240,35 @@ async def first_phase() -> Path:
     task_sem=asyncio.Semaphore(MAX_CONCURRENCY)
 
     remote_servers=[x for x in listing["servers"] if x.get("access_class")=="remote"]
+    candidates=_sample_order(remote_servers,sample_seed) if scope==SCOPE_SAMPLE else list(remote_servers)
     rows: list[dict[str,Any]]=[]
-    tasks=[]
-    task_servers=[]
-    for server in remote_servers:
+    completed=0
+    attempted=0
+    stopped_reason="registry_exhausted"
+
+    state={
+        "phase":"first",
+        "status":"IN_PROGRESS",
+        "scope":scope,
+        "scan_date":day,
+        "snapshot_at_utc":listing["snapshot_at_utc"],
+        "first_probe_started_at_utc":started_utc.isoformat(),
+        "second_probe_not_before_utc":(
+            datetime.fromtimestamp(started_utc.timestamp()+MIN_SECOND_PROBE_SECONDS,timezone.utc).isoformat()
+        ),
+        "completed_probes":0,
+        "total_probes":len(candidates) if scope==SCOPE_FULL else None,
+        "sample_seed":sample_seed,
+        "sample_server_names":[],
+        "sample_size":0,
+        "max_minutes":int(max_minutes) if scope==SCOPE_SAMPLE else None,
+        "final":False,
+    }
+    _write_first_progress_checkpoint(outdir,listing,rows,state)
+
+    def make_base(server: dict[str,Any]) -> dict[str,Any]:
         opted=is_opted_out(server,optouts)
-        base={
+        return {
             "name":server["name"],
             "version":server.get("version"),
             "remote_url":((server.get("remotes") or [{}])[0].get("url")),
@@ -229,71 +277,98 @@ async def first_phase() -> Path:
             "probe1":None,
             "probe2":None,
             "category":None,
-            "final":False,
+            "final":bool(opted),
         }
-        rows.append(base)
-        if not opted:
-            task_servers.append((base,server))
-            tasks.append(run_probe(server,pacer=pacer,task_sem=task_sem,user_agent=ua))
 
-    state={
-        "phase":"first",
-        "status":"IN_PROGRESS",
-        "scan_date":day,
-        "snapshot_at_utc":listing["snapshot_at_utc"],
-        "first_probe_started_at_utc":started_utc.isoformat(),
-        "second_probe_not_before_utc":(
-            datetime.fromtimestamp(started_utc.timestamp()+MIN_SECOND_PROBE_SECONDS,timezone.utc).isoformat()
-        ),
-        "completed_probes":0,
-        "total_probes":len(tasks),
-        "final":False,
-    }
-    _write_first_progress_checkpoint(outdir,listing,rows,state)
+    idx=0
+    while idx < len(candidates):
+        if deadline is not None and time.monotonic() >= deadline:
+            stopped_reason="max_minutes_reached"
+            break
 
-    async def _probe_one(base: dict[str,Any], server: dict[str,Any]):
-        try:
-            result=await run_probe(server,pacer=pacer,task_sem=task_sem,user_agent=ua)
-        except Exception as exc:
-            result=exc
-        return base,result
+        batch=[]
+        while idx < len(candidates) and len(batch) < MAX_CONCURRENCY:
+            if deadline is not None and time.monotonic() >= deadline:
+                stopped_reason="max_minutes_reached"
+                break
+            server=candidates[idx]
+            idx+=1
+            attempted+=1
+            base=make_base(server)
+            if base["opted_out"]:
+                rows.append(base)
+                state["sample_server_names"]=[x["name"] for x in rows]
+                state["sample_size"]=len(rows)
+                continue
+            task=asyncio.create_task(run_probe(server,pacer=pacer,task_sem=task_sem,user_agent=ua))
+            batch.append((task,base))
 
-    running=[asyncio.create_task(_probe_one(base,server)) for base,server in task_servers]
-    completed=0
-    for done in asyncio.as_completed(running):
-        base,result=await done
-        if isinstance(result,Exception):
-            probe={
-                "timestamp":datetime.now(timezone.utc).isoformat(),
-                "category":"UNREACHABLE",
-                "http_status":None,
-                "summary":{},
-                "checks":{},
-                "errors":[type(result).__name__+":"+str(result)[:240]],
-                "request_counts_by_host":{},
-                "usage_scope":"internal_registry_health",
-            }
-        else:
-            probe=result
-        base["probe1"]=probe
-        base["category"]=probe["category"]
-        if probe["category"] in {"OK","AUTH_REQUIRED"}:
-            base["final"]=True
-        completed+=1
+        if not batch:
+            if stopped_reason=="max_minutes_reached":
+                break
+            continue
+
+        task_map={task:base for task,base in batch}
+        wait_timeout=None if deadline is None else max(0.0,deadline-time.monotonic())
+        done,pending=await asyncio.wait(set(task_map),timeout=wait_timeout)
+        if pending:
+            stopped_reason="max_minutes_reached"
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending,return_exceptions=True)
+
+        for task in done:
+            base=task_map[task]
+            try:
+                result=task.result()
+            except Exception as exc:
+                result=exc
+            if isinstance(result,Exception):
+                probe={
+                    "timestamp":datetime.now(timezone.utc).isoformat(),
+                    "category":"UNREACHABLE",
+                    "http_status":None,
+                    "summary":{},
+                    "checks":{},
+                    "errors":[type(result).__name__+":"+str(result)[:240]],
+                    "request_counts_by_host":{},
+                    "usage_scope":"internal_registry_health",
+                }
+            else:
+                probe=result
+            base["probe1"]=probe
+            base["category"]=probe["category"]
+            if probe["category"] in {"OK","AUTH_REQUIRED"}:
+                base["final"]=True
+            rows.append(base)
+            completed+=1
+
         state["completed_probes"]=completed
-        if completed % CHECKPOINT_EVERY_COMPLETIONS == 0 or completed == len(running):
+        state["sample_server_names"]=[x["name"] for x in rows]
+        state["sample_size"]=len(rows)
+        if completed and (completed % CHECKPOINT_EVERY_COMPLETIONS == 0 or pending):
             state["checkpointed_at_utc"]=datetime.now(timezone.utc).isoformat()
             _write_first_progress_checkpoint(outdir,listing,rows,state)
+        if pending:
+            break
 
     elapsed=round(time.monotonic()-started,2)
     aggregate=aggregate_dataset(listing,rows)
     aggregate.update({
         "phase":"first",
         "status":"FIRST_PASS",
+        "scope":scope,
         "final":False,
         "started_at_utc":started_utc.isoformat(),
         "finished_at_utc":datetime.now(timezone.utc).isoformat(),
         "duration_seconds":elapsed,
+        "max_minutes":int(max_minutes) if scope==SCOPE_SAMPLE else None,
+        "stopped_reason":stopped_reason,
+        "sample_seed":sample_seed,
+        "sample_size":len(rows),
+        "sample_server_names":[x["name"] for x in rows],
+        "sample_population_remote_count":len(remote_servers) if scope==SCOPE_SAMPLE else None,
+        "attempted_servers":attempted,
         "second_probe_not_before_utc":(
             datetime.fromtimestamp(started_utc.timestamp()+MIN_SECOND_PROBE_SECONDS,timezone.utc).isoformat()
         ),
@@ -305,8 +380,12 @@ async def first_phase() -> Path:
     state.update({
         "phase":"first",
         "status":"FIRST_PASS",
+        "scope":scope,
         "second_probe_not_before_utc":aggregate["second_probe_not_before_utc"],
-        "completed_probes":len(tasks),
+        "completed_probes":completed,
+        "sample_server_names":aggregate["sample_server_names"],
+        "sample_size":len(rows),
+        "stopped_reason":stopped_reason,
         "checkpointed_at_utc":datetime.now(timezone.utc).isoformat(),
         "final":False,
     })
@@ -316,8 +395,18 @@ async def first_phase() -> Path:
     _write_json(outdir/"summary.json",aggregate)
     _write_json(outdir/"scan-state.json",state)
     _write_json(DATA_ROOT/"latest-summary.json",aggregate)
-    _write_json(DATA_ROOT/"latest-servers.json",{"generated_at_utc":aggregate["generated_at_utc"],"servers":rows})
-    print(json.dumps({"outdir":str(outdir),"summary":aggregate,"report_status":"pending_second_probe"},ensure_ascii=False))
+    _write_json(DATA_ROOT/"latest-servers.json",{
+        "generated_at_utc":aggregate["generated_at_utc"],
+        "scope":scope,
+        "sample_seed":sample_seed,
+        "sample_server_names":aggregate["sample_server_names"],
+        "servers":rows,
+    })
+    print(json.dumps({
+        "outdir":str(outdir),
+        "summary":aggregate,
+        "report_status":"pending_second_probe",
+    },ensure_ascii=False))
     return outdir
 
 
@@ -452,9 +541,11 @@ async def main() -> int:
     parser=argparse.ArgumentParser()
     parser.add_argument("phase",choices=("first","second"))
     parser.add_argument("--scan-date",default="")
+    parser.add_argument("--mode",choices=("full","sample"),default="full")
+    parser.add_argument("--max-minutes",type=int,default=DEFAULT_SAMPLE_MINUTES)
     args=parser.parse_args()
     if args.phase=="first":
-        await first_phase()
+        await first_phase(args.mode,args.max_minutes)
     else:
         scan_dir=DATA_ROOT/args.scan_date if args.scan_date else None
         await second_phase(scan_dir)
