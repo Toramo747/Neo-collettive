@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Callable
 import httpx
+from arena_registry_world import mark_controls_zero_weight, register_external_predictions, evaluate_external_predictions
 
 NAMESPACE="mycelix-arena"
 EVOLVE_EVERY_SESSIONS=5
@@ -84,6 +85,7 @@ def register_initial_predictions(state: dict, *, created_at: datetime|None=None)
             "probability":p,"created_at_utc":created_at.isoformat(),"due_at_utc":due.isoformat(),
             "status":"PENDING","verification":verification,"evaluated_at_utc":None,
             "outcome":None,"calibration_score":None,"sources":[],
+            "prediction_scope":"system_control","score_weight":0.0,
         })
     return state
 
@@ -139,7 +141,12 @@ def evaluate_due(state: dict, root: str|Path="data/arena", *, at: datetime|None=
 def refresh_scores(state: dict):
     by_variant={}
     for pred in state.get("predictions") or []:
-        if isinstance(pred,dict) and pred.get("status")=="EVALUATED" and pred.get("calibration_score") is not None:
+        if (
+            isinstance(pred,dict) and pred.get("status")=="EVALUATED"
+            and pred.get("calibration_score") is not None
+            and pred.get("prediction_scope")=="external_registry"
+            and float(pred.get("score_weight") or 0.0)>0.0
+        ):
             by_variant.setdefault(str(pred.get("variant_id") or ""),[]).append(float(pred["calibration_score"]))
     for v in state.get("variants") or []:
         if not isinstance(v,dict): continue
@@ -180,9 +187,13 @@ def sync(root: str|Path="data/arena") -> dict:
     root=Path(root); state=load_json(root/"evolution.json",initial_state())
     if state.get("namespace")!=NAMESPACE: state=initial_state()
     register_initial_predictions(state,created_at=datetime(2026,9,27,4,36,46,tzinfo=timezone.utc))
+    mark_controls_zero_weight(state)
     evaluate_due(state,root)
     idx=load_json(root/"index.json",{})
     session_count=len(idx.get("sessions") or []) if isinstance(idx,dict) else 0
+    register_external_predictions(state,"data/registry-health",cycle_id=str(session_count))
+    evaluate_external_predictions(state,"data/registry-health")
+    refresh_scores(state)
     maybe_evolve(state,session_count)
     # Hard guard: Arena may propose, never promote.
     for v in state.get("variants") or []:
@@ -202,7 +213,11 @@ def main():
     s=sync(args.data_dir)
     pending=sum(1 for x in s.get("predictions") or [] if x.get("status")=="PENDING")
     evaluated=sum(1 for x in s.get("predictions") or [] if x.get("status")=="EVALUATED")
+    external=[x for x in (s.get("predictions") or []) if isinstance(x,dict) and x.get("prediction_scope")=="external_registry"]
+    controls=[x for x in (s.get("predictions") or []) if isinstance(x,dict) and x.get("prediction_scope")=="system_control"]
     print(json.dumps({"ok":True,"namespace":NAMESPACE,"variants":len(s.get("variants") or []),
                       "predictions_pending":pending,"predictions_evaluated":evaluated,
+                      "external_predictions":len(external),"control_predictions":len(controls),
+                      "external_prediction_status":s.get("external_prediction_status"),
                       "automatic_promotion":False},ensure_ascii=False))
 if __name__=="__main__": main()

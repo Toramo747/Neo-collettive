@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 import neo_dialect as nd
+from arena_registry_world import sync_registry_micelio
 
 NAMESPACE="mycelix-arena"
 QUARANTINE_THRESHOLD=0.60
@@ -89,6 +90,8 @@ def proof_ok(evidence: dict, sessions: dict[str,dict]) -> tuple[bool,str]:
         # URL evidence must carry a prior read-only verification result.
         # Arena never follows arbitrary URLs itself and never contacts external agents.
         return bool(evidence.get("verified_read_only") is True),str(evidence.get("url") or "url")
+    if kind=="registry_health":
+        return bool(evidence.get("verified_read_only") is True and evidence.get("scan_at_utc") and evidence.get("category")), "registry_health"
     return False,"unsupported_evidence"
 
 def _belief_id(session_id: str, suffix: str) -> str:
@@ -191,6 +194,7 @@ def sync(root: str|Path="data/arena") -> dict:
     memory=load_json(root/"micelio.json",{"schema_v":1,"namespace":NAMESPACE,"beliefs":[]})
     memory=seed_from_sessions(root,memory)
     memory=reverify(root,memory)
+    memory,_=sync_registry_micelio(memory,"data/registry-health")
     save_json(root/"micelio.json",memory)
     update_critic_private(root,_sessions(root))
     return memory

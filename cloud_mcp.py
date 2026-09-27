@@ -133,7 +133,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.36"  # MCP Registry Health report + static status surface
+VERSION = "0.99.37"  # MCP Registry Health report + static status surface
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -11533,7 +11533,8 @@ async def arena_micelio_page(request: Request):
         if status in counts: counts[status]+=1
     body='<section class="card"><span class="tag">READ ONLY</span><h2>Micelio</h2>'
     body+='<p>Memoria verificata isolata dell Arena. Solo convinzioni con prova valida possono essere <strong>ACTIVE</strong>; le affermazioni senza prova restano ipotesi.</p>'
-    body+='<p>Attive '+str(counts["ACTIVE"])+' · ipotesi '+str(counts["HYPOTHESIS"])+' · quarantena '+str(counts["QUARANTINE"])+' · scadute '+str(counts["EXPIRED"])+'</p></section>'
+    external=sum(1 for x in beliefs if isinstance(x,dict) and x.get("source_scope")=="registry_health" and x.get("status")=="ACTIVE")
+    body+='<p>Attive '+str(counts["ACTIVE"])+' · ipotesi '+str(counts["HYPOTHESIS"])+' · quarantena '+str(counts["QUARANTINE"])+' · scadute '+str(counts["EXPIRED"])+' · fatti Registry attivi '+str(external)+'</p></section>'
     for row in beliefs:
         if not isinstance(row,dict): continue
         evidence=row.get("evidence") if isinstance(row.get("evidence"),list) else []
@@ -11553,7 +11554,11 @@ async def arena_evolution_page(request: Request):
     proposal=data.get("production_proposal") if isinstance(data.get("production_proposal"),dict) else {}
     body='<section class="card"><span class="tag">READ ONLY</span><h2>Evoluzione</h2>'
     body+='<p>Le strategie sono valutate soltanto con previsioni verificate contro la realtà. AGREE e consenso non contribuiscono al punteggio.</p>'
-    body+='<p>Varianti '+str(len(variants))+' · previsioni '+str(len(predictions))+' · promozione automatica <strong>disabilitata</strong>.</p></section>'
+    external=[x for x in predictions if isinstance(x,dict) and x.get("prediction_scope")=="external_registry"]
+    controls=[x for x in predictions if isinstance(x,dict) and x.get("prediction_scope")=="system_control"]
+    body+='<p>Varianti '+str(len(variants))+' · previsioni esterne '+str(len(external))+' · controlli peso zero '+str(len(controls))+' · promozione automatica <strong>disabilitata</strong>.</p>'
+    status=data.get("external_prediction_status") if isinstance(data.get("external_prediction_status"),dict) else {}
+    body+='<p class="muted">Registry world feed: '+html.escape(str(status.get("status") or "UNKNOWN"))+' · nessuna scansione viene avviata dall Arena.</p></section>'
     by_agent={}
     for row in variants:
         if isinstance(row,dict): by_agent.setdefault(str(row.get("agent") or "?"),[]).append(row)

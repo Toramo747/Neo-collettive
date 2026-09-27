@@ -56,8 +56,8 @@ jobs:
       - name: Verify Arena isolation and protocol
         run: |
           set -euo pipefail
-          python -m py_compile arena_core.py arena_micelio.py arena_evolution.py neo_dialect.py
-          python -m unittest -v test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_neo_dialect.py test_neo_dialect_security.py
+          python -m py_compile arena_core.py arena_micelio.py arena_evolution.py arena_registry_world.py neo_dialect.py
+          python -m unittest -v test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py test_neo_dialect.py test_neo_dialect_security.py
       - name: Validate input bounds
         env:
           MAX_TURNS: ${{ inputs.max_turns }}
@@ -102,7 +102,16 @@ jobs:
               raise SystemExit("automatic production promotion enabled")
           if any(bool(x.get("production_promoted")) for x in (d.get("variants") or [])):
               raise SystemExit("variant auto-promoted")
-          print("Evolution reality-score boundary passed")
+          ext=[x for x in (d.get("predictions") or []) if x.get("prediction_scope")=="external_registry"]
+          if ext:
+              by={}
+              for x in ext: by[x.get("agent")]=by.get(x.get("agent"),0)+1
+              for agent in ("Scout","Analyst","Critic","Builder-planner"):
+                  if by.get(agent,0)<10: raise SystemExit("external prediction minimum not met for "+agent)
+          controls=[x for x in (d.get("predictions") or []) if x.get("prediction_scope")=="system_control"]
+          if any(float(x.get("score_weight") or 0.0)!=0.0 for x in controls):
+              raise SystemExit("system control prediction has nonzero evolution weight")
+          print("Evolution external-world boundary passed")
           PY
       - name: Assert production isolation
         run: |

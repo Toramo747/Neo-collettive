@@ -2,6 +2,7 @@ import copy, tempfile, unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from arena_evolution import initial_state, register_initial_predictions, evaluate_due, refresh_scores, maybe_evolve, save_json
+from arena_registry_world import mark_controls_zero_weight
 
 class EvolutionTests(unittest.TestCase):
     def test_score_uses_only_evaluated_predictions(self):
@@ -10,6 +11,7 @@ class EvolutionTests(unittest.TestCase):
            "created_at_utc":"2026-09-01T00:00:00+00:00","due_at_utc":"2026-09-02T00:00:00+00:00",
            "status":"EVALUATED","outcome":True,"calibration_score":0.96,"sources":["test"]}
         s["predictions"]=[p]
+        p["prediction_scope"]="external_registry"; p["score_weight"]=1.0
         s["consensus"]={"AGREE":9999}
         refresh_scores(s)
         score=[v["score"] for v in s["variants"] if v["variant_id"]=="scout-evidence"][0]
@@ -19,8 +21,9 @@ class EvolutionTests(unittest.TestCase):
         self.assertEqual([v["score"] for v in s["variants"] if v["variant_id"]=="scout-evidence"][0],0.96)
 
     def test_pending_prediction_has_no_score(self):
-        s=initial_state(); register_initial_predictions(s,created_at=datetime(2026,9,27,tzinfo=timezone.utc)); refresh_scores(s)
+        s=initial_state(); register_initial_predictions(s,created_at=datetime(2026,9,27,tzinfo=timezone.utc)); mark_controls_zero_weight(s); refresh_scores(s)
         self.assertTrue(all(v["score"] is None for v in s["variants"]))
+        self.assertTrue(all(x.get("score_weight")==0.0 for x in s["predictions"]))
 
     def test_due_prediction_evaluated_against_verifier(self):
         with tempfile.TemporaryDirectory() as td:
