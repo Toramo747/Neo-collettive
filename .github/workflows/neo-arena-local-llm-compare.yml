@@ -1,0 +1,126 @@
+name: NEO Arena Local LLM Comparison
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neo-arena-local-llm-comparison
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      MODEL_SMALL: qwen2.5:0.5b-instruct
+      MODEL_LARGE: qwen2.5:3b-instruct-q4_K_M
+      REPORT: data/arena/local-llm-comparison.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+
+      - name: Validate deterministic comparison harness
+        run: |
+          set -euo pipefail
+          python -m py_compile arena_local_llm_compare.py neo_dialect.py
+          python -m unittest -v test_arena_local_llm_compare.py test_neo_dialect.py test_neo_dialect_security.py
+
+      - name: Install Ollama locally
+        run: |
+          set -euo pipefail
+          nproc
+          free -h
+          df -h .
+          start="$(date +%s)"
+          timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+          echo "INSTALL_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+          ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/ollama.log
+          exit 8
+
+      - name: Pull comparison models
+        run: |
+          set -euo pipefail
+          start="$(date +%s)"
+          timeout 360 ollama pull "$MODEL_SMALL"
+          echo "PULL_SMALL_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+          start="$(date +%s)"
+          timeout 480 ollama pull "$MODEL_LARGE"
+          echo "PULL_LARGE_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+          ollama list
+
+      - name: Run same-scenario JSON-schema comparison
+        run: |
+          set -euo pipefail
+          timeout 600 python arena_local_llm_compare.py             --models "$MODEL_SMALL" "$MODEL_LARGE"             --out "$REPORT"
+          python - <<'PY'
+          import json,os
+          p=os.environ["REPORT"]
+          d=json.load(open(p,encoding="utf-8"))
+          d["runtime"]={
+              "runner":"ubuntu-latest",
+              "install_seconds":int(os.environ.get("INSTALL_SECONDS","0")),
+              "pull_seconds":{
+                  os.environ["MODEL_SMALL"]:int(os.environ.get("PULL_SMALL_SECONDS","0")),
+                  os.environ["MODEL_LARGE"]:int(os.environ.get("PULL_LARGE_SECONDS","0")),
+              },
+          }
+          open(p,"w",encoding="utf-8").write(json.dumps(d,ensure_ascii=False,indent=2)+"\n")
+          print(json.dumps({x["model"]:x["metrics"] for x in d["models"]},indent=2))
+          PY
+
+      - name: Assert zero-weight isolation
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("data/arena/local-llm-comparison.json",encoding="utf-8"))
+          assert d["namespace"]=="mycelix-arena"
+          assert d["cost_eur"]==0
+          assert d["score_weight"]==0.0
+          assert d["external_agent_contact"] is False
+          assert d["production_influence"]=="NONE"
+          assert d["promotion"]=="NONE"
+          assert d["format_mode"]=="ollama_json_schema"
+          assert len(d["models"])==2
+          print("Local LLM comparison isolation verified")
+          PY
+
+      - name: Publish comparison report
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add "$REPORT"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "arena diagnostic: local LLM comparison [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt*3))
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neo-arena-local-llm-comparison
+          path: data/arena/local-llm-comparison.json
+          if-no-files-found: warn
+          retention-days: 30
