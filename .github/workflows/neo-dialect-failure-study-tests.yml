@@ -1,0 +1,39 @@
+name: NEO Dialect Failure Study Tests
+
+on:
+  push:
+    paths:
+      - "arena_neo_dialect_failure_study.py"
+      - "test_arena_neo_dialect_failure_study.py"
+      - ".github/workflows/neo-dialect-failure-study.yml"
+      - ".github/workflows/neo-dialect-failure-study-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Verify harness without running Arena sessions
+        run: |
+          set -euo pipefail
+          python -m py_compile arena_neo_dialect_failure_study.py neo_dialect.py neo_dialect_security.py
+          python -m unittest -v test_arena_neo_dialect_failure_study.py test_neo_dialect.py test_neo_dialect_security.py
+      - name: Assert study execution remains workflow-dispatch-only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          w=Path(".github/workflows/neo-dialect-failure-study.yml").read_text(encoding="utf-8")
+          assert "workflow_dispatch:" in w
+          assert "push:" not in w
+          assert "schedule:" not in w
+          print("Arena study remains workflow_dispatch only")
+          PY
