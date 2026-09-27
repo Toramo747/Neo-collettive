@@ -107,7 +107,7 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertIn("data/registry-health/latest-summary.json",workflow)
         self.assertIn("data/registry-health/latest-servers.json",workflow)
         self.assertIn('re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}",p.name)',workflow)
-        self.assertIn('git ls-tree","-r","--name-only","origin/main","data/registry-health"',workflow)
+        self.assertIn('"git","ls-tree","-r","--name-only","origin/main","data/registry-health"',workflow)
 
     def test_second_probe_disagreement_is_intermittent(self):
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"OK"}),"INTERMITTENT")
