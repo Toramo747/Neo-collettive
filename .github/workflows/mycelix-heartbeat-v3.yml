@@ -13,6 +13,7 @@ on:
       - "neo_policy.json"
       - "render.yaml"
       - ".github/workflows/mycelix-heartbeat-v3.yml"
+      - "test_heartbeat_workflow.py"
 
 permissions:
   contents: write
@@ -27,6 +28,36 @@ jobs:
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
+
+      - name: Measure first endpoint latencies
+        shell: bash
+        run: |
+          set -u
+          : > /tmp/endpoint-latency.tsv
+          now() { date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"; }
+          measure_health() {
+            phase="$1"; first="$2"
+            set +e
+            metrics="$(curl --silent --show-error --output "/tmp/health-${phase}.json" --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
+            rc=$?
+            set -e
+            printf '%s\thealth\t%s\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
+          }
+          measure_mcp() {
+            phase="$1"; first="$2"
+            payload='{"jsonrpc":"2.0","id":"heartbeat-latency","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-heartbeat","version":"1"}}}'
+            set +e
+            metrics="$(curl --silent --show-error --output "/tmp/mcp-${phase}.txt" --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
+            rc=$?
+            set -e
+            printf '%s\tmcp_initialize\t%s\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
+          }
+          # The first HTTP request of the run is /health and is the only cold-start candidate.
+          measure_health first_sample true
+          measure_mcp first_sample false
+
+      - name: Validate heartbeat latency contract
+        run: python -m unittest -v test_heartbeat_workflow.py
 
       - name: Wake MYCELIX
         id: wake
@@ -134,6 +165,68 @@ jobs:
             fi
           fi
 
+      - name: Measure subsequent endpoint latencies
+        shell: bash
+        run: |
+          set -u
+          now() { date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"; }
+          measure_health() {
+            set +e
+            metrics="$(curl --silent --show-error --output /tmp/health-subsequent.json --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
+            rc=$?
+            set -e
+            printf '%s\thealth\tsubsequent_sample\tfalse\t%s\t%s\n' "$(now)" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
+          }
+          measure_mcp() {
+            payload='{"jsonrpc":"2.0","id":"heartbeat-latency-warm","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-heartbeat","version":"1"}}}'
+            set +e
+            metrics="$(curl --silent --show-error --output /tmp/mcp-subsequent.txt --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
+            rc=$?
+            set -e
+            printf '%s\tmcp_initialize\tsubsequent_sample\tfalse\t%s\t%s\n' "$(now)" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
+          }
+          measure_health
+          measure_mcp
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          rows=[]
+          with open("/tmp/endpoint-latency.tsv",encoding="utf-8") as f:
+              for raw in f:
+                  parts=raw.rstrip("\n").split("\t")
+                  if len(parts)!=7:
+                      continue
+                  ts,endpoint,phase,run_first,status,total,rc=parts
+                  try:
+                      latency_ms=round(float(total)*1000.0,2)
+                  except Exception:
+                      latency_ms=None
+                  rows.append({
+                      "timestamp_utc":ts,
+                      "endpoint":endpoint,
+                      "phase":phase,
+                      "run_first_request":run_first.lower()=="true",
+                      "cold_start_candidate":run_first.lower()=="true",
+                      "http_status":int(status) if status.isdigit() else None,
+                      "latency_ms":latency_ms,
+                      "curl_exit_code":int(rc),
+                  })
+
+          payload={
+              "captured_at_utc":datetime.now(timezone.utc).isoformat(),
+              "measurement_scope":"read_only_health_and_mcp_initialize",
+              "first_request_definition":"The first HTTP request of each heartbeat run is /health; it is the only potential cold-start sample.",
+              "samples":rows,
+              "health":[x for x in rows if x["endpoint"]=="health"],
+              "mcp_initialize":[x for x in rows if x["endpoint"]=="mcp_initialize"],
+          }
+          with open("/tmp/endpoint-latency.json","w",encoding="utf-8") as f:
+              json.dump(payload,f,indent=2,ensure_ascii=False)
+              f.write("\n")
+          print(json.dumps(payload,ensure_ascii=False))
+          PY
+
       - name: Enforce repository/runtime contract
         run: |
           set -euo pipefail
@@ -188,6 +281,7 @@ jobs:
 
           raw=load("/tmp/status.json",{})
           hb=load("/tmp/heartbeat.json",{})
+          latency=load("/tmp/endpoint-latency.json",{})
           ap=raw.get("autopilot") or {}
           err=""
           try:
@@ -197,13 +291,14 @@ jobs:
 
           snapshot={
               "captured_at_utc": datetime.now(timezone.utc).isoformat(),
-              "snapshot_schema": 6,
+              "snapshot_schema": 7,
               "brand": raw.get("brand") or "MYCELIX",
               "brand_tagline": raw.get("brand_tagline") or "Collective Intelligence Network",
               "neo_version": raw.get("neo_version"),
               "runtime_profile": raw.get("runtime_profile") or {},
               "policy": raw.get("policy") or {},
               "heartbeat": hb,
+              "endpoint_latency": latency,
               "diagnostics": {
                   "status_endpoint_reached": bool(raw),
                   "poll_errors": err,
