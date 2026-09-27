@@ -33,6 +33,7 @@ from registry_health import (
 DATA_ROOT = Path("data/registry-health")
 MIN_SECOND_PROBE_SECONDS = 6 * 60 * 60
 PROBE_WALL_TIMEOUT_SECONDS = 45
+CHECKPOINT_EVERY_COMPLETIONS = 20
 
 
 def runtime_version() -> str:
@@ -148,6 +149,19 @@ def _request_count(rows: list[dict[str, Any]]) -> dict[str,int]:
     return dict(sorted(out.items()))
 
 
+def _write_first_progress_checkpoint(
+    outdir: Path,
+    listing: dict[str, Any],
+    rows: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Persist resumable first-pass progress without publishing it as latest/final."""
+    _write_json(outdir/"registry-snapshot.json",listing)
+    _write_json(outdir/"registry-health.json",{"listing":listing,"remote_results":rows})
+    (outdir/"registry-health.csv").write_text(dataset_csv(rows),encoding="utf-8")
+    _write_json(outdir/"scan-state.json",state)
+
+
 async def first_phase() -> Path:
     started=time.monotonic()
     started_utc=datetime.now(timezone.utc)
@@ -193,8 +207,32 @@ async def first_phase() -> Path:
             task_servers.append((base,server))
             tasks.append(run_probe(server,pacer=pacer,task_sem=task_sem,user_agent=ua))
 
-    results=await asyncio.gather(*tasks,return_exceptions=True)
-    for (base,_server),result in zip(task_servers,results):
+    state={
+        "phase":"first",
+        "status":"IN_PROGRESS",
+        "scan_date":day,
+        "snapshot_at_utc":listing["snapshot_at_utc"],
+        "first_probe_started_at_utc":started_utc.isoformat(),
+        "second_probe_not_before_utc":(
+            datetime.fromtimestamp(started_utc.timestamp()+MIN_SECOND_PROBE_SECONDS,timezone.utc).isoformat()
+        ),
+        "completed_probes":0,
+        "total_probes":len(tasks),
+        "final":False,
+    }
+    _write_first_progress_checkpoint(outdir,listing,rows,state)
+
+    async def _probe_one(base: dict[str,Any], server: dict[str,Any]):
+        try:
+            result=await run_probe(server,pacer=pacer,task_sem=task_sem,user_agent=ua)
+        except Exception as exc:
+            result=exc
+        return base,result
+
+    running=[asyncio.create_task(_probe_one(base,server)) for base,server in task_servers]
+    completed=0
+    for done in asyncio.as_completed(running):
+        base,result=await done
         if isinstance(result,Exception):
             probe={
                 "timestamp":datetime.now(timezone.utc).isoformat(),
@@ -212,11 +250,17 @@ async def first_phase() -> Path:
         base["category"]=probe["category"]
         if probe["category"] in {"OK","AUTH_REQUIRED"}:
             base["final"]=True
+        completed+=1
+        state["completed_probes"]=completed
+        if completed % CHECKPOINT_EVERY_COMPLETIONS == 0 or completed == len(running):
+            state["checkpointed_at_utc"]=datetime.now(timezone.utc).isoformat()
+            _write_first_progress_checkpoint(outdir,listing,rows,state)
 
     elapsed=round(time.monotonic()-started,2)
     aggregate=aggregate_dataset(listing,rows)
     aggregate.update({
         "phase":"first",
+        "status":"FIRST_PASS",
         "final":False,
         "started_at_utc":started_utc.isoformat(),
         "finished_at_utc":datetime.now(timezone.utc).isoformat(),
@@ -229,14 +273,14 @@ async def first_phase() -> Path:
         "external_verifier_metrics":verifier.usage_metrics_snapshot(),
     })
 
-    state={
+    state.update({
         "phase":"first",
-        "scan_date":day,
-        "snapshot_at_utc":listing["snapshot_at_utc"],
-        "first_probe_started_at_utc":started_utc.isoformat(),
+        "status":"FIRST_PASS",
         "second_probe_not_before_utc":aggregate["second_probe_not_before_utc"],
+        "completed_probes":len(tasks),
+        "checkpointed_at_utc":datetime.now(timezone.utc).isoformat(),
         "final":False,
-    }
+    })
     _write_json(outdir/"registry-snapshot.json",listing)
     _write_json(outdir/"registry-health.json",{"listing":listing,"remote_results":rows})
     (outdir/"registry-health.csv").write_text(dataset_csv(rows),encoding="utf-8")
@@ -305,6 +349,7 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
     aggregate=aggregate_dataset(listing,rows)
     aggregate.update({
         "phase":"second",
+        "status":"FINAL",
         "final":True,
         "started_at_utc":state["first_probe_started_at_utc"],
         "finished_at_utc":datetime.now(timezone.utc).isoformat(),
@@ -316,6 +361,7 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
     })
     state.update({
         "phase":"second",
+        "status":"FINAL",
         "second_probe_started_at_utc":started_utc.isoformat(),
         "final":True,
     })
