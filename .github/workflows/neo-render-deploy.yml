@@ -615,15 +615,15 @@ jobs:
           gh workflow run neo-arena-local-llm.yml --ref main
           echo "Local LLM diagnostic dispatched as workflow_dispatch"
 
-      - name: Dispatch local LLM comparison for v0.99.41
+      - name: Dispatch local LLM comparison for v0.99.42
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
-          if [ "$expected" != "0.99.41" ]; then
-            echo "LLM comparison applies only to v0.99.41"
+          if [ "$expected" != "0.99.42" ]; then
+            echo "LLM comparison applies only to v0.99.42"
             exit 0
           fi
           existing="$(gh run list --workflow neo-arena-local-llm-compare.yml --event workflow_dispatch --limit 50 --json headSha --jq --arg sha "$GITHUB_SHA" '[.[] | select(.headSha == $sha)] | length' 2>/dev/null || echo 0)"

@@ -133,7 +133,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.41"  # MCP Registry Health report + static status surface
+VERSION = "0.99.42"  # MCP Registry Health report + static status surface
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -8748,9 +8748,9 @@ async def neo_render_status() -> dict:
                 "id": service.get("id"),
                 "name": service.get("name"),
                 "type": service.get("type"),
-                "region": service.get("region"),
+                "region": service.get("region") or (service.get("serviceDetails") or {}).get("region"),
                 "suspended": service.get("suspended"),
-                "plan": service.get("plan"),
+                "plan": service.get("plan") or (service.get("serviceDetails") or {}).get("plan"),
                 "updatedAt": service.get("updatedAt"),
             },
         }
@@ -8806,9 +8806,9 @@ async def jarvis_render_status() -> dict:
                 "id": service.get("id"),
                 "name": service.get("name"),
                 "type": service.get("type"),
-                "region": service.get("region"),
+                "region": service.get("region") or (service.get("serviceDetails") or {}).get("region"),
                 "suspended": service.get("suspended"),
-                "plan": service.get("plan"),
+                "plan": service.get("plan") or (service.get("serviceDetails") or {}).get("plan"),
                 "updatedAt": service.get("updatedAt"),
             },
         }
@@ -9679,9 +9679,9 @@ async def api_render_diagnostics(request: Request):
             "service": {
                 "name": service.get("name"),
                 "type": service.get("type"),
-                "region": service.get("region"),
+                "region": service.get("region") or (service.get("serviceDetails") or {}).get("region"),
                 "suspended": service.get("suspended"),
-                "plan": service.get("plan"),
+                "plan": service.get("plan") or (service.get("serviceDetails") or {}).get("plan"),
                 "updatedAt": service.get("updatedAt"),
             },
             "assessment": assessment,
@@ -11319,7 +11319,7 @@ async def system(request: Request):
                 "service": {
                     "id": service.get("id"),
                     "name": service.get("name"),
-                    "region": service.get("region"),
+                    "region": service.get("region") or (service.get("serviceDetails") or {}).get("region"),
                     "suspended": service.get("suspended"),
                     "updatedAt": service.get("updatedAt"),
                 },
