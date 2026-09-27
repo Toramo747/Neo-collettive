@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import json
 import re
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,7 @@ DATA_ROOT = Path("data/registry-health")
 MIN_SECOND_PROBE_SECONDS = 6 * 60 * 60
 PROBE_WALL_TIMEOUT_SECONDS = 45
 CHECKPOINT_EVERY_COMPLETIONS = 20
+CHECKPOINT_PUBLISH_ENV = "REGISTRY_HEALTH_PUBLISH_CHECKPOINTS"
 
 
 def runtime_version() -> str:
@@ -149,6 +151,32 @@ def _request_count(rows: list[dict[str, Any]]) -> dict[str,int]:
     return dict(sorted(out.items()))
 
 
+def _publish_progress_checkpoint(outdir: Path, state: dict[str, Any]) -> None:
+    """Persist an IN_PROGRESS checkpoint to main so runner timeout does not erase it."""
+    import os
+    if str(os.getenv(CHECKPOINT_PUBLISH_ENV) or "").strip() != "1":
+        return
+    subprocess.run(["git","config","user.name","MYCELIX Registry Health"],check=True)
+    subprocess.run(["git","config","user.email","actions@users.noreply.github.com"],check=True)
+    subprocess.run(["git","add",str(outdir)],check=True)
+    if subprocess.run(["git","diff","--cached","--quiet"]).returncode == 0:
+        return
+    completed=int(state.get("completed_probes") or 0)
+    total=int(state.get("total_probes") or 0)
+    subprocess.run([
+        "git","commit","-m",
+        f"registry health checkpoint: {completed}/{total} {outdir.name} [skip render]",
+    ],check=True)
+    for attempt in range(1,4):
+        subprocess.run(["git","fetch","origin","main"],check=True)
+        rebased=subprocess.run(["git","rebase","origin/main"]).returncode == 0
+        if rebased and subprocess.run(["git","push","origin","HEAD:main"]).returncode == 0:
+            return
+        subprocess.run(["git","rebase","--abort"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        time.sleep(attempt*3)
+    raise RuntimeError("registry_health_checkpoint_publish_failed")
+
+
 def _write_first_progress_checkpoint(
     outdir: Path,
     listing: dict[str, Any],
@@ -160,6 +188,7 @@ def _write_first_progress_checkpoint(
     _write_json(outdir/"registry-health.json",{"listing":listing,"remote_results":rows})
     (outdir/"registry-health.csv").write_text(dataset_csv(rows),encoding="utf-8")
     _write_json(outdir/"scan-state.json",state)
+    _publish_progress_checkpoint(outdir,state)
 
 
 async def first_phase() -> Path:
