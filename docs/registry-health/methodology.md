@@ -136,6 +136,8 @@ Latency is observational and is not a benchmark of application performance. Futu
 
 The 27 September 2026 FINAL dataset predates this split. Its stored `total_observed_latency_ms` is a legacy aggregate and contains a double count of `initialize` (HTTP plus initialize). It remains unchanged for reproducibility and must not be interpreted as initialize latency.
 
+The persisted FINAL probes do not contain enough raw timing fields to reconstruct `initialize` latency: across the persisted probes there is no `initialize_latency_ms`, no `checks.initialize.latency_ms`, no persisted `tools/list` timing, and no per-discovery timing. Therefore no reconstructed initialize baseline is published for 27 September 2026. The first valid initialize-latency comparison is the replay of the same sample on 4 October 2026 versus the replay of the same sample on 11 October 2026, using the new separately persisted initialize timings.
+
 Only the Registry-declared HTTPS `streamable-http` target is measured. Package-only, stdio and unsupported remote transports require a different testing model and are deliberately excluded from remote-health categories.
 
 Discovery presence is independent metadata in v2 and does not declassify an otherwise healthy MCP endpoint.
