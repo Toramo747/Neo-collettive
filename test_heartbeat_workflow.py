@@ -30,6 +30,12 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn('latency=load("/tmp/endpoint-latency.json",{})',w)
         self.assertIn('"endpoint_latency": latency',w)
 
+    def test_schedule_is_realistic_and_documented(self):
+        self.assertIn('cron: "*/30 * * * *"',self.workflow)
+        doc=Path("docs/heartbeat-operations.md").read_text(encoding="utf-8")
+        self.assertIn("GitHub Actions does not guarantee",doc)
+        self.assertIn("external uptime monitor",doc)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
