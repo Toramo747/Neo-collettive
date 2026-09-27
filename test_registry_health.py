@@ -138,6 +138,14 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertIn('stopped_reason="max_minutes_reached"',source)
         self.assertIn("CHECKPOINT_EVERY_COMPLETIONS = 20",source)
 
+    def test_second_probe_preserves_sample_scope_and_membership(self):
+        source=Path("registry_health_scan.py").read_text(encoding="utf-8")
+        self.assertIn('scope=str(state.get("scope") or SCOPE_FULL)',source)
+        self.assertIn("sample_membership_changed_before_second_probe",source)
+        self.assertIn('"sample_seed":state.get("sample_seed")',source)
+        self.assertIn('"sample_server_names":sample_names',source)
+        self.assertIn('first.get("category") in {"OK","AUTH_REQUIRED"}',source)
+
     def test_second_probe_disagreement_is_intermittent(self):
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"OK"}),"INTERMITTENT")
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"SERVER_ERROR"}),"SERVER_ERROR")

@@ -465,14 +465,25 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
         row["final"]=True
 
     aggregate=aggregate_dataset(listing,rows)
+    scope=str(state.get("scope") or SCOPE_FULL)
+    sample_names=list(state.get("sample_server_names") or [])
+    if scope==SCOPE_SAMPLE:
+        row_names=[str(x.get("name") or "") for x in rows]
+        if row_names != sample_names:
+            raise RuntimeError("sample_membership_changed_before_second_probe")
     aggregate.update({
         "phase":"second",
         "status":"FINAL",
+        "scope":scope,
         "final":True,
         "started_at_utc":state["first_probe_started_at_utc"],
         "finished_at_utc":datetime.now(timezone.utc).isoformat(),
         "second_probe_started_at_utc":started_utc.isoformat(),
         "duration_seconds_second_probe":round(time.monotonic()-started,2),
+        "sample_seed":state.get("sample_seed"),
+        "sample_size":len(rows) if scope==SCOPE_SAMPLE else None,
+        "sample_server_names":sample_names if scope==SCOPE_SAMPLE else [],
+        "sample_population_remote_count":state.get("sample_population_remote_count"),
         "requests_by_host":_request_count(rows),
         "internal_verifier_metrics":verifier.internal_usage_metrics_snapshot(),
         "external_verifier_metrics":verifier.usage_metrics_snapshot(),
@@ -488,7 +499,13 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
     _write_json(outdir/"summary.json",aggregate)
     _write_json(outdir/"scan-state.json",state)
     _write_json(DATA_ROOT/"latest-summary.json",aggregate)
-    _write_json(DATA_ROOT/"latest-servers.json",{"generated_at_utc":aggregate["generated_at_utc"],"servers":rows})
+    _write_json(DATA_ROOT/"latest-servers.json",{
+        "generated_at_utc":aggregate["generated_at_utc"],
+        "scope":aggregate.get("scope"),
+        "sample_seed":aggregate.get("sample_seed"),
+        "sample_server_names":aggregate.get("sample_server_names") or [],
+        "servers":rows,
+    })
     month=outdir.name[:7]
     report_path=Path("docs/reports")/(month+"-mcp-registry-health.md")
     social_path=Path("docs/reports")/(month+"-mcp-registry-health-social-draft.md")
