@@ -11524,8 +11524,52 @@ async def arena_page(request: Request):
         body+='</section>'
     else:
         body+='<section class="card"><p>Nessuna sessione pubblicata.</p></section>'
-    body+='<section class="card"><p><a class="btn" href="/arena/micelio">Micelio</a> <a class="btn" href="/arena/evoluzione">Evoluzione</a></p></section>'
+    body+='<section class="card"><p><a class="btn" href="/arena/micelio">Micelio</a> <a class="btn" href="/arena/evoluzione">Evoluzione</a> <a class="btn" href="/arena/neo-dialect">Neo-dialect study</a></p></section>'
     return layout("NEO Arena",body)
+
+async def arena_neo_dialect_page(request: Request):
+    report=await _arena_public_json("neo-dialect-evolution-report.json")
+    study=await _arena_public_json("neo-dialect-failure-study.json")
+    sessions=study.get("sessions") if isinstance(study.get("sessions"),list) else []
+    requested=str(request.query_params.get("session") or "").strip()
+    if requested and not re.fullmatch(r"[A-Za-z0-9._-]{1,160}",requested):
+        requested=""
+    selected=next((x for x in sessions if isinstance(x,dict) and str(x.get("session_id") or "")==requested),None)
+    if selected is None and sessions:
+        selected=sessions[0] if isinstance(sessions[0],dict) else None
+    baseline=report.get("baseline") if isinstance(report.get("baseline"),dict) else {}
+    rfc=report.get("rfc") if isinstance(report.get("rfc"),dict) else {}
+    ab=report.get("ab") if isinstance(report.get("ab"),dict) else {}
+    body='<section class="card"><span class="tag">READ ONLY</span><h2>neo-dialect evolution study</h2>'
+    body+='<p><strong>'+html.escape(str(report.get("conclusion") or "unknown"))+'</strong></p>'
+    body+='<p>Sessioni '+html.escape(str(baseline.get("sessions") or 0))+' · BYE '+html.escape(str(baseline.get("complete_to_bye") or 0))+' · tentativi modello '+html.escape(str(baseline.get("model_attempts") or 0))+' · validi '+html.escape(str(baseline.get("model_valid") or 0))+' · invalidi '+html.escape(str(baseline.get("model_invalid") or 0))+' · fallback '+html.escape(str(baseline.get("model_fallbacks") or 0))+'</p>'
+    body+='<p>RFC ammesse <strong>'+html.escape(str(rfc.get("admitted") or 0))+'</strong> · raccomandate <strong>'+html.escape(str(rfc.get("recommended") or 0))+'</strong> · A/B <strong>'+html.escape(str(ab.get("status") or "UNKNOWN"))+'</strong>.</p></section>'
+    body+='<section class="card"><h3>Transcript disponibili</h3>'
+    for row in sessions:
+        if not isinstance(row,dict):
+            continue
+        sid=str(row.get("session_id") or "")
+        scenario=str(row.get("scenario") or "")
+        rep=str(row.get("repetition") or "")
+        body+='<p><a href="/arena/neo-dialect?session='+html.escape(sid,quote=True)+'"><code>'+html.escape(sid)+'</code></a> · '+html.escape(scenario)+' #'+html.escape(rep)+'</p>'
+    body+='</section>'
+    if selected:
+        metrics=selected.get("metrics") if isinstance(selected.get("metrics"),dict) else {}
+        body+='<section class="card"><h3>Transcript selezionato</h3>'
+        body+='<p><code>'+html.escape(str(selected.get("session_id") or ""))+'</code> · '+html.escape(str(selected.get("scenario") or ""))+' #'+html.escape(str(selected.get("repetition") or ""))+' · turni '+html.escape(str(metrics.get("turns") or 0))+' · fallback '+html.escape(str(metrics.get("fallbacks") or 0))+'</p>'
+        for row in selected.get("transcript") or []:
+            if not isinstance(row,dict):
+                continue
+            actor=str(row.get("actor") or "")
+            msg=row.get("message") if isinstance(row.get("message"),dict) else {}
+            typ=str(msg.get("type") or row.get("event") or "INVALID")
+            payload=json.dumps(msg,ensure_ascii=False,default=str)
+            body+='<div style="border-left:4px solid '+_arena_actor_color(actor)+';padding:8px 12px;margin:8px 0"><strong>'+html.escape(actor)+'</strong> <code>'+html.escape(typ)+'</code><br><span class="muted">'+html.escape(payload[:1800])+'</span></div>'
+        body+='</section>'
+    body+='<section class="card"><h3>Vincoli</h3><p>Zero cost · Arena-only · score weight 0.0 · nessun contatto esterno · nessuna promozione automatica · neo-dialect/1.0 invariato.</p></section>'
+    body+='<section class="card"><p><a class="btn" href="/arena">Arena</a> <a class="btn" href="/arena/evoluzione">Evoluzione</a></p></section>'
+    return layout("NEO Arena · neo-dialect",body)
+
 
 async def arena_micelio_page(request: Request):
     data=await _arena_public_json("micelio.json")
@@ -11688,6 +11732,7 @@ app = Starlette(
         Route("/registry-health", registry_health_page, methods=["GET"]),
         Route("/registry-health/about", registry_health_about, methods=["GET"]),
         Route("/arena", arena_page, methods=["GET"]),
+        Route("/arena/neo-dialect", arena_neo_dialect_page, methods=["GET"]),
         Route("/arena/micelio", arena_micelio_page, methods=["GET"]),
         Route("/arena/evoluzione", arena_evolution_page, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
