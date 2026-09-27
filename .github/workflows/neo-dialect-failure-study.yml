@@ -42,9 +42,10 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           w=Path(".github/workflows/neo-dialect-failure-study.yml").read_text(encoding="utf-8")
-          assert "workflow_dispatch:" in w
-          assert "schedule:" not in w
-          assert "push:" not in w
+          trigger_block=w.split("permissions:",1)[0]
+          assert "workflow_dispatch:" in trigger_block
+          assert "\n  schedule:" not in trigger_block
+          assert "\n  push:" not in trigger_block
           s=Path("arena_neo_dialect_failure_study.py").read_text(encoding="utf-8")
           for needle in ('"cost_eur":0','"score_weight":0.0','"external_agent_contact":False','"production_influence":"NONE"','"promotion":"NONE"'):
               assert needle in s
