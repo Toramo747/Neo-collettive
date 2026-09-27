@@ -85,6 +85,12 @@ neo-dialect/1.0 is optional. A sender MAY offer it in HELLO. The dialect is cons
 
 If that confirmation does not occur, communication continues using standard A2A messages. A2A remains authoritative for transport and protocol compatibility.
 
+## Clarification requests
+
+Clarification is not a neo-dialect message type. When a peer needs missing or ambiguous input before it can evaluate or execute a proposal, it MUST use the existing A2A clarification flow (an A2A `Message`, with the task/request placed in the A2A input-required state where applicable). `COUNTER` is reserved for proposing changes to the terms of an existing proposal; it MUST NOT be used merely to ask a question.
+
+Illustrative example: after receiving a neo-dialect `PROPOSE` whose requested output says only `{"format":"report"}`, a peer that needs the desired report language asks through standard A2A, for example: `Message: "Which language should the report use?"` with the surrounding A2A task marked input-required. The sender answers through standard A2A (for example, `Message: "Italian."`). Once the missing input is available, the neo-dialect exchange resumes with the appropriate existing type; no `COUNTER` is emitted unless proposal terms are actually being changed.
+
 ## Complete example
 
 The following example shows message format from start to finish. Values are illustrative.
