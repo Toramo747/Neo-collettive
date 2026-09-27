@@ -1,0 +1,128 @@
+name: NEO Arena Local LLM Probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neo-arena-local-llm
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MODEL: qwen2.5:0.5b-instruct
+      REPORT: data/arena/local-llm-report.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate deterministic probe
+        run: |
+          set -euo pipefail
+          python -m py_compile arena_local_llm_probe.py neo_dialect.py
+          python -m unittest -v test_arena_local_llm_probe.py
+
+      - name: Run bounded local Ollama experiment
+        run: |
+          set +e
+          nproc
+          free -h
+          df -h .
+          INSTALL_START=$(date +%s)
+          timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+          INSTALL_RC=$?
+          INSTALL_END=$(date +%s)
+          export INSTALL_SECONDS=$((INSTALL_END-INSTALL_START))
+          PULL_RC=99
+          INFER_RC=99
+          export PULL_SECONDS=0
+          if [ "$INSTALL_RC" -eq 0 ]; then
+            ollama serve >/tmp/ollama.log 2>&1 &
+            for i in $(seq 1 30); do
+              curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break
+              sleep 1
+            done
+            PULL_START=$(date +%s)
+            timeout 300 ollama pull "$MODEL"
+            PULL_RC=$?
+            PULL_END=$(date +%s)
+            export PULL_SECONDS=$((PULL_END-PULL_START))
+            if [ "$PULL_RC" -eq 0 ]; then
+              timeout 300 python arena_local_llm_probe.py --model "$MODEL" --out "$REPORT"
+              INFER_RC=$?
+            fi
+          fi
+          export INSTALL_RC PULL_RC INFER_RC
+          python - <<'PY'
+          import json,os
+          from datetime import datetime,timezone
+          from pathlib import Path
+          path=Path(os.environ["REPORT"])
+          if path.exists():
+              data=json.loads(path.read_text(encoding="utf-8"))
+          else:
+              data={
+                  "schema_v":1,"namespace":"mycelix-arena",
+                  "status":"RESOURCE_LIMIT_OR_RUNTIME_FAILURE",
+                  "model":os.environ["MODEL"],"provider":"local_ollama",
+                  "cost_eur":0,"external_agent_contact":False,
+                  "production_influence":"NONE","score_weight":0.0,
+                  "completed_at_utc":datetime.now(timezone.utc).isoformat(),
+                  "reason":"Local model test did not complete within bounded runner resources/time."
+              }
+          data["install_seconds"]=int(os.environ.get("INSTALL_SECONDS","0"))
+          data["pull_seconds"]=int(os.environ.get("PULL_SECONDS","0"))
+          data["install_rc"]=int(os.environ.get("INSTALL_RC","99"))
+          data["pull_rc"]=int(os.environ.get("PULL_RC","99"))
+          data["infer_rc"]=int(os.environ.get("INFER_RC","99"))
+          path.parent.mkdir(parents=True,exist_ok=True)
+          path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Assert diagnostic isolation
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("data/arena/local-llm-report.json",encoding="utf-8"))
+          assert d.get("namespace")=="mycelix-arena"
+          assert d.get("cost_eur")==0
+          assert d.get("external_agent_contact") is False
+          assert d.get("production_influence")=="NONE"
+          assert float(d.get("score_weight") or 0.0)==0.0
+          print("Local LLM isolation verified")
+          PY
+
+      - name: Publish diagnostic report
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/arena/local-llm-report.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "arena diagnostic: local LLM probe [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt*3))
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neo-arena-local-llm
+          path: data/arena/local-llm-report.json
+          retention-days: 30

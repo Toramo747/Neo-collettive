@@ -11,6 +11,9 @@ on:
       - "arena_micelio.py"
       - "arena_evolution.py"
       - "arena_registry_world.py"
+      - "arena_local_llm_probe.py"
+      - "test_arena_local_llm_probe.py"
+      - ".github/workflows/neo-arena-local-llm.yml"
       - "test_arena_registry_world.py"
       - "test_arena_evolution.py"
       - "data/arena/evolution.json"
@@ -577,6 +580,19 @@ jobs:
           print("market_validation_cycles=3")
           print("quality_gate="+str(bool(d.get("quality_gate"))).lower())
           PY
+
+      - name: Dispatch zero-cost local LLM probe for v0.99.39
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          if [ "$expected" != "0.99.39" ]; then
+            exit 0
+          fi
+          gh workflow run neo-arena-local-llm.yml --ref main
+          echo "Local LLM diagnostic dispatched as workflow_dispatch"
 
       - name: Dispatch fresh Jarvis snapshot
         env:
