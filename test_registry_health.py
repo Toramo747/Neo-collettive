@@ -186,7 +186,7 @@ class RegistryHealthListingTests(unittest.TestCase):
             "request_counts_by_host":{"a.example":1},
             "usage_scope":"internal_registry_health",
         }
-        monotonic_values=iter([0.0,0.0,0.0,0.0,0.0,60.1,60.1])
+        monotonic_values=iter([0.0,0.0,0.0,0.0,60.1,60.1])
         with tempfile.TemporaryDirectory() as td, \
              patch.object(rhs,"DATA_ROOT",Path(td)/"registry-health"), \
              patch.object(rhs,"fetch_complete_registry",AsyncMock(return_value=listing)), \
@@ -194,6 +194,7 @@ class RegistryHealthListingTests(unittest.TestCase):
              patch.object(rhs,"read_opt_out",return_value=set()), \
              patch.object(rhs,"_publish_progress_checkpoint",return_value=None), \
              patch.object(rhs,"_sample_budget_seconds",return_value=60), \
+             patch.object(rhs,"MAX_CONCURRENCY",1), \
              patch.object(rhs,"_monotonic",side_effect=lambda: next(monotonic_values)):
             outdir=asyncio.run(rhs.first_phase(mode="sample",max_minutes=1))
             state=json.loads((outdir/"scan-state.json").read_text(encoding="utf-8"))
@@ -205,7 +206,7 @@ class RegistryHealthListingTests(unittest.TestCase):
             self.assertEqual(summary["scope"],"SAMPLE")
             self.assertEqual(summary["stopped_reason"],"max_minutes_reached")
             self.assertEqual(latest["generated_at_utc"],summary["generated_at_utc"])
-            self.assertEqual(len(servers["servers"]),2)
+            self.assertEqual(len(servers["servers"]),1)
             self.assertEqual(servers["sample_server_names"],state["sample_server_names"])
 
     def test_second_phase_rejects_non_first_pass_before_time_check(self):
