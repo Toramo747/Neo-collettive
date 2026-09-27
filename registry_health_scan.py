@@ -43,6 +43,11 @@ SCOPE_SAMPLE = "SAMPLE"
 DEFAULT_SAMPLE_MINUTES = 30
 
 
+def _monotonic() -> float:
+    """Wrapper kept patchable so deadline behavior can be tested deterministically."""
+    return time.monotonic()
+
+
 def runtime_version() -> str:
     source=Path("cloud_mcp.py").read_text(encoding="utf-8")
     match=re.search(r'^VERSION = "([^"]+)"',source,re.M)
@@ -228,7 +233,7 @@ async def first_phase(
     max_minutes: int = DEFAULT_SAMPLE_MINUTES,
     sample_from_scan_date: str = "",
 ) -> Path:
-    started=time.monotonic()
+    started=_monotonic()
     started_utc=datetime.now(timezone.utc)
     mode=str(mode or "full").strip().lower()
     if mode not in {"full","sample"}:
@@ -318,13 +323,13 @@ async def first_phase(
 
     idx=0
     while idx < len(candidates):
-        if deadline is not None and time.monotonic() >= deadline:
+        if deadline is not None and _monotonic() >= deadline:
             stopped_reason="max_minutes_reached"
             break
 
         batch=[]
         while idx < len(candidates) and len(batch) < MAX_CONCURRENCY:
-            if deadline is not None and time.monotonic() >= deadline:
+            if deadline is not None and _monotonic() >= deadline:
                 stopped_reason="max_minutes_reached"
                 break
             server=candidates[idx]
@@ -345,7 +350,7 @@ async def first_phase(
             continue
 
         task_map={task:base for task,base in batch}
-        wait_timeout=None if deadline is None else max(0.0,deadline-time.monotonic())
+        wait_timeout=None if deadline is None else max(0.0,deadline-_monotonic())
         done,pending=await asyncio.wait(set(task_map),timeout=wait_timeout)
         if pending:
             stopped_reason="max_minutes_reached"
@@ -388,7 +393,7 @@ async def first_phase(
         if pending:
             break
 
-    elapsed=round(time.monotonic()-started,2)
+    elapsed=round(_monotonic()-started,2)
     aggregate=aggregate_dataset(listing,rows)
     aggregate.update({
         "phase":"first",
@@ -449,11 +454,102 @@ async def first_phase(
     return outdir
 
 
+def finalize_existing_first_pass(scan_dir: Path | None = None) -> Path:
+    """Close a persisted first-pass checkpoint without performing any network probes."""
+    outdir=scan_dir or latest_scan_dir()
+    state=json.loads((outdir/"scan-state.json").read_text(encoding="utf-8"))
+    if str(state.get("phase") or "") != "first":
+        raise RuntimeError("first_pass_finalize_requires_first_phase")
+    if str(state.get("status") or "") not in {"IN_PROGRESS","FIRST_PASS"}:
+        raise RuntimeError("first_pass_finalize_invalid_status")
+
+    payload=json.loads((outdir/"registry-health.json").read_text(encoding="utf-8"))
+    listing=payload["listing"]
+    rows=payload["remote_results"]
+    for row in rows:
+        if row.get("opted_out"):
+            continue
+        if not isinstance(row.get("probe1"),dict):
+            raise RuntimeError("first_pass_finalize_incomplete_probe_rows")
+
+    scope=str(state.get("scope") or SCOPE_FULL)
+    row_names=[str(x.get("name") or "") for x in rows]
+    sample_names=list(state.get("sample_server_names") or [])
+    if scope==SCOPE_SAMPLE:
+        if sample_names and row_names != sample_names:
+            raise RuntimeError("sample_membership_changed_before_first_pass_finalize")
+        sample_names=row_names
+
+    started_at=parse_utc(state["first_probe_started_at_utc"])
+    finished_text=str(state.get("checkpointed_at_utc") or datetime.now(timezone.utc).isoformat())
+    finished_at=parse_utc(finished_text)
+    internal_calls=sum(1 for row in rows if isinstance(row.get("probe1"),dict))
+    live=sum(1 for row in rows if (row.get("probe1") or {}).get("category") in {"OK","OK_WITH_ISSUES"})
+    aggregate=aggregate_dataset(listing,rows)
+    stopped_reason=str(state.get("stopped_reason") or "")
+    if not stopped_reason:
+        stopped_reason="max_minutes_reached" if scope==SCOPE_SAMPLE else "recovered_checkpoint"
+    aggregate.update({
+        "phase":"first",
+        "status":"FIRST_PASS",
+        "scope":scope,
+        "final":False,
+        "started_at_utc":started_at.isoformat(),
+        "finished_at_utc":finished_at.isoformat(),
+        "duration_seconds":round(max(0.0,(finished_at-started_at).total_seconds()),2),
+        "max_minutes":state.get("max_minutes") if scope==SCOPE_SAMPLE else None,
+        "stopped_reason":stopped_reason,
+        "sample_seed":state.get("sample_seed"),
+        "sample_replay_of":state.get("sample_replay_of"),
+        "sample_size":len(rows) if scope==SCOPE_SAMPLE else None,
+        "sample_server_names":sample_names if scope==SCOPE_SAMPLE else [],
+        "sample_population_remote_count":state.get("sample_population_remote_count"),
+        "attempted_servers":len(rows),
+        "second_probe_not_before_utc":state["second_probe_not_before_utc"],
+        "requests_by_host":_request_count(rows),
+        "internal_verifier_metrics":{
+            "calls":internal_calls,
+            "live":live,
+            "not_live":max(0,internal_calls-live),
+            "rate_limited":0,
+            "error_types":{},
+            "domains":{},
+            "scope":"internal_registry_health",
+            "privacy":"anonymous aggregate metrics only; no caller IP or personal identifier stored",
+            "payment_signal":False,
+        },
+        "external_verifier_metrics":verifier.usage_metrics_snapshot(),
+    })
+    state.update({
+        "phase":"first",
+        "status":"FIRST_PASS",
+        "scope":scope,
+        "completed_probes":internal_calls,
+        "sample_server_names":sample_names if scope==SCOPE_SAMPLE else [],
+        "sample_size":len(rows) if scope==SCOPE_SAMPLE else 0,
+        "stopped_reason":stopped_reason,
+        "final":False,
+    })
+    _write_json(outdir/"summary.json",aggregate)
+    _write_json(outdir/"scan-state.json",state)
+    _write_json(DATA_ROOT/"latest-summary.json",aggregate)
+    _write_json(DATA_ROOT/"latest-servers.json",{
+        "generated_at_utc":aggregate["generated_at_utc"],
+        "scope":scope,
+        "sample_seed":state.get("sample_seed"),
+        "sample_server_names":sample_names if scope==SCOPE_SAMPLE else [],
+        "servers":rows,
+    })
+    return outdir
+
+
 async def second_phase(scan_dir: Path | None = None) -> Path:
-    started=time.monotonic()
+    started=_monotonic()
     started_utc=datetime.now(timezone.utc)
     outdir=scan_dir or latest_scan_dir()
     state=json.loads((outdir/"scan-state.json").read_text(encoding="utf-8"))
+    if str(state.get("phase") or "") != "first" or str(state.get("status") or "") != "FIRST_PASS" or state.get("final") is True:
+        raise RuntimeError("second_probe_requires_FIRST_PASS")
     not_before=parse_utc(state["second_probe_not_before_utc"])
     if started_utc < not_before:
         remaining=int((not_before-started_utc).total_seconds())
@@ -518,7 +614,7 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
         "started_at_utc":state["first_probe_started_at_utc"],
         "finished_at_utc":datetime.now(timezone.utc).isoformat(),
         "second_probe_started_at_utc":started_utc.isoformat(),
-        "duration_seconds_second_probe":round(time.monotonic()-started,2),
+        "duration_seconds_second_probe":round(_monotonic()-started,2),
         "sample_seed":state.get("sample_seed"),
         "sample_size":len(rows) if scope==SCOPE_SAMPLE else None,
         "sample_server_names":sample_names if scope==SCOPE_SAMPLE else [],
@@ -595,7 +691,7 @@ def persistence_contract(scan_dir: Path, *, require_final: bool = False) -> dict
 
 async def main() -> int:
     parser=argparse.ArgumentParser()
-    parser.add_argument("phase",choices=("first","second"))
+    parser.add_argument("phase",choices=("first","finalize-first","second"))
     parser.add_argument("--scan-date",default="")
     parser.add_argument("--mode",choices=("full","sample"),default="full")
     parser.add_argument("--max-minutes",type=int,default=DEFAULT_SAMPLE_MINUTES)
@@ -603,6 +699,9 @@ async def main() -> int:
     args=parser.parse_args()
     if args.phase=="first":
         await first_phase(args.mode,args.max_minutes,args.sample_from_scan_date)
+    elif args.phase=="finalize-first":
+        scan_dir=DATA_ROOT/args.scan_date if args.scan_date else None
+        finalize_existing_first_pass(scan_dir)
     else:
         scan_dir=DATA_ROOT/args.scan_date if args.scan_date else None
         await second_phase(scan_dir)
