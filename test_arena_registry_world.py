@@ -7,14 +7,15 @@ from arena_registry_world import (
     register_external_predictions, evaluate_external_predictions, sync_registry_micelio,
 )
 
-def write_registry(root: Path, scan_at: str, rows):
+def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL"):
     root.mkdir(parents=True,exist_ok=True)
     cats={}
     for r in rows:
         cats.setdefault(r["category"],{"count":0,"percent_of_scanned":0.0})["count"]+=1
     for v in cats.values(): v["percent_of_scanned"]=round(100*v["count"]/len(rows),2)
     (root/"latest-summary.json").write_text(json.dumps({
-        "generated_at_utc":scan_at,"scanned":len(rows),"categories":cats
+        "generated_at_utc":scan_at,"scanned":len(rows),"categories":cats,
+        "final":final,"status":status
     }),encoding="utf-8")
     (root/"latest-servers.json").write_text(json.dumps({
         "generated_at_utc":scan_at,"servers":rows
@@ -32,6 +33,15 @@ class RegistryWorldTests(unittest.TestCase):
             self.assertEqual(n,0)
             self.assertEqual(s["external_prediction_status"]["status"],"BLOCKED_NO_REGISTRY_DATA")
             self.assertTrue("no extra scan launched" in s["external_prediction_status"]["reason"])
+
+    def test_first_pass_dataset_is_not_used_by_arena(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"
+            write_registry(reg,"2026-09-27T04:00:00+00:00",self.rows(),final=False,status="FIRST_PASS")
+            self.assertIsNone(load_registry_snapshot(reg))
+            s=initial_state()
+            n=register_external_predictions(s,reg,cycle_id="1")
+            self.assertEqual(n,0)
 
     def test_each_agent_gets_ten_external_predictions(self):
         with tempfile.TemporaryDirectory() as td:
