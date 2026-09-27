@@ -267,5 +267,26 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertEqual(json.dumps(probe,sort_keys=True),before)
 
 
+    def test_classification_transitions_reconstruct_v1_and_v2_distributions(self):
+        path=Path("data/registry-health/2026-09-27/classification-transitions.json")
+        doc=json.loads(path.read_text(encoding="utf-8"))
+        from collections import Counter
+        v1=Counter(x["class_v1"] for x in doc["servers"])
+        v2=Counter(x["class_v2"] for x in doc["servers"])
+        changed=[x for x in doc["servers"] if x["class_v1"]!=x["class_v2"]]
+        self.assertEqual(len(changed),203)
+        self.assertEqual(sum(1 for x in changed if x["class_v1"]=="OK_WITH_ISSUES" and x["class_v2"]=="OK"),202)
+        self.assertEqual(sum(1 for x in changed if x["name"]=="ai.mypenny/mypenny" and x["class_v1"]=="INTERMITTENT" and x["class_v2"]=="OK"),1)
+        self.assertEqual(v1["OK"],220)
+        self.assertEqual(v1["OK_WITH_ISSUES"],205)
+        self.assertEqual(v1["INTERMITTENT"],9)
+        self.assertEqual(v2["OK"],423)
+        self.assertEqual(v2["OK_WITH_ISSUES"],3)
+        self.assertEqual(v2["INTERMITTENT"],8)
+        self.assertEqual(dict(v1),doc["distribution_v1"])
+        self.assertEqual(dict(v2),doc["distribution_v2"])
+
+
+
 if __name__ == "__main__":
     unittest.main()

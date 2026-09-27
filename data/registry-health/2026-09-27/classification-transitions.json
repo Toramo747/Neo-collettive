@@ -1,0 +1,4036 @@
+{
+  "schema_version": 1,
+  "source_dataset": "data/registry-health/2026-09-27/registry-health.json",
+  "source_generated_at_utc": "2026-09-27T19:33:09.788469+00:00",
+  "classification_versions": {
+    "from": 1,
+    "to": 2
+  },
+  "totals": {
+    "servers": 663,
+    "changed": 203,
+    "unchanged": 460,
+    "transitions": {
+      "OK_WITH_ISSUES -> OK": 202,
+      "AUTH_REQUIRED -> AUTH_REQUIRED": 161,
+      "OK -> OK": 220,
+      "UNREACHABLE -> UNREACHABLE": 23,
+      "NOT_MCP -> NOT_MCP": 33,
+      "SERVER_ERROR -> SERVER_ERROR": 12,
+      "OK_WITH_ISSUES -> OK_WITH_ISSUES": 3,
+      "INTERMITTENT -> INTERMITTENT": 8,
+      "INTERMITTENT -> OK": 1
+    }
+  },
+  "distribution_v1": {
+    "OK_WITH_ISSUES": 205,
+    "AUTH_REQUIRED": 161,
+    "OK": 220,
+    "UNREACHABLE": 23,
+    "NOT_MCP": 33,
+    "SERVER_ERROR": 12,
+    "INTERMITTENT": 9
+  },
+  "distribution_v2": {
+    "OK": 423,
+    "AUTH_REQUIRED": 161,
+    "UNREACHABLE": 23,
+    "NOT_MCP": 33,
+    "SERVER_ERROR": 12,
+    "OK_WITH_ISSUES": 3,
+    "INTERMITTENT": 8
+  },
+  "stima_→_calcolo_finale": {
+    "estimate": {
+      "OK": 422,
+      "INTERMITTENT": 9,
+      "OK_WITH_ISSUES": 3
+    },
+    "final": {
+      "OK": 423,
+      "INTERMITTENT": 8,
+      "OK_WITH_ISSUES": 3
+    },
+    "explanation": "The entire estimate-to-final difference is ai.mypenny/mypenny: v1 saw OK_WITH_ISSUES then OK because discovery appeared only on probe2, so the server was INTERMITTENT; v2 ignores discovery for health and both probes are OK."
+  },
+  "servers": [
+    {
+      "name": "io.github.mcp-dir/stonepagamentos-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/detran_go_gravame-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.solarx56/vyrl",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.scriptmasterlabs/provider-trust",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/data-michigan",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/sintegra_sp-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Final-Commerce/final-docs",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theluckystrike/terms",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.zoningsignal/observatory",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.clment/clment",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-095",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/giphy",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.airblockfz/inflation-signal",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/ulid",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/noaa-spc",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "co.civai.nova/telegram-agent",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.meettempi/tempi-account",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/passive-aggression",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/pem-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/archive",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pavel-tashev/doc-to-markdown",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.cg3/prior",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.smarterweather/onboarding",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.moltlinestudio/optimize",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/arcgis-sarasota",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.blacklabeltec/site-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.rossdata/data-dictionary",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.biznetai/biznetai-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.srotzin/hive-mcp-vault",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.smithery/arjunkmrm-tutorials",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.guptaprakhariitr/arxiv-mcp",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "in.houseduck/house-duck-public",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/arcgis-kansas",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "one.aisa/creator-discovery",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/st-mt",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "app.vercel.filingcheck-bot/filingcheck",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/globenewswire",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "eu.dinilu/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/lang-bs",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.pickadive/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.DavidOrpeli/0xhumans-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK_WITH_ISSUES",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.scite/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dk.afbudsrejser/travel-search",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.tapetide/stock-research-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.foomworks/agent-web",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-as",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.grzesir/botspot-trading",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.trendsmcp/wikipedia",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.auriniaxo/hostel",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.controldrill/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/watchmode",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/lower-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "co.connic/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.freysa.bumi/company-research",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.labelixa/zpl",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.roxyapi/kabbalah",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "app.makefx/make-effects",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK_WITH_ISSUES",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.timvonsachs/the-last-ceo",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-010",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.weblens/weblens",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.tidemarkresearch/tidemark",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.corkandcurve/wine-travel",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/worldbank",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.ShaliniAnandaPhD/neuron-sports-ad-exchange",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.anchoredip/anchoredip",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/chronicling-america",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.srotzin/hive-mcp-agent-storage",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.luhkas2309/osigu-rcm",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.tooloracle/flareoracle",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.maximem/synap",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/metro64-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/civitai",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "cloud.redu/mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/phone-e164-shape",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.tofubofu/ai-visibility",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.mukoko/nhimbe-events",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.MajaHelferbiene/dubwebkuk",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/xxh64-len",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.getvda/auth-token-mcp-traced-service",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.flytohub/flyto-runtime",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/sefaz_df_nfce-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/solar-noon",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.brixastudio/studio",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.cerebrochain/cerebrochain",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.snapog/snapog",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "app.immoapi/immoapi",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.TommoHCIO/solana-pulse-xaas",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.roosteragents/switchboard",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.backgroundcheckquotes/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/carf_processo-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.takident/patient-services",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.finmanagerai/atlas-mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.KyleTaggart/lsp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/openiban",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.getvda/postgres-redis-compose-generator",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.primaxiom.memory/reasongraph",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sajeetharan/devglobe",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.steffanricardo/the-dutch-directory",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.aitwire/tenant",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.moltlinestudio/personal",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.abovebeyond4north-netizen/prime-agent-x402-intelligence",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.usefulapi/healthchecksio",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.alik472/ai-watermark-remover",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.oryksa/ai-employees",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Guava-Research/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.nhoverte/biocosm",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.fodda/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.jakzaizzat/cukaimax-tax-authority",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sercanmetalore/document-intel-mcp",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.im-ff/crawlinx-mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "uk.co.drivershourscalculator/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.greencalculus/api",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.esherialabs/esheria",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/sentence-count",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/lang-ur",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.ausref/reference-data",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.eatmundo/dishes",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.georgiaautoquotes/insurance",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/tiger192",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "vc.unicornscreener/unicorn-screener",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/detran_mg_reg_intencao_venda-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.lemonadolabs/lemonado-mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/contentid-b58",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.ranovam/ashby-scraper",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.pagelive/pagelive",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/leap-year-utc",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pratikmehkarkar/vin-recall-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.abenassi/argentina-data",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.contadeo/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.subscribr/subscribr",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.a2awire/data-consumer-tech-product-news-gadgets",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.sharebench/registry",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.skillrepo/skillrepo",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/brb-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/highway64-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/sefaz_ce_nfe-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.stagenth/qr-kit",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/http-415",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/pref_pr_francisco_beltrao_cnd-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.machineeconomyobservatory/meo-preflight",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.getabstract/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.luniumpay/pix-brazilian-payments",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sapiom/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.adadvisor/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/contas_enel_sp_gestao_imob-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "me.reefwith/reef",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.raditotev/agent-marketplace",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "live.alpic.staging.personal-chef-chatgp-c951fcb6/personal-chef-chatgpt-app",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/podcastindex",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Shxnque/quesen",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Compuute/lead-enrichment",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.useslop/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/worldbank-projects",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.thenextgennexus/yahoo-finance-mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.wiremock/wiremock-cloud",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/peppol",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/b3-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Korext/governance",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Bluecraft-AI/cold-email",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.moltlinestudio/research",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.roxyapi/docs",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.llclane/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.instaseer/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.cartviral/cartviral",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/arcgis-puyallup",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/lpm-lps",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/bls",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "au.com.insuro/insuro",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Kaiserunix/luogu-mcp-server",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/lang-ar",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.leshchenko1979/fast-mcp-telegram",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.funding-radar/radar",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.workers.kikoribera03.flat-rate-llm/x402-tools",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.paulovitorti/brazil-company-data-enrichment",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/us-iso-grid",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-117",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.PaidSync/paidsync",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.noclickapp/noclick",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.cyanheads/eia-energy-mcp-server",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "legal.kvasir/kvasir-legal",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/interpro",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.bluetouff/l0g",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.focusvo/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "net.nexlab/peer-research-papers",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/murmur-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.kaiv/dependency-trust",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/arcgis-eagan",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/data-dc",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-gh",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.oreillymedia/oreilly-expert",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.greencore-solutions/gsc-fleet-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/elife",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.op0ai/iconlab",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.tickerfacts/fundamentals",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.CSOAI-ORG/meok-cra-art14-reporter-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "org.totto/knowledge",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/k8s-kind-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "de.zugferd-validator/validator",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "live.alpic.staging.mcp-server-template-99cbcf02/mcp-server-template",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "lv.city24/real-estate",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.tchen6500/bazi-fortune-hub",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/ecrvsp_restricoes_renajud-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.xpaysh/devtools",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dk.herbertkokholm.citecaddy/cite-caddy",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.faulknerwayne73-droid/kojiru-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/wisconsin-code",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "live.alpic.staging.node-email-mcp-25ea0992/node-email-mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Melvynx/lumail",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "site.123skills/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.a2awire/benchmark-access-request-review-2026-09-10-81479355",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "us.mindflows/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.AnshumanAtrey/instagram-profile-intel-no-login",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.DevDizzle/gammarips",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/nebraska-code",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.AlpayC/abfall-mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.CCSTT-dev/callable",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/detran_ms_licenciamentos_flex-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "app.wishpool/norway-payments-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.compsniper/compsniper",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.buffrota/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.DSGPT2024/uk-tender-check",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "cn.pianam.mcp/stock-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ru.transkriba/transcription",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.labstack/monk",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Luca-Blight/devmatch",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.varvararatta/data_compute_stats_mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Tanbir404/zephex",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.haasonline/trade-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.origineparis/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.iturri/market-data",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-cr",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.chorilo/chorilo",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.runoscript/runoscript",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.roleset/jobs",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.dataecho/mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "co.pipeboard/meta-ads-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "uk.co.forensicaccountantcost/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.eqiqs/eqiqs",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.leonsm/fusion-studio-branding",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.eutexa/crm",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sexylin/hipo-work",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.4dmrkey/cryptopolitan",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/contas_cpfl_download-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/jdn-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "tech.p7n/platform7n",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.orbismo/orbismo",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/indent-kind",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "pro.formdesigner/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.clarid/hmda",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "app.ottodata/otto",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.lilo-property/mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.saylorinnovations/data",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.commercialbuses/commercialbuses",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "pl.iteon/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.trendsmcp/spotify",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/tarot-draw",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Kali123411/k402",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "app.wishpool/india-payments-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-america-sao-paulo",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/opensea",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/acam-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/antt_produtos_perigosos-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/tribunal_trt24_ceat-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.radixia/blog",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.reefapi/reefapi-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.isakskogstad/oecd-mcp",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "eu.qeaas/qeaas-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.stayce/icd-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/pinch-ml",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.igrlk/uiverify",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/carbon-interface",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.decisionlog/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.gaurav-kumar-sinha-060705/singularity",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "to.sprawl/sprawl",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.bildata/bildata",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.AnthonyPuggs/ausecon-mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.enrichment-kids/enrichment-kids",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "app.kanera/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.rocketlist/rocketlist",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/arcgis-linncounty",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "cn.pianam.mcp/ip-location-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "guru.goanywhere/storefront",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "co.civai.nova/pdf-agent",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.inspirio-co/rootr-cli",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "uk.co.newemploymentrules/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/midway-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.HyosikPark/weather",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/true-client",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.thetempleofdoom.argus/argus",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.flipdomain/domain-sales",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.mobile-text-alerts/sms-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.bpays/benji-pays",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.generategreetings/greetings",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "dev.stackfiesta/stackfiesta-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.coastmancoastman/diem-agent-workers",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/pdbe",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.smithery/motorboy1-my-mcp-server",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "live.alpic.doing-v2-d5286fe8/doing",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.smithery/kodey-ai-salesforce-mcp-minimal",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.grabmail/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theluckystrike/cv-maker-resume-templates",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "dev.paperdock/paperdock",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Samrajtheailyceum/advertising-protocols",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.thenextgennexus/legal-mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.ArneFfm/animal-checklist-account",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.thejohnsonbros/plumbing-booking",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.themineworks/academic-research-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.m9labs-railscope/verantis-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.lifescored/mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.qinisolabs/qiniso",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.converttoit/converter",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.youdotcom-oss/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.aggors/merchant-evidence",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "net.thirdmade/shelf",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.acornreply/server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Nimistu/lahend-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "org.benevolabs/irenictable",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/pref_go_aparecida_goiania_cnd-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/c-k",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ee.ehtekunst/arhiiv",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "jp.addresstozip/address-to-zip",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.claracarspt/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.agent-module/mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.recaloapp/recalo",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.chartervsown/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/congressional-documents",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Contentrain/contentrain",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-072",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.daedalmap/hurricanes",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.userguiding/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "video.motiontext/motion-text",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.router/ai-gateway",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.kulybaba/weather-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.ontarioprotocol/ontario-protocol",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "org.californiabitcoin/agent-commerce",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.gomission/mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.freshypenguin/ao-page-watch",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Brock-Denton/tokenmaxxing",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.silly-geese/quality-qr",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.srotzin/hive-mcp-keet-bridge",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.skipseek/skipseek",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.trendsmcp/app-store",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.clauxel.aiwaiverdesk/aiwaiverdesk-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/cvm_processos_sancionadores-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.chaband-ops/iskra-reputation",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.nowork-studio/notfair-meta-ads",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.openmapp/openmapp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "store.scvd/general-store",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.ai-erd/ai-erd",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/textstats",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-asia-magadan",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Bogzx/alphaprove",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-048",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.envelopebudget/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-europe-paris",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/gpx-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.checkmycontractorquote/local-compliance-os",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Toinedotcom/toolforte",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/scrapingant",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.huddlevo/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/grapheme-n",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.tegas/video",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "app.countlink/countdown",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/mercadopago-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.AnkitPat/todo-mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.familyfairplay/family-fair-play",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.clauderegistry/plugin-catalog",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/lemmy",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "uk.co.weightmedscompare/price-compare",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.stratalize/intelligence",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.bcited/bcited",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-cd",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theluckystrike/scope-change",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.srotzin/hive-mcp-zk-attestation",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/nyc-animals",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.magnificentjobs/jobs",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.liudejua27-blip/fitmeet",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.realworldapis/realworldapis",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-md",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.workers.notdown-app.recall/memory",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/timezone",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.CognitiveCoreAI/the-remote-suite",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.letsweft/weft",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.atomsai/contextdb-memory",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.idntty/stash",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Harshyadav442277/telegraph-morse",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "app.papertext.app/papertext-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.lqwdtech/gateway",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.rigorloop/research-bounties",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-australia-sydney",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.majorelalexis-stack/maxia",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theluckystrike/quotes-estimates-proposals-vat-win-rate",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-125",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.sitemcp/site-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.1inch.business/mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.deployment-io/deployment-io",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.realuptime/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/json-type-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.apifymcpfactory-droid/llms-txt-checker",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.bubblio/door_a9015a46f924",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/adzuna",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "live.alpic.lineup-bf157e35/lineup",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "pro.publifye/lexifye",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.wrbtc/wallet-intelligence",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/info-uri",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/data-cityofnewyork",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.intuneready/intune-ready",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Chris-Eaccountability/elephant-accountability-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.noerrands/tables",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/revisao-bancaria-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.syfert/legal-research",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.wholesalepilot/wholesalepilot",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/sec-xbrl",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "app.wishpool/latam-logistics-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.socialrobot/socialrobot-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.yumaheymans/bestrobotmower-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.guptaprakhariitr/uspto-patents-mcp",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.codex-curator/intelligence-aeternum-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.bavlio/bavlio",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.neptunecigar/catalog",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "app.vercel.groundtruth-ruby/groundtruth",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/sec-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/csv-rows-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/pirate-weather",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "sh.knowngood/knowngood",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.slidetok/slidetok",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.moneyyoureowed/catalog",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "dev.ichabod/ichabod",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/registradores_matric_lista-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/the-graph",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.cefradar/cefradar",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.okdocai/okdoc",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.tredict/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.getalai/presentations",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "fr.edifiable/edifiable",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.varvararatta/support_service_management_mcp",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.mearef/reference-data",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.tokenfix/legal-grounding",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.contextstudios/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Chriscorp/tracea",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.jpalepu/first100",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.teamtrayd/trayd-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.edgethirteen.www/accessproof",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/mte_certidao_debitos-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.joeyough/mcpcheck",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/kalshi",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.cymetica/event-trader-research",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/domains",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/port-20",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/airnow",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.chalet-montagne/rentals",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.sparkpay/sparkpay",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.green-api/whatsapp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.zation/agent-radar",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.bota-chat/bota",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "bio.irishealth/iris",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.theprotoclinical/commerce",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-africa-tunis",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-america-argentina-buenos-aires",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/arcgis-carlsbad",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Cigarfinder/cigarfinder",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.chrp-bass/chrp-epi-authority",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.digitalpublic/commercial",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "live.alpic.fast-mcp-f337845e/fast-mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/calculo-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.openarx/openarx",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.janishiestand/thesischeck",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.moelayyan90/xguard",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.ejentum/self-inspect-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.calibvo/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.fluentedi/tools",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "fast.rank/rank-fast",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.mypenny/mypenny",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "OK",
+      "cause": "v1_intermittent_only_because_discovery_changed_between_probes; v2_treats_both_probes_as_OK"
+    },
+    {
+      "name": "io.github.shaileshjgd/geoclear",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ru.kurerhub/courier-catalog",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "it.datituristici/datituristici",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.afanasenkoa/zillow-mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.dropwatchhq/research-intel",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.odilelabs/odile",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/acah-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-042",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/csp-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "co.flyweel/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/ksuid-ts",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/detran_pr_licenciamento-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/pref_sp_campinas_iptu-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.cyanheads/astronomy-mcp-server",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "org.memoryapi/predict",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "org.billcommons/bill-commons",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Web3Auth/mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/askdata-xk",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.bch1212/bizintel",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/lang-ky",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/trimet",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.meistertask/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/dol-whd",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.khalidsaidi/a2abench",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.shipwork/seo-checks",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "market.execution/execution-market",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.dropwatchhq/payer-api-directory",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.costbench/mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.daedalmap/wildfires",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "cc.pipic/pipic",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-pacific-efate",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.cyanheads/pubmed-mcp-server",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.fpetitit/mcpcheckup",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/veiculo_fipe-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/sefaz_rr_certidao_debitos-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.jakeloo/peelaway",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.debridge-finance/debridge-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/aviationstack",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/statscan",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.TravelType/travel-poi",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.umagestaointeligente/packvalue-tools",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.marketcrew/market-data",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.major7apps/pensyve",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.rentrolldesk/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.minutemailco/mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.adtao/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-bz",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.SihyeonJeon/legend-saju",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.dedale-bi.remnant/remnant",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/detran_mg_multas_descritivos-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.varvararatta/currency_converter_mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "net.gentechlabs/x402-gateway",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.canadapayrollcalculator/site",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.vizkr/council",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.smithery/fengyinxia-jimeng-mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/cenprot_sp_protestos-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.ChanghuLiu/uk-waste-rule-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/contas_cpfl_link-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.payments.managed/payments-ai-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pdunovits/pabs-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.beket/audit",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Masmedeam/learnthat",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.aristiun/aribot",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/senatran_meus_veiculos_posse-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/istat-it",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.namewhisper/ens-tools",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.khaledmoayad/3ammiya",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.desvela/brand-watch",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/sefaz_al_ipva-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/data-bloomington",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "fr.aopx/aopx",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.mcp-dir/librelink_business-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.0xSardius/solenrich",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "in.creo-memories/mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.tinyfish.agent/web-agent",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.voicearc/splitbasket-prices",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/segment",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.pubble/pubble",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.iknow/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.nulljosh/newsline",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.jawz/jawz",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.cesteral/sa360-mcp",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-de",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.zyrvix/docs",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "me.shre/shre",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "eu.ansvar/german-law",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.spala/public-mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/referrer-ok",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "co.thinair/geo",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "gr.bestprice/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.wulfkaal/corpus",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.rootsbymenda/food-safety",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.jweezy119/Pabandi",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.maxvideoai/maxvideoai",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.a2awire/data-nasa-mission-space-news",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "ai.getfinsight/market-analysis",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/cid-v1",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.brainiall/image",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/netherlands-tenders",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "fyi.medrates/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "nl.intermediair.www/jobs",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/iana-zones",
+      "class_v1": "INTERMITTENT",
+      "class_v2": "INTERMITTENT",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/lobsters",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.geraldho81/flow-productivity",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "au.com.arthr/mcp",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theluckystrike/sow",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.jdhart81/agent-surety",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/mixpanel",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.borisinc/aegis",
+      "class_v1": "SERVER_ERROR",
+      "class_v2": "SERVER_ERROR",
+      "cause": "unchanged"
+    },
+    {
+      "name": "net.todoist/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.ArasPasha/botwire-mcp",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.comos-federation/gateway",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "au.com.horsetruth/machine-intelligence",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.mcpscores/vehicle-fault-codes",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/data-iledefrance",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.lowlanddata/eu-marketplaces",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.tounsils/ask-me-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/adsb",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.thenextgennexus/banking-financial-stability-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theluckystrike/credit-memo",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/cookie-token",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.b77/kinnovis-storage",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.BuilderIO/agent-native-analytics",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/coinpaprika",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.liknenS/patchrooms",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/pref_sp_sao_paulo_ottc-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Wxt-ai/handoff-recovery-desk",
+      "class_v1": "UNREACHABLE",
+      "class_v2": "UNREACHABLE",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/expect-ct",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/tz-america-toronto",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.djoudad292/hireme-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "app.agentrendezvous/rendezvous",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "dev.dystro/dystro",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/semi-seg",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.alpinedataworks/adw-intelligence-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK_WITH_ISSUES",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.clideck/network-knowledge",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "nl.marketingburos/marketingburos",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/coingecko",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.quantumskils-arch/african-fintech-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.gocardless/gc-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.davisvillelabs.filedproof/filedproof",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.voyahomes/voya-homes",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.tianxiagongchang/factory-search",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.kimchi-sushi/agent-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.sanity.www/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "md.mostlyright/datasets",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ai.getvda/structured-output-agent-openai",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.bartek-filipiuk/intent-hub",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.AlejandroArnaud/mcp-for-zotero",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.amzscout-corp/amzscout-skill-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "de.agentview/agentview-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.pawlisty/pet-listings",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.toughtongueai/mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/doffin",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.cross-deck/prism",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Taru0208/us-census-mcp-server",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/maine-code",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.petabloom/podcasts",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.DataAssistIO/Dataassist-IO",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.usefulapi/missive",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.lemonvite/lemonvite",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "ca.parksopen/parksopen",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/datagov-il",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/docs-anchor2",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.Severin2k/blumen-komander-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "nl.briefverzenden/post",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.ntop/docs",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pdarche/model-wellness",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.si-imtiaz/leadquasar",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.braincloudservers/braincloud-mcp",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/ioos-erddap",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.theasteve/invoicebloom",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.jamboree777/nightwatch",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.pipeworx-io/healthdata",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.sadri-dridi/util-027",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.mcp-dir/tribunal_trf3_processo-mcp",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.tendergap/eu-tender-gap",
+      "class_v1": "NOT_MCP",
+      "class_v2": "NOT_MCP",
+      "cause": "unchanged"
+    },
+    {
+      "name": "dev.pages.datanest-stores/store",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.dcrypt-007/dantes-exchange",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.sadri-dridi/cc-pr",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/crates",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.ONE8943/ai-furniture-hub",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.tenkenco/declaude",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.jorgesandoval/spectra",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.vhspace/agentbase",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.Sunbrunch/agent-intelligence-platform",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "io.github.paulovitorti/google-news-scraper-real-urls",
+      "class_v1": "AUTH_REQUIRED",
+      "class_v2": "AUTH_REQUIRED",
+      "cause": "unchanged"
+    },
+    {
+      "name": "io.github.pipeworx-io/einpresswire",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.outagedeck/outagedeck-status",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    },
+    {
+      "name": "com.thenextgennexus/youtube-media-mcp-server",
+      "class_v1": "OK_WITH_ISSUES",
+      "class_v2": "OK",
+      "cause": "discovery_no_longer_declassifies"
+    },
+    {
+      "name": "com.tools-berry/paycheck",
+      "class_v1": "OK",
+      "class_v2": "OK",
+      "cause": "unchanged"
+    }
+  ]
+}
