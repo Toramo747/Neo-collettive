@@ -56,8 +56,8 @@ jobs:
       - name: Verify Arena isolation and protocol
         run: |
           set -euo pipefail
-          python -m py_compile arena_core.py neo_dialect.py
-          python -m unittest -v test_arena_core.py test_neo_dialect.py test_neo_dialect_security.py
+          python -m py_compile arena_core.py arena_micelio.py neo_dialect.py
+          python -m unittest -v test_arena_core.py test_arena_micelio.py test_neo_dialect.py test_neo_dialect_security.py
       - name: Validate input bounds
         env:
           MAX_TURNS: ${{ inputs.max_turns }}
@@ -78,6 +78,18 @@ jobs:
         run: |
           set -euo pipefail
           python arena_core.py             --topic "$TOPIC"             --participants "$PARTICIPANTS"             --guest-personality "$GUEST"             --max-turns "$MAX_TURNS"             --andrea-message "$ANDREA_MESSAGE" | tee /tmp/arena-result.json
+      - name: Sync and reverify isolated micelio
+        run: |
+          set -euo pipefail
+          python arena_micelio.py --data-dir data/arena
+          python - <<'PY'
+          import json
+          d=json.load(open("data/arena/micelio.json",encoding="utf-8"))
+          if d.get("namespace")!="mycelix-arena": raise SystemExit("micelio namespace mismatch")
+          bad=[x for x in (d.get("beliefs") or []) if not x.get("evidence") and x.get("status")=="ACTIVE"]
+          if bad: raise SystemExit("unproven belief became active")
+          print("Micelio verification boundary passed")
+          PY
       - name: Assert production isolation
         run: |
           python - <<'PY'

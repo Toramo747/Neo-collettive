@@ -8,6 +8,9 @@ on:
     paths:
       - "cloud_mcp.py"
       - "arena_core.py"
+      - "arena_micelio.py"
+      - "test_arena_micelio.py"
+      - "data/arena/micelio.json"
       - "test_arena_core.py"
       - ".github/workflows/neo-arena.yml"
       - "a2a_peer.py"
@@ -117,7 +120,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py
 
       - name: Build Docker image in GitHub CI
         run: |
@@ -388,7 +391,10 @@ jobs:
           curl --fail --silent --show-error --max-time 30 "https://neo-collettive.onrender.com/arena" > /tmp/arena.html
           grep -q "NEO Arena" /tmp/arena.html
           grep -q "mycelix-arena" /tmp/arena.html
-          echo "Arena read-only surface healthy"
+          curl --fail --silent --show-error --max-time 30 "https://neo-collettive.onrender.com/arena/micelio" > /tmp/micelio.html
+          grep -q "Micelio" /tmp/micelio.html
+          grep -q "Memoria verificata" /tmp/micelio.html
+          echo "Arena and Micelio read-only surfaces healthy"
 
       - name: Bootstrap first Arena session for v0.99.34
         if: success()

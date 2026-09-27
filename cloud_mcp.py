@@ -133,7 +133,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.34"  # MCP Registry Health report + static status surface
+VERSION = "0.99.35"  # MCP Registry Health report + static status surface
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -11525,7 +11525,25 @@ async def arena_page(request: Request):
     return layout("NEO Arena",body)
 
 async def arena_micelio_page(request: Request):
-    body='<section class="card"><span class="tag">PHASE 2</span><h2>Micelio</h2><p>Non ancora attivato in v0.99.34.</p></section>'
+    data=await _arena_public_json("micelio.json")
+    beliefs=data.get("beliefs") if isinstance(data.get("beliefs"),list) else []
+    counts={k:0 for k in ("ACTIVE","HYPOTHESIS","QUARANTINE","EXPIRED")}
+    for row in beliefs:
+        status=str((row or {}).get("status") or "").upper()
+        if status in counts: counts[status]+=1
+    body='<section class="card"><span class="tag">READ ONLY</span><h2>Micelio</h2>'
+    body+='<p>Memoria verificata isolata dell Arena. Solo convinzioni con prova valida possono essere <strong>ACTIVE</strong>; le affermazioni senza prova restano ipotesi.</p>'
+    body+='<p>Attive '+str(counts["ACTIVE"])+' · ipotesi '+str(counts["HYPOTHESIS"])+' · quarantena '+str(counts["QUARANTINE"])+' · scadute '+str(counts["EXPIRED"])+'</p></section>'
+    for row in beliefs:
+        if not isinstance(row,dict): continue
+        evidence=row.get("evidence") if isinstance(row.get("evidence"),list) else []
+        proof="; ".join(str(x.get("test") or x.get("url") or "") for x in evidence if isinstance(x,dict))
+        body+='<section class="card"><span class="tag">'+html.escape(str(row.get("status") or ""))+'</span>'
+        body+='<h3>'+html.escape(str(row.get("type") or "belief"))+'</h3><p>'+html.escape(str(row.get("text") or ""))+'</p>'
+        body+='<p class="muted">Autore: '+html.escape(str(row.get("author") or ""))+' · fiducia '+html.escape(str(row.get("confidence") or 0))+' · ultima verifica '+html.escape(str(row.get("last_verified_utc") or ""))+'</p>'
+        body+='<p><strong>Prova:</strong> '+html.escape(proof or "nessuna — ipotesi")+'</p></section>'
+    if not beliefs:
+        body+='<section class="card"><p>Nessuna convinzione nel micelio.</p></section>'
     return layout("NEO Arena · Micelio",body)
 
 async def arena_evolution_page(request: Request):
