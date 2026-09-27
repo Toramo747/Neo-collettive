@@ -1,0 +1,116 @@
+name: NEO Dialect Failure Study
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neo-dialect-failure-study
+  cancel-in-progress: false
+
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODEL: qwen2.5:3b-instruct-q4_K_M
+      REPORT: data/arena/neo-dialect-failure-study.json
+      DOC: docs/neo-dialect/failures-1.0.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+
+      - name: Validate isolated failure-study harness
+        run: |
+          set -euo pipefail
+          python -m py_compile arena_neo_dialect_failure_study.py neo_dialect.py neo_dialect_security.py
+          python -m unittest -v test_arena_neo_dialect_failure_study.py test_neo_dialect.py test_neo_dialect_security.py
+
+      - name: Assert workflow-dispatch-only and zero-weight boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          w=Path(".github/workflows/neo-dialect-failure-study.yml").read_text(encoding="utf-8")
+          assert "workflow_dispatch:" in w
+          assert "schedule:" not in w
+          assert "push:" not in w
+          s=Path("arena_neo_dialect_failure_study.py").read_text(encoding="utf-8")
+          for needle in ('"cost_eur":0','"score_weight":0.0','"external_agent_contact":False','"production_influence":"NONE"','"promotion":"NONE"'):
+              assert needle in s
+          print("dispatch-only zero-weight isolation verified")
+          PY
+
+      - name: Install Ollama locally
+        run: |
+          set -euo pipefail
+          timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+          ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/ollama.log
+          exit 8
+
+      - name: Pull zero-cost local 3B model
+        run: |
+          set -euo pipefail
+          timeout 480 ollama pull "$MODEL"
+          ollama list
+
+      - name: Run 12 complete Arena sessions
+        run: |
+          set -euo pipefail
+          timeout 2100 python arena_neo_dialect_failure_study.py --model "$MODEL" --out "$REPORT" --docs-out "$DOC"
+          python - <<'PY'
+          import json,os
+          d=json.load(open(os.environ["REPORT"],encoding="utf-8"))
+          s=d["summary"]
+          assert d["cost_eur"]==0
+          assert d["score_weight"]==0.0
+          assert d["external_agent_contact"] is False
+          assert d["production_influence"]=="NONE"
+          assert d["promotion"]=="NONE"
+          assert s["sessions"]==12
+          assert s["complete_to_bye"]==12
+          assert s["by_scenario"]=={"collaborativo":3,"scettico":3,"confuso":3,"ostile":3}
+          print(json.dumps(s,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Publish Arena evidence and failure analysis
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add "$REPORT" data/arena/neo-dialect-evolution "$DOC"
+          git diff --cached --quiet && exit 0
+          git commit -m "arena: collect neo-dialect 1.0 failure evidence [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt*3))
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: neo-dialect-failure-study
+          path: |
+            data/arena/neo-dialect-failure-study.json
+            data/arena/neo-dialect-evolution
+            docs/neo-dialect/failures-1.0.md
+          if-no-files-found: warn
+          retention-days: 30
