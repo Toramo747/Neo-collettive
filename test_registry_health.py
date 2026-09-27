@@ -84,7 +84,8 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertEqual(classify_verification(auth),"AUTH_REQUIRED")
         self.assertEqual(classify_verification(server_error),"SERVER_ERROR")
         self.assertEqual(classify_verification(good),"OK")
-        self.assertEqual(classify_verification(issue),"OK_WITH_ISSUES")
+        self.assertEqual(classify_verification(issue,1),"OK_WITH_ISSUES")
+        self.assertEqual(classify_verification(issue,2),"OK")
         self.assertEqual(classify_verification(dead),"UNREACHABLE")
         self.assertEqual(classify_verification(not_mcp),"NOT_MCP")
 

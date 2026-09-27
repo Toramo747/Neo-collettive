@@ -144,8 +144,9 @@ class RegistryWorldTests(unittest.TestCase):
             p["due_at_utc"]="2026-09-02T00:00:00+00:00"
             write_registry(reg,"2026-09-20T00:00:00+00:00",rows,classification_version=2)
             n=evaluate_external_predictions(s,reg,at=datetime(2026,9,20,tzinfo=timezone.utc))
-            self.assertEqual(n,0)
+            self.assertEqual(n,39)
             self.assertEqual(p["status"],"AWAITING_MATCHING_CLASSIFICATION")
+            self.assertIsNone(p.get("evaluated_at_utc"))
 
     def test_new_predictions_use_v2_derived_view_on_legacy_final(self):
         with tempfile.TemporaryDirectory() as td:
