@@ -41,7 +41,7 @@ jobs:
             metrics="$(curl --silent --show-error --output "/tmp/health-${phase}.json" --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
             rc=$?
             set -e
-            printf '%s\thealth\t%s\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
+            printf '%s\thealth\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
           }
           measure_mcp() {
             phase="$1"; first="$2"
@@ -50,7 +50,7 @@ jobs:
             metrics="$(curl --silent --show-error --output "/tmp/mcp-${phase}.txt" --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
             rc=$?
             set -e
-            printf '%s\tmcp_initialize\t%s\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
+            printf '%s\tmcp_initialize\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
           }
           # The first HTTP request of the run is /health and is the only cold-start candidate.
           measure_health first_sample true

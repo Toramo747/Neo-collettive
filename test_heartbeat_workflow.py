@@ -18,6 +18,12 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn("first_sample",w)
         self.assertIn("subsequent_sample",w)
 
+    def test_first_sample_tsv_has_exact_field_count(self):
+        w=self.workflow
+        self.assertIn("printf '%s\\thealth\\t%s\\t%s\\t%s\\t%s\\n'",w)
+        self.assertIn("printf '%s\\tmcp_initialize\\t%s\\t%s\\t%s\\t%s\\n'",w)
+        self.assertNotIn("printf '%s\\thealth\\t%s\\t%s\\t%s\\t%s\\t%s\\n'",w)
+
     def test_first_request_is_explicit_cold_start_candidate(self):
         w=self.workflow
         self.assertIn("run_first_request",w)
