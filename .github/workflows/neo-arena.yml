@@ -56,8 +56,8 @@ jobs:
       - name: Verify Arena isolation and protocol
         run: |
           set -euo pipefail
-          python -m py_compile arena_core.py arena_micelio.py neo_dialect.py
-          python -m unittest -v test_arena_core.py test_arena_micelio.py test_neo_dialect.py test_neo_dialect_security.py
+          python -m py_compile arena_core.py arena_micelio.py arena_evolution.py neo_dialect.py
+          python -m unittest -v test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_neo_dialect.py test_neo_dialect_security.py
       - name: Validate input bounds
         env:
           MAX_TURNS: ${{ inputs.max_turns }}
@@ -89,6 +89,20 @@ jobs:
           bad=[x for x in (d.get("beliefs") or []) if not x.get("evidence") and x.get("status")=="ACTIVE"]
           if bad: raise SystemExit("unproven belief became active")
           print("Micelio verification boundary passed")
+          PY
+      - name: Evaluate Arena strategy predictions
+        run: |
+          set -euo pipefail
+          python arena_evolution.py --data-dir data/arena
+          python - <<'PY'
+          import json
+          d=json.load(open("data/arena/evolution.json",encoding="utf-8"))
+          if d.get("namespace")!="mycelix-arena": raise SystemExit("evolution namespace mismatch")
+          if (d.get("production_proposal") or {}).get("automatic_promotion") is not False:
+              raise SystemExit("automatic production promotion enabled")
+          if any(bool(x.get("production_promoted")) for x in (d.get("variants") or [])):
+              raise SystemExit("variant auto-promoted")
+          print("Evolution reality-score boundary passed")
           PY
       - name: Assert production isolation
         run: |

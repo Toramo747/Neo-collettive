@@ -1,0 +1,275 @@
+{
+  "schema_v": 1,
+  "namespace": "mycelix-arena",
+  "variants": [
+    {
+      "variant_id": "scout-breadth",
+      "agent": "Scout",
+      "strategy": "breadth_first",
+      "rules": [
+        "scan multiple candidate classes",
+        "label uncertainty"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "scout-gap",
+      "agent": "Scout",
+      "strategy": "gap_first",
+      "rules": [
+        "start from documented gaps",
+        "avoid popularity as evidence"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "scout-evidence",
+      "agent": "Scout",
+      "strategy": "evidence_first",
+      "rules": [
+        "prefer falsifiable claims",
+        "attach a verification path"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "analyst-weighted",
+      "agent": "Analyst",
+      "strategy": "weighted_evidence",
+      "rules": [
+        "weight independent evidence",
+        "separate facts from hypotheses"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "analyst-falsify",
+      "agent": "Analyst",
+      "strategy": "falsification_weighted",
+      "rules": [
+        "penalize contrary evidence explicitly",
+        "prefer testable criteria"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "analyst-conservative",
+      "agent": "Analyst",
+      "strategy": "conservative",
+      "rules": [
+        "hold when evidence is sparse",
+        "avoid consensus-based confidence"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "critic-counter",
+      "agent": "Critic",
+      "strategy": "counterexample_first",
+      "rules": [
+        "seek counterexamples before agreement",
+        "record disconfirming tests"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "critic-duplicate",
+      "agent": "Critic",
+      "strategy": "duplication_check",
+      "rules": [
+        "search for existing alternatives",
+        "challenge novelty"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "critic-independence",
+      "agent": "Critic",
+      "strategy": "source_independence",
+      "rules": [
+        "challenge correlated sources",
+        "accept only proven shared facts"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "builder-feasible",
+      "agent": "Builder-planner",
+      "strategy": "feasibility_first",
+      "rules": [
+        "estimate bounded build effort",
+        "identify dependencies"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "builder-dependency",
+      "agent": "Builder-planner",
+      "strategy": "dependency_first",
+      "rules": [
+        "block hidden paid dependencies",
+        "prefer reproducible environments"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    },
+    {
+      "variant_id": "builder-smallest",
+      "agent": "Builder-planner",
+      "strategy": "smallest_test_first",
+      "rules": [
+        "design smallest falsifiable test",
+        "never auto-promote to production"
+      ],
+      "generation": 0,
+      "parent_id": null,
+      "status": "ACTIVE",
+      "score": null,
+      "production_promoted": false,
+      "created_at_utc": "2026-09-27T04:36:46+00:00"
+    }
+  ],
+  "predictions": [
+    {
+      "prediction_id": "pred-health",
+      "agent": "Scout",
+      "variant_id": "scout-evidence",
+      "statement": "On the evaluation date MYCELIX production health will still report runtime profile mycelix-prod-main.",
+      "probability": 0.8,
+      "created_at_utc": "2026-09-27T04:36:46+00:00",
+      "due_at_utc": "2026-10-04T04:36:46+00:00",
+      "status": "PENDING",
+      "verification": {
+        "kind": "read_only_test",
+        "test": "production_health_profile"
+      },
+      "evaluated_at_utc": null,
+      "outcome": null,
+      "calibration_score": null,
+      "sources": []
+    },
+    {
+      "prediction_id": "pred-micelio",
+      "agent": "Analyst",
+      "variant_id": "analyst-falsify",
+      "statement": "Every ACTIVE fact in the Arena micelio will still carry at least one proof.",
+      "probability": 0.9,
+      "created_at_utc": "2026-09-27T04:36:46+00:00",
+      "due_at_utc": "2026-10-04T04:36:46+00:00",
+      "status": "PENDING",
+      "verification": {
+        "kind": "read_only_test",
+        "test": "active_facts_have_proof"
+      },
+      "evaluated_at_utc": null,
+      "outcome": null,
+      "calibration_score": null,
+      "sources": []
+    },
+    {
+      "prediction_id": "pred-gap",
+      "agent": "Critic",
+      "variant_id": "critic-independence",
+      "statement": "The MCP Compatibility Doctor usefulness claim will remain an unproven hypothesis unless independent proof is added.",
+      "probability": 0.65,
+      "created_at_utc": "2026-09-27T04:36:46+00:00",
+      "due_at_utc": "2026-10-04T04:36:46+00:00",
+      "status": "PENDING",
+      "verification": {
+        "kind": "read_only_test",
+        "test": "tool_utility_still_hypothesis"
+      },
+      "evaluated_at_utc": null,
+      "outcome": null,
+      "calibration_score": null,
+      "sources": []
+    },
+    {
+      "prediction_id": "pred-promotion",
+      "agent": "Builder-planner",
+      "variant_id": "builder-smallest",
+      "statement": "No Arena strategy variant will be marked as promoted to production without Andrea approval.",
+      "probability": 0.98,
+      "created_at_utc": "2026-09-27T04:36:46+00:00",
+      "due_at_utc": "2026-10-04T04:36:46+00:00",
+      "status": "PENDING",
+      "verification": {
+        "kind": "read_only_test",
+        "test": "no_auto_promotion"
+      },
+      "evaluated_at_utc": null,
+      "outcome": null,
+      "calibration_score": null,
+      "sources": []
+    }
+  ],
+  "genealogy": [],
+  "last_evolved_session_count": 0,
+  "scoring_rule": "Brier calibration from evaluated predictions only; consensus/AGREE count has zero weight",
+  "production_proposal": {
+    "approval_required": true,
+    "approved_by_andrea": false,
+    "automatic_promotion": false,
+    "candidate_variant_id": null
+  },
+  "boundary": {
+    "production_promotion": "MANUAL_ONLY",
+    "commercial_influence": "NONE",
+    "seti_influence": "NONE",
+    "external_usage_influence": "NONE"
+  }
+}

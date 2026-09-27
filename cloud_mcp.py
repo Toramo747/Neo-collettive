@@ -133,7 +133,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.35"  # MCP Registry Health report + static status surface
+VERSION = "0.99.36"  # MCP Registry Health report + static status surface
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -11547,7 +11547,27 @@ async def arena_micelio_page(request: Request):
     return layout("NEO Arena · Micelio",body)
 
 async def arena_evolution_page(request: Request):
-    body='<section class="card"><span class="tag">PHASE 3</span><h2>Evoluzione</h2><p>Non ancora attivata in v0.99.34.</p></section>'
+    data=await _arena_public_json("evolution.json")
+    variants=data.get("variants") if isinstance(data.get("variants"),list) else []
+    predictions=data.get("predictions") if isinstance(data.get("predictions"),list) else []
+    proposal=data.get("production_proposal") if isinstance(data.get("production_proposal"),dict) else {}
+    body='<section class="card"><span class="tag">READ ONLY</span><h2>Evoluzione</h2>'
+    body+='<p>Le strategie sono valutate soltanto con previsioni verificate contro la realtà. AGREE e consenso non contribuiscono al punteggio.</p>'
+    body+='<p>Varianti '+str(len(variants))+' · previsioni '+str(len(predictions))+' · promozione automatica <strong>disabilitata</strong>.</p></section>'
+    by_agent={}
+    for row in variants:
+        if isinstance(row,dict): by_agent.setdefault(str(row.get("agent") or "?"),[]).append(row)
+    for agent,rows in by_agent.items():
+        body+='<section class="card"><h3>'+html.escape(agent)+'</h3>'
+        for row in rows:
+            body+='<p><code>'+html.escape(str(row.get("variant_id") or ""))+'</code> · stato '+html.escape(str(row.get("status") or ""))+' · score '+html.escape(str(row.get("score") if row.get("score") is not None else "pending"))+' · gen '+html.escape(str(row.get("generation") or 0))+'</p>'
+        body+='</section>'
+    body+='<section class="card"><h3>Previsioni</h3>'
+    for row in predictions:
+        if not isinstance(row,dict): continue
+        body+='<p><strong>'+html.escape(str(row.get("agent") or ""))+'</strong> / '+html.escape(str(row.get("variant_id") or ""))+' — '+html.escape(str(row.get("statement") or ""))+'<br><span class="muted">'+html.escape(str(row.get("status") or ""))+' · scadenza '+html.escape(str(row.get("due_at_utc") or ""))+'</span></p>'
+    body+='</section>'
+    body+='<section class="card"><h3>Promozione</h3><p>Richiede approvazione esplicita di Andrea: <strong>'+html.escape(str(bool(proposal.get("approval_required",True))))+'</strong>. Nessuna variante viene promossa automaticamente.</p></section>'
     return layout("NEO Arena · Evoluzione",body)
 
 
