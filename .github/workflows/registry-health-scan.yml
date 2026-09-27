@@ -55,14 +55,13 @@ jobs:
         run: |
           set -euo pipefail
           phase="${{ inputs.phase }}"
-          if [ "${GITHUB_RUN_ATTEMPT}" -gt 1 ] && [ "$phase" = "first" ]; then
-            phase="second"
-          fi
           echo "REGISTRY_HEALTH_PHASE=$phase" >> "$GITHUB_ENV"
           echo "effective_phase=$phase"
 
       - name: Run Registry Health phase
         shell: bash
+        env:
+          REGISTRY_HEALTH_PUBLISH_CHECKPOINTS: "1"
         run: |
           set -euo pipefail
           args=("$REGISTRY_HEALTH_PHASE")
@@ -126,7 +125,33 @@ jobs:
           },indent=2))
           PY
 
+      - name: Commit Registry Health dataset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Registry Health"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/registry-health docs/reports
+          if git diff --cached --quiet; then
+            echo "No Registry Health dataset changes"
+          else
+            git commit -m "registry health data: ${REGISTRY_HEALTH_PHASE} probe $(date -u +%F)"
+            for attempt in 1 2 3; do
+              git fetch origin main
+              if git rebase origin/main && git push origin HEAD:main; then
+                break
+              fi
+              git rebase --abort >/dev/null 2>&1 || true
+              if [ "$attempt" -eq 3 ]; then
+                echo "Could not publish Registry Health dataset commit" >&2
+                exit 1
+              fi
+              sleep $((attempt * 3))
+            done
+          fi
+
       - name: Sync Arena from persisted Registry observation
+        if: env.REGISTRY_HEALTH_PHASE == 'second'
         run: |
           set -euo pipefail
           python arena_micelio.py --data-dir data/arena
@@ -148,28 +173,19 @@ jobs:
           print(json.dumps({"external_predictions":len(ext),"by_agent":by,"registry_active_facts":len(facts)},indent=2))
           PY
 
-      - name: Commit public dataset and aggregate drafts
+      - name: Commit Arena outputs from FINAL Registry data
+        if: env.REGISTRY_HEALTH_PHASE == 'second'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "MYCELIX Registry Health"
           git config user.email "actions@users.noreply.github.com"
-          git add data/registry-health data/arena docs/reports
-          if git diff --cached --quiet; then
-            echo "No Registry Health data changes"
-            exit 0
-          fi
-          git commit -m "registry health data: ${REGISTRY_HEALTH_PHASE} probe $(date -u +%F)"
-          for attempt in 1 2 3; do
-            git fetch origin main
-            if git rebase origin/main && git push origin HEAD:main; then
-              exit 0
-            fi
-            git rebase --abort >/dev/null 2>&1 || true
-            sleep $((attempt * 3))
-          done
-          echo "Could not publish Registry Health dataset commit" >&2
-          exit 1
+          git add data/arena
+          git diff --cached --quiet && exit 0
+          git commit -m "arena: ingest FINAL registry health $(date -u +%F) [skip render]"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
 
       - name: Verify Registry Health data persisted on main
         run: |
