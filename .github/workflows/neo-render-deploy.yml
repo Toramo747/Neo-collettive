@@ -602,24 +602,24 @@ jobs:
           gh workflow run jarvis-runtime-snapshot-v2.yml --ref main
           echo "Jarvis runtime snapshot workflow dispatched"
 
-      - name: Bootstrap first Registry Health scan for v0.99.33
+      - name: Dispatch authorized Registry Health scan for v0.99.40
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
-          if [ "$expected" != "0.99.33" ]; then
-            echo "Registry Health bootstrap applies only to v0.99.33"
+          if [ "$expected" != "0.99.40" ]; then
+            echo "Authorized Registry Health scan applies only to v0.99.40"
             exit 0
           fi
-          existing="$(gh run list --workflow registry-health-scan.yml --limit 20 --json databaseId --jq 'length' 2>/dev/null || echo 0)"
+          existing="$(gh run list --workflow registry-health-scan.yml --event workflow_dispatch --limit 50 --json headSha --jq --arg sha "$GITHUB_SHA" '[.[] | select(.headSha == $sha)] | length' 2>/dev/null || echo 0)"
           if [ "$existing" -gt 0 ]; then
-            echo "Registry Health already has a workflow run; no duplicate bootstrap"
+            echo "Authorized Registry Health scan already dispatched for this commit"
             exit 0
           fi
-          gh workflow run registry-health-scan.yml --ref main -f phase=first
-          echo "First Registry Health execution dispatched via workflow_dispatch"
+          gh workflow run registry-health-scan.yml --ref main -f phase=first -f scan_date=''
+          echo "Authorized Registry Health phase=first dispatched via workflow_dispatch"
 
       - name: Roll back failed application commit
         if: failure()
