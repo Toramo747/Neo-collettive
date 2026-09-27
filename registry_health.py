@@ -359,6 +359,9 @@ def _fmt_pct(count: int, total: int) -> str:
 def render_report(summary: dict[str, Any], scan_date: str) -> str:
     """Render an aggregate-only English report draft."""
     scanned=int(summary.get("scanned") or 0)
+    scope=str(summary.get("scope") or "FULL").upper()
+    is_sample=scope=="SAMPLE"
+    sample_size=int(summary.get("sample_size") or scanned)
     categories=summary.get("categories") if isinstance(summary.get("categories"),dict) else {}
     def count(name: str) -> int:
         row=categories.get(name)
@@ -372,26 +375,37 @@ def render_report(summary: dict[str, Any], scan_date: str) -> str:
     invalid=int(summary.get("invalid_input_schemas") or 0)
     tls_failures=int(summary.get("tls_failures") or 0)
 
-    findings=[
-        f"{int(summary.get('remote_verifiable') or 0)} of {int(summary.get('servers_total') or 0)} active/latest Registry servers declared a remotely verifiable HTTPS streamable-http endpoint.",
-        f"{count('OK')} scanned remotes were classified OK after the two-probe policy; {count('AUTH_REQUIRED')} required authentication and were counted separately from downtime.",
-        f"Discovery metadata was observed for {discovery} of {scanned} scanned remotes ({_fmt_pct(discovery,scanned)}).",
-        f"The scan observed {invalid} invalid tool input schemas and {tls_failures} TLS-validation failures across the final observations.",
-        f"Observed aggregate request latency had a median of {lat.get('median')} ms and p90 of {lat.get('p90')} ms across {int(lat.get('samples') or 0)} samples.",
-    ]
-
     category_lines=[]
     for name in FINAL_CATEGORIES:
         n=count(name)
         category_lines.append(f"| {name} | {n} | {_fmt_pct(n,scanned)} |")
 
-    return f"""# MCP Registry Health Report — {scan_date}
+    if is_sample:
+        title=f"# MCP Registry Health Sample Report — {scan_date}"
+        scope_notice=(
+            f"**SAMPLE ONLY — {sample_size} Registry remotes. These results describe only the sampled servers "
+            "and must not be interpreted or published as statistics for the entire MCP Registry.**"
+        )
+        census=f"""## Sample definition
 
-**Draft — not published externally.**
-
-This report summarizes a read-only GitHub Actions measurement of the official MCP Registry. It contains aggregate results only; no server is named negatively.
-
-## Registry census
+- Scope: **SAMPLE**
+- Sample size: **{sample_size}**
+- Recorded random seed: **{summary.get('sample_seed')}**
+- Remote population visible in the Registry snapshot: **{int(summary.get('sample_population_remote_count') or 0)}**
+- Sampling method: randomized order with the recorded seed; observations stop at the configured time budget.
+"""
+        findings=[
+            f"Within this {sample_size}-server sample, {count('OK')} were classified OK and {count('AUTH_REQUIRED')} required authentication.",
+            f"Discovery metadata was observed for {discovery} of {scanned} sampled remotes ({_fmt_pct(discovery,scanned)}).",
+            f"The sample observed {invalid} invalid tool input schemas and {tls_failures} TLS-validation failures.",
+            f"Observed sample latency had a median of {lat.get('median')} ms and p90 of {lat.get('p90')} ms across {int(lat.get('samples') or 0)} samples.",
+        ]
+        category_heading="## Sample remote-health categories"
+        share_heading="Share of sampled remotes"
+    else:
+        title=f"# MCP Registry Health Report — {scan_date}"
+        scope_notice="This report summarizes a read-only GitHub Actions measurement of the official MCP Registry. It contains aggregate results only; no server is named negatively."
+        census=f"""## Registry census
 
 - Active/latest servers: **{int(summary.get('servers_total') or 0)}**
 - HTTPS streamable-http remotes: **{int(summary.get('remote_verifiable') or 0)}**
@@ -399,10 +413,27 @@ This report summarizes a read-only GitHub Actions measurement of the official MC
 - Other remote transports not verified: **{int(summary.get('remote_unverifiable_transport') or 0)}**
 - Metadata-only entries: **{int(summary.get('metadata_only') or 0)}**
 - Opted out of probing: **{int(summary.get('opted_out') or 0)}**
+"""
+        findings=[
+            f"{int(summary.get('remote_verifiable') or 0)} of {int(summary.get('servers_total') or 0)} active/latest Registry servers declared a remotely verifiable HTTPS streamable-http endpoint.",
+            f"{count('OK')} scanned remotes were classified OK after the two-probe policy; {count('AUTH_REQUIRED')} required authentication and were counted separately from downtime.",
+            f"Discovery metadata was observed for {discovery} of {scanned} scanned remotes ({_fmt_pct(discovery,scanned)}).",
+            f"The scan observed {invalid} invalid tool input schemas and {tls_failures} TLS-validation failures across the final observations.",
+            f"Observed aggregate request latency had a median of {lat.get('median')} ms and p90 of {lat.get('p90')} ms across {int(lat.get('samples') or 0)} samples.",
+        ]
+        category_heading="## Final remote-health categories"
+        share_heading="Share of scanned remotes"
 
-## Final remote-health categories
+    return f"""{title}
 
-| Category | Count | Share of scanned remotes |
+**Draft — not published externally.**
+
+{scope_notice}
+
+{census}
+{category_heading}
+
+| Category | Count | {share_heading} |
 |---|---:|---:|
 {chr(10).join(category_lines)}
 
@@ -431,6 +462,16 @@ Dataset license: CC BY 4.0, attribution to Andrea Gava / MYCELIX. Code remains u
 
 def render_social_draft(summary: dict[str, Any], scan_date: str) -> str:
     scanned=int(summary.get("scanned") or 0)
+    scope=str(summary.get("scope") or "FULL").upper()
+    if scope=="SAMPLE":
+        size=int(summary.get("sample_size") or scanned)
+        return "\n".join([
+            f"MCP Registry Health SAMPLE — {scan_date} [DRAFT — NOT PUBLISHED]",
+            f"Time-bounded randomized sample: {size} Registry remotes; seed recorded in the dataset.",
+            f"{scanned} sampled remotes were evaluated read-only from GitHub Actions with no tool calls and no credentials.",
+            "Results apply only to this sample and are not statistics for the entire MCP Registry.",
+            "Non-OK results require a second observation at least six hours later before the sample becomes FINAL.",
+        ]) + "\n"
     remote=int(summary.get("remote_verifiable") or 0)
     total=int(summary.get("servers_total") or 0)
     return "\n".join([
@@ -440,3 +481,4 @@ def render_social_draft(summary: dict[str, Any], scan_date: str) -> str:
         "Non-OK results use a second observation at least six hours later; authenticated endpoints are counted separately from downtime.",
         "Methodology and CC BY 4.0 dataset are prepared for review before any external publication.",
     ]) + "\n"
+

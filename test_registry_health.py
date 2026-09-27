@@ -100,6 +100,24 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertEqual(len([x for x in social.splitlines() if x.strip()]),5)
 
 
+    def test_sample_report_is_explicitly_non_registry_wide(self):
+        summary={
+            "scope":"SAMPLE","sample_size":12,"sample_seed":4242,
+            "sample_population_remote_count":300,"servers_total":500,"remote_verifiable":300,
+            "package_only":100,"remote_unverifiable_transport":50,"metadata_only":50,
+            "opted_out":0,"scanned":12,
+            "categories":{"OK":{"count":8},"AUTH_REQUIRED":{"count":1},"UNREACHABLE":{"count":3}},
+            "protocol_versions":{},"invalid_input_schemas":0,"discovery_present":5,
+            "tls_failures":1,"latency_ms":{"median":100.0,"p90":200.0,"samples":10},
+        }
+        report=render_report(summary,"2026-09-27")
+        self.assertIn("SAMPLE ONLY",report)
+        self.assertIn("Sample size: **12**",report)
+        self.assertIn("must not be interpreted or published as statistics for the entire MCP Registry",report)
+        social=render_social_draft(summary,"2026-09-27")
+        self.assertIn("Results apply only to this sample",social)
+        self.assertNotIn("We measured 500 active/latest Registry entries",social)
+
     def test_scan_workflow_persists_dated_and_latest_datasets(self):
         workflow=Path(".github/workflows/registry-health-scan.yml").read_text(encoding="utf-8")
         self.assertIn("Assert dataset persistence contract",workflow)
