@@ -1,0 +1,29 @@
+name: NEO Dialect RFC Registry Tests
+
+on:
+  push:
+    paths:
+      - "docs/neo-dialect/rfc/**"
+      - "test_neo_dialect_rfc_registry.py"
+      - ".github/workflows/neo-dialect-rfc-registry-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate RFC registry decision
+        run: python -m unittest -v test_neo_dialect_rfc_registry.py
+      - name: Assert neo-dialect 1.0 production files unchanged
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only HEAD^ HEAD -- docs/neo-dialect.md schemas/neo-dialect/1.0 neo_dialect.py)"
