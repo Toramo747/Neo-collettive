@@ -6,7 +6,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "cloud_mcp.py"\n      - "arena_core.py"\n      - "test_arena_core.py"\n      - ".github/workflows/neo-arena.yml"
+      - "cloud_mcp.py"
+      - "arena_core.py"
+      - "test_arena_core.py"
+      - ".github/workflows/neo-arena.yml"
       - "a2a_peer.py"
       - "test_a2a_peer.py"
       - "test_peer_refusal.py"
@@ -49,7 +52,8 @@ on:
       - "test_mcp_endpoint_verifier.py"
       - "registry_health.py"
       - "registry_health_scan.py"
-      - "test_registry_health.py test_arena_core.py"
+      - "test_registry_health.py"
+      - "test_arena_core.py"
       - "data/registry-health/latest-summary.json"
       - "data/registry-health/latest-servers.json"
       - "verify_mcp_endpoint_live_probe.py"
@@ -113,7 +117,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py
 
       - name: Build Docker image in GitHub CI
         run: |
