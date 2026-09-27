@@ -102,7 +102,7 @@ class RegistryHealthListingTests(unittest.TestCase):
     def test_scan_workflow_persists_dated_and_latest_datasets(self):
         workflow=Path(".github/workflows/registry-health-scan.yml").read_text(encoding="utf-8")
         self.assertIn("Assert dataset persistence contract",workflow)
-        self.assertIn("git add data/registry-health docs/reports",workflow)
+        self.assertIn("git add data/registry-health data/arena docs/reports",workflow)
         self.assertIn("Verify Registry Health data persisted on main",workflow)
         self.assertIn("data/registry-health/latest-summary.json",workflow)
         self.assertIn("data/registry-health/latest-servers.json",workflow)
