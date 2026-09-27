@@ -7,7 +7,7 @@ from arena_registry_world import (
     register_external_predictions, evaluate_external_predictions, sync_registry_micelio,
 )
 
-def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL"):
+def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL", scope="FULL"):
     root.mkdir(parents=True,exist_ok=True)
     cats={}
     for r in rows:
@@ -15,10 +15,13 @@ def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL"
     for v in cats.values(): v["percent_of_scanned"]=round(100*v["count"]/len(rows),2)
     (root/"latest-summary.json").write_text(json.dumps({
         "generated_at_utc":scan_at,"scanned":len(rows),"categories":cats,
-        "final":final,"status":status
+        "final":final,"status":status,"scope":scope,
+        "sample_server_names":[r["name"] for r in rows] if scope=="SAMPLE" else []
     }),encoding="utf-8")
     (root/"latest-servers.json").write_text(json.dumps({
-        "generated_at_utc":scan_at,"servers":rows
+        "generated_at_utc":scan_at,"scope":scope,
+        "sample_server_names":[r["name"] for r in rows] if scope=="SAMPLE" else [],
+        "servers":rows
     }),encoding="utf-8")
 
 class RegistryWorldTests(unittest.TestCase):
@@ -42,6 +45,28 @@ class RegistryWorldTests(unittest.TestCase):
             s=initial_state()
             n=register_external_predictions(s,reg,cycle_id="1")
             self.assertEqual(n,0)
+
+    def test_final_sample_is_accepted_and_limited_to_sample_rows(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"; rows=self.rows()[:6]
+            write_registry(reg,"2026-09-27T04:00:00+00:00",rows,scope="SAMPLE")
+            snap=load_registry_snapshot(reg)
+            self.assertIsNotNone(snap)
+            self.assertEqual(snap["scope"],"SAMPLE")
+            self.assertEqual({r["name"] for r in snap["servers"]},{r["name"] for r in rows})
+            self.assertTrue(snap["sample_fingerprint"])
+
+    def test_sample_prediction_waits_for_same_sample(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"; rows=self.rows()[:8]
+            write_registry(reg,"2026-09-01T00:00:00+00:00",rows,scope="SAMPLE")
+            s=initial_state(); register_external_predictions(s,reg,cycle_id="1")
+            p=next(x for x in s["predictions"] if x.get("prediction_scope")=="external_registry")
+            later=list(rows)
+            later[-1]={"name":"different-server","category":"OK","version":"1","final":True}
+            write_registry(reg,"2026-09-20T00:00:00+00:00",later,scope="SAMPLE")
+            evaluate_external_predictions(s,reg,at=datetime(2026,9,20,tzinfo=timezone.utc))
+            self.assertEqual(p["status"],"AWAITING_MATCHING_SAMPLE")
 
     def test_each_agent_gets_ten_external_predictions(self):
         with tempfile.TemporaryDirectory() as td:

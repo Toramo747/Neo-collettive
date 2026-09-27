@@ -21,6 +21,11 @@ def _load(path: Path, default: Any):
     try: return json.loads(path.read_text(encoding="utf-8"))
     except Exception: return default
 
+def _sample_fingerprint(names: list[str]) -> str:
+    canonical="\n".join(sorted(str(x) for x in names if str(x)))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:24] if canonical else ""
+
+
 def _scan_at(summary: dict, servers: dict) -> str:
     for obj in (summary,servers):
         for key in ("generated_at_utc","snapshot_at_utc","scan_at_utc","completed_at_utc"):
@@ -39,6 +44,9 @@ def load_registry_snapshot(registry_dir: str|Path="data/registry-health") -> dic
         return None
     if summary.get("final") is not True or str(summary.get("status") or "") != "FINAL":
         return None
+    scope=str(summary.get("scope") or "FULL").upper()
+    if scope not in {"FULL","SAMPLE"}:
+        return None
     scan_at=_scan_at(summary,servers_doc)
     if not scan_at:
         return None
@@ -54,8 +62,21 @@ def load_registry_snapshot(registry_dir: str|Path="data/registry-health") -> dic
         })
     if not clean:
         return None
+    sample_names=[str(x) for x in (summary.get("sample_server_names") or servers_doc.get("sample_server_names") or []) if str(x)]
+    if scope=="SAMPLE":
+        row_names=[x["name"] for x in clean]
+        if set(sample_names) != set(row_names):
+            return None
+        sample_fingerprint=_sample_fingerprint(sample_names)
+        if not sample_fingerprint:
+            return None
+    else:
+        sample_fingerprint=""
     return {
         "scan_at_utc":scan_at,
+        "scope":scope,
+        "sample_fingerprint":sample_fingerprint,
+        "sample_server_names":sample_names,
         "summary":summary,
         "servers":clean,
         "source_files":[str(sp),str(rp)],
@@ -93,7 +114,7 @@ def register_external_predictions(state: dict, registry_dir: str|Path="data/regi
             "reason":"Registry Health latest-summary/latest-servers not available; no extra scan launched.",
         }
         return 0
-    marker=f"{snap['scan_at_utc']}|{cycle_id}"
+    marker=f"{snap['scan_at_utc']}|{snap['scope']}|{snap['sample_fingerprint']}|{cycle_id}"
     existing=[
         x for x in (state.get("predictions") or [])
         if isinstance(x,dict) and x.get("prediction_scope")=="external_registry" and x.get("generation_marker")==marker
@@ -140,6 +161,7 @@ def register_external_predictions(state: dict, registry_dir: str|Path="data/regi
                 "due_at_utc":due.isoformat(),"status":"PENDING",
                 "prediction_scope":"external_registry","score_weight":1.0,
                 "generation_marker":marker,"registry_base_scan_at_utc":snap["scan_at_utc"],
+                "registry_scope":snap["scope"],"registry_sample_fingerprint":snap["sample_fingerprint"],
                 "verification":verification,"target":target,
                 "evaluated_at_utc":None,"outcome":None,"calibration_score":None,"sources":[],
             })
@@ -147,6 +169,7 @@ def register_external_predictions(state: dict, registry_dir: str|Path="data/regi
     counts=Counter(x["agent"] for x in added)
     state["external_prediction_status"]={
         "status":"READY","cycle_id":str(cycle_id),"registry_scan_at_utc":snap["scan_at_utc"],
+        "registry_scope":snap["scope"],"registry_sample_fingerprint":snap["sample_fingerprint"],
         "required_per_agent":EXTERNAL_PER_AGENT,"registered":len(added),
         "by_agent":dict(counts),"no_new_scan":True,
     }
@@ -173,6 +196,12 @@ def evaluate_external_predictions(state: dict, registry_dir: str|Path="data/regi
         if not base or scan_dt<=base:
             pred["status"]="AWAITING_REGISTRY_SCAN"
             continue
+        pred_scope=str(pred.get("registry_scope") or "FULL").upper()
+        if pred_scope=="SAMPLE":
+            expected=str(pred.get("registry_sample_fingerprint") or "")
+            if snap["scope"]!="SAMPLE" or not expected or snap["sample_fingerprint"]!=expected:
+                pred["status"]="AWAITING_MATCHING_SAMPLE"
+                continue
         ver=pred.get("verification") or {}; test=str(ver.get("test") or "")
         outcome=False
         if test=="server_stays_category":
@@ -222,6 +251,7 @@ def sync_registry_micelio(memory: dict, registry_dir: str|Path="data/registry-he
             "kind":"registry_health","server_name":name,"category":cat,
             "scan_at_utc":snap["scan_at_utc"],"verified_read_only":True,
             "dataset":"data/registry-health/latest-servers.json",
+            "registry_scope":snap["scope"],"registry_sample_fingerprint":snap["sample_fingerprint"],
         }
         if same:
             prev=str(((same.get("evidence") or [{}])[-1] or {}).get("scan_at_utc") or "")
@@ -245,6 +275,7 @@ def sync_registry_micelio(memory: dict, registry_dir: str|Path="data/registry-he
     memory["beliefs"]=beliefs
     memory["external_registry_status"]={
         "status":"READY","scan_at_utc":snap["scan_at_utc"],"imported":imported,
+        "registry_scope":snap["scope"],"registry_sample_fingerprint":snap["sample_fingerprint"],
         "active_external_facts":sum(1 for b in beliefs if b.get("source_scope")=="registry_health" and b.get("status")=="ACTIVE"),
         "no_new_scan":True,
     }
