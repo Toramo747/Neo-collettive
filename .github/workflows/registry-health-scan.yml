@@ -126,13 +126,35 @@ jobs:
           },indent=2))
           PY
 
+      - name: Sync Arena from persisted Registry observation
+        run: |
+          set -euo pipefail
+          python arena_micelio.py --data-dir data/arena
+          python arena_evolution.py --data-dir data/arena
+          python - <<'PY'
+          import json
+          evo=json.load(open("data/arena/evolution.json",encoding="utf-8"))
+          mic=json.load(open("data/arena/micelio.json",encoding="utf-8"))
+          ext=[x for x in (evo.get("predictions") or []) if x.get("prediction_scope")=="external_registry"]
+          by={}
+          for x in ext: by[x.get("agent")]=by.get(x.get("agent"),0)+1
+          for agent in ("Scout","Analyst","Critic","Builder-planner"):
+              if by.get(agent,0) < 10:
+                  raise SystemExit("Arena external prediction minimum not met for "+agent)
+          facts=[x for x in (mic.get("beliefs") or []) if x.get("source_scope")=="registry_health" and x.get("status")=="ACTIVE"]
+          provisional=[x for x in (mic.get("beliefs") or []) if x.get("source_scope")=="registry_health" and x.get("status")=="ACTIVE" and not x.get("evidence")]
+          if provisional:
+              raise SystemExit("unproven Registry fact entered micelio")
+          print(json.dumps({"external_predictions":len(ext),"by_agent":by,"registry_active_facts":len(facts)},indent=2))
+          PY
+
       - name: Commit public dataset and aggregate drafts
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "MYCELIX Registry Health"
           git config user.email "actions@users.noreply.github.com"
-          git add data/registry-health docs/reports
+          git add data/registry-health data/arena docs/reports
           if git diff --cached --quiet; then
             echo "No Registry Health data changes"
             exit 0

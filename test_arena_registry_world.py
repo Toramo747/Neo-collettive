@@ -23,7 +23,7 @@ def write_registry(root: Path, scan_at: str, rows):
 class RegistryWorldTests(unittest.TestCase):
     def rows(self):
         cats=["OK","OK","OK_WITH_ISSUES","AUTH_REQUIRED","UNREACHABLE","SERVER_ERROR","INTERMITTENT","NOT_MCP","OK","OK","OK","UNREACHABLE"]
-        return [{"name":f"srv-{i:02d}","category":c,"version":"1"} for i,c in enumerate(cats)]
+        return [{"name":f"srv-{i:02d}","category":c,"version":"1","final":True} for i,c in enumerate(cats)]
 
     def test_no_dataset_registers_nothing_and_launches_no_scan(self):
         with tempfile.TemporaryDirectory() as td:
@@ -63,6 +63,15 @@ class RegistryWorldTests(unittest.TestCase):
             n=evaluate_external_predictions(s,reg,at=future)
             self.assertGreater(n,0)
             self.assertEqual(p["status"],"EVALUATED")
+
+    def test_provisional_registry_observation_is_not_active_fact(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"
+            rows=self.rows()
+            rows[0]["final"]=False
+            write_registry(reg,"2026-09-01T00:00:00+00:00",rows)
+            m={"beliefs":[]}; m,n=sync_registry_micelio(m,reg)
+            self.assertFalse(any(b.get("server_name")=="srv-00" and b.get("status")=="ACTIVE" for b in m["beliefs"]))
 
     def test_registry_micelio_fact_and_change_quarantine(self):
         with tempfile.TemporaryDirectory() as td:

@@ -201,6 +201,8 @@ def sync_registry_micelio(memory: dict, registry_dir: str|Path="data/registry-he
     beliefs=[x for x in (memory.get("beliefs") or []) if isinstance(x,dict)]
     imported=0
     for row in snap["servers"]:
+        if row.get("final") is not True:
+            continue
         name=row["name"]; cat=row["category"]
         current=[
             b for b in beliefs if b.get("source_scope")=="registry_health" and b.get("server_name")==name and b.get("status")=="ACTIVE"
