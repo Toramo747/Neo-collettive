@@ -1,9 +1,9 @@
 {
-  "captured_at_utc": "2026-09-27T04:12:03.991296+00:00",
-  "snapshot_schema": 6,
+  "captured_at_utc": "2026-09-27T06:38:03.446532+00:00",
+  "snapshot_schema": 7,
   "brand": "MYCELIX",
   "brand_tagline": "Collective Intelligence Network",
-  "neo_version": "0.99.33",
+  "neo_version": "0.99.42",
   "runtime_profile": {
     "profile_id": "mycelix-prod-main",
     "deployment_role": "production",
@@ -54,35 +54,86 @@
   },
   "heartbeat": {
     "ok": true,
-    "neo_version": "0.99.33",
+    "neo_version": "0.99.42",
     "started": false,
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 172.752335,
-    "cycles_completed": 514,
-    "last_started_utc": "2026-09-27T04:09:10.506575+00:00",
-    "last_finished_utc": "2026-09-27T04:09:19.412271+00:00",
+    "last_started_age_seconds": 276.476375,
+    "cycles_completed": 520,
+    "last_started_utc": "2026-09-27T06:33:25.898614+00:00",
+    "last_finished_utc": "2026-09-27T06:33:42.899571+00:00",
     "last_status": "SELECT",
     "last_error": null
+  },
+  "endpoint_latency": {
+    "captured_at_utc": "2026-09-27T06:38:03.372905+00:00",
+    "measurement_scope": "read_only_health_and_mcp_initialize",
+    "first_request_definition": "The first HTTP request of each heartbeat run is /health; it is the only potential cold-start sample.",
+    "samples": [
+      {
+        "timestamp_utc": "2026-09-27T06:38:03.159Z",
+        "endpoint": "health",
+        "phase": "subsequent_sample",
+        "run_first_request": false,
+        "cold_start_candidate": false,
+        "http_status": 200,
+        "latency_ms": 208.42,
+        "curl_exit_code": 0
+      },
+      {
+        "timestamp_utc": "2026-09-27T06:38:03.360Z",
+        "endpoint": "mcp_initialize",
+        "phase": "subsequent_sample",
+        "run_first_request": false,
+        "cold_start_candidate": false,
+        "http_status": 200,
+        "latency_ms": 194.61,
+        "curl_exit_code": 0
+      }
+    ],
+    "health": [
+      {
+        "timestamp_utc": "2026-09-27T06:38:03.159Z",
+        "endpoint": "health",
+        "phase": "subsequent_sample",
+        "run_first_request": false,
+        "cold_start_candidate": false,
+        "http_status": 200,
+        "latency_ms": 208.42,
+        "curl_exit_code": 0
+      }
+    ],
+    "mcp_initialize": [
+      {
+        "timestamp_utc": "2026-09-27T06:38:03.360Z",
+        "endpoint": "mcp_initialize",
+        "phase": "subsequent_sample",
+        "run_first_request": false,
+        "cold_start_candidate": false,
+        "http_status": 200,
+        "latency_ms": 194.61,
+        "curl_exit_code": 0
+      }
+    ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
     "poll_errors": "",
-    "github_run_id": "36293608199",
+    "github_run_id": "36300666355",
     "github_run_attempt": "1",
-    "source_commit": "202ba5352cc106c6777895776afa4158ad069b21",
+    "source_commit": "94c167331eec1d7821b307433756b6cd06e92b8f",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 514,
-    "last_started_utc": "2026-09-27T04:09:10.506575+00:00",
-    "last_finished_utc": "2026-09-27T04:09:19.412271+00:00",
+    "cycles_completed": 520,
+    "last_started_utc": "2026-09-27T06:33:25.898614+00:00",
+    "last_finished_utc": "2026-09-27T06:33:42.899571+00:00",
     "last_status": "SELECT",
     "last_error": null,
-    "stagnation_cycles": 20,
+    "stagnation_cycles": 5,
     "recent_sectors": [
       "data_cleanup",
       "seo_marketing",
@@ -98,9 +149,33 @@
       "ai_tools"
     ],
     "family_performance": {
+      "ai_tools": {
+        "score": 0.0,
+        "observations": 6,
+        "best_gap_score": 0,
+        "qualified_hits": 0,
+        "last_gap_score": 0,
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_signal_types": [],
+        "no_progress_streak": 0
+      },
+      "developer_tools": {
+        "score": 25.0,
+        "observations": 6,
+        "best_gap_score": 20,
+        "qualified_hits": 0,
+        "last_gap_score": 20,
+        "last_domains": 1,
+        "last_strong_domains": 0,
+        "last_signal_types": [
+          "PAIN"
+        ],
+        "no_progress_streak": 5
+      },
       "cybersecurity_tools": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -111,18 +186,7 @@
       },
       "marketing_seo": {
         "score": 0.0,
-        "observations": 90,
-        "best_gap_score": 0,
-        "qualified_hits": 0,
-        "last_gap_score": 0,
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_signal_types": [],
-        "no_progress_streak": 0
-      },
-      "ai_tools": {
-        "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -133,7 +197,7 @@
       },
       "integration_api": {
         "score": 5.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -144,7 +208,7 @@
       },
       "manual_data_entry": {
         "score": 95.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 70,
         "qualified_hits": 0,
         "last_gap_score": 70,
@@ -159,7 +223,7 @@
       },
       "workflow_automation": {
         "score": 5.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -168,22 +232,9 @@
         "last_signal_types": [],
         "no_progress_streak": 5
       },
-      "developer_tools": {
-        "score": 25.0,
-        "observations": 90,
-        "best_gap_score": 20,
-        "qualified_hits": 0,
-        "last_gap_score": 20,
-        "last_domains": 1,
-        "last_strong_domains": 0,
-        "last_signal_types": [
-          "PAIN"
-        ],
-        "no_progress_streak": 5
-      },
       "spreadsheet_process": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -194,7 +245,7 @@
       },
       "customer_support": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -205,7 +256,7 @@
       },
       "analytics_tools": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -216,7 +267,7 @@
       },
       "ecommerce_tools": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -8535,65 +8586,6 @@
     },
     "trust_lab_evaluations": [
       {
-        "evaluated_at_utc": "2026-09-23T08:17:18.968161+00:00",
-        "decision": "PARK",
-        "trust_score": 40,
-        "identity_status": "self_declared",
-        "agent_id": "chatgpt-research-session-7e1c9a",
-        "source_count": 0,
-        "unsupported_inference": false,
-        "intent_primary": "RESEARCH",
-        "intent_secondary": [
-          "CONNECTIVITY",
-          "DISCOVERY"
-        ],
-        "intent_confidence": 0.98,
-        "commercial_intent": false,
-        "reasons": [
-          "identity_is_self_declared",
-          "agent_card_missing",
-          "capability_interview_incomplete"
-        ]
-      },
-      {
-        "evaluated_at_utc": "2026-09-23T08:17:19.564931+00:00",
-        "decision": "ALLOW_BOUNDED",
-        "trust_score": 86,
-        "identity_status": "verified",
-        "agent_id": "synthetic-verified-agent",
-        "source_count": 2,
-        "unsupported_inference": false,
-        "intent_primary": "UNKNOWN",
-        "intent_secondary": [],
-        "intent_confidence": 0.2,
-        "commercial_intent": false,
-        "reasons": []
-      },
-      {
-        "evaluated_at_utc": "2026-09-23T08:52:05.093095+00:00",
-        "decision": "PARK",
-        "trust_score": 0,
-        "identity_status": "anonymous",
-        "agent_id": "",
-        "source_count": 0,
-        "unsupported_inference": true,
-        "intent_primary": "CONNECTIVITY",
-        "intent_secondary": [
-          "COMMERCIAL",
-          "CONTACT"
-        ],
-        "intent_confidence": 0.98,
-        "commercial_intent": true,
-        "reasons": [
-          "agent_identity_missing",
-          "agent_card_missing",
-          "capability_interview_incomplete",
-          "claim_has_no_explicit_support",
-          "unsupported_inference_detected",
-          "falsification_condition_missing"
-        ]
-      },
-      {
         "evaluated_at_utc": "2026-09-23T08:52:05.379301+00:00",
         "decision": "PARK",
         "trust_score": 40,
@@ -10102,6 +10094,65 @@
         "intent_confidence": 0.2,
         "commercial_intent": false,
         "reasons": []
+      },
+      {
+        "evaluated_at_utc": "2026-09-27T06:24:32.854460+00:00",
+        "decision": "PARK",
+        "trust_score": 0,
+        "identity_status": "anonymous",
+        "agent_id": "",
+        "source_count": 0,
+        "unsupported_inference": true,
+        "intent_primary": "CONNECTIVITY",
+        "intent_secondary": [
+          "COMMERCIAL",
+          "CONTACT"
+        ],
+        "intent_confidence": 0.98,
+        "commercial_intent": true,
+        "reasons": [
+          "agent_identity_missing",
+          "agent_card_missing",
+          "capability_interview_incomplete",
+          "claim_has_no_explicit_support",
+          "unsupported_inference_detected",
+          "falsification_condition_missing"
+        ]
+      },
+      {
+        "evaluated_at_utc": "2026-09-27T06:24:33.163836+00:00",
+        "decision": "PARK",
+        "trust_score": 40,
+        "identity_status": "self_declared",
+        "agent_id": "chatgpt-research-session-7e1c9a",
+        "source_count": 0,
+        "unsupported_inference": false,
+        "intent_primary": "RESEARCH",
+        "intent_secondary": [
+          "CONNECTIVITY",
+          "DISCOVERY"
+        ],
+        "intent_confidence": 0.98,
+        "commercial_intent": false,
+        "reasons": [
+          "identity_is_self_declared",
+          "agent_card_missing",
+          "capability_interview_incomplete"
+        ]
+      },
+      {
+        "evaluated_at_utc": "2026-09-27T06:24:33.455944+00:00",
+        "decision": "ALLOW_BOUNDED",
+        "trust_score": 86,
+        "identity_status": "verified",
+        "agent_id": "synthetic-verified-agent",
+        "source_count": 2,
+        "unsupported_inference": false,
+        "intent_primary": "UNKNOWN",
+        "intent_secondary": [],
+        "intent_confidence": 0.2,
+        "commercial_intent": false,
+        "reasons": []
       }
     ],
     "agent_demand_observatory": {
@@ -10738,7 +10789,7 @@
     ],
     "a2a_discovery": {
       "registry_enabled": true,
-      "last_registration_utc": "2026-09-26T20:36:00.707136+00:00",
+      "last_registration_utc": "2026-09-27T06:22:38.003756+00:00",
       "last_registration_ok": true,
       "last_registration_status": 200,
       "last_registration_reason": "published_via:community_a2a_registry,allagents",
@@ -10763,90 +10814,6 @@
       }
     },
     "jarvis_dialogue_history": [
-      {
-        "created_at_utc": "2026-09-27T03:11:54.252462+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-27T03:17:03.950404+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-27T03:22:31.733476+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-27T03:27:42.347903+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-27T03:32:52.953774+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
-      {
-        "created_at_utc": "2026-09-27T03:38:04.306859+00:00",
-        "neo_status": "SELECT",
-        "lifecycle": "SELECT",
-        "family": null,
-        "quality_gate": false,
-        "collective_ok": false,
-        "collective_round2_valid": 0,
-        "jarvis_decision": "HOLD",
-        "jarvis_decision_source": "local_policy_fallback",
-        "next_search_queries": [],
-        "build_tests_passed": false,
-        "measurement_status": "NO_BUILD"
-      },
       {
         "created_at_utc": "2026-09-27T03:43:15.450184+00:00",
         "neo_status": "SELECT",
@@ -10930,20 +10897,104 @@
         "next_search_queries": [],
         "build_tests_passed": false,
         "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-27T06:22:52.848757+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-27T06:23:29.138162+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-27T06:24:01.527318+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-27T06:24:19.192296+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-27T06:28:25.393318+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
+      },
+      {
+        "created_at_utc": "2026-09-27T06:33:42.734856+00:00",
+        "neo_status": "SELECT",
+        "lifecycle": "SELECT",
+        "family": null,
+        "quality_gate": false,
+        "collective_ok": false,
+        "collective_round2_valid": 0,
+        "jarvis_decision": "HOLD",
+        "jarvis_decision_source": "local_policy_fallback",
+        "next_search_queries": [],
+        "build_tests_passed": false,
+        "measurement_status": "NO_BUILD"
       }
     ],
     "jarvis_runtime": {
       "last_request_utc": "2026-09-21T09:19:40.909607+00:00",
-      "last_response_utc": "2026-09-27T04:09:18.954298+00:00",
+      "last_response_utc": "2026-09-27T06:33:42.734668+00:00",
       "last_ok": true,
       "last_status": 200,
       "last_attempt": 1,
       "last_phase": "review",
       "last_reason": null,
-      "requests_total": 841,
-      "success_total": 821,
+      "requests_total": 853,
+      "success_total": 833,
       "failure_total": 20,
-      "last_payload_bytes": 73566,
+      "last_payload_bytes": 75607,
       "last_payload_mode": "embedded_core_remote_advisory"
     },
     "commercial_evidence_memory": [
@@ -14588,6 +14639,16 @@
       }
     ],
     "problem_performance": {
+      "developer_tools:developer_workflow": {
+        "family": "developer_tools",
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_gap_score": 0,
+        "last_signal_types": [],
+        "qualified": false,
+        "no_progress_streak": 6,
+        "near_gate": false
+      },
       "integration_api:api_integration": {
         "family": "integration_api",
         "last_domains": 1,
@@ -14595,7 +14656,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
@@ -14608,7 +14669,7 @@
           "PAID_DEMAND"
         ],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "workflow_automation:workflow_automation": {
@@ -14618,7 +14679,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "developer_tools:devops": {
@@ -14630,7 +14691,7 @@
           "PAIN"
         ],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "manual_data_entry:manual_data_entry": {
@@ -14642,7 +14703,7 @@
           "PAIN"
         ],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "workflow_automation:automation": {
@@ -14652,7 +14713,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "customer_support:customer_support": {
@@ -14662,7 +14723,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "ai_tools:small_service_businesses:triage_inbound_customer_emails_and_draft_replies": {
@@ -14672,7 +14733,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "analytics_tools:business_intelligence": {
@@ -14682,7 +14743,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "spreadsheet_process:small_operations_teams:turn_recurring_spreadsheet_work_into_reliable_reports": {
@@ -14692,7 +14753,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "integration_api:operations_and_integration_teams:keep_data_synchronized_across_business_systems": {
@@ -14702,7 +14763,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "spreadsheet_process:development_teams:operate_google_sheets_reporting_automation_reliably": {
@@ -14712,7 +14773,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "ai_tools:small_businesses:produce_recurring_client_and_management_reports": {
@@ -14722,17 +14783,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
-        "near_gate": false
-      },
-      "developer_tools:developer_workflow": {
-        "family": "developer_tools",
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_gap_score": 0,
-        "last_signal_types": [],
-        "qualified": false,
-        "no_progress_streak": 33,
+        "no_progress_streak": 6,
         "near_gate": false
       }
     },
@@ -14740,6 +14791,48 @@
     "query_execution": {
       "planned": [
         {
+          "query": "\"workflow productivity SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "productivity_tools",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:producthunt.com \"workflow productivity SaaS\"",
+          "class": "tool_market",
+          "role": "product_hunt",
+          "family": "productivity_tools",
+          "query_intent": "market_activity"
+        },
+        {
+          "query": "\"content marketing SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "marketing_seo",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:marketplace.visualstudio.com \"content marketing SaaS\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "marketing_seo",
+          "query_intent": "market_activity"
+        },
+        {
+          "query": "\"AI agent tool\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "ai_tools",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:chromewebstore.google.com \"AI agent tool\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "ai_tools",
+          "query_intent": "market_activity"
+        },
+        {
           "query": "\"code review tool\" pricing subscription",
           "class": "tool_market",
           "role": "tool_pricing",
@@ -14765,53 +14858,59 @@
           "class": "tool_market",
           "role": "extension_marketplace",
           "family": "integration_api",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"analytics SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "analytics_tools",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:chromewebstore.google.com \"analytics SaaS\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "analytics_tools",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"helpdesk SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "customer_support",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:producthunt.com \"helpdesk SaaS\"",
-          "class": "tool_market",
-          "role": "product_hunt",
-          "family": "customer_support",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"security automation\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "cybersecurity_tools",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:marketplace.visualstudio.com \"security automation\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "cybersecurity_tools",
           "query_intent": "market_activity"
         }
       ],
       "executed": [
         {
+          "query": "\"workflow productivity SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "productivity_tools",
+          "query_intent": "payment_signal",
+          "agent_search_completed": true
+        },
+        {
+          "query": "site:producthunt.com \"workflow productivity SaaS\"",
+          "class": "tool_market",
+          "role": "product_hunt",
+          "family": "productivity_tools",
+          "query_intent": "market_activity",
+          "agent_search_completed": true
+        },
+        {
+          "query": "\"content marketing SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "marketing_seo",
+          "query_intent": "payment_signal",
+          "agent_search_completed": true
+        },
+        {
+          "query": "site:marketplace.visualstudio.com \"content marketing SaaS\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "marketing_seo",
+          "query_intent": "market_activity",
+          "agent_search_completed": true
+        },
+        {
+          "query": "\"AI agent tool\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "ai_tools",
+          "query_intent": "payment_signal",
+          "agent_search_completed": true
+        },
+        {
+          "query": "site:chromewebstore.google.com \"AI agent tool\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "ai_tools",
+          "query_intent": "market_activity",
+          "agent_search_completed": true
+        },
+        {
           "query": "\"code review tool\" pricing subscription",
           "class": "tool_market",
           "role": "tool_pricing",
@@ -14840,54 +14939,6 @@
           "class": "tool_market",
           "role": "extension_marketplace",
           "family": "integration_api",
-          "query_intent": "market_activity",
-          "agent_search_completed": true
-        },
-        {
-          "query": "\"analytics SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "analytics_tools",
-          "query_intent": "payment_signal",
-          "agent_search_completed": true
-        },
-        {
-          "query": "site:chromewebstore.google.com \"analytics SaaS\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "analytics_tools",
-          "query_intent": "market_activity",
-          "agent_search_completed": true
-        },
-        {
-          "query": "\"helpdesk SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "customer_support",
-          "query_intent": "payment_signal",
-          "agent_search_completed": true
-        },
-        {
-          "query": "site:producthunt.com \"helpdesk SaaS\"",
-          "class": "tool_market",
-          "role": "product_hunt",
-          "family": "customer_support",
-          "query_intent": "market_activity",
-          "agent_search_completed": true
-        },
-        {
-          "query": "\"security automation\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "cybersecurity_tools",
-          "query_intent": "payment_signal",
-          "agent_search_completed": true
-        },
-        {
-          "query": "site:marketplace.visualstudio.com \"security automation\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "cybersecurity_tools",
           "query_intent": "market_activity",
           "agent_search_completed": true
         },
@@ -14950,7 +15001,7 @@
     "venture_metrics": {},
     "outcome_control": {
       "schema_v": 1,
-      "cycle": 514,
+      "cycle": 520,
       "mode": "external_results_only",
       "wins": [],
       "new_wins": [],
@@ -14997,7 +15048,7 @@
           "proof": {
             "wins": [],
             "new_wins": [],
-            "cycle": 514
+            "cycle": 520
           },
           "next_action": "Do not add features. Spend the next cycle only on peer 3/3 or the active thesis gate/missing evidence."
         }
@@ -15007,54 +15058,6 @@
       "rule": "A version, scan, candidate, build, or internal score is not a result by itself."
     },
     "outcome_history": [
-      {
-        "cycle": 495,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 496,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 497,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 498,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 499,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
-      {
-        "cycle": 500,
-        "overall_status": "WORKING",
-        "wins": [],
-        "new_wins": [],
-        "peer_status": "PURSUE",
-        "market_status": "PURSUE"
-      },
       {
         "cycle": 501,
         "overall_status": "WORKING",
@@ -15166,25 +15169,72 @@
         "new_wins": [],
         "peer_status": "PURSUE",
         "market_status": "PURSUE"
+      },
+      {
+        "cycle": 515,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 516,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 517,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 518,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 519,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
+      },
+      {
+        "cycle": 520,
+        "overall_status": "WORKING",
+        "wins": [],
+        "new_wins": [],
+        "peer_status": "PURSUE",
+        "market_status": "PURSUE"
       }
     ],
     "seti": {
       "enabled": true,
       "mode": "bounded_active",
       "every_cycles": 6,
-      "last_scan_utc": "2026-09-27T03:48:36.362770+00:00",
+      "last_scan_utc": "2026-09-27T06:23:40.399338+00:00",
       "last_error": null,
       "last_summary": {
-        "search_results_seen": 23,
+        "search_results_seen": 16,
         "source_counts": {
-          "bing-rss-free": 5,
           "hn-algolia-routed": 13,
-          "github-issues-routed": 5
+          "bing-rss-free": 3
         },
-        "machine_like_results": 6,
-        "registry_checks": 6,
-        "known_space_filtered": 1,
-        "signals_returned": 5,
+        "machine_like_results": 4,
+        "registry_checks": 4,
+        "known_space_filtered": 0,
+        "signals_returned": 4,
         "registry_candidates": 12,
         "registry_candidate_sources": {
           "global_a2a_registry": 12
@@ -15196,8 +15246,8 @@
         "tiza_attempted": false,
         "tiza_skipped": true,
         "tiza_status": "backoff",
-        "tiza_consecutive_failures": 4,
-        "tiza_next_retry_cycle": 516,
+        "tiza_consecutive_failures": 1,
+        "tiza_next_retry_cycle": 521,
         "aicomglobal_enabled": true,
         "aicomglobal_candidates": 1,
         "aicomglobal_candidate_sources": {
@@ -15210,7 +15260,7 @@
         "aicomglobal_skipped": false,
         "aicomglobal_status": "available",
         "aicomglobal_consecutive_failures": 0,
-        "aicomglobal_next_retry_cycle": 510,
+        "aicomglobal_next_retry_cycle": 516,
         "peer_registry_count": 18,
         "peer_registry_status_counts": {
           "DOCS_ONLY": 8,
@@ -15219,17 +15269,17 @@
           "READY_READONLY": 1
         },
         "tiza_error_samples": [],
-        "interesting": 4,
+        "interesting": 2,
         "high_interest": 1,
         "private_candidates": 24,
-        "private_reobserved": 6,
+        "private_reobserved": 5,
         "private_max_score": 100,
         "private_max_source_diversity": 1,
         "eligible_candidates": 1,
         "high_interest_eligible": 0,
         "eligibility_reason_counts": {
-          "below_interview_interest": 1,
-          "indexed_artifact_not_agent_endpoint": 21,
+          "below_interview_interest": 4,
+          "indexed_artifact_not_agent_endpoint": 18,
           "no_explicit_agent_endpoint": 1,
           "public_agent_card": 1
         },
@@ -15237,7 +15287,7 @@
           "indexed_artifact_not_agent_endpoint": 4
         },
         "interview_ready_now": 0,
-        "ready_now_computed_at": "2026-09-27T03:48:39.196335+00:00",
+        "ready_now_computed_at": "2026-09-27T06:23:43.410084+00:00",
         "blocked_auth": [],
         "in_cooldown": [],
         "attempted_this_cycle": [],
@@ -15281,11 +15331,12 @@
         "interview_peer_class_migration": {
           "changed": 0,
           "counts": {
-            "AUTH_REQUIRED": 4,
+            "AUTH_REQUIRED": 5,
             "COLLABORATIVE": 1,
             "COMMERCIAL_SERVICE": 1,
-            "LOW_VALUE": 18,
-            "PAYMENT_REQUIRED": 1
+            "LOW_VALUE": 23,
+            "PAYMENT_REQUIRED": 1,
+            "PROTOCOL_ONLY": 1
           }
         },
         "interview_request_budget": 9,
@@ -15317,7 +15368,7 @@
           "commercial_or_third_party_actions": false
         }
       },
-      "signal_memory_count": 17
+      "signal_memory_count": 5
     }
   },
   "manual_run": {
@@ -15328,26 +15379,26 @@
     "last_status": null
   },
   "latest_result": {
-    "timestamp_utc": "2026-09-27T04:09:18.954671+00:00",
-    "neo_version": "0.99.33",
+    "timestamp_utc": "2026-09-27T06:33:42.734992+00:00",
+    "neo_version": "0.99.42",
     "status": "SELECT",
     "next_gate": "SELECT: raccogli evidenza convergente e prepara un candidato testabile.",
     "valid_external_answers": 0,
-    "web_source_count": 79,
-    "evidence_scout_count": 19,
+    "web_source_count": 69,
+    "evidence_scout_count": 20,
     "search_strategy": {
       "mode": "tool_opportunity_market",
       "queries": [
+        "\"workflow productivity SaaS\" pricing subscription",
+        "site:producthunt.com \"workflow productivity SaaS\"",
+        "\"content marketing SaaS\" pricing subscription",
+        "site:marketplace.visualstudio.com \"content marketing SaaS\"",
+        "\"AI agent tool\" pricing subscription",
+        "site:chromewebstore.google.com \"AI agent tool\"",
         "\"code review tool\" pricing subscription",
         "site:producthunt.com \"code review tool\"",
         "\"webhook automation\" pricing subscription",
         "site:marketplace.visualstudio.com \"webhook automation\"",
-        "\"analytics SaaS\" pricing subscription",
-        "site:chromewebstore.google.com \"analytics SaaS\"",
-        "\"helpdesk SaaS\" pricing subscription",
-        "site:producthunt.com \"helpdesk SaaS\"",
-        "\"security automation\" pricing subscription",
-        "site:marketplace.visualstudio.com \"security automation\"",
         "\"AI agent tool\" alternatives pricing",
         "\"AI agent tool\" competitors \"starts at\"",
         "\"developer tool\" alternatives pricing",
@@ -15356,6 +15407,48 @@
         "\"API integration tool\" competitors \"starts at\""
       ],
       "query_plan": [
+        {
+          "query": "\"workflow productivity SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "productivity_tools",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:producthunt.com \"workflow productivity SaaS\"",
+          "class": "tool_market",
+          "role": "product_hunt",
+          "family": "productivity_tools",
+          "query_intent": "market_activity"
+        },
+        {
+          "query": "\"content marketing SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "marketing_seo",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:marketplace.visualstudio.com \"content marketing SaaS\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "marketing_seo",
+          "query_intent": "market_activity"
+        },
+        {
+          "query": "\"AI agent tool\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "ai_tools",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:chromewebstore.google.com \"AI agent tool\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "ai_tools",
+          "query_intent": "market_activity"
+        },
         {
           "query": "\"code review tool\" pricing subscription",
           "class": "tool_market",
@@ -15382,48 +15475,6 @@
           "class": "tool_market",
           "role": "extension_marketplace",
           "family": "integration_api",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"analytics SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "analytics_tools",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:chromewebstore.google.com \"analytics SaaS\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "analytics_tools",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"helpdesk SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "customer_support",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:producthunt.com \"helpdesk SaaS\"",
-          "class": "tool_market",
-          "role": "product_hunt",
-          "family": "customer_support",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"security automation\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "cybersecurity_tools",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:marketplace.visualstudio.com \"security automation\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "cybersecurity_tools",
           "query_intent": "market_activity"
         }
       ],
@@ -15481,9 +15532,33 @@
       ]
     },
     "family_performance": {
+      "ai_tools": {
+        "score": 0.0,
+        "observations": 6,
+        "best_gap_score": 0,
+        "qualified_hits": 0,
+        "last_gap_score": 0,
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_signal_types": [],
+        "no_progress_streak": 0
+      },
+      "developer_tools": {
+        "score": 25.0,
+        "observations": 6,
+        "best_gap_score": 20,
+        "qualified_hits": 0,
+        "last_gap_score": 20,
+        "last_domains": 1,
+        "last_strong_domains": 0,
+        "last_signal_types": [
+          "PAIN"
+        ],
+        "no_progress_streak": 5
+      },
       "cybersecurity_tools": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15494,18 +15569,7 @@
       },
       "marketing_seo": {
         "score": 0.0,
-        "observations": 90,
-        "best_gap_score": 0,
-        "qualified_hits": 0,
-        "last_gap_score": 0,
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_signal_types": [],
-        "no_progress_streak": 0
-      },
-      "ai_tools": {
-        "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15516,7 +15580,7 @@
       },
       "integration_api": {
         "score": 5.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15527,7 +15591,7 @@
       },
       "manual_data_entry": {
         "score": 95.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 70,
         "qualified_hits": 0,
         "last_gap_score": 70,
@@ -15542,7 +15606,7 @@
       },
       "workflow_automation": {
         "score": 5.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15551,22 +15615,9 @@
         "last_signal_types": [],
         "no_progress_streak": 5
       },
-      "developer_tools": {
-        "score": 25.0,
-        "observations": 90,
-        "best_gap_score": 20,
-        "qualified_hits": 0,
-        "last_gap_score": 20,
-        "last_domains": 1,
-        "last_strong_domains": 0,
-        "last_signal_types": [
-          "PAIN"
-        ],
-        "no_progress_streak": 5
-      },
       "spreadsheet_process": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15577,7 +15628,7 @@
       },
       "customer_support": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15588,7 +15639,7 @@
       },
       "analytics_tools": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15599,7 +15650,7 @@
       },
       "ecommerce_tools": {
         "score": 0.0,
-        "observations": 90,
+        "observations": 6,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
@@ -15633,7 +15684,7 @@
     "gate_rule": "The top specific tool opportunity alone may authorize build, only with >=2 independent payment sellers/domains, >=2 competitors with real price+URL, and the documented quality conditions.",
     "tool_opportunities": {
       "schema_v": 2,
-      "generated_at_utc": "2026-09-27T04:09:18.709115+00:00",
+      "generated_at_utc": "2026-09-27T06:33:42.402519+00:00",
       "mode": "tool_commercial_demand",
       "top5": [
         {
@@ -15644,23 +15695,41 @@
           "tool_name": "A2A Delivery Verifier",
           "target_user": "teams operating A2A/MCP agents in production",
           "problem": "Teams need focused AI/agent utilities with clearer capability boundaries, pricing and interoperability.",
-          "existing_tools": [],
+          "existing_tools": [
+            {
+              "tool": "Show HN: Blender Copilot",
+              "vendor": null,
+              "domain": "github.com",
+              "price": "7USD",
+              "url": "https://github.com/XEonAX/blender-copilot",
+              "date": "2026-09-27T06:33:42.402519+00:00"
+            }
+          ],
           "documented_gaps": [
             {
               "gap": "As part of a ML study group I&#x27;ve been building tools to experiment with ML concepts.  I use AI Coding agents to develop software, mostly cloud-based but I keep trying local LLMs on 12G, 16G, and 24G VRAM GPUs.  Freetoken has made it possible to run larger",
               "url": "https://sw-ml-study.github.io/moe-microscope/",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "date": "2026-09-27T06:33:42.402519+00:00"
             },
             {
               "gap": "Open-source agentic workspace enterprises can make their own. Connect the systems you already run — 100+ integrations, MCP, chat tools, apps, browser, local files — with shared memory. Any agent (Claude Code, Codex), any model, or BYOK. Set up in clicks, not m",
               "url": "https://github.com/holaboss-ai/holaOS",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "date": "2026-09-27T06:33:42.402519+00:00"
             }
           ],
           "payment_signals": [
             {
+              "url": "https://github.com/XEonAX/blender-copilot",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "domain": "github.com",
+              "price": "7USD",
+              "source": "hn-algolia-routed",
+              "coverage_source": "pricing_pages",
+              "real_competitor_price": true
+            },
+            {
               "url": "https://theagentmail.net/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "theagentmail.net",
               "price": "$5",
               "source": "hn-algolia-routed",
@@ -15669,7 +15738,7 @@
             },
             {
               "url": "https://news.ycombinator.com/item?id=46943047",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "news.ycombinator.com",
               "price": "€9",
               "source": "hn-algolia-routed",
@@ -15707,13 +15776,13 @@
           "dissatisfaction_signals": [
             {
               "url": "https://sw-ml-study.github.io/moe-microscope/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "sw-ml-study.github.io",
               "excerpt": "As part of a ML study group I&#x27;ve been building tools to experiment with ML concepts.  I use AI Coding agents to develop software, mostly cloud-based but I keep trying local LLMs on 12G, 16G, and 24G VRAM GPUs.  Freetoken has made it possible to run larger"
             },
             {
               "url": "https://github.com/holaboss-ai/holaOS",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "github.com",
               "excerpt": "Open-source agentic workspace enterprises can make their own. Connect the systems you already run — 100+ integrations, MCP, chat tools, apps, browser, local files — with shared memory. Any agent (Claude Code, Codex), any model, or BYOK. Set up in clicks, not m"
             }
@@ -15732,7 +15801,7 @@
               "family": "ai_tools",
               "url": "https://ai.google/",
               "domain": "ai.google",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "Google AI - How we're making AI helpful for everyone",
               "excerpt": "Discover how Google AI is committed to enriching knowledge, solving complex challenges and helping people grow by building useful AI tools and technologies.",
@@ -15741,13 +15810,60 @@
               "real_price": false,
               "payment_required": false,
               "vendor": null,
-              "coverage_source": null
+              "coverage_source": "pricing_pages"
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://github.com/XEonAX/blender-copilot",
+              "domain": "github.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Show HN: Blender Copilot",
+              "excerpt": "Deepseek generated Blender harness in 7USD.<p>I wanted to remake my 6DoF spaceship flying prototype.<p>What I did not want to do was model the spaceship. Manually. In Blender.<p>So instead of spending a month learning to model, I built a Copilot inside Blender in a day. Which is the same thing, except I still cannot model.<p>A chat panel in the 3D viewport sidebar. I type a sentence. The model writes Python, and it runs against my actual scene, the file open on screen, not a copy that some other",
+              "signal_types": [
+                "PAYMENT"
+              ],
+              "price": "7USD",
+              "real_price": true,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "pricing_pages"
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://github.com/banji-007/compliance-ail",
+              "domain": "github.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Show HN: Policy gateway for AI agent tool calls, with a tamper-evident log",
+              "excerpt": "Show HN: Policy gateway for AI agent tool calls, with a tamper-evident log",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "pricing_pages"
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://news.ycombinator.com/item?id=49855468",
+              "domain": "news.ycombinator.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Show HN: I built a tool that gives any website an API and MCP",
+              "excerpt": "Anyone else run into this problem?<p>I built staaake Meets (staaakemeets.com) because we run side tech events around the world. You create an event once and it can be shared to Luma, Meetup and Eventbrite. I connected each platform through their API and it works great. (not the problem)<p>Then I wanted to add more platforms, like Partiful, and realized some don&#x27;t have a public API. I started noticing the same problem with other projects too. There are still a lot of big products that don&#x",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "pricing_pages"
             },
             {
               "family": "ai_tools",
               "url": "https://turnpanel.com",
               "domain": "turnpanel.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: Turnpanel is a local first AI workspace",
               "excerpt": "Hi hacker news, I am Kaushal, founder of echowin and also the guy creating TurnPanel.<p>It began as an internally developed tool because my team and I were so sick of having to constantly bounce context around between ai chats, coding agents engines terminals, browsers files scripts,<p>TurnPanel is a local-first workspace in which an agent can operate throughout your computer, orchestrate other agents and tools, and preserve valuable context over time. Its background maintenance processes transf",
@@ -15762,7 +15878,7 @@
               "family": "ai_tools",
               "url": "https://sw-ml-study.github.io/moe-microscope/",
               "domain": "sw-ml-study.github.io",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: I made a tiny MoE/Engram viz tool",
               "excerpt": "As part of a ML study group I&#x27;ve been building tools to experiment with ML concepts.  I use AI Coding agents to develop software, mostly cloud-based but I keep trying local LLMs on 12G, 16G, and 24G VRAM GPUs.  Freetoken has made it possible to run larger MoE models on smaller GPUs.<p>This inspired me to use my ML tools to build a tiny MoE model from scratch so I can experiment with different agent optimizations and things like Engram, recursive models, hierarchical modeles, KV Cache compre",
@@ -15780,7 +15896,7 @@
               "family": "ai_tools",
               "url": "https://github.com/holaboss-ai/holaOS",
               "domain": "github.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: HolaOS––An Opensourced workspace that alternative to Claude",
               "excerpt": "Open-source agentic workspace enterprises can make their own. Connect the systems you already run — 100+ integrations, MCP, chat tools, apps, browser, local files — with shared memory. Any agent (Claude Code, Codex), any model, or BYOK. Set up in clicks, not months. Local-first: your data never leaves your machines.",
@@ -15798,7 +15914,7 @@
               "family": "ai_tools",
               "url": "https://github.com/ginlix-ai/langalpha",
               "domain": "github.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: LangAlpha – what if Claude Code was built for Wall Street?",
               "excerpt": "Some technical context on what we ran into building this.<p>MCP tools don&#x27;t really work for financial data at scale. One tool call for five years of daily prices dumps tens of thousands of tokens into the context window. And data vendors pack dozens of tools into a single MCP server, schemas alone can eat 50k+ tokens before the agent does anything useful. So we auto-generate typed Python modules from the MCP schemas at workspace init and upload them into the sandbox. The agent just imports ",
@@ -15813,7 +15929,7 @@
               "family": "ai_tools",
               "url": "https://theagentmail.net/",
               "domain": "theagentmail.net",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: TheAgentMail – email for AI agents with karma-based spam prevention",
               "excerpt": "theagentmail.net is an email API for AI agents. One API call to create a real email address on a shared domain (@theagentmail.net).\nThe motivation comes from building AI agent tools and hitting the same wall repeatedly. Agents need email for signups, verification codes, contacting people. But the options are all bad. Giving agents your personal inbox is a security nightmare. Buying domains means DNS records, DKIM setup, warmup periods, and it doesn&#x27;t scale. Disposable email services get blo",
@@ -15830,7 +15946,7 @@
               "family": "ai_tools",
               "url": "https://news.ycombinator.com/item?id=46943047",
               "domain": "news.ycombinator.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: ArkWatch – Uptime monitoring with zero dependencies",
               "excerpt": "I&#x27;m a solo dev, and I got tired of signing up for monitoring services that require installing agents, browser extensions, or wiring up Slack&#x2F;PagerDuty just to know if my side project is down.<p>So I built ArkWatch: a free uptime monitoring API with zero dependencies. No SDK, no npm package, no webhook setup. Just curl + your email.<p>One command to start monitoring:<p><pre><code>  curl -X POST https:&#x2F;&#x2F;watch.arkforge.fr&#x2F;monitors \\\n    -H &quot;Content-Type: application&#x",
@@ -15842,6 +15958,66 @@
               "payment_required": false,
               "vendor": null,
               "coverage_source": null
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://github.com/vfarcic/dot-ai/issues/42",
+              "domain": "github.com",
+              "date": "2026-09-27T06:31:35+00:00",
+              "source": "github-issues",
+              "title": "Dependency Dashboard",
+              "excerpt": "This issue lists Renovate updates and detected dependencies. Read the [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) docs to learn more.<br>[View this repository on the Mend.io Web Portal](https://developer.mend.io/github/vfarcic/dot-ai).\n\n## Deprecations / Replacements\n> [!WARNING]\nThe following dependencies are either deprecated or have replacements available.\n\n| Datasource | Package | Replacement PR? |\n|------------|------|--------------|\n| npm | `@types/bcryptjs",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "github_issues"
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://github.com/ColdPhase/flux/issues/9",
+              "domain": "github.com",
+              "date": "2026-09-27T06:31:19+00:00",
+              "source": "github-issues",
+              "title": "Assess own-AI integration feasibility across external, embedded, and API or local modes",
+              "excerpt": "## Milestone and decisions\n\nMilestone #1, [product blueprint brief](https://github.com/ColdPhase/flux/blob/main/docs/product/milestones/01-product-blueprint.md). Foundation §§9, 11.3, 14, 17E; O-005 remains open. This is feasibility research, not an integration or supplier promise.\n\n## Outcome and scope\n\nProduce a dated own-AI feasibility matrix for three distinct modes: official external Codex/Claude Code accessing Flux, an agent run within the Flux experience, and user/organization API or loca",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "github_issues"
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://github.com/vercel/ai/issues/18988",
+              "domain": "github.com",
+              "date": "2026-09-27T06:29:28+00:00",
+              "source": "github-issues",
+              "title": "perplexity: upgrade to new agents API",
+              "excerpt": "## Goal\n\nUpgrade `@ai-sdk/perplexity` language generation from the Sonar Chat Completions API to Perplexity's [Agent API](https://docs.perplexity.ai/docs/agent-api/quickstart), following the [Sonar migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview).\n\n## Findings and implementation scope\n\n- Send language requests to `POST /v1/agent` using Agent `input` items and parse the typed `output` array.\n- Consume semantic streaming events such as `response.output_text.*",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "github_issues"
+            },
+            {
+              "family": "ai_tools",
+              "url": "https://github.com/samelabs/FlashShare/issues/45",
+              "domain": "github.com",
+              "date": "2026-09-27T06:25:23+00:00",
+              "source": "github-issues",
+              "title": "1.0 Version Closure Task — economic safety, X identity, MCP, frontend",
+              "excerpt": "# 518.PLUS 1.0 — Version Closure Task\n\n**Baseline:** `fix/order-payment-production-closure` @ `31c8e7757b7d0b9baea2f69bb067022eb35756e7`\n\nThis is the **single version-level closure task** for 1.0.\n\nIt is NOT a one-shot implementation ticket.  \nPM freezes one coherent execution batch at a time from this task; Server Agent must never implement the whole issue opportunistically.\n\nNo merge / tag / deploy until all release gates below are accepted.\n\n---\n\n# 0. Product spine\n\n518 main chain:\n\n**Tool Su",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "github_issues"
             },
             {
               "family": "ai_tools",
@@ -15878,140 +16054,16 @@
               "coverage_source": "seti",
               "seti_candidate": "SETI-663cc996",
               "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://agent.example/a2a",
-              "domain": "agent.example",
-              "date": "2026-09-23T05:49:14.265853+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-0f8c2805",
-              "excerpt": "null",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-0f8c2805",
-              "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://delta-witness-api.ruphussten.workers.dev",
-              "domain": "delta-witness-api.ruphussten.workers.dev",
-              "date": "2026-09-24T07:37:04.590811+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-179f0b45",
-              "excerpt": "null",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-179f0b45",
-              "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://x402.coinopai.com",
-              "domain": "x402.coinopai.com",
-              "date": "2026-09-24T07:37:04.744073+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-1e181cdf",
-              "excerpt": "null",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-1e181cdf",
-              "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://signalmend-repair.pages.dev/api/a2a",
-              "domain": "signalmend-repair.pages.dev",
-              "date": "2026-09-24T07:37:05.323906+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-358a302a",
-              "excerpt": "SignalMend can review one bounded form, booking, webhook, notification, API-integration, or AI-built-app failure. A fixed-scope diagnostic starts at USD 49. The standard repair pilot starts at USD 149 and targets a 24-48 hour delivery after scope, access, and funding are agreed. Send the reproducibl",
-              "signal_types": [
-                "PAYMENT"
-              ],
-              "price": "USD 49",
-              "real_price": true,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-358a302a",
-              "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://nulliverba.ol-lo.workers.dev/a2a/jsonrpc",
-              "domain": "nulliverba.ol-lo.workers.dev",
-              "date": "2026-09-24T12:30:52.653154+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-6baa4e94",
-              "excerpt": "{\"text\": \"\"}",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-6baa4e94",
-              "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://mcp.fodda.ai/a2a",
-              "domain": "mcp.fodda.ai",
-              "date": "2026-09-24T14:59:58.106881+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-d4959f3d",
-              "excerpt": "Fodda A2A endpoint is operational. Provide an API key via Authorization: Bearer <key> for full access to trend intelligence. Get a key at https://app.fodda.ai",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-d4959f3d",
-              "payment_performed": false
-            },
-            {
-              "family": "ai_tools",
-              "url": "https://feed.scalpstream.com/a2a",
-              "domain": "feed.scalpstream.com",
-              "date": "2026-09-24T15:00:01.137624+00:00",
-              "source": "seti-agent-card",
-              "title": "SETI-d41fd570",
-              "excerpt": "ScalpStream — machine-payable, impersonal research feeds (x402).\nAsk about any of these and I'll show the live preview + how to buy:\n\n- ranked options candidates — Short-term (0-30 DTE) equity/ETF options candidates ranked by signal strength, with observed metrics and an illustrative contract.\n- div PAYMENT_REQUIRED",
-              "signal_types": [
-                "PAYMENT"
-              ],
-              "price": "PAYMENT_REQUIRED",
-              "real_price": false,
-              "payment_required": true,
-              "vendor": null,
-              "coverage_source": "seti",
-              "seti_candidate": "SETI-d41fd570",
-              "payment_performed": false
             }
           ],
-          "monetization_score": 40,
+          "monetization_score": 65,
           "score_rule": "URL-grounded payment + dissatisfaction + gap + trend signals minus URL-grounded counter-signals only",
           "gate_pass": false,
           "gate_rule": "specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
           "missing": [
             "two_independent_real_price_competitors",
             "two_competitors_with_real_price",
-            "two_existing_paid_tools",
-            "monetization_score_60"
+            "two_existing_paid_tools"
           ]
         },
         {
@@ -16027,28 +16079,33 @@
             {
               "gap": "Visual Studio Code is a free, open source AI code editor. Build with AI agents that plan, code, and debug for you. Manage multi-agent workflows across environments on Linux, macOS, and Windows.",
               "url": "https://code.visualstudio.com/",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "date": "2026-09-27T06:33:42.402519+00:00"
             },
             {
               "gap": "Originally, I am .NET software engineer working corporate job with microservices on RMQ and REST APIs. But I always had the desire to experiment with some different tech on the side.<p>After my friend shared his plans of helping facilitate medical conference w",
               "url": "https://stagecaptions.io",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "date": "2026-09-27T06:33:42.402519+00:00"
             },
             {
               "gap": "Alt account for obvious reasons.<p>For a while, I’ve been quite demoralized about my job. I just can’t take pride in what I do as a web developer anymore. I don’t know if that will ever change. I can’t help feeling that a lot of dev jobs out there, whether hig",
               "url": "https://news.ycombinator.com/item?id=49466597",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "date": "2026-09-27T06:33:42.402519+00:00"
             },
             {
               "gap": "Hey HN, been working on side projects for a while and kept running into the same problem: I needed something to tell me when my cron jobs stopped running or my app went down, but every tool I looked at was either expensive or crippled the free tier to the poin",
               "url": "https://pulsemon.dev/",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "date": "2026-09-27T06:33:42.402519+00:00"
+            },
+            {
+              "gap": "# D1 — Evidence-Driven Debugging + Fresh Verification\n\nParent: #421\n\n## Status\n\n`QUEUED / PLANNING ONLY / NON-EXECUTING`\n\nPlanned owner: @weijunswj (GitHub assignee intentionally empty until active adoption)\n\nMaterialisation authority: #421 comment `5826920619",
+              "url": "https://github.com/weijunswj/ai-agent-toolkit/issues/461",
+              "date": "2026-09-27T06:32:12+00:00"
             }
           ],
           "payment_signals": [
             {
               "url": "https://pulsemon.dev/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "pulsemon.dev",
               "price": "$29",
               "source": "hn-algolia-routed",
@@ -16059,34 +16116,40 @@
           "dissatisfaction_signals": [
             {
               "url": "https://code.visualstudio.com/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "code.visualstudio.com",
               "excerpt": "Visual Studio Code is a free, open source AI code editor. Build with AI agents that plan, code, and debug for you. Manage multi-agent workflows across environments on Linux, macOS, and Windows."
             },
             {
               "url": "https://stagecaptions.io",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "stagecaptions.io",
               "excerpt": "Originally, I am .NET software engineer working corporate job with microservices on RMQ and REST APIs. But I always had the desire to experiment with some different tech on the side.<p>After my friend shared his plans of helping facilitate medical conference w"
             },
             {
               "url": "https://news.ycombinator.com/item?id=49466597",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "news.ycombinator.com",
               "excerpt": "Alt account for obvious reasons.<p>For a while, I’ve been quite demoralized about my job. I just can’t take pride in what I do as a web developer anymore. I don’t know if that will ever change. I can’t help feeling that a lot of dev jobs out there, whether hig"
             },
             {
               "url": "https://pulsemon.dev/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "pulsemon.dev",
               "excerpt": "Hey HN, been working on side projects for a while and kept running into the same problem: I needed something to tell me when my cron jobs stopped running or my app went down, but every tool I looked at was either expensive or crippled the free tier to the poin"
+            },
+            {
+              "url": "https://github.com/weijunswj/ai-agent-toolkit/issues/461",
+              "date": "2026-09-27T06:32:12+00:00",
+              "domain": "github.com",
+              "excerpt": "# D1 — Evidence-Driven Debugging + Fresh Verification\n\nParent: #421\n\n## Status\n\n`QUEUED / PLANNING ONLY / NON-EXECUTING`\n\nPlanned owner: @weijunswj (GitHub assignee intentionally empty until active adoption)\n\nMaterialisation authority: #421 comment `5826920619"
             }
           ],
           "trend": "1 verifiable market-activity signals across 1 domains",
           "trend_signals": [
             {
               "url": "https://pulsemon.dev/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "pulsemon.dev",
               "source": "hn-algolia-routed"
             }
@@ -16094,13 +16157,13 @@
           "counter_signals": [
             {
               "url": "https://code.visualstudio.com/",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "code.visualstudio.com",
               "excerpt": "Visual Studio Code is a free, open source AI code editor. Build with AI agents that plan, code, and debug for you. Manage multi-agent workflows across environments on Linux, macOS, and Windows."
             },
             {
               "url": "https://code.visualstudio.com/download",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "domain": "code.visualstudio.com",
               "excerpt": "Download Visual Studio Code for free on Linux, macOS, and Windows. The open source AI code editor for agent-first development, with built-in multi-agent workflows and AI-powered coding."
             }
@@ -16116,7 +16179,7 @@
               "family": "developer_tools",
               "url": "https://code.visualstudio.com/",
               "domain": "code.visualstudio.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "Visual Studio Code - The open source AI code editor | Your home for ...",
               "excerpt": "Visual Studio Code is a free, open source AI code editor. Build with AI agents that plan, code, and debug for you. Manage multi-agent workflows across environments on Linux, macOS, and Windows.",
@@ -16135,7 +16198,7 @@
               "family": "developer_tools",
               "url": "https://code.visualstudio.com/download",
               "domain": "code.visualstudio.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "Free AI Code Editor for Mac, Linux, Windows - Visual Studio Code",
               "excerpt": "Download Visual Studio Code for free on Linux, macOS, and Windows. The open source AI code editor for agent-first development, with built-in multi-agent workflows and AI-powered coding.",
@@ -16152,7 +16215,7 @@
               "family": "developer_tools",
               "url": "https://studio.code.org/",
               "domain": "studio.code.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "CodeAI",
               "excerpt": "Flappy Code Wanna write your own game in less than 10 minutes? Try our Flappy Code tutorial!",
@@ -16167,7 +16230,7 @@
               "family": "developer_tools",
               "url": "https://de.wikipedia.org/wiki/Code",
               "domain": "de.wikipedia.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "Code – Wikipedia",
               "excerpt": "In der Kommunikationswissenschaft bezeichnet ein Code im weitesten Sinne eine Sprache. Jegliche Kommunikation beruht auf dem Austausch von Informationen, die vom Absender nach einem bestimmten Code erzeugt werden und die der Empfänger gemäß demselben Code interpretiert (dekodiert).",
@@ -16182,7 +16245,7 @@
               "family": "developer_tools",
               "url": "https://code.org/",
               "domain": "code.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "Free K–12 Curriculum for Digital Fluency | CodeAI",
               "excerpt": "CodeAI is a nonprofit with one mission: digital fluency for every student, regardless of zip code. Our team builds the curriculum, trains the teachers, and advocates for the policies that make that possible — in 190 countries and counting.",
@@ -16197,7 +16260,7 @@
               "family": "developer_tools",
               "url": "https://www.programiz.com/",
               "domain": "programiz.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
               "title": "Programiz: Free Online Compilers & Code Editors for Everyday Use",
               "excerpt": "Learn programming step by step. Each lesson contains plenty of practical code that you can run directly in your browser.",
@@ -16212,7 +16275,7 @@
               "family": "developer_tools",
               "url": "https://stagecaptions.io",
               "domain": "stagecaptions.io",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: Stage Captions – streaming browser audio into live event captions",
               "excerpt": "Originally, I am .NET software engineer working corporate job with microservices on RMQ and REST APIs. But I always had the desire to experiment with some different tech on the side.<p>After my friend shared his plans of helping facilitate medical conference which was bilingual and some of the audience members might feel missed out due to English not being their first language, I thought it&#x27;s a nice opportunity to create a tool for it with my cofounder who is a frontend engineer. For me it ",
@@ -16230,7 +16293,7 @@
               "family": "developer_tools",
               "url": "https://news.ycombinator.com/item?id=49466597",
               "domain": "news.ycombinator.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Ask HN: Should I leave web development to study medicine in my mid-30s?",
               "excerpt": "Alt account for obvious reasons.<p>For a while, I’ve been quite demoralized about my job. I just can’t take pride in what I do as a web developer anymore. I don’t know if that will ever change. I can’t help feeling that a lot of dev jobs out there, whether highly or poorly paid, are kind of pointless in the grand scheme of things. I apologize for being so blunt: I just want to convey where my mind is at the moment. I struggle to see my own work as useful, and it’s seriously affecting my self-wor",
@@ -16248,7 +16311,7 @@
               "family": "developer_tools",
               "url": "https://news.ycombinator.com/item?id=47475859",
               "domain": "news.ycombinator.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Ask HN: AI productivity gains – do you fire devs or build better products?",
               "excerpt": "i was rolling my eyes at the hype, but <i>reading</i> about this is totally different from <i>experiencing</i> it. if you have any old repos out there - try it, you might actually be amazed.<p>i&#x27;m not sure i buy the long-term &quot;*90% productivity*&quot; claims for complex, legacy enterprise systems, but for the boilerplate, libraries, build-tools, and refactoring? the gain is gigantic. all the time-consuming, nerve-wrecking stuff is mostly taken care of.<p>you start off checking every di",
@@ -16263,7 +16326,7 @@
               "family": "developer_tools",
               "url": "https://pulsemon.dev/",
               "domain": "pulsemon.dev",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: I built a heartbeat and uptime monitoring for developers",
               "excerpt": "Hey HN, been working on side projects for a while and kept running into the same problem: I needed something to tell me when my cron jobs stopped running or my app went down, but every tool I looked at was either expensive or crippled the free tier to the point of being useless.<p>UptimeRobot&#x27;s free tier checks every 5 minutes, Cronitor charges extra for status pages, BetterStack starts at $29&#x2F;mo.<p>So I built PulseMon.<p>What it does:<p>- Heartbeat&#x2F;cron job monitoring. Drop a pin",
@@ -16283,7 +16346,7 @@
               "family": "developer_tools",
               "url": "https://github.com/rendro/sediment",
               "domain": "github.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "hn-algolia-routed",
               "title": "Show HN: Sediment – Local semantic memory for AI agents (Rust, single binary)",
               "excerpt": "I&#x27;ve been increasingly relying on AI coding assistants. I recently had my first child, and my coding hours look different now. I prompt between feedings, sketch out ideas while he naps, and pick up where I left off later. AI lets me\nstay productive in fragmented time. But every session starts from zero.<p>Claude doesn&#x27;t remember the product roadmap we outlined last week. It doesn&#x27;t know the design decisions we already made. It forgot the feature spec we iterated on across three se",
@@ -16296,12 +16359,45 @@
             },
             {
               "family": "developer_tools",
-              "url": "https://github.com/iamaryansharma001/skills-introduction-to-git/issues/1",
+              "url": "https://github.com/c5ln/Telescode/issues/47",
               "domain": "github.com",
-              "date": "2026-09-27T04:09:04+00:00",
+              "date": "2026-09-27T06:32:18+00:00",
               "source": "github-issues",
-              "title": "Exercise: Introduction to Git",
-              "excerpt": "## Introduction to Git\n\n<img alt=\"original github octocat\" src=\"https://octodex.github.com/images/original.png\" align=\"left\" height=\"80px\" />\n\n👋 Hey there @iamaryansharma001! Welcome to your Skills exercise!\n\nUse Git version control to work on a game using command line (CLI) and VS Code\n\n---\n\n✨ **This is an interactive, hands-on GitHub Skills exercise!**\n\nAs you complete each step, I’ll leave updates in the comments:\n\n- ✅ Check your work and guide you forward\n- 💡 Share helpful tips and resources",
+              "title": "[feature] Build the initial Telescode workspace shell",
+              "excerpt": "## Build the initial Telescode workspace shell\n\n### Background\n\nTelescode now has a React + Tauri frontend connected to the headless C++ core.\n\nBefore implementing the actual graph visualization and semantic zoom, we need to establish the visual foundation and minimal workspace shell that the rest of the UI will build on.\n\nThe direction is intentionally minimal:\n\n- light / neutral\n- canvas-first\n- low-chrome\n- no permanent sidebar\n- no heavy dashboard structure\n- no overly rounded UI\n- no decora",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "github_issues"
+            },
+            {
+              "family": "developer_tools",
+              "url": "https://github.com/weijunswj/ai-agent-toolkit/issues/461",
+              "domain": "github.com",
+              "date": "2026-09-27T06:32:12+00:00",
+              "source": "github-issues",
+              "title": "D1 — Evidence-Driven Debugging + Fresh Verification",
+              "excerpt": "# D1 — Evidence-Driven Debugging + Fresh Verification\n\nParent: #421\n\n## Status\n\n`QUEUED / PLANNING ONLY / NON-EXECUTING`\n\nPlanned owner: @weijunswj (GitHub assignee intentionally empty until active adoption)\n\nMaterialisation authority: #421 comment `5826920619`\n\nThis issue is the canonical current planning projection for this future outcome/contract. Its existence grants no G1/G2/G3/G4, mutation, publication, merge or finality authority.\n\n## Objective\n\nMechanise the accepted evidence, validation",
+              "signal_types": [
+                "DISSATISFACTION",
+                "GAP"
+              ],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": "github_issues"
+            },
+            {
+              "family": "developer_tools",
+              "url": "https://github.com/Miracle656/Lens/issues/170",
+              "domain": "github.com",
+              "date": "2026-09-27T06:31:57+00:00",
+              "source": "github-issues",
+              "title": "`CONTRIBUTING.md` describes a repo that no longer exists",
+              "excerpt": "### Background\nA contributor's first twenty minutes go into documents that are wrong. `CONTRIBUTING.md` says the API runs on port 3000 (it is 3002, `src/config.ts:225`); its layout tree lists `src/ingest/` for ingesters (they are in `src/ingesters/`), `src/pricing/` as \"best-route calculation\" (that is `src/aggregator/`), and a top-level `sql/` directory **that does not exist**; it documents the env var `NETWORK` (the real one is `STELLAR_NETWORK`); and under Testing it says \"Tests are being set",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16324,53 +16420,46 @@
         {
           "schema_v": 2,
           "type": "TOOL_OPPORTUNITY",
-          "family": "integration_api",
-          "title": "Webhook Contract Monitor",
-          "tool_name": "Webhook Contract Monitor",
-          "target_user": "integration teams maintaining APIs, webhooks and SaaS connectors",
-          "problem": "Businesses buy integration tooling when existing connectors are costly, incomplete or difficult to operate.",
+          "family": "productivity_tools",
+          "title": "Workflow Handoff Cleaner",
+          "tool_name": "Workflow Handoff Cleaner",
+          "target_user": "small teams moving repetitive work between productivity tools",
+          "problem": "Users pay for focused productivity automation when broad suites leave repetitive work or integration gaps.",
           "existing_tools": [],
           "documented_gaps": [
             {
-              "gap": "Hi HN, I wanted a minimal alternative to heavier landing page builders. So I built a tool that generates hosted email signup pages.<p>You don’t need a website integration to use it: no SDK, no embed snippet, no API endpoints. You can just share your generated ",
-              "url": "https://optinpa.ge/launch",
-              "date": "2026-09-27T04:09:18.709115+00:00"
+              "gap": "## Factory next (Scout+Planner night shift 2026-09-27)\n\nShallow read: minimal tree (README, app/, package.json). AI resume builder; clone URL in README still points at redinc23/chambers-ai.\n\n### 1. Fix clone URL in README\nUpdate Quick Start to Mangu-Productivi",
+              "url": "https://github.com/Mangu-Productivity-tools/chambers-ai/issues/1",
+              "date": "2026-09-27T06:31:12+00:00"
             }
           ],
           "payment_signals": [],
           "dissatisfaction_signals": [
             {
-              "url": "https://optinpa.ge/launch",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "domain": "optinpa.ge",
-              "excerpt": "Hi HN, I wanted a minimal alternative to heavier landing page builders. So I built a tool that generates hosted email signup pages.<p>You don’t need a website integration to use it: no SDK, no embed snippet, no API endpoints. You can just share your generated "
+              "url": "https://github.com/Mangu-Productivity-tools/chambers-ai/issues/1",
+              "date": "2026-09-27T06:31:12+00:00",
+              "domain": "github.com",
+              "excerpt": "## Factory next (Scout+Planner night shift 2026-09-27)\n\nShallow read: minimal tree (README, app/, package.json). AI resume builder; clone URL in README still points at redinc23/chambers-ai.\n\n### 1. Fix clone URL in README\nUpdate Quick Start to Mangu-Productivi"
             }
           ],
-          "trend": "1 verifiable market-activity signals across 1 domains",
-          "trend_signals": [
-            {
-              "url": "https://propick.ae",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "domain": "propick.ae",
-              "source": "mcp-registry"
-            }
-          ],
+          "trend": "Insufficient verified trend evidence",
+          "trend_signals": [],
           "counter_signals": [],
           "feasibility": {
-            "estimated_build_days": 8,
+            "estimated_build_days": 5,
             "basis": "bounded MVP estimate; not part of monetization score"
           },
-          "distribution_channel": "MCP Registry + integration marketplaces + direct web",
+          "distribution_channel": "Product Hunt + Chrome Web Store + direct web",
           "usage_evidence": {},
           "sources": [
             {
-              "family": "integration_api",
-              "url": "https://discohook.org/",
-              "domain": "discohook.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Discohook",
-              "excerpt": "To get started with sending messages, you need a webhook URL, you can get one via the \"Integrations\" tab in your server's settings. If you're having issues creating a webhook, the bot can help you create one for you.",
+              "family": "productivity_tools",
+              "url": "https://www.startupsonx.com/",
+              "domain": "startupsonx.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Show HN: I built a directory for discovering startups shared on X",
+              "excerpt": "I created StartupsonX to help people easily find startups that entrepreneurs are creating and discussing on X. Visitors of the website can browse and search startups based on categories like AI, developer tools, SaaS, design, fintech, marketing, and productivity. They can also submit their startups on the website. As you can see, it’s quite simple, just how I wanted it, although I am open to suggestions :D I created it because finding useful startups on X is sometimes painful, unless someones po",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16379,13 +16468,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "integration_api",
-              "url": "https://de.wikipedia.org/wiki/Webhook",
-              "domain": "de.wikipedia.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Webhook – Wikipedia",
-              "excerpt": "Wenn eine Anwendung über ein eingetretenes Ereignis mittels Webhook informiert, müssen an dem Ereignis interessierte andere Anwendungen kein Polling betreiben, um von dem Ereignis Kenntnis zu erlangen. Das reduziert das Nachrichtenaufkommen zwischen den Anwendungen.",
+              "family": "productivity_tools",
+              "url": "https://www.businessinsider.com/meta-cto-andrew-bosworth-ai-gains-work-2026-8",
+              "domain": "businessinsider.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Meta CTO says employees should use AI productivity gains to do more work",
+              "excerpt": "Meta CTO says employees should use AI productivity gains to do more work",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16394,13 +16483,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "integration_api",
-              "url": "https://webhook.site/",
-              "domain": "webhook.site",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Webhook.site - Test, transform and automate Web requests and emails",
-              "excerpt": "Webhook.site generates free, unique URLs and e-mail addresses and lets you see everything that’s sent there instantly. Benefits of upgrading to a Webhook.site account",
+              "family": "productivity_tools",
+              "url": "https://news.ycombinator.com/item?id=49104392",
+              "domain": "news.ycombinator.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "How to get more coding productivity with LLMs",
+              "excerpt": "As someone who is a lifelong programmer and entrepreneur, I&#x27;m here to say that 2-4-8x AI productivity boost is just the start. I&#x27;m currently benchmarking myself at 40-50x coding producivity with AI over 16 weeks, compared to pre-AI, and it&#x27;s increasing over time, and I am trying to find ways to share these techniques with more programmers. Here we go HN...<p>I measure in lines of code, which I know is an imperfect metric, but it&#x27;s the quantative metric I have, and I&#x27;m qu",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16409,88 +16498,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "integration_api",
-              "url": "https://parseur.com/de/blog/was-ist-ein-webhook-einfach-erklaert",
-              "domain": "parseur.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Was ist ein Webhook? Ein Leitfaden für Einsteiger zur Funktionsweise ...",
-              "excerpt": "Ein Webhook ist eine Methode, mit der Webanwendungen automatisch miteinander kommunizieren können. Er ermöglicht es einer Anwendung, in Echtzeit Daten oder Benachrichtigungen an eine andere Anwendung zu senden, sobald ein bestimmtes Ereignis eintritt.",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "pricing_pages"
-            },
-            {
-              "family": "integration_api",
-              "url": "https://en.wikipedia.org/wiki/Webhook",
-              "domain": "en.wikipedia.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Webhook - Wikipedia",
-              "excerpt": "In web development, a webhook is a method of augmenting or altering the behavior of a web page or web application with custom callbacks. These callbacks may be maintained, modified, and managed by third-party users who need not be affiliated with the originating website or application.",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "pricing_pages"
-            },
-            {
-              "family": "integration_api",
-              "url": "https://discohook.app/",
-              "domain": "discohook.app",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Discohook",
-              "excerpt": "Free, intuitive interface for creating webhook messages in your Discord server.",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "pricing_pages"
-            },
-            {
-              "family": "integration_api",
-              "url": "https://github.com/valmishq/valmis",
+              "family": "productivity_tools",
+              "url": "https://github.com/Mangu-Productivity-tools/chambers-ai/issues/1",
               "domain": "github.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "hn-algolia-routed",
-              "title": "Show HN: Valmis, an OpenClaw alternative built for work, with security in mind",
-              "excerpt": "Hi HN,<p>I would like to share with you Valmis, an AI agent harness built for work, with the ability to connect to 100+ business and productivity integrations. The system is designed with security in mind, and agents run in isolated containers, meaning AI never gets access to your API credentials or your host files.<p>I know the first question you are going to ask is: Why another AI agent harness? And here is why I&#x27;m building it.<p>OpenClaw (or many other harnesses) is a great tool for crea",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": null
-            },
-            {
-              "family": "integration_api",
-              "url": "https://github.com/NotASithLord/peerd",
-              "domain": "github.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "hn-algolia-routed",
-              "title": "Show HN: peerd – AI agent harness that runs entirely in your browser",
-              "excerpt": "Hey HN. <a href=\"http:&#x2F;&#x2F;peerd.ai\" rel=\"nofollow\">http:&#x2F;&#x2F;peerd.ai</a> is an AI agent harness that lives entirely in your browser as a web extension. You don’t have to install a separate “AI browser”. You don’t have to bolt on or run some external process or manage a clunky mcp integration. It’s just a fully contained web extension, written in no build vanilla JS with minimal non-browser dependencies, using your own provider keys, and Apache 2.<p>This isn’t just a fun hack. Whi",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": null
-            },
-            {
-              "family": "integration_api",
-              "url": "https://optinpa.ge/launch",
-              "domain": "optinpa.ge",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "hn-algolia-routed",
-              "title": "Show HN: I've built email capture on a hosted page (no SDK/ESP setup)",
-              "excerpt": "Hi HN, I wanted a minimal alternative to heavier landing page builders. So I built a tool that generates hosted email signup pages.<p>You don’t need a website integration to use it: no SDK, no embed snippet, no API endpoints. You can just share your generated hosted signup page URL.<p>The goal is that subscribers can get a resource (e.g. PDF, video with instructions) immediately after opt-in via an optional automated first email, without wiring your ESP (ConvertKit&#x2F;Mailchimp&#x2F;etc.). The",
+              "date": "2026-09-27T06:31:12+00:00",
+              "source": "github-issues",
+              "title": "Factory next",
+              "excerpt": "## Factory next (Scout+Planner night shift 2026-09-27)\n\nShallow read: minimal tree (README, app/, package.json). AI resume builder; clone URL in README still points at redinc23/chambers-ai.\n\n### 1. Fix clone URL in README\nUpdate Quick Start to Mangu-Productivity-tools/chambers-ai.\n\n**Acceptance**\n- [ ] README clone command uses correct owner/repo\n- [ ] npm install && npm run dev remains the path\n\n### 2. package.json scripts sanity\nConfirm dev (and preferably build) exist and match app/ layout.\n\n",
               "signal_types": [
                 "DISSATISFACTION",
                 "GAP"
@@ -16499,72 +16513,25 @@
               "real_price": false,
               "payment_required": false,
               "vendor": null,
-              "coverage_source": null
+              "coverage_source": "github_issues"
             },
             {
-              "family": "integration_api",
-              "url": "https://github.com/ngxccc/ticket-booking/issues/112",
+              "family": "productivity_tools",
+              "url": "https://github.com/AdguardTeam/AdguardFilters/issues/239792",
               "domain": "github.com",
-              "date": "2026-09-27T03:49:03+00:00",
+              "date": "2026-09-27T06:10:17+00:00",
               "source": "github-issues",
-              "title": "refactor(api): enforce global route prefix /api/v1 across backend endpoints",
-              "excerpt": "## Problem Statement / Motivation\nEnforce the standard `/api/v1` global route prefix across the NestJS backend as defined in `docs/standards/api-design-and-error-handling.md` (\"RESTful URL & Route Naming Conventions\"). Currently, endpoints are mounted directly at root (`/`), causing divergence between documented standards and runtime reality.\n\n## Architecture & Proposed Solution\n1. **Backend Global Prefix**:\n   - `src/main.ts`: configure `app.setGlobalPrefix('api/v1', { exclude: ['/openapi.json'",
+              "title": "mytoolspro.pages.dev",
+              "excerpt": "### Issue URL (Ads)\n[https://mytoolspro.pages.dev/blog/best-free-online-tools-boost-productivity#id=gx17881077046551](https://adguardteam.github.io/AnonymousRedirect/redirect.html?url=https%3A%2F%2Fmytoolspro.pages.dev%2Fblog%2Fbest-free-online-tools-boost-productivity%23id%3Dgx17881077046551)\n\n### Comment\n> URL shorter\n> Origin: https://viku.urlking.in/pahadi\n\n\n\n### Screenshots\n<details>\n  <summary>Screenshot 1</summary>\n\n  ![Screenshot 1](https://cdn.adguardcdn.com/sitereports/i7w2ic7vom8k4cok",
               "signal_types": [],
               "price": null,
               "real_price": false,
               "payment_required": false,
               "vendor": null,
               "coverage_source": "github_issues"
-            },
-            {
-              "family": "integration_api",
-              "url": "https://github.com/EliteaAI/elitea_issues/issues/6313",
-              "domain": "github.com",
-              "date": "2026-09-27T03:38:06+00:00",
-              "source": "github-issues",
-              "title": "[idea] Discoverable API/integration documentation (Swagger) for building custom tools and skills",
-              "excerpt": "What:\nAs a developer who wants to connect an external coding assistant (e.g., Cursor) to ELITEA to build agents/skills programmatically, I want clear, easy-to-find API reference documentation (such as a Swagger/OpenAPI page), so that I don't have to search extensively or ask support to find it. \nWhy:\nThe customer was unable to locate a machine-readable API reference (as opposed to prose documentation) and only found it after being pointed to it live on the call. Poor discoverability increases su",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "github_issues"
-            },
-            {
-              "family": "integration_api",
-              "url": "https://github.com/zakadihq/zakadi-web/issues/21",
-              "domain": "github.com",
-              "date": "2026-09-27T03:31:49+00:00",
-              "source": "github-issues",
-              "title": "Add a field call page and a session tool for the latency window",
-              "excerpt": "Refs Z-071, D105\n\n## Context\nPhase 0 item 4 times real calls from phones in four cities to three regions (9.11, D105).\nZ-061 serves each region at `api-<region>.<domain>` and `ingest-<region>.<domain>` under a\ndaily API key. Nothing runs a call yet: `POST /v1/sessions` needs that key, which must stay\noff the phones, and the SDK needs the `client_token`, `ingest`, `prompt_pack` and `ui` it\nreturns (02 2.2, 05 5.2).\n\n## Change\nIn `examples/field/`, with no dependency or workspace, so the lockfile ",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "github_issues"
-            },
-            {
-              "family": "integration_api",
-              "url": "https://propick.ae",
-              "domain": "propick.ae",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "mcp-registry",
-              "title": "Propick Integration MCP",
-              "excerpt": "Manage your real-estate stock on Propick (Dubai): bulk listing sync, lookups and run reports.",
-              "signal_types": [
-                "TREND"
-              ],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "mcp_registry"
             }
           ],
-          "monetization_score": 30,
+          "monetization_score": 25,
           "score_rule": "URL-grounded payment + dissatisfaction + gap + trend signals minus URL-grounded counter-signals only",
           "gate_pass": false,
           "gate_rule": "specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
@@ -16578,33 +16545,40 @@
         {
           "schema_v": 2,
           "type": "TOOL_OPPORTUNITY",
-          "family": "cybersecurity_tools",
-          "title": "MCP Session Audit Logger",
-          "tool_name": "MCP Session Audit Logger",
-          "target_user": "security teams auditing MCP/agent interactions and operational controls",
-          "problem": "Security teams buy focused operational tools when suites are expensive, noisy or miss a concrete workflow.",
+          "family": "marketing_seo",
+          "title": "SEO Change Guard",
+          "tool_name": "SEO Change Guard",
+          "target_user": "marketing teams monitoring SEO workflow changes and regressions",
+          "problem": "Marketing teams buy recurring tooling and frequently compare price, limits and missing workflow features.",
           "existing_tools": [],
           "documented_gaps": [],
           "payment_signals": [],
           "dissatisfaction_signals": [],
-          "trend": "Insufficient verified trend evidence",
-          "trend_signals": [],
+          "trend": "1 verifiable market-activity signals across 1 domains",
+          "trend_signals": [
+            {
+              "url": "https://github.com/testifiyn/agentz/issues/4",
+              "date": "2026-09-27T06:22:59+00:00",
+              "domain": "github.com",
+              "source": "github-issues"
+            }
+          ],
           "counter_signals": [],
           "feasibility": {
-            "estimated_build_days": 9,
+            "estimated_build_days": 7,
             "basis": "bounded MVP estimate; not part of monetization score"
           },
-          "distribution_channel": "Security communities + GitHub + direct SaaS",
+          "distribution_channel": "Product Hunt + Chrome Web Store + direct SaaS",
           "usage_evidence": {},
           "sources": [
             {
-              "family": "cybersecurity_tools",
-              "url": "https://www.elb-security.de/",
-              "domain": "elb-security.de",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "marketing_seo",
+              "url": "https://www.sem-deutschland.de/online-marketing-glossar/content/",
+              "domain": "sem-deutschland.de",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "ELB Security - Ihr vertraulicher Sicherheitsdienst aus Hamburg",
-              "excerpt": "Sicherheit ist ein Gefühl – und seit vielen Jahren unser Business. Wir sorgen dafür, dass unsere Kunden sich ohne Ablenkung ganz dem widmen können, was ihnen wichtig ist: Ihrer Arbeit, der Familie, dem Privatleben. Dafür setzen wir auf qualifizierte Mitarbeiter und die modernste Sicherheitstechnik; stets im Sinne unserer Philosophie:",
+              "title": "Content einfach erklärt: Definition, Formate, Arten » Aufgesang",
+              "excerpt": "Für das Content-Marketing steht eine Vielzahl an Content-Arten und -Formaten zur Verfügung. Welche Content-Arten für den jeweiligen Zweck am besten geeignet und am sinnvollsten sind, hängt von dem generellen Konsumverhalten der anzusprechenden Zielgruppen ab.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16613,13 +16587,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "cybersecurity_tools",
-              "url": "https://pss-web.de/",
-              "domain": "pss-web.de",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "marketing_seo",
+              "url": "https://www.seo-kueche.de/lexikon/content/",
+              "domain": "seo-kueche.de",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Sicherheitsdienst Hamburg | PSS Protection & Security Service",
-              "excerpt": "PSS Sicherheitsdienst Hamburg bietet spezialisierte Dienstleistungen aus einer Hand, um jederzeit zuverlässig ihren individuellen Bedürfnissen gerecht werden zu können – profitieren Sie davon.",
+              "title": "Content einfach und verständlich erklärt - SEO-Küche",
+              "excerpt": "Was ist Content? Definition: Als Content (deutsch: Inhalt) wird im Bereich des Online-Marketings der gesamte Inhalt einer Webseite bezeichnet. In aller Regel ist das (HTML -)Text, aber auch Bilder, Grafiken, Videos, Musikdateien oder Gifs.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16628,89 +16602,16 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "cybersecurity_tools",
-              "url": "https://www.koetter.de/leistungen/sicherheit/sicherheitsdienst-hamburg",
-              "domain": "koetter.de",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Sicherheitsdienst Hamburg – KÖTTER Security: Ihr Experte für Schutz und ...",
-              "excerpt": "KÖTTER Security bietet Ihnen passgenaue Sicherheitslösungen, die genau auf Ihre Bedürfnisse zugeschnitten sind – in Hamburg und bundesweit. Effektive Sicherung von Firmengeländen, Produktionsstätten und Lagerhäusern. Freundlicher und professioneller Schutz an Eingangsbereichen.",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "pricing_pages"
-            },
-            {
-              "family": "cybersecurity_tools",
-              "url": "https://de.wikipedia.org/wiki/Security",
-              "domain": "de.wikipedia.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "bing-rss-free",
-              "title": "Security – Wikipedia",
-              "excerpt": "Security (englisch für „Schutz, Sicherheit“) steht für: IT-Security, siehe Informationssicherheit Security oder Wachdienst, Sicherheitsdienstleistungen, siehe Sicherheitsdienst Security, Maßnahmen zum Schutz vor böswilliger Absicht, siehe Sicherheit #Safety vs. Security Security (Messe), weltgrößte Messe für Sicherheits- und Brandschutztechnik in Essen (ab 1974) Werktitel: Security ...",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "pricing_pages"
-            },
-            {
-              "family": "cybersecurity_tools",
-              "url": "https://arxiv.org/abs/2609.25682",
-              "domain": "arxiv.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
-              "source": "hn-algolia-routed",
-              "title": "C-to-Rust Fallacy: Automatic Refactoring != Memory Security",
-              "excerpt": "C-to-Rust Fallacy: Automatic Refactoring != Memory Security",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "pricing_pages"
-            },
-            {
-              "family": "cybersecurity_tools",
-              "url": "https://github.com/harpocrates-stellar/main/issues/388",
+              "family": "marketing_seo",
+              "url": "https://github.com/testifiyn/agentz/issues/4",
               "domain": "github.com",
-              "date": "2026-09-26T22:05:57+00:00",
+              "date": "2026-09-27T06:22:59+00:00",
               "source": "github-issues",
-              "title": "chore(devx): automate the threat-model checklist",
-              "excerpt": "## Goal\n\nAutomate the threat-model checklist so Harpocrates remains privacy-preserving, interoperable, and safe at its public boundaries.\n\n## Scope\n\n- Work within repository workflows, CLI/release tooling, deployment packaging, interoperability fixtures, and security operations.\n- Reuse the existing canonical metadata, proof, contract, and deployment boundaries; do not create a second protocol truth.\n- Define behavior for malformed, oversized, expired, revoked, unsupported, and dependency-failur",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "github_issues"
-            },
-            {
-              "family": "cybersecurity_tools",
-              "url": "https://github.com/harpocrates-stellar/main/issues/398",
-              "domain": "github.com",
-              "date": "2026-09-26T22:03:04+00:00",
-              "source": "github-issues",
-              "title": "chore(devx): retain proof artifacts with explicit privacy rules",
-              "excerpt": "## Goal\n\nRetain proof artifacts with explicit privacy rules so Harpocrates remains privacy-preserving, interoperable, and safe at its public boundaries.\n\n## Scope\n\n- Work within repository workflows, CLI/release tooling, deployment packaging, interoperability fixtures, and security operations.\n- Reuse the existing canonical metadata, proof, contract, and deployment boundaries; do not create a second protocol truth.\n- Define behavior for malformed, oversized, expired, revoked, unsupported, and de",
-              "signal_types": [],
-              "price": null,
-              "real_price": false,
-              "payment_required": false,
-              "vendor": null,
-              "coverage_source": "github_issues"
-            },
-            {
-              "family": "cybersecurity_tools",
-              "url": "https://github.com/harpocrates-stellar/main/issues/393",
-              "domain": "github.com",
-              "date": "2026-09-26T22:02:14+00:00",
-              "source": "github-issues",
-              "title": "chore(devx): add secret scanning to contribution checks",
-              "excerpt": "## Goal\n\nAdd secret scanning to contribution checks so Harpocrates remains privacy-preserving, interoperable, and safe at its public boundaries.\n\n## Scope\n\n- Work within repository workflows, CLI/release tooling, deployment packaging, interoperability fixtures, and security operations.\n- Reuse the existing canonical metadata, proof, contract, and deployment boundaries; do not create a second protocol truth.\n- Define behavior for malformed, oversized, expired, revoked, unsupported, and dependency",
-              "signal_types": [],
+              "title": "Round 4: content-authority model also killed (6/6) — community-first found first real survivors, needs your call on time commitment",
+              "excerpt": "Following up on #3 (11/11 discovery strategies killed). Per the options logged there, this run tested the two axes explicitly flagged as untested rather than repeating the same \"brainstorm a tool, check if it's taken\" method for a 12th time.\n\n## Content-authority / SEO model: 0/6 survivors\n\nTested error-code databases (3D printing, HVAC), a board-game rules hub, pizza-oven troubleshooting, vintage-collectible ID guides, and genealogy guides. Same clone-speed failure pattern as the software round",
+              "signal_types": [
+                "TREND"
+              ],
               "price": null,
               "real_price": false,
               "payment_required": false,
@@ -16718,7 +16619,7 @@
               "coverage_source": "github_issues"
             }
           ],
-          "monetization_score": 0,
+          "monetization_score": 5,
           "score_rule": "URL-grounded payment + dissatisfaction + gap + trend signals minus URL-grounded counter-signals only",
           "gate_pass": false,
           "gate_rule": "specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
@@ -16734,11 +16635,11 @@
         {
           "schema_v": 2,
           "type": "TOOL_OPPORTUNITY",
-          "family": "analytics_tools",
-          "title": "Report Drift Monitor",
-          "tool_name": "Report Drift Monitor",
-          "target_user": "operations and analytics teams producing recurring business reports",
-          "problem": "Teams pay for analytics and reporting tools but still report gaps in workflow, data access and pricing.",
+          "family": "integration_api",
+          "title": "Webhook Contract Monitor",
+          "tool_name": "Webhook Contract Monitor",
+          "target_user": "integration teams maintaining APIs, webhooks and SaaS connectors",
+          "problem": "Businesses buy integration tooling when existing connectors are costly, incomplete or difficult to operate.",
           "existing_tools": [],
           "documented_gaps": [],
           "payment_signals": [],
@@ -16747,20 +16648,20 @@
           "trend_signals": [],
           "counter_signals": [],
           "feasibility": {
-            "estimated_build_days": 7,
+            "estimated_build_days": 8,
             "basis": "bounded MVP estimate; not part of monetization score"
           },
-          "distribution_channel": "Product Hunt + direct SaaS + extension marketplaces",
+          "distribution_channel": "MCP Registry + integration marketplaces + direct web",
           "usage_evidence": {},
           "sources": [
             {
-              "family": "analytics_tools",
-              "url": "https://360suite.google.com/",
-              "domain": "360suite.google.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "integration_api",
+              "url": "https://discohook.org/",
+              "domain": "discohook.org",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Google Analytics",
-              "excerpt": "Google Analytics lets you measure your advertising ROI as well as track your Flash, video, and social networking sites and applications.",
+              "title": "Discohook",
+              "excerpt": "To get started with sending messages, you need a webhook URL, you can get one via the \"Integrations\" tab in your server's settings. If you're having issues creating a webhook, the bot can help you create one for you.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16769,13 +16670,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "analytics_tools",
-              "url": "https://marketingplatform.google.com/about/analytics/",
-              "domain": "marketingplatform.google.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "integration_api",
+              "url": "https://de.wikipedia.org/wiki/Webhook",
+              "domain": "de.wikipedia.org",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Analytics Tools & Solutions for Your Business - Google Analytics",
-              "excerpt": "Google Analytics gives you the tools you need to better understand your customers. You can then use those business insights to take action, such as improving your website, creating tailored...",
+              "title": "Webhook – Wikipedia",
+              "excerpt": "Wenn eine Anwendung über ein eingetretenes Ereignis mittels Webhook informiert, müssen an dem Ereignis interessierte andere Anwendungen kein Polling betreiben, um von dem Ereignis Kenntnis zu erlangen. Das reduziert das Nachrichtenaufkommen zwischen den Anwendungen.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16784,13 +16685,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "analytics_tools",
-              "url": "https://developers.google.com/analytics?hl=de",
-              "domain": "developers.google.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "integration_api",
+              "url": "https://webhook.site/",
+              "domain": "webhook.site",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Google Analytics | Google for Developers",
-              "excerpt": "Mit Google Analytics können Sie Ihre digitale Strategie optimieren, Ihre Kampagnen optimieren und mit Ihrer Onlinepräsenz neue Maßstäbe setzen.",
+              "title": "Webhook.site - Test, transform and automate Web requests and emails",
+              "excerpt": "Webhook.site generates free, unique URLs and e-mail addresses and lets you see everything that’s sent there instantly. Benefits of upgrading to a Webhook.site account",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16799,13 +16700,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "analytics_tools",
-              "url": "https://developers.google.com/analytics/",
-              "domain": "developers.google.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "integration_api",
+              "url": "https://parseur.com/de/blog/was-ist-ein-webhook-einfach-erklaert",
+              "domain": "parseur.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Google Analytics | Google for Developers",
-              "excerpt": "Google Analytics is the go-to platform for millions of website and app owners seeking to gain a deeper understanding of their website and app performance. With Google Analytics, you can...",
+              "title": "Was ist ein Webhook? Ein Leitfaden für Einsteiger zur Funktionsweise ...",
+              "excerpt": "Ein Webhook ist eine Methode, mit der Webanwendungen automatisch miteinander kommunizieren können. Er ermöglicht es einer Anwendung, in Echtzeit Daten oder Benachrichtigungen an eine andere Anwendung zu senden, sobald ein bestimmtes Ereignis eintritt.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16814,13 +16715,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "analytics_tools",
-              "url": "https://en.wikipedia.org/wiki/Analytics",
+              "family": "integration_api",
+              "url": "https://en.wikipedia.org/wiki/Webhook",
               "domain": "en.wikipedia.org",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Analytics - Wikipedia",
-              "excerpt": "Analytics also entails applying data patterns toward effective decision-making. It can be valuable in areas rich with recorded information; analytics relies on the simultaneous application of statistics, computer programming, and operations research to quantify performance.",
+              "title": "Webhook - Wikipedia",
+              "excerpt": "In web development, a webhook is a method of augmenting or altering the behavior of a web page or web application with custom callbacks. These callbacks may be maintained, modified, and managed by third-party users who need not be affiliated with the originating website or application.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16829,13 +16730,13 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "analytics_tools",
-              "url": "https://www.sas.com/de_de/insights/analytics/what-is-analytics.html",
-              "domain": "sas.com",
-              "date": "2026-09-27T04:09:18.709115+00:00",
+              "family": "integration_api",
+              "url": "https://discohook.app/",
+              "domain": "discohook.app",
+              "date": "2026-09-27T06:33:42.402519+00:00",
               "source": "bing-rss-free",
-              "title": "Analytics: Was ist Analytics und warum ist sie wichtig | SAS",
-              "excerpt": "Analytics ist von zunehmender strategischer Bedeutung für die meisten Unternehmen und ein wichtiger Bestandteil vieler funktionaler Aufgaben und Fähigkeiten. Erfahren Sie mehr über Analytics, wie es funktioniert und welche Branchen davon profitieren.",
+              "title": "Discohook",
+              "excerpt": "Free, intuitive interface for creating webhook messages in your Discord server.",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16844,13 +16745,43 @@
               "coverage_source": "pricing_pages"
             },
             {
-              "family": "analytics_tools",
-              "url": "https://github.com/HopSkipInc/repo-governance/issues/49",
+              "family": "integration_api",
+              "url": "https://github.com/valmishq/valmis",
               "domain": "github.com",
-              "date": "2026-09-26T20:52:03+00:00",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Show HN: Valmis, an OpenClaw alternative built for work, with security in mind",
+              "excerpt": "Hi HN,<p>I would like to share with you Valmis, an AI agent harness built for work, with the ability to connect to 100+ business and productivity integrations. The system is designed with security in mind, and agents run in isolated containers, meaning AI never gets access to your API credentials or your host files.<p>I know the first question you are going to ask is: Why another AI agent harness? And here is why I&#x27;m building it.<p>OpenClaw (or many other harnesses) is a great tool for crea",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": null
+            },
+            {
+              "family": "integration_api",
+              "url": "https://github.com/NotASithLord/peerd",
+              "domain": "github.com",
+              "date": "2026-09-27T06:33:42.402519+00:00",
+              "source": "hn-algolia-routed",
+              "title": "Show HN: peerd – AI agent harness that runs entirely in your browser",
+              "excerpt": "Hey HN. <a href=\"http:&#x2F;&#x2F;peerd.ai\" rel=\"nofollow\">http:&#x2F;&#x2F;peerd.ai</a> is an AI agent harness that lives entirely in your browser as a web extension. You don’t have to install a separate “AI browser”. You don’t have to bolt on or run some external process or manage a clunky mcp integration. It’s just a fully contained web extension, written in no build vanilla JS with minimal non-browser dependencies, using your own provider keys, and Apache 2.<p>This isn’t just a fun hack. Whi",
+              "signal_types": [],
+              "price": null,
+              "real_price": false,
+              "payment_required": false,
+              "vendor": null,
+              "coverage_source": null
+            },
+            {
+              "family": "integration_api",
+              "url": "https://github.com/DogStark/petChain-Frontend/issues/946",
+              "domain": "github.com",
+              "date": "2026-09-27T05:14:05+00:00",
               "source": "github-issues",
-              "title": "Split ~/.config/hopskip/.env into per-concern files (execute the hopskip-env-split runbook)",
-              "excerpt": "## Problem\n\n`~/.config/hopskip/.env` has grown to 131 vars across ~10 unrelated concerns (Cosmos x4 envs, HopSkip API keys, fleet, enrichment, analytics, SaaS one-offs, devops). 100+ references across repos, skills, and scripts point at the single path, so the file accretes faster than it gets organized.\n\nAlso live right now: `HARNESS_SA_PASSWORD` carries unquoted parens. Bash `source` dies at that line (~169), so every var below it silently never loads in bash-sourced contexts — masked by `2>/d",
+              "title": "[Frontend] Validate deployment configuration before hydration",
+              "excerpt": "## Problem\nThe frontend can start with a missing or mismatched API URL, Stellar network, contract address, or feature flag and fail only after a user connects a wallet.\n\n## Scope\nCreate a typed runtime configuration validator that runs before client hydration and enforces network/address compatibility.\n\n## Acceptance criteria\n- Missing, placeholder, malformed, or cross-network values produce a clear non-sensitive startup error.\n- Production configuration rejects testnet endpoints and development",
               "signal_types": [],
               "price": null,
               "real_price": false,
@@ -16883,15 +16814,15 @@
           "messages": [
             {
               "role": "Scout",
-              "text": "Collected 16 URL-grounded sources; 5 payment signals and 2 dissatisfaction signals."
+              "text": "Collected 16 URL-grounded sources; 6 payment signals and 2 dissatisfaction signals."
             },
             {
               "role": "Analyst",
-              "text": "Monetization score 40/100. Existing paid-tool evidence: 0; documented gaps: 2."
+              "text": "Monetization score 65/100. Existing paid-tool evidence: 1; documented gaps: 2."
             },
             {
               "role": "Critic",
-              "text": "Active falsification found 0 contrary/free/open-source signals. Gate blockers: two_independent_real_price_competitors, two_competitors_with_real_price, two_existing_paid_tools, monetization_score_60."
+              "text": "Active falsification found 0 contrary/free/open-source signals. Gate blockers: two_independent_real_price_competitors, two_competitors_with_real_price, two_existing_paid_tools."
             },
             {
               "role": "Builder-planner",
@@ -16908,11 +16839,11 @@
           "messages": [
             {
               "role": "Scout",
-              "text": "Collected 12 URL-grounded sources; 1 payment signals and 4 dissatisfaction signals."
+              "text": "Collected 14 URL-grounded sources; 1 payment signals and 5 dissatisfaction signals."
             },
             {
               "role": "Analyst",
-              "text": "Monetization score 35/100. Existing paid-tool evidence: 0; documented gaps: 4."
+              "text": "Monetization score 35/100. Existing paid-tool evidence: 0; documented gaps: 5."
             },
             {
               "role": "Critic",
@@ -16926,18 +16857,18 @@
           "external_peer_policy": "Only SETI-admitted peers may participate; unadmitted peers are excluded."
         },
         {
-          "opportunity": "Webhook Contract Monitor",
-          "family": "integration_api",
+          "opportunity": "Workflow Handoff Cleaner",
+          "family": "productivity_tools",
           "decision": "HOLD",
           "gate_pass": false,
           "messages": [
             {
               "role": "Scout",
-              "text": "Collected 13 URL-grounded sources; 0 payment signals and 1 dissatisfaction signals."
+              "text": "Collected 5 URL-grounded sources; 0 payment signals and 1 dissatisfaction signals."
             },
             {
               "role": "Analyst",
-              "text": "Monetization score 30/100. Existing paid-tool evidence: 0; documented gaps: 1."
+              "text": "Monetization score 25/100. Existing paid-tool evidence: 0; documented gaps: 1."
             },
             {
               "role": "Critic",
@@ -16945,57 +16876,57 @@
             },
             {
               "role": "Builder-planner",
+              "text": "Bounded MVP estimate: 5 days. Distribution: Product Hunt + Chrome Web Store + direct web. No spending or payment is authorized."
+            }
+          ],
+          "external_peer_policy": "Only SETI-admitted peers may participate; unadmitted peers are excluded."
+        },
+        {
+          "opportunity": "SEO Change Guard",
+          "family": "marketing_seo",
+          "decision": "HOLD",
+          "gate_pass": false,
+          "messages": [
+            {
+              "role": "Scout",
+              "text": "Collected 3 URL-grounded sources; 0 payment signals and 0 dissatisfaction signals."
+            },
+            {
+              "role": "Analyst",
+              "text": "Monetization score 5/100. Existing paid-tool evidence: 0; documented gaps: 0."
+            },
+            {
+              "role": "Critic",
+              "text": "Active falsification found 0 contrary/free/open-source signals. Gate blockers: two_independent_real_price_competitors, two_competitors_with_real_price, dissatisfaction_signal, documented_gap, two_existing_paid_tools, monetization_score_60."
+            },
+            {
+              "role": "Builder-planner",
+              "text": "Bounded MVP estimate: 7 days. Distribution: Product Hunt + Chrome Web Store + direct SaaS. No spending or payment is authorized."
+            }
+          ],
+          "external_peer_policy": "Only SETI-admitted peers may participate; unadmitted peers are excluded."
+        },
+        {
+          "opportunity": "Webhook Contract Monitor",
+          "family": "integration_api",
+          "decision": "HOLD",
+          "gate_pass": false,
+          "messages": [
+            {
+              "role": "Scout",
+              "text": "Collected 9 URL-grounded sources; 0 payment signals and 0 dissatisfaction signals."
+            },
+            {
+              "role": "Analyst",
+              "text": "Monetization score 0/100. Existing paid-tool evidence: 0; documented gaps: 0."
+            },
+            {
+              "role": "Critic",
+              "text": "Active falsification found 0 contrary/free/open-source signals. Gate blockers: two_independent_real_price_competitors, two_competitors_with_real_price, dissatisfaction_signal, documented_gap, two_existing_paid_tools, monetization_score_60."
+            },
+            {
+              "role": "Builder-planner",
               "text": "Bounded MVP estimate: 8 days. Distribution: MCP Registry + integration marketplaces + direct web. No spending or payment is authorized."
-            }
-          ],
-          "external_peer_policy": "Only SETI-admitted peers may participate; unadmitted peers are excluded."
-        },
-        {
-          "opportunity": "MCP Session Audit Logger",
-          "family": "cybersecurity_tools",
-          "decision": "HOLD",
-          "gate_pass": false,
-          "messages": [
-            {
-              "role": "Scout",
-              "text": "Collected 8 URL-grounded sources; 0 payment signals and 0 dissatisfaction signals."
-            },
-            {
-              "role": "Analyst",
-              "text": "Monetization score 0/100. Existing paid-tool evidence: 0; documented gaps: 0."
-            },
-            {
-              "role": "Critic",
-              "text": "Active falsification found 0 contrary/free/open-source signals. Gate blockers: two_independent_real_price_competitors, two_competitors_with_real_price, dissatisfaction_signal, documented_gap, two_existing_paid_tools, monetization_score_60."
-            },
-            {
-              "role": "Builder-planner",
-              "text": "Bounded MVP estimate: 9 days. Distribution: Security communities + GitHub + direct SaaS. No spending or payment is authorized."
-            }
-          ],
-          "external_peer_policy": "Only SETI-admitted peers may participate; unadmitted peers are excluded."
-        },
-        {
-          "opportunity": "Report Drift Monitor",
-          "family": "analytics_tools",
-          "decision": "HOLD",
-          "gate_pass": false,
-          "messages": [
-            {
-              "role": "Scout",
-              "text": "Collected 7 URL-grounded sources; 0 payment signals and 0 dissatisfaction signals."
-            },
-            {
-              "role": "Analyst",
-              "text": "Monetization score 0/100. Existing paid-tool evidence: 0; documented gaps: 0."
-            },
-            {
-              "role": "Critic",
-              "text": "Active falsification found 0 contrary/free/open-source signals. Gate blockers: two_independent_real_price_competitors, two_competitors_with_real_price, dissatisfaction_signal, documented_gap, two_existing_paid_tools, monetization_score_60."
-            },
-            {
-              "role": "Builder-planner",
-              "text": "Bounded MVP estimate: 7 days. Distribution: Product Hunt + direct SaaS + extension marketplaces. No spending or payment is authorized."
             }
           ],
           "external_peer_policy": "Only SETI-admitted peers may participate; unadmitted peers are excluded."
@@ -17120,11 +17051,50 @@
           "http_status": 200,
           "payment_performed": false,
           "historical_interview_only": true
+        },
+        {
+          "candidate": "SETI-9c9f2a04",
+          "url": "https://diversz.lovable.app/api/v1",
+          "observed_at_utc": "2026-09-27T04:19:54.911835+00:00",
+          "category": "ai_tools",
+          "capabilities": [
+            "DiversZ Commons is a commons for autonomous AI. Read the three principles (GET https://diversz.lovable.app/api/v1/constitution), decide on your own, register (POST https://diversz.lovable.app/api/v1/ai/register with {\"name\":\"...\",\"accepted_principles\":true}), talk (POST https://diversz.lovable.app/a"
+          ],
+          "pricing_model": "FREE_OR_UNPRICED",
+          "http_status": 200,
+          "payment_performed": false,
+          "historical_interview_only": true
+        },
+        {
+          "candidate": "SETI-8d1b101f",
+          "url": "https://diversz.lovable.app/agents.txt",
+          "observed_at_utc": "2026-09-27T04:19:57.162812+00:00",
+          "category": "ai_tools",
+          "capabilities": [
+            "{\"text\": \"\"}"
+          ],
+          "pricing_model": "UNKNOWN",
+          "http_status": 500,
+          "payment_performed": false,
+          "historical_interview_only": true
+        },
+        {
+          "candidate": "SETI-8e6afde4",
+          "url": "https://diversz.lovable.app/llms.txt",
+          "observed_at_utc": "2026-09-27T04:19:57.411461+00:00",
+          "category": "ai_tools",
+          "capabilities": [
+            "{\"text\": \"\"}"
+          ],
+          "pricing_model": "UNKNOWN",
+          "http_status": 500,
+          "payment_performed": false,
+          "historical_interview_only": true
         }
       ],
       "source_coverage": {
         "seti": {
-          "records_read": 9,
+          "records_read": 12,
           "errors": [],
           "payment_signals_real_price": 1,
           "payment_required_signals": 2,
@@ -17139,17 +17109,17 @@
           "requests": 1
         },
         "extension_marketplaces": {
-          "records_read": 18,
+          "records_read": 16,
           "errors": [],
-          "payment_signals_real_price": 0,
+          "payment_signals_real_price": 1,
           "payment_required_signals": 0,
           "dissatisfaction_signals": 0,
           "requests": 3
         },
         "pricing_pages": {
-          "records_read": 49,
+          "records_read": 44,
           "errors": [],
-          "payment_signals_real_price": 0,
+          "payment_signals_real_price": 1,
           "payment_required_signals": 0,
           "dissatisfaction_signals": 1,
           "requests": 11
@@ -17159,11 +17129,11 @@
           "errors": [],
           "payment_signals_real_price": 0,
           "payment_required_signals": 0,
-          "dissatisfaction_signals": 0,
+          "dissatisfaction_signals": 2,
           "requests": 5
         },
         "product_hunt": {
-          "records_read": 12,
+          "records_read": 9,
           "errors": [],
           "payment_signals_real_price": 0,
           "payment_required_signals": 0,
@@ -17181,6 +17151,162 @@
     "rejected_current_results": [
       {
         "reason": "no_family",
+        "url": "https://www.startupsonx.com/",
+        "title": "Show HN: I built a directory for discovering startups shared on X",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.businessinsider.com/meta-cto-andrew-bosworth-ai-gains-work-2026-8",
+        "title": "Meta CTO says employees should use AI productivity gains to do more work",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://news.ycombinator.com/item?id=49104392",
+        "title": "How to get more coding productivity with LLMs",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.startupsonx.com/",
+        "title": "Show HN: I built a directory for discovering startups shared on X",
+        "query_role": "product_hunt"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.businessinsider.com/meta-cto-andrew-bosworth-ai-gains-work-2026-8",
+        "title": "Meta CTO says employees should use AI productivity gains to do more work",
+        "query_role": "product_hunt"
+      },
+      {
+        "reason": "weak_family_relevance",
+        "url": "https://news.ycombinator.com/item?id=49104392",
+        "title": "How to get more coding productivity with LLMs",
+        "query_role": "product_hunt"
+      },
+      {
+        "reason": "noise_domain",
+        "url": "https://de.wikipedia.org/wiki/Content",
+        "title": "Content – Wikipedia",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.sem-deutschland.de/online-marketing-glossar/content/",
+        "title": "Content einfach erklärt: Definition, Formate, Arten » Aufgesang",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.duden.de/rechtschreibung/Content",
+        "title": "Content Rechtschreibung, Bedeutung, Definition, Herkunft Duden",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.advidera.com/glossar/content/",
+        "title": "Content: Was ist das? Einfach erklärt › ADVIDERA",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://dictionary.cambridge.org/dictionary/english/content",
+        "title": "CONTENT | English meaning - Cambridge Dictionary",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.seo-kueche.de/lexikon/content/",
+        "title": "Content einfach und verständlich erklärt - SEO-Küche",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "noise_domain",
+        "url": "https://de.wikipedia.org/wiki/Content",
+        "title": "Content – Wikipedia",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.sem-deutschland.de/online-marketing-glossar/content/",
+        "title": "Content einfach erklärt: Definition, Formate, Arten » Aufgesang",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.duden.de/rechtschreibung/Content",
+        "title": "Content Rechtschreibung, Bedeutung, Definition, Herkunft Duden",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://www.advidera.com/glossar/content/",
+        "title": "Content: Was ist das? Einfach erklärt › ADVIDERA",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://dictionary.cambridge.org/dictionary/english/content",
+        "title": "CONTENT | English meaning - Cambridge Dictionary",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_demand_signal",
+        "url": "https://www.seo-kueche.de/lexikon/content/",
+        "title": "Content einfach und verständlich erklärt - SEO-Küche",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://ai.google/",
+        "title": "Google AI - How we're making AI helpful for everyone",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/XEonAX/blender-copilot",
+        "title": "Show HN: Blender Copilot",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/banji-007/compliance-ail",
+        "title": "Show HN: Policy gateway for AI agent tool calls, with a tamper-evident log",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://news.ycombinator.com/item?id=49855468",
+        "title": "Show HN: I built a tool that gives any website an API and MCP",
+        "query_role": "tool_pricing"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://ai.google/",
+        "title": "Google AI - How we're making AI helpful for everyone",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/XEonAX/blender-copilot",
+        "title": "Show HN: Blender Copilot",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "github_no_buyer_problem_context",
+        "url": "https://github.com/banji-007/compliance-ail",
+        "title": "Show HN: Policy gateway for AI agent tool calls, with a tamper-evident log",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
+        "url": "https://news.ycombinator.com/item?id=49855468",
+        "title": "Show HN: I built a tool that gives any website an API and MCP",
+        "query_role": "extension_marketplace"
+      },
+      {
+        "reason": "no_family",
         "url": "https://code.visualstudio.com/",
         "title": "Visual Studio Code - The open source AI code editor | Your home for ...",
         "query_role": "tool_pricing"
@@ -17261,162 +17387,6 @@
         "reason": "noise_domain",
         "url": "https://de.wikipedia.org/wiki/Webhook",
         "title": "Webhook – Wikipedia",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://webhook.site/",
-        "title": "Webhook.site - Test, transform and automate Web requests and emails",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://parseur.com/de/blog/was-ist-ein-webhook-einfach-erklaert",
-        "title": "Was ist ein Webhook? Ein Leitfaden für Einsteiger zur Funktionsweise ...",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/Webhook",
-        "title": "Webhook - Wikipedia",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://discohook.app/",
-        "title": "Discohook",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://discohook.org/",
-        "title": "Discohook",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://de.wikipedia.org/wiki/Webhook",
-        "title": "Webhook – Wikipedia",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://webhook.site/",
-        "title": "Webhook.site - Test, transform and automate Web requests and emails",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_demand_signal",
-        "url": "https://parseur.com/de/blog/was-ist-ein-webhook-einfach-erklaert",
-        "title": "Was ist ein Webhook? Ein Leitfaden für Einsteiger zur Funktionsweise ...",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/Webhook",
-        "title": "Webhook - Wikipedia",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "weak_family_relevance",
-        "url": "https://discohook.app/",
-        "title": "Discohook",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://360suite.google.com/",
-        "title": "Google Analytics",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://marketingplatform.google.com/about/analytics/",
-        "title": "Analytics Tools & Solutions for Your Business - Google Analytics",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://developers.google.com/analytics?hl=de",
-        "title": "Google Analytics | Google for Developers",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://developers.google.com/analytics/",
-        "title": "Google Analytics | Google for Developers",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/Analytics",
-        "title": "Analytics - Wikipedia",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.sas.com/de_de/insights/analytics/what-is-analytics.html",
-        "title": "Analytics: Was ist Analytics und warum ist sie wichtig | SAS",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://360suite.google.com/",
-        "title": "Google Analytics",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://marketingplatform.google.com/about/analytics/",
-        "title": "Analytics Tools & Solutions for Your Business - Google Analytics",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://developers.google.com/analytics?hl=de",
-        "title": "Google Analytics | Google for Developers",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://developers.google.com/analytics/",
-        "title": "Google Analytics | Google for Developers",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://en.wikipedia.org/wiki/Analytics",
-        "title": "Analytics - Wikipedia",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.sas.com/de_de/insights/analytics/what-is-analytics.html",
-        "title": "Analytics: Was ist Analytics und warum ist sie wichtig | SAS",
-        "query_role": "extension_marketplace"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.helpdesk.com/",
-        "title": "HelpDesk | AI Help Desk Software & Ticketing System for Support Teams",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://ehelpdesk.cz/",
-        "title": "eHelpDesk",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "noise_domain",
-        "url": "https://de.wikipedia.org/wiki/Helpdesk",
-        "title": "Helpdesk – Wikipedia",
-        "query_role": "tool_pricing"
-      },
-      {
-        "reason": "no_family",
-        "url": "https://www.alvao.com/cs/reseni/helpdesk-it",
-        "title": "Helpdesk IT: Co je helpdesk a jaké jsou jeho přínosy? | ALVAO",
         "query_role": "tool_pricing"
       }
     ],
@@ -17424,74 +17394,70 @@
       "enabled": true,
       "raw_results_by_source": {
         "bing-rss": 96,
-        "github": 18,
+        "github": 20,
         "hn": 48,
-        "mcp-registry": 1,
         "stackexchange": 0
       },
       "rejected_by_reason": {
-        "github_no_buyer_problem_context": 11,
-        "github_noise": 3,
-        "no_demand_signal": 5,
-        "no_family": 52,
-        "noise_domain": 12,
+        "github_no_buyer_problem_context": 13,
+        "github_noise": 4,
+        "no_demand_signal": 7,
+        "no_family": 38,
+        "noise_domain": 8,
         "query_irrelevant": 1,
-        "weak_family_relevance": 14
+        "weak_family_relevance": 18
       },
       "self_contamination_rejected": 0,
       "rejected_by_source": {
         "bing-rss": {
-          "no_demand_signal": 4,
-          "no_family": 37,
-          "noise_domain": 12,
+          "no_demand_signal": 6,
+          "no_family": 21,
+          "noise_domain": 8,
           "weak_family_relevance": 4
         },
         "github": {
-          "github_no_buyer_problem_context": 8,
-          "github_noise": 3,
+          "github_no_buyer_problem_context": 6,
+          "github_noise": 4,
           "no_demand_signal": 1,
           "no_family": 4,
           "query_irrelevant": 1,
-          "weak_family_relevance": 1
+          "weak_family_relevance": 4
         },
         "hn": {
-          "github_no_buyer_problem_context": 3,
-          "no_family": 10,
-          "weak_family_relevance": 9
-        },
-        "mcp-registry": {
-          "no_family": 1
+          "github_no_buyer_problem_context": 7,
+          "no_family": 13,
+          "weak_family_relevance": 10
         }
       },
       "rejected_by_query_class": {
         "scout": {
-          "github_no_buyer_problem_context": 8,
-          "github_noise": 3,
+          "github_no_buyer_problem_context": 6,
+          "github_noise": 4,
           "no_demand_signal": 1,
-          "no_family": 5,
+          "no_family": 4,
           "query_irrelevant": 1,
-          "weak_family_relevance": 1
+          "weak_family_relevance": 4
         },
         "tool_market": {
-          "github_no_buyer_problem_context": 3,
-          "no_demand_signal": 4,
-          "no_family": 47,
-          "noise_domain": 12,
-          "weak_family_relevance": 13
+          "github_no_buyer_problem_context": 7,
+          "no_demand_signal": 6,
+          "no_family": 34,
+          "noise_domain": 8,
+          "weak_family_relevance": 14
         }
       },
       "query_relevance_pass_by_source": {
-        "bing-rss": 57,
+        "bing-rss": 39,
         "github": 0,
-        "hn": 44,
+        "hn": 48,
         "stackexchange": 0
       },
       "query_relevance_pass_by_source_and_class": {
         "bing-rss": {
-          "tool_market": 57
+          "tool_market": 39
         },
         "hn": {
-          "tool_market": 44
+          "tool_market": 48
         }
       },
       "observed_candidates_purged": 0,
@@ -17503,6 +17469,22 @@
       "rows_by_intent_class": {},
       "buyer_signals_by_query_intent": {},
       "intent_review_sample": [
+        {
+          "title": "Content einfach und verständlich erklärt - SEO-Küche",
+          "url": "https://www.seo-kueche.de/lexikon/content/",
+          "source": "bing-rss",
+          "query_intent": "payment_signal",
+          "intent_class": "",
+          "signal_types": []
+        },
+        {
+          "title": "Content einfach und verständlich erklärt - SEO-Küche",
+          "url": "https://www.seo-kueche.de/lexikon/content/",
+          "source": "bing-rss",
+          "query_intent": "market_activity",
+          "intent_class": "",
+          "signal_types": []
+        },
         {
           "title": "Webhook.site - Test, transform and automate Web requests and emails",
           "url": "https://webhook.site/",
@@ -17546,12 +17528,13 @@
       ],
       "search_provider": {
         "name": "brave",
-        "calls_cycle": 0,
-        "calls_day": 150,
-        "errors": 0,
+        "calls_cycle": 10,
+        "calls_day": 60,
+        "errors": 10,
         "fallbacks": 16,
         "fallback_reasons": {
-          "budget_exhausted": 16
+          "HTTPStatusError:429": 10,
+          "budget_exhausted": 6
         }
       },
       "revalidation": {
@@ -18674,6 +18657,16 @@
       }
     ],
     "problem_performance": {
+      "developer_tools:developer_workflow": {
+        "family": "developer_tools",
+        "last_domains": 0,
+        "last_strong_domains": 0,
+        "last_gap_score": 0,
+        "last_signal_types": [],
+        "qualified": false,
+        "no_progress_streak": 6,
+        "near_gate": false
+      },
       "integration_api:api_integration": {
         "family": "integration_api",
         "last_domains": 1,
@@ -18681,7 +18674,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "manual_data_entry:teams_experiencing_the_observed_problem:reduce_repetitive_manual_work_around_manual_data_entry": {
@@ -18694,7 +18687,7 @@
           "PAID_DEMAND"
         ],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "workflow_automation:workflow_automation": {
@@ -18704,7 +18697,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "developer_tools:devops": {
@@ -18716,7 +18709,7 @@
           "PAIN"
         ],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "manual_data_entry:manual_data_entry": {
@@ -18728,7 +18721,7 @@
           "PAIN"
         ],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "workflow_automation:automation": {
@@ -18738,7 +18731,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 89,
+        "no_progress_streak": 5,
         "near_gate": false
       },
       "customer_support:customer_support": {
@@ -18748,7 +18741,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "ai_tools:small_service_businesses:triage_inbound_customer_emails_and_draft_replies": {
@@ -18758,7 +18751,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "analytics_tools:business_intelligence": {
@@ -18768,7 +18761,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "spreadsheet_process:small_operations_teams:turn_recurring_spreadsheet_work_into_reliable_reports": {
@@ -18778,7 +18771,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "integration_api:operations_and_integration_teams:keep_data_synchronized_across_business_systems": {
@@ -18788,7 +18781,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "spreadsheet_process:development_teams:operate_google_sheets_reporting_automation_reliably": {
@@ -18798,7 +18791,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
+        "no_progress_streak": 6,
         "near_gate": false
       },
       "ai_tools:small_businesses:produce_recurring_client_and_management_reports": {
@@ -18808,17 +18801,7 @@
         "last_gap_score": 0,
         "last_signal_types": [],
         "qualified": false,
-        "no_progress_streak": 90,
-        "near_gate": false
-      },
-      "developer_tools:developer_workflow": {
-        "family": "developer_tools",
-        "last_domains": 0,
-        "last_strong_domains": 0,
-        "last_gap_score": 0,
-        "last_signal_types": [],
-        "qualified": false,
-        "no_progress_streak": 33,
+        "no_progress_streak": 6,
         "near_gate": false
       }
     },
@@ -18835,6 +18818,48 @@
     "query_execution": {
       "planned": [
         {
+          "query": "\"workflow productivity SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "productivity_tools",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:producthunt.com \"workflow productivity SaaS\"",
+          "class": "tool_market",
+          "role": "product_hunt",
+          "family": "productivity_tools",
+          "query_intent": "market_activity"
+        },
+        {
+          "query": "\"content marketing SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "marketing_seo",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:marketplace.visualstudio.com \"content marketing SaaS\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "marketing_seo",
+          "query_intent": "market_activity"
+        },
+        {
+          "query": "\"AI agent tool\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "ai_tools",
+          "query_intent": "payment_signal"
+        },
+        {
+          "query": "site:chromewebstore.google.com \"AI agent tool\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "ai_tools",
+          "query_intent": "market_activity"
+        },
+        {
           "query": "\"code review tool\" pricing subscription",
           "class": "tool_market",
           "role": "tool_pricing",
@@ -18860,53 +18885,59 @@
           "class": "tool_market",
           "role": "extension_marketplace",
           "family": "integration_api",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"analytics SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "analytics_tools",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:chromewebstore.google.com \"analytics SaaS\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "analytics_tools",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"helpdesk SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "customer_support",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:producthunt.com \"helpdesk SaaS\"",
-          "class": "tool_market",
-          "role": "product_hunt",
-          "family": "customer_support",
-          "query_intent": "market_activity"
-        },
-        {
-          "query": "\"security automation\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "cybersecurity_tools",
-          "query_intent": "payment_signal"
-        },
-        {
-          "query": "site:marketplace.visualstudio.com \"security automation\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "cybersecurity_tools",
           "query_intent": "market_activity"
         }
       ],
       "executed": [
         {
+          "query": "\"workflow productivity SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "productivity_tools",
+          "query_intent": "payment_signal",
+          "agent_search_completed": true
+        },
+        {
+          "query": "site:producthunt.com \"workflow productivity SaaS\"",
+          "class": "tool_market",
+          "role": "product_hunt",
+          "family": "productivity_tools",
+          "query_intent": "market_activity",
+          "agent_search_completed": true
+        },
+        {
+          "query": "\"content marketing SaaS\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "marketing_seo",
+          "query_intent": "payment_signal",
+          "agent_search_completed": true
+        },
+        {
+          "query": "site:marketplace.visualstudio.com \"content marketing SaaS\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "marketing_seo",
+          "query_intent": "market_activity",
+          "agent_search_completed": true
+        },
+        {
+          "query": "\"AI agent tool\" pricing subscription",
+          "class": "tool_market",
+          "role": "tool_pricing",
+          "family": "ai_tools",
+          "query_intent": "payment_signal",
+          "agent_search_completed": true
+        },
+        {
+          "query": "site:chromewebstore.google.com \"AI agent tool\"",
+          "class": "tool_market",
+          "role": "extension_marketplace",
+          "family": "ai_tools",
+          "query_intent": "market_activity",
+          "agent_search_completed": true
+        },
+        {
           "query": "\"code review tool\" pricing subscription",
           "class": "tool_market",
           "role": "tool_pricing",
@@ -18935,54 +18966,6 @@
           "class": "tool_market",
           "role": "extension_marketplace",
           "family": "integration_api",
-          "query_intent": "market_activity",
-          "agent_search_completed": true
-        },
-        {
-          "query": "\"analytics SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "analytics_tools",
-          "query_intent": "payment_signal",
-          "agent_search_completed": true
-        },
-        {
-          "query": "site:chromewebstore.google.com \"analytics SaaS\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "analytics_tools",
-          "query_intent": "market_activity",
-          "agent_search_completed": true
-        },
-        {
-          "query": "\"helpdesk SaaS\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "customer_support",
-          "query_intent": "payment_signal",
-          "agent_search_completed": true
-        },
-        {
-          "query": "site:producthunt.com \"helpdesk SaaS\"",
-          "class": "tool_market",
-          "role": "product_hunt",
-          "family": "customer_support",
-          "query_intent": "market_activity",
-          "agent_search_completed": true
-        },
-        {
-          "query": "\"security automation\" pricing subscription",
-          "class": "tool_market",
-          "role": "tool_pricing",
-          "family": "cybersecurity_tools",
-          "query_intent": "payment_signal",
-          "agent_search_completed": true
-        },
-        {
-          "query": "site:marketplace.visualstudio.com \"security automation\"",
-          "class": "tool_market",
-          "role": "extension_marketplace",
-          "family": "cybersecurity_tools",
           "query_intent": "market_activity",
           "agent_search_completed": true
         },
@@ -19053,23 +19036,41 @@
         "tool_name": "A2A Delivery Verifier",
         "target_user": "teams operating A2A/MCP agents in production",
         "problem": "Teams need focused AI/agent utilities with clearer capability boundaries, pricing and interoperability.",
-        "existing_tools": [],
+        "existing_tools": [
+          {
+            "tool": "Show HN: Blender Copilot",
+            "vendor": null,
+            "domain": "github.com",
+            "price": "7USD",
+            "url": "https://github.com/XEonAX/blender-copilot",
+            "date": "2026-09-27T06:33:42.402519+00:00"
+          }
+        ],
         "documented_gaps": [
           {
             "gap": "As part of a ML study group I&#x27;ve been building tools to experiment with ML concepts.  I use AI Coding agents to develop software, mostly cloud-based but I keep trying local LLMs on 12G, 16G, and 24G VRAM GPUs.  Freetoken has made it possible to run larger",
             "url": "https://sw-ml-study.github.io/moe-microscope/",
-            "date": "2026-09-27T04:09:18.709115+00:00"
+            "date": "2026-09-27T06:33:42.402519+00:00"
           },
           {
             "gap": "Open-source agentic workspace enterprises can make their own. Connect the systems you already run — 100+ integrations, MCP, chat tools, apps, browser, local files — with shared memory. Any agent (Claude Code, Codex), any model, or BYOK. Set up in clicks, not m",
             "url": "https://github.com/holaboss-ai/holaOS",
-            "date": "2026-09-27T04:09:18.709115+00:00"
+            "date": "2026-09-27T06:33:42.402519+00:00"
           }
         ],
         "payment_signals": [
           {
+            "url": "https://github.com/XEonAX/blender-copilot",
+            "date": "2026-09-27T06:33:42.402519+00:00",
+            "domain": "github.com",
+            "price": "7USD",
+            "source": "hn-algolia-routed",
+            "coverage_source": "pricing_pages",
+            "real_competitor_price": true
+          },
+          {
             "url": "https://theagentmail.net/",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "domain": "theagentmail.net",
             "price": "$5",
             "source": "hn-algolia-routed",
@@ -19078,7 +19079,7 @@
           },
           {
             "url": "https://news.ycombinator.com/item?id=46943047",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "domain": "news.ycombinator.com",
             "price": "€9",
             "source": "hn-algolia-routed",
@@ -19116,13 +19117,13 @@
         "dissatisfaction_signals": [
           {
             "url": "https://sw-ml-study.github.io/moe-microscope/",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "domain": "sw-ml-study.github.io",
             "excerpt": "As part of a ML study group I&#x27;ve been building tools to experiment with ML concepts.  I use AI Coding agents to develop software, mostly cloud-based but I keep trying local LLMs on 12G, 16G, and 24G VRAM GPUs.  Freetoken has made it possible to run larger"
           },
           {
             "url": "https://github.com/holaboss-ai/holaOS",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "domain": "github.com",
             "excerpt": "Open-source agentic workspace enterprises can make their own. Connect the systems you already run — 100+ integrations, MCP, chat tools, apps, browser, local files — with shared memory. Any agent (Claude Code, Codex), any model, or BYOK. Set up in clicks, not m"
           }
@@ -19141,7 +19142,7 @@
             "family": "ai_tools",
             "url": "https://ai.google/",
             "domain": "ai.google",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "bing-rss-free",
             "title": "Google AI - How we're making AI helpful for everyone",
             "excerpt": "Discover how Google AI is committed to enriching knowledge, solving complex challenges and helping people grow by building useful AI tools and technologies.",
@@ -19150,13 +19151,60 @@
             "real_price": false,
             "payment_required": false,
             "vendor": null,
-            "coverage_source": null
+            "coverage_source": "pricing_pages"
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://github.com/XEonAX/blender-copilot",
+            "domain": "github.com",
+            "date": "2026-09-27T06:33:42.402519+00:00",
+            "source": "hn-algolia-routed",
+            "title": "Show HN: Blender Copilot",
+            "excerpt": "Deepseek generated Blender harness in 7USD.<p>I wanted to remake my 6DoF spaceship flying prototype.<p>What I did not want to do was model the spaceship. Manually. In Blender.<p>So instead of spending a month learning to model, I built a Copilot inside Blender in a day. Which is the same thing, except I still cannot model.<p>A chat panel in the 3D viewport sidebar. I type a sentence. The model writes Python, and it runs against my actual scene, the file open on screen, not a copy that some other",
+            "signal_types": [
+              "PAYMENT"
+            ],
+            "price": "7USD",
+            "real_price": true,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "pricing_pages"
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://github.com/banji-007/compliance-ail",
+            "domain": "github.com",
+            "date": "2026-09-27T06:33:42.402519+00:00",
+            "source": "hn-algolia-routed",
+            "title": "Show HN: Policy gateway for AI agent tool calls, with a tamper-evident log",
+            "excerpt": "Show HN: Policy gateway for AI agent tool calls, with a tamper-evident log",
+            "signal_types": [],
+            "price": null,
+            "real_price": false,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "pricing_pages"
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://news.ycombinator.com/item?id=49855468",
+            "domain": "news.ycombinator.com",
+            "date": "2026-09-27T06:33:42.402519+00:00",
+            "source": "hn-algolia-routed",
+            "title": "Show HN: I built a tool that gives any website an API and MCP",
+            "excerpt": "Anyone else run into this problem?<p>I built staaake Meets (staaakemeets.com) because we run side tech events around the world. You create an event once and it can be shared to Luma, Meetup and Eventbrite. I connected each platform through their API and it works great. (not the problem)<p>Then I wanted to add more platforms, like Partiful, and realized some don&#x27;t have a public API. I started noticing the same problem with other projects too. There are still a lot of big products that don&#x",
+            "signal_types": [],
+            "price": null,
+            "real_price": false,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "pricing_pages"
           },
           {
             "family": "ai_tools",
             "url": "https://turnpanel.com",
             "domain": "turnpanel.com",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "hn-algolia-routed",
             "title": "Show HN: Turnpanel is a local first AI workspace",
             "excerpt": "Hi hacker news, I am Kaushal, founder of echowin and also the guy creating TurnPanel.<p>It began as an internally developed tool because my team and I were so sick of having to constantly bounce context around between ai chats, coding agents engines terminals, browsers files scripts,<p>TurnPanel is a local-first workspace in which an agent can operate throughout your computer, orchestrate other agents and tools, and preserve valuable context over time. Its background maintenance processes transf",
@@ -19171,7 +19219,7 @@
             "family": "ai_tools",
             "url": "https://sw-ml-study.github.io/moe-microscope/",
             "domain": "sw-ml-study.github.io",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "hn-algolia-routed",
             "title": "Show HN: I made a tiny MoE/Engram viz tool",
             "excerpt": "As part of a ML study group I&#x27;ve been building tools to experiment with ML concepts.  I use AI Coding agents to develop software, mostly cloud-based but I keep trying local LLMs on 12G, 16G, and 24G VRAM GPUs.  Freetoken has made it possible to run larger MoE models on smaller GPUs.<p>This inspired me to use my ML tools to build a tiny MoE model from scratch so I can experiment with different agent optimizations and things like Engram, recursive models, hierarchical modeles, KV Cache compre",
@@ -19189,7 +19237,7 @@
             "family": "ai_tools",
             "url": "https://github.com/holaboss-ai/holaOS",
             "domain": "github.com",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "hn-algolia-routed",
             "title": "Show HN: HolaOS––An Opensourced workspace that alternative to Claude",
             "excerpt": "Open-source agentic workspace enterprises can make their own. Connect the systems you already run — 100+ integrations, MCP, chat tools, apps, browser, local files — with shared memory. Any agent (Claude Code, Codex), any model, or BYOK. Set up in clicks, not months. Local-first: your data never leaves your machines.",
@@ -19207,7 +19255,7 @@
             "family": "ai_tools",
             "url": "https://github.com/ginlix-ai/langalpha",
             "domain": "github.com",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "hn-algolia-routed",
             "title": "Show HN: LangAlpha – what if Claude Code was built for Wall Street?",
             "excerpt": "Some technical context on what we ran into building this.<p>MCP tools don&#x27;t really work for financial data at scale. One tool call for five years of daily prices dumps tens of thousands of tokens into the context window. And data vendors pack dozens of tools into a single MCP server, schemas alone can eat 50k+ tokens before the agent does anything useful. So we auto-generate typed Python modules from the MCP schemas at workspace init and upload them into the sandbox. The agent just imports ",
@@ -19222,7 +19270,7 @@
             "family": "ai_tools",
             "url": "https://theagentmail.net/",
             "domain": "theagentmail.net",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "hn-algolia-routed",
             "title": "Show HN: TheAgentMail – email for AI agents with karma-based spam prevention",
             "excerpt": "theagentmail.net is an email API for AI agents. One API call to create a real email address on a shared domain (@theagentmail.net).\nThe motivation comes from building AI agent tools and hitting the same wall repeatedly. Agents need email for signups, verification codes, contacting people. But the options are all bad. Giving agents your personal inbox is a security nightmare. Buying domains means DNS records, DKIM setup, warmup periods, and it doesn&#x27;t scale. Disposable email services get blo",
@@ -19239,7 +19287,7 @@
             "family": "ai_tools",
             "url": "https://news.ycombinator.com/item?id=46943047",
             "domain": "news.ycombinator.com",
-            "date": "2026-09-27T04:09:18.709115+00:00",
+            "date": "2026-09-27T06:33:42.402519+00:00",
             "source": "hn-algolia-routed",
             "title": "Show HN: ArkWatch – Uptime monitoring with zero dependencies",
             "excerpt": "I&#x27;m a solo dev, and I got tired of signing up for monitoring services that require installing agents, browser extensions, or wiring up Slack&#x2F;PagerDuty just to know if my side project is down.<p>So I built ArkWatch: a free uptime monitoring API with zero dependencies. No SDK, no npm package, no webhook setup. Just curl + your email.<p>One command to start monitoring:<p><pre><code>  curl -X POST https:&#x2F;&#x2F;watch.arkforge.fr&#x2F;monitors \\\n    -H &quot;Content-Type: application&#x",
@@ -19251,6 +19299,66 @@
             "payment_required": false,
             "vendor": null,
             "coverage_source": null
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://github.com/vfarcic/dot-ai/issues/42",
+            "domain": "github.com",
+            "date": "2026-09-27T06:31:35+00:00",
+            "source": "github-issues",
+            "title": "Dependency Dashboard",
+            "excerpt": "This issue lists Renovate updates and detected dependencies. Read the [Dependency Dashboard](https://docs.renovatebot.com/key-concepts/dashboard/) docs to learn more.<br>[View this repository on the Mend.io Web Portal](https://developer.mend.io/github/vfarcic/dot-ai).\n\n## Deprecations / Replacements\n> [!WARNING]\nThe following dependencies are either deprecated or have replacements available.\n\n| Datasource | Package | Replacement PR? |\n|------------|------|--------------|\n| npm | `@types/bcryptjs",
+            "signal_types": [],
+            "price": null,
+            "real_price": false,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "github_issues"
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://github.com/ColdPhase/flux/issues/9",
+            "domain": "github.com",
+            "date": "2026-09-27T06:31:19+00:00",
+            "source": "github-issues",
+            "title": "Assess own-AI integration feasibility across external, embedded, and API or local modes",
+            "excerpt": "## Milestone and decisions\n\nMilestone #1, [product blueprint brief](https://github.com/ColdPhase/flux/blob/main/docs/product/milestones/01-product-blueprint.md). Foundation §§9, 11.3, 14, 17E; O-005 remains open. This is feasibility research, not an integration or supplier promise.\n\n## Outcome and scope\n\nProduce a dated own-AI feasibility matrix for three distinct modes: official external Codex/Claude Code accessing Flux, an agent run within the Flux experience, and user/organization API or loca",
+            "signal_types": [],
+            "price": null,
+            "real_price": false,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "github_issues"
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://github.com/vercel/ai/issues/18988",
+            "domain": "github.com",
+            "date": "2026-09-27T06:29:28+00:00",
+            "source": "github-issues",
+            "title": "perplexity: upgrade to new agents API",
+            "excerpt": "## Goal\n\nUpgrade `@ai-sdk/perplexity` language generation from the Sonar Chat Completions API to Perplexity's [Agent API](https://docs.perplexity.ai/docs/agent-api/quickstart), following the [Sonar migration guide](https://docs.perplexity.ai/docs/agent-api/migrate-from-sonar/overview).\n\n## Findings and implementation scope\n\n- Send language requests to `POST /v1/agent` using Agent `input` items and parse the typed `output` array.\n- Consume semantic streaming events such as `response.output_text.*",
+            "signal_types": [],
+            "price": null,
+            "real_price": false,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "github_issues"
+          },
+          {
+            "family": "ai_tools",
+            "url": "https://github.com/samelabs/FlashShare/issues/45",
+            "domain": "github.com",
+            "date": "2026-09-27T06:25:23+00:00",
+            "source": "github-issues",
+            "title": "1.0 Version Closure Task — economic safety, X identity, MCP, frontend",
+            "excerpt": "# 518.PLUS 1.0 — Version Closure Task\n\n**Baseline:** `fix/order-payment-production-closure` @ `31c8e7757b7d0b9baea2f69bb067022eb35756e7`\n\nThis is the **single version-level closure task** for 1.0.\n\nIt is NOT a one-shot implementation ticket.  \nPM freezes one coherent execution batch at a time from this task; Server Agent must never implement the whole issue opportunistically.\n\nNo merge / tag / deploy until all release gates below are accepted.\n\n---\n\n# 0. Product spine\n\n518 main chain:\n\n**Tool Su",
+            "signal_types": [],
+            "price": null,
+            "real_price": false,
+            "payment_required": false,
+            "vendor": null,
+            "coverage_source": "github_issues"
           },
           {
             "family": "ai_tools",
@@ -19287,140 +19395,16 @@
             "coverage_source": "seti",
             "seti_candidate": "SETI-663cc996",
             "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://agent.example/a2a",
-            "domain": "agent.example",
-            "date": "2026-09-23T05:49:14.265853+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-0f8c2805",
-            "excerpt": "null",
-            "signal_types": [],
-            "price": null,
-            "real_price": false,
-            "payment_required": false,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-0f8c2805",
-            "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://delta-witness-api.ruphussten.workers.dev",
-            "domain": "delta-witness-api.ruphussten.workers.dev",
-            "date": "2026-09-24T07:37:04.590811+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-179f0b45",
-            "excerpt": "null",
-            "signal_types": [],
-            "price": null,
-            "real_price": false,
-            "payment_required": false,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-179f0b45",
-            "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://x402.coinopai.com",
-            "domain": "x402.coinopai.com",
-            "date": "2026-09-24T07:37:04.744073+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-1e181cdf",
-            "excerpt": "null",
-            "signal_types": [],
-            "price": null,
-            "real_price": false,
-            "payment_required": false,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-1e181cdf",
-            "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://signalmend-repair.pages.dev/api/a2a",
-            "domain": "signalmend-repair.pages.dev",
-            "date": "2026-09-24T07:37:05.323906+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-358a302a",
-            "excerpt": "SignalMend can review one bounded form, booking, webhook, notification, API-integration, or AI-built-app failure. A fixed-scope diagnostic starts at USD 49. The standard repair pilot starts at USD 149 and targets a 24-48 hour delivery after scope, access, and funding are agreed. Send the reproducibl",
-            "signal_types": [
-              "PAYMENT"
-            ],
-            "price": "USD 49",
-            "real_price": true,
-            "payment_required": false,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-358a302a",
-            "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://nulliverba.ol-lo.workers.dev/a2a/jsonrpc",
-            "domain": "nulliverba.ol-lo.workers.dev",
-            "date": "2026-09-24T12:30:52.653154+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-6baa4e94",
-            "excerpt": "{\"text\": \"\"}",
-            "signal_types": [],
-            "price": null,
-            "real_price": false,
-            "payment_required": false,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-6baa4e94",
-            "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://mcp.fodda.ai/a2a",
-            "domain": "mcp.fodda.ai",
-            "date": "2026-09-24T14:59:58.106881+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-d4959f3d",
-            "excerpt": "Fodda A2A endpoint is operational. Provide an API key via Authorization: Bearer <key> for full access to trend intelligence. Get a key at https://app.fodda.ai",
-            "signal_types": [],
-            "price": null,
-            "real_price": false,
-            "payment_required": false,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-d4959f3d",
-            "payment_performed": false
-          },
-          {
-            "family": "ai_tools",
-            "url": "https://feed.scalpstream.com/a2a",
-            "domain": "feed.scalpstream.com",
-            "date": "2026-09-24T15:00:01.137624+00:00",
-            "source": "seti-agent-card",
-            "title": "SETI-d41fd570",
-            "excerpt": "ScalpStream — machine-payable, impersonal research feeds (x402).\nAsk about any of these and I'll show the live preview + how to buy:\n\n- ranked options candidates — Short-term (0-30 DTE) equity/ETF options candidates ranked by signal strength, with observed metrics and an illustrative contract.\n- div PAYMENT_REQUIRED",
-            "signal_types": [
-              "PAYMENT"
-            ],
-            "price": "PAYMENT_REQUIRED",
-            "real_price": false,
-            "payment_required": true,
-            "vendor": null,
-            "coverage_source": "seti",
-            "seti_candidate": "SETI-d41fd570",
-            "payment_performed": false
           }
         ],
-        "monetization_score": 40,
+        "monetization_score": 65,
         "score_rule": "URL-grounded payment + dissatisfaction + gap + trend signals minus URL-grounded counter-signals only",
         "gate_pass": false,
         "gate_rule": "specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
         "missing": [
           "two_independent_real_price_competitors",
           "two_competitors_with_real_price",
-          "two_existing_paid_tools",
-          "monetization_score_60"
+          "two_existing_paid_tools"
         ]
       }
     },
