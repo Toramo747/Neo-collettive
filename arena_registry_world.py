@@ -48,7 +48,7 @@ def load_registry_snapshot(registry_dir: str|Path="data/registry-health") -> dic
         if not name or not cat: continue
         clean.append({
             "name":name,"category":cat,"version":str(row.get("version") or ""),
-            "remote_url":str(row.get("remote_url") or ""),
+            "remote_url":str(row.get("remote_url") or ""),"final":bool(row.get("final")),
         })
     if not clean:
         return None
