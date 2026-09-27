@@ -163,7 +163,7 @@ def evaluate_external_predictions(state: dict, registry_dir: str|Path="data/regi
     ok_share=(ok_count/scanned) if scanned else 0.0
     evaluated=0
     for pred in state.get("predictions") or []:
-        if not isinstance(pred,dict) or pred.get("prediction_scope")!="external_registry" or pred.get("status")!="PENDING":
+        if not isinstance(pred,dict) or pred.get("prediction_scope")!="external_registry" or pred.get("status") not in {"PENDING","AWAITING_REGISTRY_SCAN"}:
             continue
         due=_parse(str(pred.get("due_at_utc") or ""))
         base=_parse(str(pred.get("registry_base_scan_at_utc") or ""))

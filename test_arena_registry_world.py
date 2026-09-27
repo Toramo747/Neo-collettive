@@ -60,9 +60,6 @@ class RegistryWorldTests(unittest.TestCase):
             evaluate_external_predictions(s,reg,at=future)
             self.assertIn(p["status"],("PENDING","AWAITING_REGISTRY_SCAN"))
             write_registry(reg,"2026-09-20T00:00:00+00:00",rows)
-            # AWAITING becomes pending for evaluation in next sync cycle.
-            for x in s["predictions"]:
-                if x.get("status")=="AWAITING_REGISTRY_SCAN": x["status"]="PENDING"
             n=evaluate_external_predictions(s,reg,at=future)
             self.assertGreater(n,0)
             self.assertEqual(p["status"],"EVALUATED")
