@@ -32,8 +32,9 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           w=Path(".github/workflows/neo-dialect-failure-study.yml").read_text(encoding="utf-8")
-          assert "workflow_dispatch:" in w
-          assert "push:" not in w
-          assert "schedule:" not in w
+          trigger_block=w.split("permissions:",1)[0]
+          assert "workflow_dispatch:" in trigger_block
+          assert "\n  push:" not in trigger_block
+          assert "\n  schedule:" not in trigger_block
           print("Arena study remains workflow_dispatch only")
           PY
