@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from arena_core import ArenaSession, ARENA_NAMESPACE, MAX_TURNS, persist_session
@@ -28,6 +29,26 @@ class ArenaPhase1Tests(unittest.TestCase):
         s=ArenaSession("x",["Scout","Analyst","Critic","Builder-planner","Guest"],"scettico",8).run()
         self.assertLessEqual(s["metrics"]["turns"],8)
         self.assertLessEqual(s["max_turns"],MAX_TURNS)
+
+
+    def test_repeat_loop_is_blocked(self):
+        s=ArenaSession("x",["Scout","Analyst","Critic","Builder-planner"],"collaborativo",20)
+        msg=s._msg("PROPOSE",proposal_id="loop",subject="repeat me",offer={"x":1},requested={"review":True})
+        self.assertTrue(s._append("Scout",msg))
+        self.assertTrue(s._append("Scout",msg))
+        self.assertFalse(s._append("Scout",msg))
+        self.assertEqual(s.metrics["loops_blocked"],1)
+        self.assertTrue(any(x.get("reason")=="repeat_loop_blocked" for x in s.invalid))
+
+    def test_daily_session_limit_is_enforced(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            today=datetime.now(timezone.utc).date().isoformat()
+            rows=[{"session_id":f"old-{i}","created_at_utc":today+"T00:00:00+00:00","turns":1} for i in range(8)]
+            (root/"index.json").write_text(json.dumps({"schema_v":1,"namespace":ARENA_NAMESPACE,"sessions":rows}),encoding="utf-8")
+            s=ArenaSession("x",["Scout","Analyst","Critic","Builder-planner"],"collaborativo",8).run()
+            with self.assertRaisesRegex(RuntimeError,"ARENA_DAILY_SESSION_LIMIT"):
+                persist_session(s,root)
 
     def test_isolation_boundary_and_persistence(self):
         s=ArenaSession("x",["Scout","Analyst","Critic","Builder-planner"],"collaborativo",20).run()
