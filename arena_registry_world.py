@@ -37,6 +37,8 @@ def load_registry_snapshot(registry_dir: str|Path="data/registry-health") -> dic
     rows=servers_doc.get("servers") if isinstance(servers_doc,dict) else None
     if not isinstance(summary,dict) or not isinstance(rows,list):
         return None
+    if summary.get("final") is not True or str(summary.get("status") or "") != "FINAL":
+        return None
     scan_at=_scan_at(summary,servers_doc)
     if not scan_at:
         return None
