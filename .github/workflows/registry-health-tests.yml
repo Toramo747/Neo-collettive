@@ -10,6 +10,8 @@ on:
       - "test_registry_health.py"
       - "mcp_endpoint_verifier.py"
       - "test_mcp_endpoint_verifier.py"
+      - "arena_registry_world.py"
+      - "test_arena_registry_world.py"
       - ".github/workflows/registry-health-tests.yml"
       - ".github/workflows/registry-health-scan.yml"
 
@@ -30,4 +32,4 @@ jobs:
       - name: Compile registry health code
         run: python -m py_compile registry_health.py registry_health_scan.py mcp_endpoint_verifier.py
       - name: Run registry health and verifier tests
-        run: python -m unittest -v test_registry_health.py test_mcp_endpoint_verifier.py
+        run: python -m unittest -v test_registry_health.py test_mcp_endpoint_verifier.py test_arena_registry_world.py

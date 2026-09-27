@@ -12,6 +12,7 @@ AGENTS=("Scout","Analyst","Critic","Builder-planner")
 REGISTRY_SUMMARY="latest-summary.json"
 REGISTRY_SERVERS="latest-servers.json"
 EXTERNAL_PER_AGENT=10
+CURRENT_CLASSIFICATION_VERSION=2
 
 def _parse(v: str):
     try: return datetime.fromisoformat(str(v).replace("Z","+00:00"))
@@ -32,14 +33,26 @@ def _scan_at(summary: dict, servers: dict) -> str:
             if obj.get(key): return str(obj[key])
     return ""
 
-def load_registry_snapshot(registry_dir: str|Path="data/registry-health") -> dict|None:
+def load_registry_snapshot(registry_dir: str|Path="data/registry-health", classification_version: int|None=None) -> dict|None:
     root=Path(registry_dir)
+    requested_version=int(classification_version or CURRENT_CLASSIFICATION_VERSION)
+    if requested_version not in {1,2}: return None
+    derived=root/f"latest-classification-v{requested_version}.json"
     sp=root/REGISTRY_SUMMARY; rp=root/REGISTRY_SERVERS
     if not sp.exists() or not rp.exists():
         return None
     summary=_load(sp,{})
     servers_doc=_load(rp,{})
-    rows=servers_doc.get("servers") if isinstance(servers_doc,dict) else None
+    primary_version=int(summary.get("classification_version") or servers_doc.get("classification_version") or 1)
+    derived_doc=_load(derived,{}) if derived.exists() else {}
+    if requested_version==primary_version:
+        rows=servers_doc.get("servers") if isinstance(servers_doc,dict) else None
+        category_summary=summary
+    elif isinstance(derived_doc,dict) and int(derived_doc.get("classification_version") or 0)==requested_version:
+        rows=derived_doc.get("servers")
+        category_summary={**summary,"categories":derived_doc.get("categories") or {},"classification_version":requested_version}
+    else:
+        rows=None
     if not isinstance(summary,dict) or not isinstance(rows,list):
         return None
     if summary.get("final") is not True or str(summary.get("status") or "") != "FINAL":
@@ -77,8 +90,9 @@ def load_registry_snapshot(registry_dir: str|Path="data/registry-health") -> dic
         "scope":scope,
         "sample_fingerprint":sample_fingerprint,
         "sample_server_names":sample_names,
-        "summary":summary,
+        "summary":category_summary,
         "servers":clean,
+        "classification_version":requested_version,
         "source_files":[str(sp),str(rp)],
     }
 
@@ -106,7 +120,7 @@ def _agent_probability(agent: str, category: str, kind: str) -> float:
     return round(max(0.05,min(0.95,base+offsets.get(agent,0.0))),2)
 
 def register_external_predictions(state: dict, registry_dir: str|Path="data/registry-health", *, cycle_id: str) -> int:
-    snap=load_registry_snapshot(registry_dir)
+    snap=load_registry_snapshot(registry_dir,CURRENT_CLASSIFICATION_VERSION)
     if not snap:
         state["external_prediction_status"]={
             "status":"BLOCKED_NO_REGISTRY_DATA","cycle_id":str(cycle_id),
@@ -114,7 +128,7 @@ def register_external_predictions(state: dict, registry_dir: str|Path="data/regi
             "reason":"Registry Health latest-summary/latest-servers not available; no extra scan launched.",
         }
         return 0
-    marker=f"{snap['scan_at_utc']}|{snap['scope']}|{snap['sample_fingerprint']}|{cycle_id}"
+    marker=f"{snap['scan_at_utc']}|{snap['scope']}|{snap['sample_fingerprint']}|v{snap['classification_version']}|{cycle_id}"
     existing=[
         x for x in (state.get("predictions") or [])
         if isinstance(x,dict) and x.get("prediction_scope")=="external_registry" and x.get("generation_marker")==marker
@@ -162,6 +176,7 @@ def register_external_predictions(state: dict, registry_dir: str|Path="data/regi
                 "prediction_scope":"external_registry","score_weight":1.0,
                 "generation_marker":marker,"registry_base_scan_at_utc":snap["scan_at_utc"],
                 "registry_scope":snap["scope"],"registry_sample_fingerprint":snap["sample_fingerprint"],
+                "classification_version":snap["classification_version"],
                 "verification":verification,"target":target,
                 "evaluated_at_utc":None,"outcome":None,"calibration_score":None,"sources":[],
             })
@@ -170,26 +185,35 @@ def register_external_predictions(state: dict, registry_dir: str|Path="data/regi
     state["external_prediction_status"]={
         "status":"READY","cycle_id":str(cycle_id),"registry_scan_at_utc":snap["scan_at_utc"],
         "registry_scope":snap["scope"],"registry_sample_fingerprint":snap["sample_fingerprint"],
+        "classification_version":snap["classification_version"],
         "required_per_agent":EXTERNAL_PER_AGENT,"registered":len(added),
         "by_agent":dict(counts),"no_new_scan":True,
     }
     return len(added)
 
 def evaluate_external_predictions(state: dict, registry_dir: str|Path="data/registry-health", *, at: datetime|None=None) -> int:
-    snap=load_registry_snapshot(registry_dir)
-    if not snap: return 0
-    scan_dt=_parse(snap["scan_at_utc"])
-    if not scan_dt: return 0
     at=at or datetime.now(timezone.utc)
-    by_name={r["name"]:r for r in snap["servers"]}
-    summary=snap["summary"]
-    scanned=int(summary.get("scanned") or len(by_name) or 0)
-    ok_count=int(((summary.get("categories") or {}).get("OK") or {}).get("count") or sum(1 for r in by_name.values() if r["category"]=="OK"))
-    ok_share=(ok_count/scanned) if scanned else 0.0
     evaluated=0
+    cache={}
     for pred in state.get("predictions") or []:
-        if not isinstance(pred,dict) or pred.get("prediction_scope")!="external_registry" or pred.get("status") not in {"PENDING","AWAITING_REGISTRY_SCAN"}:
+        if not isinstance(pred,dict) or pred.get("prediction_scope")!="external_registry" or pred.get("status") not in {"PENDING","AWAITING_REGISTRY_SCAN","AWAITING_MATCHING_CLASSIFICATION"}:
             continue
+        pred_version=int(pred.get("classification_version") or 1)
+        if pred_version not in cache:
+            cache[pred_version]=load_registry_snapshot(registry_dir,pred_version)
+        snap=cache[pred_version]
+        if not snap or int(snap.get("classification_version") or 0)!=pred_version:
+            pred["status"]="AWAITING_MATCHING_CLASSIFICATION"
+            continue
+        scan_dt=_parse(snap["scan_at_utc"])
+        if not scan_dt:
+            pred["status"]="AWAITING_REGISTRY_SCAN"
+            continue
+        by_name={r["name"]:r for r in snap["servers"]}
+        summary=snap["summary"]
+        scanned=int(summary.get("scanned") or len(by_name) or 0)
+        ok_count=int(((summary.get("categories") or {}).get("OK") or {}).get("count") or sum(1 for r in by_name.values() if r["category"]=="OK"))
+        ok_share=(ok_count/scanned) if scanned else 0.0
         due=_parse(str(pred.get("due_at_utc") or ""))
         base=_parse(str(pred.get("registry_base_scan_at_utc") or ""))
         if not due or at<due: continue

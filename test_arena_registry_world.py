@@ -7,7 +7,7 @@ from arena_registry_world import (
     register_external_predictions, evaluate_external_predictions, sync_registry_micelio,
 )
 
-def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL", scope="FULL"):
+def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL", scope="FULL", classification_version=2, derived_versions=()):
     root.mkdir(parents=True,exist_ok=True)
     cats={}
     for r in rows:
@@ -15,14 +15,22 @@ def write_registry(root: Path, scan_at: str, rows, *, final=True, status="FINAL"
     for v in cats.values(): v["percent_of_scanned"]=round(100*v["count"]/len(rows),2)
     (root/"latest-summary.json").write_text(json.dumps({
         "generated_at_utc":scan_at,"scanned":len(rows),"categories":cats,
-        "final":final,"status":status,"scope":scope,
+        "final":final,"status":status,"scope":scope,"classification_version":classification_version,
         "sample_server_names":[r["name"] for r in rows] if scope=="SAMPLE" else []
     }),encoding="utf-8")
     (root/"latest-servers.json").write_text(json.dumps({
-        "generated_at_utc":scan_at,"scope":scope,
+        "generated_at_utc":scan_at,"scope":scope,"classification_version":classification_version,
         "sample_server_names":[r["name"] for r in rows] if scope=="SAMPLE" else [],
         "servers":rows
     }),encoding="utf-8")
+    for version in derived_versions:
+        dcats={}; drows=[]
+        for r in rows:
+            cat=r.get(f"category_v{version}",r["category"])
+            dcats.setdefault(cat,{"count":0,"percent_of_scanned":0.0})["count"]+=1
+            drows.append({**r,"category":cat,"classification_version":version})
+        for v in dcats.values(): v["percent_of_scanned"]=round(100*v["count"]/len(drows),2)
+        (root/f"latest-classification-v{version}.json").write_text(json.dumps({"classification_version":version,"scanned":len(drows),"categories":dcats,"servers":drows}),encoding="utf-8")
 
 class RegistryWorldTests(unittest.TestCase):
     def rows(self):
@@ -124,5 +132,29 @@ class RegistryWorldTests(unittest.TestCase):
             newer=[b for b in m["beliefs"] if b.get("server_name")=="srv-00" and b.get("status")=="ACTIVE"]
             self.assertEqual(len(newer),1)
             self.assertEqual(newer[0]["registry_category"],"UNREACHABLE")
+
+    def test_prediction_classification_version_mismatch_blocks_evaluation(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"; rows=self.rows()
+            write_registry(reg,"2026-09-01T00:00:00+00:00",rows,classification_version=2)
+            s=initial_state(); register_external_predictions(s,reg,cycle_id="1")
+            p=next(x for x in s["predictions"] if x.get("prediction_scope")=="external_registry")
+            self.assertEqual(p["classification_version"],2)
+            p["classification_version"]=1
+            p["due_at_utc"]="2026-09-02T00:00:00+00:00"
+            write_registry(reg,"2026-09-20T00:00:00+00:00",rows,classification_version=2)
+            n=evaluate_external_predictions(s,reg,at=datetime(2026,9,20,tzinfo=timezone.utc))
+            self.assertEqual(n,0)
+            self.assertEqual(p["status"],"AWAITING_MATCHING_CLASSIFICATION")
+
+    def test_new_predictions_use_v2_derived_view_on_legacy_final(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"; rows=self.rows()
+            write_registry(reg,"2026-09-01T00:00:00+00:00",rows,classification_version=1,derived_versions=(2,))
+            s=initial_state(); register_external_predictions(s,reg,cycle_id="1")
+            ext=[x for x in s["predictions"] if x.get("prediction_scope")=="external_registry"]
+            self.assertTrue(ext)
+            self.assertTrue(all(x.get("classification_version")==2 for x in ext))
+
 
 if __name__=="__main__": unittest.main()
