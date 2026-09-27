@@ -30,6 +30,13 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn('latency=load("/tmp/endpoint-latency.json",{})',w)
         self.assertIn('"endpoint_latency": latency',w)
 
+    def test_render_budget_documented(self):
+        doc=Path("docs/render-free-budget.md").read_text(encoding="utf-8")
+        self.assertIn("750",doc)
+        self.assertIn("637.5",doc)
+        self.assertIn("07:00-23:00",doc)
+        self.assertIn("15%",doc)
+
     def test_schedule_is_realistic_and_documented(self):
         self.assertIn('cron: "*/30 * * * *"',self.workflow)
         doc=Path("docs/heartbeat-operations.md").read_text(encoding="utf-8")
