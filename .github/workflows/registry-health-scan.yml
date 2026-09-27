@@ -1,6 +1,12 @@
 name: Registry Health Scan
 
 on:
+  push:
+    paths:
+      - ".github/workflows/registry-health-scan.yml"
+      - ".github/registry-health-finalize-trigger.txt"
+  schedule:
+    - cron: "20 18 27 9 *"
   workflow_dispatch:
     inputs:
       phase:
@@ -10,6 +16,7 @@ on:
         type: choice
         options:
           - first
+          - finalize-first
           - second
       scan_date:
         description: "Optional YYYY-MM-DD scan directory for second phase"
@@ -72,7 +79,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          phase="${{ inputs.phase }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "$(date -u +%F)" != "2026-09-27" ]; then
+              echo "One-time second probe schedule is inactive outside 2026-09-27"
+              exit 0
+            fi
+            phase="second"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            message="$(git log -1 --pretty=%B "$GITHUB_SHA")"
+            if printf '%s\n' "$message" | grep -Fq '[registry-finalize-first]'; then
+              phase="finalize-first"
+            else
+              echo "Push does not authorize Registry Health execution"
+              exit 0
+            fi
+          else
+            phase="${{ inputs.phase }}"
+          fi
           echo "REGISTRY_HEALTH_PHASE=$phase" >> "$GITHUB_ENV"
           echo "effective_phase=$phase"
 
@@ -89,8 +112,13 @@ jobs:
               args+=("--sample-from-scan-date" "${{ inputs.sample_from_scan_date }}")
             fi
           fi
-          if [ "$REGISTRY_HEALTH_PHASE" = "second" ] && [ -n "${{ inputs.scan_date }}" ]; then
-            args+=("--scan-date" "${{ inputs.scan_date }}")
+          if [ "$REGISTRY_HEALTH_PHASE" = "finalize-first" ]; then
+            args+=("--scan-date" "2026-09-27")
+          fi
+          if [ "$REGISTRY_HEALTH_PHASE" = "second" ]; then
+            scan_date="${{ inputs.scan_date }}"
+            if [ -z "$scan_date" ]; then scan_date="2026-09-27"; fi
+            args+=("--scan-date" "$scan_date")
           fi
           python registry_health_scan.py "${args[@]}" | tee /tmp/registry-health-run.log
 
