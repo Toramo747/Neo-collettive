@@ -426,6 +426,27 @@ jobs:
             echo "First Arena session dispatched"
           fi
 
+      - name: Report Render service plan
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 45             "https://neo-collettive.onrender.com/api/render/diagnostics?target=neo"             > /tmp/render-plan.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/render-plan.json",encoding="utf-8"))
+          s=d.get("service") or {}
+          print(json.dumps({
+              "name":s.get("name"),
+              "type":s.get("type"),
+              "region":s.get("region"),
+              "plan":s.get("plan"),
+              "suspended":s.get("suspended"),
+              "assessment":d.get("assessment"),
+              "possible_cold_starts":(d.get("categories") or {}).get("possible_cold_starts"),
+          },indent=2))
+          if not s.get("plan"):
+              raise SystemExit("Render API did not expose service plan")
+          PY
+
       - name: Verify Pathwren remains 100/100
         run: |
           set -euo pipefail
