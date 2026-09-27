@@ -9,6 +9,7 @@ import registry_health_scan as rhs
 from registry_health_scan import _sample_budget_seconds, _sample_order, _select_sample_candidates
 from registry_health import (
     classify_verification,
+    classify_compact_probe,
     final_category,
     is_opted_out,
     normalize_registry_rows,
@@ -250,6 +251,19 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"OK"}),"INTERMITTENT")
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"SERVER_ERROR"}),"SERVER_ERROR")
         self.assertEqual(final_category({"category":"OK"},None),"OK")
+
+
+    def test_classification_v2_does_not_require_discovery(self):
+        result={"checks":{"initialize":{"ok":True,"http_status":200},"tools_list":{"ok":True,"invalid_input_schemas":0},"discovery":{"present":False}},"errors":[]}
+        self.assertEqual(classify_verification(result,1),"OK_WITH_ISSUES")
+        self.assertEqual(classify_verification(result,2),"OK")
+
+    def test_compact_probe_reclassification_is_non_mutating(self):
+        probe={"http_status":200,"summary":{"invalid_input_schemas":0,"discovery_present":False},"checks":{"initialize":{"ok":True,"http_status":200}},"errors":[]}
+        before=json.dumps(probe,sort_keys=True)
+        self.assertEqual(classify_compact_probe(probe,1),"OK_WITH_ISSUES")
+        self.assertEqual(classify_compact_probe(probe,2),"OK")
+        self.assertEqual(json.dumps(probe,sort_keys=True),before)
 
 
 if __name__ == "__main__":

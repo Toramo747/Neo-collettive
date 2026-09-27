@@ -21,9 +21,11 @@ import mcp_endpoint_verifier as verifier
 from registry_health import (
     HOST_REQUEST_DELAY_SECONDS,
     MAX_CONCURRENCY,
+    CLASSIFICATION_VERSION,
     PER_HOST_CONCURRENCY,
     aggregate_dataset,
     classify_verification,
+    derived_classification_view,
     dataset_csv,
     fetch_complete_registry,
     final_category,
@@ -74,27 +76,33 @@ def compact_probe(result: dict[str, Any], category: str) -> dict[str, Any]:
     init=checks.get("initialize") if isinstance(checks.get("initialize"),dict) else {}
     http=checks.get("http") if isinstance(checks.get("http"),dict) else {}
     tls=checks.get("tls") if isinstance(checks.get("tls"),dict) else {}
+    tools=checks.get("tools_list") if isinstance(checks.get("tools_list"),dict) else {}
+    discovery=checks.get("discovery") if isinstance(checks.get("discovery"),dict) else {}
+    discovery_latencies=[float(x.get("latency_ms")) for x in (discovery.get("checks") or []) if isinstance(x,dict) and isinstance(x.get("latency_ms"),(int,float))]
     return {
         "timestamp": result.get("timestamp"),
-        "category": category,
-        "http_status": init.get("http_status") or http.get("status"),
+        "category":category,
+        "classification_version":CLASSIFICATION_VERSION,
+        "http_status":init.get("http_status") or http.get("status"),
         "summary": {
             "protocol_version": summary.get("protocol_version"),
             "tool_count": int(summary.get("tool_count") or 0),
             "valid_input_schemas": int(summary.get("valid_input_schemas") or 0),
             "invalid_input_schemas": int(summary.get("invalid_input_schemas") or 0),
-            "discovery_present": summary.get("discovery_present") is True,
-            "total_observed_latency_ms": summary.get("total_observed_latency_ms"),
+            "discovery_present":summary.get("discovery_present") is True,
+            "initialize_latency_ms":init.get("latency_ms"),
+            "tools_list_latency_ms":tools.get("latency_ms"),
+            "discovery_latency_ms":discovery_latencies,
+            "total_observed_latency_ms":summary.get("total_observed_latency_ms"),
         },
         "checks": {
             "tls": {
                 "ok": tls.get("ok") is True,
                 "error": tls.get("error"),
             },
-            "initialize": {
-                "ok": init.get("ok") is True,
-                "http_status": init.get("http_status"),
-            },
+            "initialize":{"ok":init.get("ok") is True,"http_status":init.get("http_status"),"latency_ms":init.get("latency_ms")},
+            "tools_list":{"ok":tools.get("ok") is True,"http_status":tools.get("http_status"),"latency_ms":tools.get("latency_ms"),"invalid_input_schemas":int(tools.get("invalid_input_schemas") or 0)},
+            "discovery":{"present":discovery.get("present") is True,"latency_ms":discovery_latencies},
         },
         "errors": [str(x) for x in (result.get("errors") or [])],
         "request_counts_by_host": {
@@ -129,13 +137,21 @@ async def run_probe(
             ),
             timeout=PROBE_WALL_TIMEOUT_SECONDS,
         )
-    category=classify_verification(result)
+    category=classify_verification(result,CLASSIFICATION_VERSION)
     return compact_probe(result,category)
 
 
 def _write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(json.dumps(value,ensure_ascii=False,indent=2,sort_keys=False)+"\n",encoding="utf-8")
+
+
+def _write_classification_views(outdir: Path, rows: list[dict[str, Any]], aggregate: dict[str, Any]) -> None:
+    for version in (1,2):
+        view=derived_classification_view(rows,version)
+        view.update({"derived_from_generated_at_utc":aggregate.get("generated_at_utc"),"scope":aggregate.get("scope"),"sample_seed":aggregate.get("sample_seed"),"sample_server_names":aggregate.get("sample_server_names") or [],"source_dataset":str(outdir/"registry-health.json")})
+        _write_json(outdir/f"classification-v{version}.json",view)
+        _write_json(DATA_ROOT/f"latest-classification-v{version}.json",view)
 
 
 def latest_scan_dir() -> Path:
@@ -442,10 +458,12 @@ async def first_phase(
     _write_json(DATA_ROOT/"latest-servers.json",{
         "generated_at_utc":aggregate["generated_at_utc"],
         "scope":scope,
+        "classification_version":CLASSIFICATION_VERSION,
         "sample_seed":sample_seed,
         "sample_server_names":aggregate["sample_server_names"],
         "servers":rows,
     })
+    _write_classification_views(outdir,rows,aggregate)
     print(json.dumps({
         "outdir":str(outdir),
         "summary":aggregate,
@@ -536,10 +554,12 @@ def finalize_existing_first_pass(scan_dir: Path | None = None) -> Path:
     _write_json(DATA_ROOT/"latest-servers.json",{
         "generated_at_utc":aggregate["generated_at_utc"],
         "scope":scope,
+        "classification_version":CLASSIFICATION_VERSION,
         "sample_seed":state.get("sample_seed"),
         "sample_server_names":sample_names if scope==SCOPE_SAMPLE else [],
         "servers":rows,
     })
+    _write_classification_views(outdir,rows,aggregate)
     return outdir
 
 
@@ -637,10 +657,12 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
     _write_json(DATA_ROOT/"latest-servers.json",{
         "generated_at_utc":aggregate["generated_at_utc"],
         "scope":aggregate.get("scope"),
+        "classification_version":CLASSIFICATION_VERSION,
         "sample_seed":aggregate.get("sample_seed"),
         "sample_server_names":aggregate.get("sample_server_names") or [],
         "servers":rows,
     })
+    _write_classification_views(outdir,rows,aggregate)
     month=outdir.name[:7]
     report_path=Path("docs/reports")/(month+"-mcp-registry-health.md")
     social_path=Path("docs/reports")/(month+"-mcp-registry-health-social-draft.md")

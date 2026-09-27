@@ -660,16 +660,13 @@ async def verify_endpoint(
             if registry_url and requested_url != registry_url:
                 comparison = "registered_endpoint_differs_from_checked_url"
 
-        latency_values = []
-        for key in ("http", "initialize", "tools_list"):
-            value = checks.get(key) if isinstance(checks.get(key), dict) else {}
-            latency = value.get("latency_ms")
-            if isinstance(latency, (int, float)):
-                latency_values.append(float(latency))
-        for row in (discovery.get("checks") or []):
-            latency = row.get("latency_ms") if isinstance(row, dict) else None
-            if isinstance(latency, (int, float)):
-                latency_values.append(float(latency))
+        init_latency=checks.get("initialize",{}).get("latency_ms") if isinstance(checks.get("initialize"),dict) else None
+        tools_latency=checks.get("tools_list",{}).get("latency_ms") if isinstance(checks.get("tools_list"),dict) else None
+        discovery_latencies=[float(row.get("latency_ms")) for row in (discovery.get("checks") or []) if isinstance(row,dict) and isinstance(row.get("latency_ms"),(int,float))]
+        latency_values=[]
+        if isinstance(init_latency,(int,float)): latency_values.append(float(init_latency))
+        if isinstance(tools_latency,(int,float)): latency_values.append(float(tools_latency))
+        latency_values.extend(discovery_latencies)
 
         _record_usage(domain, live, errors, usage_scope=usage_scope)
         return {
@@ -686,8 +683,11 @@ async def verify_endpoint(
                 "tool_count": tools_count,
                 "valid_input_schemas": valid_schemas,
                 "invalid_input_schemas": invalid_schemas,
-                "discovery_present": discovery.get("present"),
-                "total_observed_latency_ms": round(sum(latency_values), 2),
+                "discovery_present":discovery.get("present"),
+                "initialize_latency_ms":init_latency,
+                "tools_list_latency_ms":tools_latency,
+                "discovery_latency_ms":discovery_latencies,
+                "total_observed_latency_ms":round(sum(latency_values),2),
             },
             "errors": errors,
             "read_only": True,

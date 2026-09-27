@@ -29,6 +29,7 @@ PER_HOST_CONCURRENCY = 1
 HOST_REQUEST_DELAY_SECONDS = 1.0
 LIST_PAGE_LIMIT = 100
 OPT_OUT_PATH = Path("data/registry-health/opt-out.txt")
+CLASSIFICATION_VERSION = 2
 
 FINAL_CATEGORIES = (
     "OK",
@@ -198,39 +199,86 @@ def is_opted_out(server: dict[str, Any], values: set[str]) -> bool:
     return False
 
 
-def classify_verification(result: dict[str, Any]) -> str:
-    checks = result.get("checks") if isinstance(result.get("checks"), dict) else {}
-    init = checks.get("initialize") if isinstance(checks.get("initialize"), dict) else {}
-    tools = checks.get("tools_list") if isinstance(checks.get("tools_list"), dict) else {}
-    discovery = checks.get("discovery") if isinstance(checks.get("discovery"), dict) else {}
-    status = init.get("http_status")
+def classify_verification(result: dict[str, Any], classification_version: int = CLASSIFICATION_VERSION) -> str:
+    """Versioned classification. v1 required discovery; v2 treats it as metadata."""
+    version=int(classification_version)
+    if version not in {1,2}:
+        raise ValueError("unsupported_classification_version")
+    checks=result.get("checks") if isinstance(result.get("checks"),dict) else {}
+    init=checks.get("initialize") if isinstance(checks.get("initialize"),dict) else {}
+    tools=checks.get("tools_list") if isinstance(checks.get("tools_list"),dict) else {}
+    discovery=checks.get("discovery") if isinstance(checks.get("discovery"),dict) else {}
+    status=init.get("http_status")
     if status is None:
-        http = checks.get("http") if isinstance(checks.get("http"), dict) else {}
-        status = http.get("status")
-    try:
-        code = int(status)
-    except Exception:
-        code = 0
-
-    if code in {401, 403}:
-        return "AUTH_REQUIRED"
-    if 500 <= code <= 599:
-        return "SERVER_ERROR"
+        http=checks.get("http") if isinstance(checks.get("http"),dict) else {}
+        status=http.get("status")
+    try: code=int(status)
+    except Exception: code=0
+    if code in {401,403}: return "AUTH_REQUIRED"
+    if 500 <= code <= 599: return "SERVER_ERROR"
     if init.get("ok") is True:
-        invalid = int(tools.get("invalid_input_schemas") or 0)
-        if tools.get("ok") is True and invalid == 0 and discovery.get("present") is True and not result.get("errors"):
+        invalid=int(tools.get("invalid_input_schemas") or 0)
+        protocol_ok=tools.get("ok") is True and invalid==0 and not result.get("errors")
+        if protocol_ok and (version==2 or discovery.get("present") is True):
             return "OK"
         return "OK_WITH_ISSUES"
-
-    errors = set(str(x) for x in (result.get("errors") or []))
-    unreachable = {
-        "dns_error", "dns_no_results", "transport_error", "request_error",
-        "blocked_host", "blocked_ip", "blocked_resolved_ip",
-    }
-    if errors & unreachable or code == 0:
-        return "UNREACHABLE"
+    errors=set(str(x) for x in (result.get("errors") or []))
+    unreachable={"dns_error","dns_no_results","transport_error","request_error","blocked_host","blocked_ip","blocked_resolved_ip"}
+    if errors & unreachable or code==0: return "UNREACHABLE"
     return "NOT_MCP"
 
+
+def classify_compact_probe(probe: dict[str, Any], classification_version: int) -> str:
+    """Reclassify a persisted compact probe without network access."""
+    version=int(classification_version)
+    if version not in {1,2}: raise ValueError("unsupported_classification_version")
+    checks=probe.get("checks") if isinstance(probe.get("checks"),dict) else {}
+    init=checks.get("initialize") if isinstance(checks.get("initialize"),dict) else {}
+    summary=probe.get("summary") if isinstance(probe.get("summary"),dict) else {}
+    try: code=int(probe.get("http_status") or init.get("http_status") or 0)
+    except Exception: code=0
+    if code in {401,403}: return "AUTH_REQUIRED"
+    if 500 <= code <= 599: return "SERVER_ERROR"
+    errors=set(str(x) for x in (probe.get("errors") or []))
+    if init.get("ok") is True:
+        protocol_ok=int(summary.get("invalid_input_schemas") or 0)==0 and not errors
+        if protocol_ok and (version==2 or summary.get("discovery_present") is True):
+            return "OK"
+        return "OK_WITH_ISSUES"
+    unreachable={"dns_error","dns_no_results","transport_error","request_error","blocked_host","blocked_ip","blocked_resolved_ip"}
+    if errors & unreachable or code==0: return "UNREACHABLE"
+    return "NOT_MCP"
+
+
+def final_category_for_version(probe1: dict[str, Any], probe2: dict[str, Any] | None, classification_version: int) -> str:
+    first=classify_compact_probe(probe1,classification_version)
+    if not probe2: return first
+    second=classify_compact_probe(probe2,classification_version)
+    return first if first==second else "INTERMITTENT"
+
+
+def derived_classification_view(rows: list[dict[str, Any]], classification_version: int) -> dict[str, Any]:
+    version=int(classification_version)
+    categories=Counter()
+    servers=[]
+    for row in rows:
+        if row.get("opted_out") or not isinstance(row.get("probe1"),dict): continue
+        probe2=row.get("probe2") if isinstance(row.get("probe2"),dict) else None
+        category=final_category_for_version(row["probe1"],probe2,version)
+        categories[category]+=1
+        probe=probe2 or row["probe1"]
+        summary=probe.get("summary") if isinstance(probe.get("summary"),dict) else {}
+        servers.append({
+            "name":row.get("name"),"version":row.get("version"),"remote_url":row.get("remote_url"),
+            "category":category,"classification_version":version,
+            "discovery_present":summary.get("discovery_present") is True,"final":bool(row.get("final")),
+        })
+    total=len(servers)
+    return {
+        "classification_version":version,"scanned":total,
+        "categories":{k:{"count":int(v),"percent_of_scanned":round(100.0*v/total,2) if total else 0.0} for k,v in sorted(categories.items())},
+        "servers":servers,
+    }
 
 def final_category(probe1: dict[str, Any], probe2: dict[str, Any] | None) -> str:
     first = str(probe1.get("category") or "")
@@ -263,7 +311,10 @@ def aggregate_dataset(listing: dict[str, Any], rows: list[dict[str, Any]]) -> di
     broken_schemas = 0
     discovery_present = 0
     tls_failures = 0
-    latencies: list[float] = []
+    initialize_latencies: list[float] = []
+    tools_list_latencies: list[float] = []
+    discovery_latencies: list[float] = []
+    legacy_total_latencies: list[float] = []
     request_counts: Counter[str] = Counter()
     scanned = 0
     for row in rows:
@@ -282,9 +333,14 @@ def aggregate_dataset(listing: dict[str, Any], rows: list[dict[str, Any]]) -> di
         tls = checks.get("tls") if isinstance(checks.get("tls"), dict) else {}
         if tls and tls.get("ok") is False:
             tls_failures += 1
-        latency = summary.get("total_observed_latency_ms")
-        if isinstance(latency, (int, float)):
-            latencies.append(float(latency))
+        init_latency=summary.get("initialize_latency_ms")
+        tools_latency=summary.get("tools_list_latency_ms")
+        discovery_rows=summary.get("discovery_latency_ms") if isinstance(summary.get("discovery_latency_ms"),list) else []
+        legacy_total=summary.get("total_observed_latency_ms")
+        if isinstance(init_latency,(int,float)): initialize_latencies.append(float(init_latency))
+        if isinstance(tools_latency,(int,float)): tools_list_latencies.append(float(tools_latency))
+        discovery_latencies.extend(float(x) for x in discovery_rows if isinstance(x,(int,float)))
+        if isinstance(legacy_total,(int,float)): legacy_total_latencies.append(float(legacy_total))
         for host, count in (probe.get("request_counts_by_host") or {}).items():
             request_counts[str(host)] += int(count or 0)
 
@@ -304,15 +360,22 @@ def aggregate_dataset(listing: dict[str, Any], rows: list[dict[str, Any]]) -> di
         "metadata_only": int(listing.get("metadata_only") or 0),
         "opted_out": sum(1 for x in rows if x.get("opted_out")),
         "scanned": scanned,
+        "classification_version": CLASSIFICATION_VERSION,
         "categories": category_payload,
         "protocol_versions": dict(protocols),
         "invalid_input_schemas": broken_schemas,
         "discovery_present": discovery_present,
         "tls_failures": tls_failures,
         "latency_ms": {
-            "median": round(statistics.median(latencies), 2) if latencies else None,
-            "p90": percentile(latencies, 0.90),
-            "samples": len(latencies),
+            "metric":"initialize",
+            "median":round(statistics.median(initialize_latencies),2) if initialize_latencies else None,
+            "p90":percentile(initialize_latencies,0.90),"samples":len(initialize_latencies),
+        },
+        "latency_breakdown_ms": {
+            "initialize":{"median":round(statistics.median(initialize_latencies),2) if initialize_latencies else None,"p90":percentile(initialize_latencies,0.90),"samples":len(initialize_latencies)},
+            "tools_list":{"median":round(statistics.median(tools_list_latencies),2) if tools_list_latencies else None,"p90":percentile(tools_list_latencies,0.90),"samples":len(tools_list_latencies)},
+            "discovery_request":{"median":round(statistics.median(discovery_latencies),2) if discovery_latencies else None,"p90":percentile(discovery_latencies,0.90),"samples":len(discovery_latencies)},
+            "legacy_total_observed":{"median":round(statistics.median(legacy_total_latencies),2) if legacy_total_latencies else None,"p90":percentile(legacy_total_latencies,0.90),"samples":len(legacy_total_latencies)},
         },
         "requests_by_host": dict(sorted(request_counts.items())),
     }

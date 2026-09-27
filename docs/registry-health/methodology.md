@@ -56,17 +56,27 @@ Request-level limits are:
 
 Registry Health calls are tagged `internal_registry_health`. They have separate aggregate telemetry and are excluded from the external `verify_mcp_endpoint` usage metrics used by MYCELIX market evidence.
 
+## Classification versions
+
+Registry Health classifications are explicitly versioned.
+
+**classification_version = 1** is the historical policy used for the 27 September 2026 FINAL sample and the 40 Arena predictions created from it. It required discovery metadata for `OK`.
+
+**classification_version = 2** is current. `OK` means valid MCP `initialize`, valid `tools/list`, valid returned input schemas, and no MCP or verifier error. `discovery_present` is independent metadata and does not affect the category.
+
+Historical raw probe observations are immutable. New classification policies are represented by derived views calculated from those persisted probes rather than by rewriting historical observations.
+
 ## Categories
 
 Each remotely verifiable server receives exactly one final category.
 
 ### OK
 
-`initialize` succeeds, `tools/list` succeeds, every returned input schema passes the verifier's structural sanity checks, no verifier error is recorded, and a supported discovery document is present.
+Under v2, `initialize` succeeds, `tools/list` succeeds, every returned input schema passes structural sanity checks, and no MCP or verifier error is recorded. Under historical v1, discovery presence was also required.
 
 ### OK_WITH_ISSUES
 
-The endpoint responds as MCP and `initialize` succeeds, but one or more non-fatal issues are present, such as invalid tool input schemas, a failed `tools/list` check, missing discovery metadata, or another verifier warning.
+The endpoint responds as MCP and `initialize` succeeds, but a non-fatal MCP/verifier issue remains, such as a failed `tools/list`, invalid input schema, or verifier warning. Missing discovery alone is not an issue in v2.
 
 ### AUTH_REQUIRED
 
@@ -120,11 +130,13 @@ The report is a measurement from GitHub-hosted Actions runners. A server reporte
 
 An `AUTH_REQUIRED` result says only that anonymous access was not accepted; it does not evaluate the authenticated service.
 
-Latency is observational and includes several read-only checks. It is not a benchmark of application performance.
+Latency is observational and is not a benchmark of application performance. Future scans persist `initialize`, `tools/list`, and discovery-request latencies separately; the primary reported latency is `initialize` median and p90.
+
+The 27 September 2026 FINAL dataset predates this split. Its stored `total_observed_latency_ms` is a legacy aggregate and contains a double count of `initialize` (HTTP plus initialize). It remains unchanged for reproducibility and must not be interpreted as initialize latency.
 
 Only the Registry-declared HTTPS `streamable-http` target is measured. Package-only, stdio and unsupported remote transports require a different testing model and are deliberately excluded from remote-health categories.
 
-Discovery-document absence is reported as an issue, not proof that the MCP endpoint itself is unusable.
+Discovery presence is independent metadata in v2 and does not declassify an otherwise healthy MCP endpoint.
 
 The scan does not evaluate tool correctness, business logic, authorization quality, data safety, or what a tool would do if called. Tools are never invoked.
 
