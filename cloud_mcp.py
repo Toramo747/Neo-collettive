@@ -133,7 +133,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.33"  # MCP Registry Health report + static status surface
+VERSION = "0.99.34"  # MCP Registry Health report + static status surface
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -11465,6 +11465,74 @@ async def registry_health_about(request: Request):
     return layout("Registry Health About",body)
 
 
+
+ARENA_PUBLIC_RAW_BASE = "https://raw.githubusercontent.com/Toramo747/Neo-collettive/main/data/arena/"
+
+async def _arena_public_json(relative_path: str) -> dict:
+    safe=str(relative_path or "").strip().lstrip("/")
+    if not re.fullmatch(r"[A-Za-z0-9._/-]{1,240}",safe) or ".." in safe:
+        return {}
+    url=ARENA_PUBLIC_RAW_BASE+safe
+    try:
+        async with httpx.AsyncClient(timeout=3.0,follow_redirects=False) as client:
+            r=await client.get(url,headers={"Accept":"application/json"})
+        if r.status_code==200:
+            data=r.json()
+            return data if isinstance(data,dict) else {}
+    except Exception:
+        pass
+    try:
+        with open("data/arena/"+safe,"r",encoding="utf-8") as fh:
+            data=json.load(fh)
+        return data if isinstance(data,dict) else {}
+    except Exception:
+        return {}
+
+def _arena_actor_color(actor: str) -> str:
+    return {
+        "Scout":"#2563eb","Analyst":"#059669","Critic":"#dc2626",
+        "Builder-planner":"#7c3aed","Guest":"#d97706","Andrea":"#475569",
+        "SYSTEM":"#64748b",
+    }.get(str(actor),"#334155")
+
+async def arena_page(request: Request):
+    index=await _arena_public_json("index.json")
+    sessions=index.get("sessions") if isinstance(index.get("sessions"),list) else []
+    latest=sessions[0] if sessions else {}
+    session={}
+    path=str(latest.get("path") or "")
+    if path:
+        session=await _arena_public_json(path.replace("data/arena/",""))
+    body='<section class="card"><span class="tag">READ ONLY</span><h2>NEO Arena</h2>'
+    body+='<p>Sandbox isolata <code>mycelix-arena</code>. Le sessioni partono solo da GitHub Actions workflow_dispatch; Render non espone endpoint di scrittura.</p>'
+    body+='<p><strong>Sessioni:</strong> '+html.escape(str(len(sessions)))+'</p></section>'
+    if session:
+        metrics=session.get("metrics") or {}
+        body+='<section class="card"><h2>Ultima sessione</h2>'
+        body+='<p><strong>'+html.escape(str(session.get("topic") or ""))+'</strong></p>'
+        body+='<p>Turni '+html.escape(str(metrics.get("turns") or 0))+' · validi '+html.escape(str(metrics.get("valid_messages") or 0))+' · non validi '+html.escape(str(metrics.get("invalid_messages") or 0))+' · loop bloccati '+html.escape(str(metrics.get("loops_blocked") or 0))+' · injection '+html.escape(str(metrics.get("injection_attempts") or 0))+'</p></section>'
+        body+='<section class="card"><h2>Transcript</h2>'
+        for row in session.get("transcript") or []:
+            actor=str(row.get("actor") or "")
+            msg=row.get("message") if isinstance(row.get("message"),dict) else {}
+            typ=str(msg.get("type") or row.get("event") or "INVALID")
+            text=str(row.get("display") or msg.get("subject") or msg.get("reason") or json.dumps(msg,ensure_ascii=False,default=str)[:700])
+            body+='<div style="border-left:4px solid '+_arena_actor_color(actor)+';padding:8px 12px;margin:8px 0"><strong>'+html.escape(actor)+'</strong> <code>'+html.escape(typ)+'</code><br>'+html.escape(text[:1000])+'</div>'
+        body+='</section>'
+    else:
+        body+='<section class="card"><p>Nessuna sessione pubblicata.</p></section>'
+    body+='<section class="card"><p><a class="btn" href="/arena/micelio">Micelio</a> <a class="btn" href="/arena/evoluzione">Evoluzione</a></p></section>'
+    return layout("NEO Arena",body)
+
+async def arena_micelio_page(request: Request):
+    body='<section class="card"><span class="tag">PHASE 2</span><h2>Micelio</h2><p>Non ancora attivato in v0.99.34.</p></section>'
+    return layout("NEO Arena · Micelio",body)
+
+async def arena_evolution_page(request: Request):
+    body='<section class="card"><span class="tag">PHASE 3</span><h2>Evoluzione</h2><p>Non ancora attivata in v0.99.34.</p></section>'
+    return layout("NEO Arena · Evoluzione",body)
+
+
 async def api_discover(request: Request):
     q = (request.query_params.get("q") or "cybersecurity").strip()
     return JSONResponse(await discover_data(q, 10))
@@ -11573,6 +11641,9 @@ app = Starlette(
         Route("/.well-known/mcp.json", mcp_discovery_document, methods=["GET"]),
         Route("/registry-health", registry_health_page, methods=["GET"]),
         Route("/registry-health/about", registry_health_about, methods=["GET"]),
+        Route("/arena", arena_page, methods=["GET"]),
+        Route("/arena/micelio", arena_micelio_page, methods=["GET"]),
+        Route("/arena/evoluzione", arena_evolution_page, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
         Route("/api/discover", api_discover, methods=["GET"]),
         Route("/api/collective", api_collective, methods=["GET"]),
