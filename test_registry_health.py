@@ -288,5 +288,20 @@ class RegistryHealthListingTests(unittest.TestCase):
 
 
 
+    def test_legacy_final_has_no_reconstructable_initialize_latency(self):
+        servers=json.loads(Path("data/registry-health/latest-servers.json").read_text(encoding="utf-8"))
+        probes=[
+            row.get(key)
+            for row in servers.get("servers",[])
+            for key in ("probe1","probe2")
+            if isinstance(row.get(key),dict)
+        ]
+        self.assertTrue(probes)
+        self.assertEqual(sum(1 for p in probes if isinstance((p.get("summary") or {}).get("initialize_latency_ms"),(int,float))),0)
+        self.assertEqual(sum(1 for p in probes if isinstance(((p.get("checks") or {}).get("initialize") or {}).get("latency_ms"),(int,float))),0)
+        self.assertGreater(sum(1 for p in probes if isinstance((p.get("summary") or {}).get("total_observed_latency_ms"),(int,float))),0)
+
+
+
 if __name__ == "__main__":
     unittest.main()
