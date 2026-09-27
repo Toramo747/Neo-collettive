@@ -149,7 +149,7 @@ def _write_json(path: Path, value: Any) -> None:
 def _write_classification_views(outdir: Path, rows: list[dict[str, Any]], aggregate: dict[str, Any]) -> None:
     for version in (1,2):
         view=derived_classification_view(rows,version)
-        view.update({"derived_from_generated_at_utc":aggregate.get("generated_at_utc"),"scope":aggregate.get("scope"),"sample_seed":aggregate.get("sample_seed"),"sample_server_names":aggregate.get("sample_server_names") or [],"source_dataset":str(outdir/"registry-health.json")})
+        view.update({"derived_from_generated_at_utc":aggregate.get("generated_at_utc"),"scope":aggregate.get("scope"),"sample_seed":aggregate.get("sample_seed"),"sample_server_names":aggregate.get("sample_server_names") or [],"source_dataset":str(outdir/"registry-health.json"),"compatibility_view":version==1})
         _write_json(outdir/f"classification-v{version}.json",view)
         _write_json(DATA_ROOT/f"latest-classification-v{version}.json",view)
 

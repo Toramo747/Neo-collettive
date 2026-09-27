@@ -66,6 +66,8 @@ Registry Health classifications are explicitly versioned.
 
 Historical raw probe observations are immutable. New classification policies are represented by derived views calculated from those persisted probes rather than by rewriting historical observations.
 
+Every future Registry Health scan writes both classification views from the same persisted probes: v2 is the current view and v1 is the compatibility view. The v1 compatibility view is retained for as long as at least one external Arena prediction with `classification_version = 1` remains open. Historical v1 predictions are evaluated against the later scan's v1 view; new predictions use v2.
+
 ## Categories
 
 Each remotely verifiable server receives exactly one final category.

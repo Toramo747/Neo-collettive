@@ -158,4 +158,33 @@ class RegistryWorldTests(unittest.TestCase):
             self.assertTrue(all(x.get("classification_version")==2 for x in ext))
 
 
+    def test_future_registry_scan_exposes_both_classification_versions(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"; rows=self.rows()
+            write_registry(reg,"2026-10-04T20:00:00+00:00",rows,classification_version=2,derived_versions=(1,))
+            v1=load_registry_snapshot(reg,1)
+            v2=load_registry_snapshot(reg,2)
+            self.assertIsNotNone(v1)
+            self.assertIsNotNone(v2)
+            self.assertEqual(v1["classification_version"],1)
+            self.assertEqual(v2["classification_version"],2)
+
+    def test_v1_prediction_evaluates_against_v1_view_on_future_scan(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg=Path(td)/"registry"; rows=self.rows()
+            write_registry(reg,"2026-09-27T19:33:09+00:00",rows,classification_version=1,derived_versions=(2,))
+            s=initial_state()
+            register_external_predictions(s,reg,cycle_id="1")
+            p=next(x for x in s["predictions"] if x.get("prediction_scope")=="external_registry")
+            p["classification_version"]=1
+            p["registry_base_scan_at_utc"]="2026-09-27T19:33:09+00:00"
+            p["due_at_utc"]="2026-10-04T19:33:09+00:00"
+            p["status"]="PENDING"
+            write_registry(reg,"2026-10-04T20:00:00+00:00",rows,classification_version=2,derived_versions=(1,))
+            n=evaluate_external_predictions(s,reg,at=datetime(2026,10,4,20,1,tzinfo=timezone.utc))
+            self.assertGreaterEqual(n,1)
+            self.assertEqual(p["status"],"EVALUATED")
+            self.assertEqual(p["classification_version"],1)
+            self.assertTrue(s["registry_classification_compatibility"]["retain_v1_view"])
+
 if __name__=="__main__": unittest.main()

@@ -195,8 +195,19 @@ def evaluate_external_predictions(state: dict, registry_dir: str|Path="data/regi
     at=at or datetime.now(timezone.utc)
     evaluated=0
     cache={}
+    open_v1=any(
+        isinstance(p,dict)
+        and p.get("prediction_scope")=="external_registry"
+        and int(p.get("classification_version") or 1)==1
+        and p.get("status") in {"PENDING","AWAITING_REGISTRY_SCAN","AWAITING_MATCHING_SAMPLE","AWAITING_MATCHING_CLASSIFICATION"}
+        for p in (state.get("predictions") or [])
+    )
+    state["registry_classification_compatibility"]={
+        "current_version":CURRENT_CLASSIFICATION_VERSION,
+        "retain_v1_view":bool(open_v1),
+    }
     for pred in state.get("predictions") or []:
-        if not isinstance(pred,dict) or pred.get("prediction_scope")!="external_registry" or pred.get("status") not in {"PENDING","AWAITING_REGISTRY_SCAN","AWAITING_MATCHING_CLASSIFICATION"}:
+        if not isinstance(pred,dict) or pred.get("prediction_scope")!="external_registry" or pred.get("status") not in {"PENDING","AWAITING_REGISTRY_SCAN","AWAITING_MATCHING_SAMPLE","AWAITING_MATCHING_CLASSIFICATION"}:
             continue
         pred_version=int(pred.get("classification_version") or 1)
         if pred_version not in cache:
