@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from registry_health import (
     classify_verification,
@@ -96,6 +97,16 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertNotIn("example.com",report)
         social=render_social_draft(summary,"2026-09-26")
         self.assertEqual(len([x for x in social.splitlines() if x.strip()]),5)
+
+
+    def test_scan_workflow_persists_dated_and_latest_datasets(self):
+        workflow=Path(".github/workflows/registry-health-scan.yml").read_text(encoding="utf-8")
+        self.assertIn("Assert dataset persistence contract",workflow)
+        self.assertIn("git add data/registry-health docs/reports",workflow)
+        self.assertIn("Verify Registry Health data persisted on main",workflow)
+        self.assertIn("data/registry-health/latest-summary.json",workflow)
+        self.assertIn("data/registry-health/latest-servers.json",workflow)
+        self.assertRegex(workflow,r"registry-health/\\d\{4\}-\\d\{2\}-\\d\{2\}")
 
     def test_second_probe_disagreement_is_intermittent(self):
         self.assertEqual(final_category({"category":"SERVER_ERROR"},{"category":"OK"}),"INTERMITTENT")

@@ -32,6 +32,7 @@ from registry_health import (
 
 DATA_ROOT = Path("data/registry-health")
 MIN_SECOND_PROBE_SECONDS = 6 * 60 * 60
+PROBE_WALL_TIMEOUT_SECONDS = 45
 
 
 def runtime_version() -> str:
@@ -103,14 +104,17 @@ async def run_probe(
     remote=(server.get("remotes") or [{}])[0]
     url=str(remote.get("url") or "")
     async with task_sem:
-        result=await verifier.verify_endpoint(
-            url=url,
-            caller="registry-health:"+str(server.get("name") or ""),
-            client_version=runtime_version(),
-            usage_scope="internal_registry_health",
-            user_agent=user_agent,
-            request_pacer=pacer,
-            enforce_rate_limit=False,
+        result=await asyncio.wait_for(
+            verifier.verify_endpoint(
+                url=url,
+                caller="registry-health:"+str(server.get("name") or ""),
+                client_version=runtime_version(),
+                usage_scope="internal_registry_health",
+                user_agent=user_agent,
+                request_pacer=pacer,
+                enforce_rate_limit=False,
+            ),
+            timeout=PROBE_WALL_TIMEOUT_SECONDS,
         )
     category=classify_verification(result)
     return compact_probe(result,category)
@@ -329,6 +333,44 @@ async def second_phase(scan_dir: Path | None = None) -> Path:
     social_path.write_text(render_social_draft(aggregate,outdir.name),encoding="utf-8")
     print(json.dumps({"outdir":str(outdir),"summary":aggregate,"report":str(report_path),"social":str(social_path)},ensure_ascii=False))
     return outdir
+
+
+def persistence_contract(scan_dir: Path, *, require_final: bool = False) -> dict[str, Any]:
+    """Validate the on-disk contract that the workflow must commit."""
+    required=(
+        scan_dir/"registry-snapshot.json",
+        scan_dir/"registry-health.json",
+        scan_dir/"registry-health.csv",
+        scan_dir/"summary.json",
+        scan_dir/"scan-state.json",
+        DATA_ROOT/"latest-summary.json",
+        DATA_ROOT/"latest-servers.json",
+    )
+    missing=[str(p) for p in required if not p.exists() or p.stat().st_size <= 0]
+    if missing:
+        raise RuntimeError("registry_health_persistence_missing:"+",".join(missing))
+    summary=json.loads((scan_dir/"summary.json").read_text(encoding="utf-8"))
+    latest=json.loads((DATA_ROOT/"latest-summary.json").read_text(encoding="utf-8"))
+    servers=json.loads((DATA_ROOT/"latest-servers.json").read_text(encoding="utf-8"))
+    state=json.loads((scan_dir/"scan-state.json").read_text(encoding="utf-8"))
+    if str(state.get("scan_date") or "") != scan_dir.name:
+        raise RuntimeError("registry_health_scan_date_mismatch")
+    if summary.get("generated_at_utc") != latest.get("generated_at_utc"):
+        raise RuntimeError("registry_health_latest_summary_not_updated")
+    rows=servers.get("servers")
+    if not isinstance(rows,list):
+        raise RuntimeError("registry_health_latest_servers_missing")
+    if require_final and (summary.get("final") is not True or state.get("final") is not True):
+        raise RuntimeError("registry_health_final_scan_required")
+    return {
+        "scan_dir":str(scan_dir),
+        "phase":summary.get("phase"),
+        "final":summary.get("final") is True,
+        "servers_total":summary.get("servers_total"),
+        "scanned":summary.get("scanned"),
+        "latest_summary":str(DATA_ROOT/"latest-summary.json"),
+        "latest_servers":str(DATA_ROOT/"latest-servers.json"),
+    }
 
 
 async def main() -> int:

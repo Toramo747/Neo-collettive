@@ -30,7 +30,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +70,24 @@ jobs:
             args+=("--scan-date" "${{ inputs.scan_date }}")
           fi
           python registry_health_scan.py "${args[@]}" | tee /tmp/registry-health-run.log
+
+      - name: Assert dataset persistence contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          from registry_health_scan import DATA_ROOT,persistence_contract
+          candidates=sorted(
+              p for p in DATA_ROOT.iterdir()
+              if p.is_dir() and re.fullmatch(r"\d{4}-\d{2}-\d{2}",p.name)
+              and (p/"scan-state.json").exists()
+          )
+          if not candidates:
+              raise SystemExit("dated Registry Health directory missing")
+          result=persistence_contract(candidates[-1],require_final=False)
+          print(json.dumps(result,indent=2))
+          PY
 
       - name: Assert scan isolation and safety telemetry
         run: |
@@ -130,6 +148,28 @@ jobs:
           done
           echo "Could not publish Registry Health dataset commit" >&2
           exit 1
+
+      - name: Verify Registry Health data persisted on main
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          python - <<'PY'
+          import json,re,subprocess
+          names=subprocess.check_output(["git","ls-tree","-r","--name-only","origin/main","data/registry-health"],text=True).splitlines()
+          dated={}
+          for name in names:
+              m=re.match(r"data/registry-health/(\d{4}-\d{2}-\d{2})/(.+)$",name)
+              if m: dated.setdefault(m.group(1),set()).add(m.group(2))
+          if not dated: raise SystemExit("no persisted dated Registry Health scan on main")
+          day=sorted(dated)[-1]
+          required={"registry-snapshot.json","registry-health.json","registry-health.csv","summary.json","scan-state.json"}
+          missing=required-dated[day]
+          if missing: raise SystemExit("persisted dated scan incomplete: "+",".join(sorted(missing)))
+          top=set(x for x in names if x.count("/")==2)
+          for required_top in ("data/registry-health/latest-summary.json","data/registry-health/latest-servers.json"):
+              if required_top not in top: raise SystemExit("missing persisted "+required_top)
+          print(json.dumps({"persisted_scan_date":day,"files":len(dated[day])},indent=2))
+          PY
 
       - uses: actions/upload-artifact@v4
         if: always()
