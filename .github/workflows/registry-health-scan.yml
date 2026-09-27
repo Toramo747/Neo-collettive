@@ -29,6 +29,11 @@ on:
         required: true
         default: "30"
         type: string
+      sample_from_scan_date:
+        description: "Optional prior SAMPLE YYYY-MM-DD whose exact server list must be replayed"
+        required: false
+        default: ""
+        type: string
   # Monthly cadence is intentionally disabled pending Andrea Gava approval.
   # schedule:
   #   - cron: "17 3 1 * *"
@@ -80,6 +85,9 @@ jobs:
           args=("$REGISTRY_HEALTH_PHASE")
           if [ "$REGISTRY_HEALTH_PHASE" = "first" ]; then
             args+=("--mode" "${{ inputs.mode }}" "--max-minutes" "${{ inputs.max_minutes }}")
+            if [ -n "${{ inputs.sample_from_scan_date }}" ]; then
+              args+=("--sample-from-scan-date" "${{ inputs.sample_from_scan_date }}")
+            fi
           fi
           if [ "$REGISTRY_HEALTH_PHASE" = "second" ] && [ -n "${{ inputs.scan_date }}" ]; then
             args+=("--scan-date" "${{ inputs.scan_date }}")

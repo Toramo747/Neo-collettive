@@ -208,14 +208,45 @@ def _sample_order(remote_servers: list[dict[str, Any]], seed: int) -> list[dict[
     return items
 
 
-async def first_phase(mode: str = "full", max_minutes: int = DEFAULT_SAMPLE_MINUTES) -> Path:
+def _select_sample_candidates(
+    remote_servers: list[dict[str, Any]],
+    seed: int,
+    replay_names: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Randomize a new sample or reproduce an exact prior sample membership."""
+    if replay_names:
+        by_name={str(x.get("name") or ""):x for x in remote_servers}
+        missing=[name for name in replay_names if name not in by_name]
+        if missing:
+            raise RuntimeError("sample_replay_members_missing:"+",".join(missing[:20]))
+        return [by_name[name] for name in replay_names]
+    return _sample_order(remote_servers,seed)
+
+
+async def first_phase(
+    mode: str = "full",
+    max_minutes: int = DEFAULT_SAMPLE_MINUTES,
+    sample_from_scan_date: str = "",
+) -> Path:
     started=time.monotonic()
     started_utc=datetime.now(timezone.utc)
     mode=str(mode or "full").strip().lower()
     if mode not in {"full","sample"}:
         raise ValueError("invalid_scan_mode")
     scope=SCOPE_SAMPLE if mode=="sample" else SCOPE_FULL
+    replay_names: list[str]=[]
+    sample_replay_of=""
     sample_seed=secrets.randbits(63) if scope==SCOPE_SAMPLE else None
+    if scope==SCOPE_SAMPLE and sample_from_scan_date:
+        prior_dir=DATA_ROOT/str(sample_from_scan_date)
+        prior_state=json.loads((prior_dir/"scan-state.json").read_text(encoding="utf-8"))
+        if str(prior_state.get("scope") or "") != SCOPE_SAMPLE:
+            raise RuntimeError("sample_replay_source_not_sample")
+        replay_names=[str(x) for x in (prior_state.get("sample_server_names") or []) if str(x)]
+        if not replay_names:
+            raise RuntimeError("sample_replay_source_empty")
+        sample_seed=int(prior_state.get("sample_seed"))
+        sample_replay_of=str(sample_from_scan_date)
     budget_seconds=_sample_budget_seconds(max_minutes) if scope==SCOPE_SAMPLE else None
     deadline=(started+budget_seconds) if budget_seconds is not None else None
 
@@ -240,7 +271,10 @@ async def first_phase(mode: str = "full", max_minutes: int = DEFAULT_SAMPLE_MINU
     task_sem=asyncio.Semaphore(MAX_CONCURRENCY)
 
     remote_servers=[x for x in listing["servers"] if x.get("access_class")=="remote"]
-    candidates=_sample_order(remote_servers,sample_seed) if scope==SCOPE_SAMPLE else list(remote_servers)
+    candidates=(
+        _select_sample_candidates(remote_servers,int(sample_seed),replay_names)
+        if scope==SCOPE_SAMPLE else list(remote_servers)
+    )
     rows: list[dict[str,Any]]=[]
     completed=0
     attempted=0
@@ -259,6 +293,8 @@ async def first_phase(mode: str = "full", max_minutes: int = DEFAULT_SAMPLE_MINU
         "completed_probes":0,
         "total_probes":len(candidates) if scope==SCOPE_FULL else None,
         "sample_seed":sample_seed,
+        "sample_replay_of":sample_replay_of or None,
+        "sample_population_remote_count":len(remote_servers) if scope==SCOPE_SAMPLE else None,
         "sample_server_names":[],
         "sample_size":0,
         "max_minutes":int(max_minutes) if scope==SCOPE_SAMPLE else None,
@@ -365,6 +401,7 @@ async def first_phase(mode: str = "full", max_minutes: int = DEFAULT_SAMPLE_MINU
         "max_minutes":int(max_minutes) if scope==SCOPE_SAMPLE else None,
         "stopped_reason":stopped_reason,
         "sample_seed":sample_seed,
+        "sample_replay_of":sample_replay_of or None,
         "sample_size":len(rows),
         "sample_server_names":[x["name"] for x in rows],
         "sample_population_remote_count":len(remote_servers) if scope==SCOPE_SAMPLE else None,
@@ -385,6 +422,8 @@ async def first_phase(mode: str = "full", max_minutes: int = DEFAULT_SAMPLE_MINU
         "completed_probes":completed,
         "sample_server_names":aggregate["sample_server_names"],
         "sample_size":len(rows),
+        "sample_population_remote_count":len(remote_servers) if scope==SCOPE_SAMPLE else None,
+        "sample_replay_of":sample_replay_of or None,
         "stopped_reason":stopped_reason,
         "checkpointed_at_utc":datetime.now(timezone.utc).isoformat(),
         "final":False,
@@ -560,9 +599,10 @@ async def main() -> int:
     parser.add_argument("--scan-date",default="")
     parser.add_argument("--mode",choices=("full","sample"),default="full")
     parser.add_argument("--max-minutes",type=int,default=DEFAULT_SAMPLE_MINUTES)
+    parser.add_argument("--sample-from-scan-date",default="")
     args=parser.parse_args()
     if args.phase=="first":
-        await first_phase(args.mode,args.max_minutes)
+        await first_phase(args.mode,args.max_minutes,args.sample_from_scan_date)
     else:
         scan_dir=DATA_ROOT/args.scan_date if args.scan_date else None
         await second_phase(scan_dir)

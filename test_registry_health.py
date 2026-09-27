@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from registry_health_scan import _sample_budget_seconds, _sample_order
+from registry_health_scan import _sample_budget_seconds, _sample_order, _select_sample_candidates
 from registry_health import (
     classify_verification,
     final_category,
@@ -155,6 +155,32 @@ class RegistryHealthListingTests(unittest.TestCase):
         self.assertIn('"sample_server_names"',source)
         self.assertIn('stopped_reason="max_minutes_reached"',source)
         self.assertIn("CHECKPOINT_EVERY_COMPLETIONS = 20",source)
+
+    def test_sample_hard_stop_and_checkpoint_publish_contract(self):
+        source=Path("registry_health_scan.py").read_text(encoding="utf-8")
+        self.assertIn("deadline=(started+budget_seconds)",source)
+        self.assertIn("wait_timeout=None if deadline is None else max(0.0,deadline-time.monotonic())",source)
+        self.assertIn("done,pending=await asyncio.wait",source)
+        self.assertIn("task.cancel()",source)
+        self.assertIn('stopped_reason="max_minutes_reached"',source)
+        self.assertIn("CHECKPOINT_EVERY_COMPLETIONS = 20",source)
+        self.assertIn('subprocess.run(["git","push","origin","HEAD:main"])',source)
+
+    def test_exact_sample_can_be_replayed_for_future_arena_evaluation(self):
+        servers=[{"name":f"srv-{i:02d}"} for i in range(6)]
+        replay=["srv-04","srv-01","srv-05"]
+        selected=_select_sample_candidates(servers,123,replay)
+        self.assertEqual([x["name"] for x in selected],replay)
+        with self.assertRaisesRegex(RuntimeError,"sample_replay_members_missing"):
+            _select_sample_candidates(servers,123,["srv-missing"])
+
+    def test_one_shot_sample_dispatch_is_guarded(self):
+        deploy=Path(".github/workflows/neo-render-deploy.yml").read_text(encoding="utf-8")
+        self.assertIn("Dispatch authorized 30-minute Registry Health SAMPLE once",deploy)
+        self.assertIn("[registry-sample-once]",deploy)
+        self.assertIn("Registry Health SAMPLE already dispatched for this commit",deploy)
+        self.assertIn("-f mode=sample",deploy)
+        self.assertIn("-f max_minutes=30",deploy)
 
     def test_second_probe_preserves_sample_scope_and_membership(self):
         source=Path("registry_health_scan.py").read_text(encoding="utf-8")
