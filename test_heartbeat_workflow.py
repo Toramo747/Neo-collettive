@@ -30,6 +30,15 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn('latency=load("/tmp/endpoint-latency.json",{})',w)
         self.assertIn('"endpoint_latency": latency',w)
 
+    def test_uptime_monitor_instructions(self):
+        doc=Path("docs/uptime-monitor.md").read_text(encoding="utf-8")
+        self.assertIn("cron-job.org",doc)
+        self.assertIn("https://neo-collettive.onrender.com/health",doc)
+        self.assertIn("Europe/Rome",doc)
+        self.assertIn("07:00-23:00",doc)
+        self.assertIn("525",doc)
+        self.assertIn("Andrea",doc)
+
     def test_render_budget_documented(self):
         doc=Path("docs/render-free-budget.md").read_text(encoding="utf-8")
         self.assertIn("750",doc)
