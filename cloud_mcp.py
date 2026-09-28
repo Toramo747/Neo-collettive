@@ -509,9 +509,11 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
-    if isinstance(payload.get("inbound_traffic_events"), list):
+    if isinstance(payload.get("inbound_traffic_events"), list) and payload.get("inbound_traffic_events"):
         AUTOPILOT_STATE["inbound_traffic_events"] = [x for x in payload.get("inbound_traffic_events")[-1200:] if isinstance(x,dict)]
-        AUTOPILOT_STATE["inbound_traffic_summary"] = summarize_inbound_traffic(AUTOPILOT_STATE["inbound_traffic_events"])
+    elif isinstance(payload.get("inbound_messages"), list):
+        AUTOPILOT_STATE["inbound_traffic_events"] = retroactive_from_inbound_messages(payload.get("inbound_messages") or [])
+    AUTOPILOT_STATE["inbound_traffic_summary"] = summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
     if isinstance(payload.get("inbound_security_events"), list):
         AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
     if isinstance(payload.get("inbound_security_stats"), dict):
@@ -9747,6 +9749,7 @@ async def api_render_diagnostics(request: Request):
             "latest_ask": latest_ask,
             "neo_jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") if target == "jarvis" else None,
             "last_dialogue": (list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-1] if target == "jarvis" and AUTOPILOT_STATE.get("jarvis_dialogue_history") else None),
+            "inbound_traffic_summary": summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or []),
             "log_rows_scanned": len(rows),
             "categories": categories,
             "startup_events": startup_events[:20],

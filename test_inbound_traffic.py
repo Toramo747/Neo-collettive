@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from inbound_traffic import classify_inbound_event, append_event, summarize_events
+from inbound_traffic import classify_inbound_event, append_event, summarize_events, retroactive_from_inbound_messages
 
 class InboundTrafficTests(unittest.TestCase):
     def test_agent_card_fetch_is_crawler_probe(self):
@@ -44,6 +44,17 @@ class InboundTrafficTests(unittest.TestCase):
         self.assertEqual(s["counts"]["last_24h"]["real_contact"],1)
         self.assertEqual(s["counts"]["last_7d"]["unknown"],0)
         self.assertEqual(s["crawler_origins"][0]["name"],"agent-tools.cloud")
+
+    def test_retroactive_existing_a2a_text_is_real_contact_only(self):
+        rows=retroactive_from_inbound_messages([
+            {"received_at_utc":"2026-09-23T05:00:00+00:00","method":"message/send","text":"hello","sender":{"agent_id":"peer-1","agent":"Peer"}},
+            {"received_at_utc":"2026-09-23T05:01:00+00:00","method":"message/send","text":"","sender":{"agent_id":"peer-2"}},
+        ])
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["category"],"real_contact")
+        self.assertTrue(rows[0]["historical_derived"])
+
+
 
 if __name__=="__main__":
     unittest.main()
