@@ -30,6 +30,7 @@ from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
+from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
@@ -258,6 +259,8 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "exploration_history": [],
     "inbound_messages": [],
     "inbound_agent_stats": {},
+    "inbound_traffic_events": [],
+    "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"real_contact":0,"unknown":0},"last_24h":{"crawler_probe":0,"real_contact":0,"unknown":0},"last_7d":{"crawler_probe":0,"real_contact":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
     "inbound_security_events": [],
     "inbound_security_stats": {
         "blocked_total":0,
@@ -405,6 +408,8 @@ def _state_payload() -> dict:
         "exploration_history": list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
         "inbound_messages": list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "inbound_traffic_events": list(AUTOPILOT_STATE.get("inbound_traffic_events") or [])[-1200:],
+        "inbound_traffic_summary": AUTOPILOT_STATE.get("inbound_traffic_summary") or {},
         "inbound_security_events": list(AUTOPILOT_STATE.get("inbound_security_events") or [])[-80:],
         "inbound_security_stats": AUTOPILOT_STATE.get("inbound_security_stats") or {},
         "agent_chat_events": list(AUTOPILOT_STATE.get("agent_chat_events") or [])[-240:],
@@ -504,6 +509,9 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_messages"] = payload.get("inbound_messages")[-80:]
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
+    if isinstance(payload.get("inbound_traffic_events"), list):
+        AUTOPILOT_STATE["inbound_traffic_events"] = [x for x in payload.get("inbound_traffic_events")[-1200:] if isinstance(x,dict)]
+        AUTOPILOT_STATE["inbound_traffic_summary"] = summarize_inbound_traffic(AUTOPILOT_STATE["inbound_traffic_events"])
     if isinstance(payload.get("inbound_security_events"), list):
         AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
     if isinstance(payload.get("inbound_security_stats"), dict):
@@ -1081,6 +1089,51 @@ def _a2a_inbound_text(payload: dict) -> str:
     return "\n".join(chunks).strip()[:A2A_MAX_MESSAGE_CHARS]
 
 
+def _inbound_request_meta(request: Request) -> dict:
+    headers=request.headers
+    declared=str(headers.get("origin") or headers.get("referer") or headers.get("x-agent-card-url") or "").strip()[:500]
+    forwarded=str(headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    client_ip=forwarded or str(headers.get("x-real-ip") or "") or (request.client.host if request.client else "")
+    return {
+        "user_agent":str(headers.get("user-agent") or "")[:500],
+        "ip_or_origin":declared or client_ip[:180],
+        "mcp_session_id":str(headers.get("mcp-session-id") or "")[:300],
+    }
+
+
+def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoint: str|None=None) -> dict:
+    payload=payload if isinstance(payload,dict) else {}
+    path=endpoint or request.url.path
+    rpc_method=str(payload.get("method") or "")[:120]
+    has_text=False
+    if path=="/a2a":
+        try:
+            has_text=bool(_a2a_inbound_text(payload).strip())
+        except Exception:
+            has_text=False
+    meta=_inbound_request_meta(request)
+    category,reason,crawler=classify_inbound_event(
+        endpoint=path,method=request.method,user_agent=meta["user_agent"],
+        origin=meta["ip_or_origin"],rpc_method=rpc_method,has_text=has_text,
+    )
+    row={
+        "timestamp_utc":datetime.now(timezone.utc).isoformat(),
+        "endpoint":path,
+        "method":request.method,
+        "user_agent":meta["user_agent"] or None,
+        "ip_or_origin":meta["ip_or_origin"] or None,
+        "category":category,
+        "reason":reason,
+        "rpc_method":rpc_method or None,
+        "mcp_session_id":meta["mcp_session_id"] or None,
+        "crawler_name":crawler,
+    }
+    events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
+    AUTOPILOT_STATE["inbound_traffic_events"]=events
+    AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
+    return row
+
+
 def _a2a_sender(payload: dict, request: Request) -> dict:
     params=payload.get("params") or {}
     message=params.get("message") or {}
@@ -1416,6 +1469,7 @@ def _inbound_reply_text(row: dict) -> str:
     )
 
 async def a2a_agent_card(request: Request):
+    _record_inbound_traffic(request)
     return JSONResponse(_neo_agent_card())
 
 
@@ -1478,6 +1532,7 @@ async def a2a_endpoint(request: Request):
     if not isinstance(payload,dict):
         return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}},status_code=400)
     rpc_id=payload.get("id")
+    _record_inbound_traffic(request,payload=payload)
     requested_version=_a2a_requested_version(request)
     if not _a2a_version_supported(requested_version):
         return JSONResponse({
@@ -1663,6 +1718,7 @@ async def trust_lab_page(request: Request):
 
 
 async def api_agent_chats(request: Request):
+    _record_inbound_traffic(request)
     events=backfill_inbound_chat_events(
         AUTOPILOT_STATE.get("inbound_messages") or [],
         AUTOPILOT_STATE.get("agent_chat_events") or [],
@@ -1758,6 +1814,7 @@ async def agent_demand_page(request: Request):
 
 
 async def api_inbound_agents(request: Request):
+    _record_inbound_traffic(request)
     stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
     declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
     messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
@@ -1784,6 +1841,7 @@ async def api_inbound_agents(request: Request):
         },
         "agent_demand_observatory":summarize_agent_demand(messages,stats),
         "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
+        "inbound_traffic_summary":AUTOPILOT_STATE.get("inbound_traffic_summary") or summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or []),
         "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
         "recent_messages":messages[-20:],
         "recent_security_events":security_events[-20:],
@@ -11389,6 +11447,7 @@ async def mcp_discovery_document(request: Request):
 
 
 async def health(request: Request):
+    _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
     return JSONResponse({
         "status":"ok",
@@ -11636,11 +11695,70 @@ async def api_collective(request: Request):
     return JSONResponse(await collective_two_rounds(q, problem, 3))
 
 
-mcp_app = mcp.streamable_http_app(
+class _InboundTrafficASGI:
+    def __init__(self, app):
+        self.app=app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type")!="http" or not str(scope.get("path") or "").startswith("/mcp"):
+            return await self.app(scope,receive,send)
+        chunks=[]
+        more=True
+        while more:
+            message=await receive()
+            if message.get("type")!="http.request":
+                continue
+            chunks.append(message.get("body",b""))
+            more=bool(message.get("more_body"))
+        body=b"".join(chunks)
+        payload={}
+        if len(body)<=1024*1024:
+            try:
+                parsed=json.loads(body.decode("utf-8")) if body else {}
+                if isinstance(parsed,dict):
+                    payload=parsed
+            except Exception:
+                payload={}
+        header_map={k.decode("latin1").lower():v.decode("latin1") for k,v in (scope.get("headers") or [])}
+        declared=(header_map.get("origin") or header_map.get("referer") or header_map.get("x-agent-card-url") or "")[:500]
+        client=scope.get("client") or ("",0)
+        forwarded=(header_map.get("x-forwarded-for") or "").split(",")[0].strip()
+        source=declared or forwarded or header_map.get("x-real-ip") or str(client[0] or "")
+        rpc=str(payload.get("method") or "")[:120]
+        category,reason,crawler=classify_inbound_event(
+            endpoint=str(scope.get("path") or "/mcp"),method=str(scope.get("method") or "POST"),
+            user_agent=header_map.get("user-agent",""),origin=source,rpc_method=rpc,has_text=False,
+        )
+        row={
+            "timestamp_utc":datetime.now(timezone.utc).isoformat(),
+            "endpoint":str(scope.get("path") or "/mcp"),
+            "method":str(scope.get("method") or "POST"),
+            "user_agent":header_map.get("user-agent") or None,
+            "ip_or_origin":source or None,
+            "category":category,
+            "reason":reason,
+            "rpc_method":rpc or None,
+            "mcp_session_id":header_map.get("mcp-session-id") or None,
+            "crawler_name":crawler,
+        }
+        events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
+        AUTOPILOT_STATE["inbound_traffic_events"]=events
+        AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
+        sent=False
+        async def replay_receive():
+            nonlocal sent
+            if not sent:
+                sent=True
+                return {"type":"http.request","body":body,"more_body":False}
+            return {"type":"http.disconnect"}
+        return await self.app(scope,replay_receive,send)
+
+
+mcp_app = _InboundTrafficASGI(mcp.streamable_http_app(
     stateless_http=True,
     json_response=True,
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-)
+))
 
 
 async def _startup_neo_dialect_probe() -> None:

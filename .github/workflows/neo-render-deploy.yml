@@ -43,6 +43,8 @@ on:
       - "test_agent_demand.py"
       - "agent_demand.py"
       - "test_agent_chat.py"
+      - "inbound_traffic.py"
+      - "test_inbound_traffic.py"
       - "agent_chat.py"
       - "test_trust_lab.py"
       - "inbound_recovery_seed.json"
@@ -128,7 +130,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+          python -m unittest -v test_evidence_integrity.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
 
       - name: Build Docker image in GitHub CI
         run: |
