@@ -11921,10 +11921,18 @@ app = Starlette(
 
 
 class _ExplicitReviewASGI:
-    """Deny network-capable public HTTP entry points without server-side review."""
-    guarded_paths={
-        "/api/discover","/api/collective","/api/director/run",
-        "/api/market/run-cycles","/api/heartbeat",
+    """Deny externally-triggered network/state effects without server-side review."""
+    guarded_methods={
+        "/api/discover":{"GET"},
+        "/api/collective":{"GET"},
+        "/api/director/run":{"GET"},
+        "/api/market/run-cycles":{"POST"},
+        "/api/heartbeat":{"GET"},
+        "/api/runtime/snapshot-published":{"POST"},
+        "/api/trust/evaluate":{"POST"},
+        "/venture":{"POST"},
+        "/api/venture/audit":{"GET","POST"},
+        "/api/venture/measurement":{"POST"},
     }
 
     def __init__(self, inner):
@@ -11932,10 +11940,12 @@ class _ExplicitReviewASGI:
 
     async def __call__(self, scope, receive, send):
         path=str(scope.get("path") or "")
-        if scope.get("type")=="http" and path in self.guarded_paths:
+        method=str(scope.get("method") or "GET").upper()
+        guarded=method in self.guarded_methods.get(path,set())
+        if scope.get("type")=="http" and guarded:
             headers={k.decode("latin1").lower():v.decode("latin1") for k,v in (scope.get("headers") or [])}
             if not explicit_review_authorized(headers):
-                raw=json.dumps(review_required_result(path),separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                raw=json.dumps(review_required_result(path+":"+method),separators=(",",":"),ensure_ascii=False).encode("utf-8")
                 await send({"type":"http.response.start","status":403,"headers":[
                     (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
                 ]})
