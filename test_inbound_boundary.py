@@ -28,12 +28,20 @@ class InboundBoundaryTests(unittest.TestCase):
         self.assertFalse(row["execution_allowed"])
         self.assertFalse(row["installation_allowed"])
         self.assertFalse(row["knowledge_ledger_write_allowed"])
+        self.assertFalse(row["hypothesis_creation_allowed"])
 
     def test_all_network_capable_inbound_entry_points_require_review(self):
         source=Path("cloud_mcp.py").read_text(encoding="utf-8")
-        for path in ("/api/discover","/api/collective","/api/director/run","/api/market/run-cycles","/api/heartbeat"):
+        for path in (
+            "/api/discover","/api/collective","/api/director/run","/api/market/run-cycles",
+            "/api/heartbeat","/api/runtime/snapshot-published","/api/trust/evaluate",
+            "/venture","/api/venture/audit","/api/venture/measurement",
+        ):
             self.assertIn('"'+path+'"',source)
-        self.assertIn('rpc=="tools/call" and not explicit_review_authorized',source)
+        self.assertIn('guarded_methods={',source)
+        self.assertIn('if rpc=="tools/call":',source)
+        self.assertIn('if not explicit_review_authorized(header_map):',source)
+        self.assertIn('endpoint_verifier.consume_rate_limit',source)
         self.assertNotIn('AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]\n        row["knowledge_id"]',source)
 
 
