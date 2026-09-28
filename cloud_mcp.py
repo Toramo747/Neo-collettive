@@ -12004,6 +12004,7 @@ app = Starlette(
 class _ExplicitReviewASGI:
     """Deny externally-triggered network/state effects without server-side review."""
     guarded_methods={
+        "/api/discover":{"GET"},
         "/api/collective":{"GET"},
         "/api/director/run":{"GET"},
         "/api/market/run-cycles":{"POST"},
