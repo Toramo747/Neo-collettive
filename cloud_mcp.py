@@ -6726,7 +6726,7 @@ def _strip_html_text(value: str, limit: int = 5000) -> str:
 async def _revalidation_fetch_url(url: str, row: dict[str, Any]) -> dict:
     """Fresh bounded fetch for legacy evidence revalidation.
 
-    Redirects are followed manually so each hop is checked by the public-HTTPS guard.
+    Redirects are followed only by the bounded verifier, which revalidates DNS and every hop.
     Any error is returned as data; callers must never let it abort an autopilot cycle.
     """
     current=str(url or "").strip()
@@ -6774,10 +6774,9 @@ async def _revalidation_fetch_url(url: str, row: dict[str, Any]) -> dict:
             "url":current,
             "title":title,
             "body":body,
-            "status":response.status_code,
+            "status":status,
             "content_type":ctype[:120],
         }
-        return {"ok":False,"error":"too_many_redirects"}
     except Exception as exc:
         return {"ok":False,"error":type(exc).__name__+": "+str(exc)[:220]}
 
