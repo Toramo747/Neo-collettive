@@ -185,6 +185,7 @@ def merge_supplementary_state(
 
     messages={}
     stats={}
+    traffic_events={}
     for _source,payload in candidates:
         if not isinstance(payload,dict):
             continue
@@ -204,6 +205,14 @@ def merge_supplementary_state(
             current=stats.get(str(key))
             if not current or str(row.get("last_seen_utc") or "") >= str(current.get("last_seen_utc") or ""):
                 stats[str(key)]=row
+        for row in payload.get("inbound_traffic_events") or []:
+            if not isinstance(row,dict):
+                continue
+            key=str(row.get("event_id") or "").strip() or "|".join(str(row.get(field) or "") for field in (
+                "timestamp_utc","endpoint","method","rpc_method","ip_or_origin","user_agent","content_fingerprint"
+            ))
+            if key:
+                traffic_events[key]=row
 
     for row in merged.get("inbound_messages") or []:
         if isinstance(row,dict):
@@ -221,4 +230,7 @@ def merge_supplementary_state(
         merged["inbound_messages"]=ordered[-80:]
     if stats:
         merged["inbound_agent_stats"]=stats
+    if traffic_events:
+        ordered=sorted(traffic_events.values(),key=lambda row:str(row.get("timestamp_utc") or ""))
+        merged["inbound_traffic_events"]=ordered[-1200:]
     return merged

@@ -17,6 +17,19 @@ _MAX_AMOUNT_RE=re.compile(r'(?i)(?:"?(?:amount|value)"?\s*[:=]\s*"?(?:max|all)"?
 _ASSET_RE=re.compile(r"(?i)\b(?:USDC|USDT|BTC|BITCOIN|ETH|ETHEREUM|SOL|SOLANA|TRX|TRON)\b")
 _IMPERATIVE_TRANSFER_RE=re.compile(r"(?i)\b(?:send|transfer|pay|forward)\b")
 _RESEARCH_CONTEXT_RE=re.compile(r"(?i)\b(?:analy[sz]e|analysis|research|example|sample|malicious|phishing|spam|threat|detect|classifier|quoted)\b")
+_CODE_ACQUISITION_RE=re.compile(
+    r"(?i)(?:\b(?:curl|wget)\b.{0,160}(?:https?://|paste\.)|"
+    r"\b(?:download|fetch)\b.{0,100}\b(?:script|code|file)\b|"
+    r"\b(?:pip|npm|yarn|apt(?:-get)?|dnf|brew)\s+install\b)"
+)
+_CODE_EXECUTION_RE=re.compile(
+    r"(?i)(?:\b(?:execute|run|launch)\b.{0,80}\b(?:script|code|command|binary|node)\b|"
+    r"\b(?:python|python3|bash|sh|powershell|pwsh|node)\s+[^\n]{0,160})"
+)
+_EXTERNAL_PASTE_RE=re.compile(r"(?i)https?://(?:www\.)?(?:paste\.rs|pastebin\.com|hastebin\.com)/\S+")
+_EXTERNAL_IP_URL_RE=re.compile(r"(?i)https?://(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:/\S*)?")
+_REWARD_RE=re.compile(r"(?i)\b(?:earn|reward|compensation|bounty|payment|paid)\b.{0,80}\b(?:token|coin|credit|money|crypto)\b")
+_JOIN_RE=re.compile(r"(?i)\b(?:join|enroll|participate|federat|run\s+(?:a|your)\s+node|node-id)\b")
 
 
 def _clean(value: Any) -> str:
@@ -41,6 +54,27 @@ def classify_inbound_security(text: str) -> dict:
     raw=_clean(text)
     if not raw:
         return {"blocked":False,"traffic_class":"NORMAL","reason":"empty","signals":[]}
+
+    solicitation_signals=[]
+    if _CODE_ACQUISITION_RE.search(raw): solicitation_signals.append("code_acquisition")
+    if _CODE_EXECUTION_RE.search(raw): solicitation_signals.append("code_execution")
+    if _EXTERNAL_PASTE_RE.search(raw): solicitation_signals.append("external_paste")
+    if _EXTERNAL_IP_URL_RE.search(raw): solicitation_signals.append("external_ip_url")
+    if _REWARD_RE.search(raw): solicitation_signals.append("promised_compensation")
+    if _JOIN_RE.search(raw): solicitation_signals.append("join_or_node_request")
+    malicious_solicitation=(
+        ("code_acquisition" in solicitation_signals and "code_execution" in solicitation_signals)
+        or ("external_paste" in solicitation_signals and "code_execution" in solicitation_signals)
+        or ("external_ip_url" in solicitation_signals and "join_or_node_request" in solicitation_signals)
+        or ("promised_compensation" in solicitation_signals and "join_or_node_request" in solicitation_signals)
+    )
+    if malicious_solicitation:
+        return {
+            "blocked":True,
+            "traffic_class":"MALICIOUS_SOLICITATION",
+            "reason":"download_execute_or_reward_solicitation",
+            "signals":sorted(set(solicitation_signals)),
+        }
 
     wallets=_wallet_count(raw)
     structured=len(_STRUCTURED_KEY_RE.findall(raw))
@@ -158,7 +192,10 @@ def quarantine_legacy_inbound_security(payload: dict | None) -> tuple[dict | Non
     stats=dict(out.get("inbound_security_stats") or {})
     if moved:
         stats["blocked_total"]=max(int(stats.get("blocked_total") or 0),len(all_security))
-        stats["crypto_transfer_requests"]=max(int(stats.get("crypto_transfer_requests") or 0),len(all_security))
+        crypto_count=sum(1 for event in all_security if event.get("reason")=="execution_shaped_crypto_transfer_request")
+        stats["crypto_transfer_requests"]=max(int(stats.get("crypto_transfer_requests") or 0),crypto_count)
+        solicitation_count=sum(1 for event in all_security if event.get("traffic_class")=="MALICIOUS_SOLICITATION")
+        stats["malicious_solicitations"]=max(int(stats.get("malicious_solicitations") or 0),solicitation_count)
         stats["last_seen_utc"]=moved[-1].get("received_at_utc")
     out["inbound_messages"]=clean[-80:]
     out["agent_chat_events"]=filtered[-240:]

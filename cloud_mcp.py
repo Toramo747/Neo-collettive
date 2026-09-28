@@ -30,7 +30,7 @@ from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
-from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
@@ -260,7 +260,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "inbound_traffic_events": [],
-    "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"self_traffic":0,"real_contact":0,"unknown":0},"last_24h":{"crawler_probe":0,"self_traffic":0,"real_contact":0,"unknown":0},"last_7d":{"crawler_probe":0,"self_traffic":0,"real_contact":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
+    "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0},"last_24h":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0},"last_7d":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
     "inbound_security_events": [],
     "inbound_security_stats": {
         "blocked_total":0,
@@ -510,7 +510,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
     if isinstance(payload.get("inbound_agent_stats"), dict):
         AUTOPILOT_STATE["inbound_agent_stats"] = payload.get("inbound_agent_stats") or {}
     if isinstance(payload.get("inbound_traffic_events"), list) and payload.get("inbound_traffic_events"):
-        AUTOPILOT_STATE["inbound_traffic_events"] = [x for x in payload.get("inbound_traffic_events")[-1200:] if isinstance(x,dict)]
+        AUTOPILOT_STATE["inbound_traffic_events"] = reconcile_message_events(
+            [x for x in payload.get("inbound_traffic_events")[-1200:] if isinstance(x,dict)],
+            payload.get("inbound_messages") or [],
+        )
     elif isinstance(payload.get("inbound_messages"), list):
         AUTOPILOT_STATE["inbound_traffic_events"] = retroactive_from_inbound_messages(payload.get("inbound_messages") or [])
     AUTOPILOT_STATE["inbound_traffic_events"] = reclassify_known_self_events(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
@@ -877,6 +880,12 @@ def _restore_state() -> str:
     cycle_floor_meta["load"]=cycle_floor_load
     payload=upgrade_legacy_admitted_interviews(payload)
     payload=upgrade_legacy_intent_state(payload)
+    if isinstance(payload,dict):
+        payload=dict(payload)
+        payload["inbound_traffic_events"]=reconcile_message_events(
+            payload.get("inbound_traffic_events") or [],
+            payload.get("inbound_messages") or [],
+        )
     payload,inbound_security_migration=quarantine_legacy_inbound_security(payload)
     meta["inbound_security_migration"]=inbound_security_migration
     if isinstance(payload,dict):
@@ -1111,15 +1120,18 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     path=endpoint or request.url.path
     rpc_method=str(payload.get("method") or "")[:120]
     has_text=False
+    inbound_text=""
     if path=="/a2a":
         try:
-            has_text=bool(_a2a_inbound_text(payload).strip())
+            inbound_text=_a2a_inbound_text(payload).strip()
+            has_text=bool(inbound_text)
         except Exception:
             has_text=False
     meta=_inbound_request_meta(request)
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
         origin=meta["ip_or_origin"],rpc_method=rpc_method,has_text=has_text,
+        text=inbound_text,
         self_marker=meta["self_marker"],declared_agent_id=meta["declared_agent_id"],
     )
     row={
@@ -1134,12 +1146,13 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "mcp_session_id":meta["mcp_session_id"] or None,
         "crawler_name":crawler,
         "self_source":meta["self_marker"] or (meta["declared_agent_id"] if category=="self_traffic" else None),
+        "content_fingerprint":content_fingerprint(inbound_text),
     }
     events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
     AUTOPILOT_STATE["inbound_traffic_events"]=events
     AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
     _save_local_state()
-    return row
+    return dict(events[-1]) if events else row
 
 
 def _a2a_sender(payload: dict, request: Request) -> dict:
@@ -1259,6 +1272,8 @@ def _record_inbound_security_event(payload: dict, request: Request, verdict: dic
     stats["blocked_total"]=int(stats.get("blocked_total") or 0)+1
     if event["reason"]=="execution_shaped_crypto_transfer_request":
         stats["crypto_transfer_requests"]=int(stats.get("crypto_transfer_requests") or 0)+1
+    if event["traffic_class"]=="MALICIOUS_SOLICITATION":
+        stats["malicious_solicitations"]=int(stats.get("malicious_solicitations") or 0)+1
     stats["last_seen_utc"]=now
     AUTOPILOT_STATE["inbound_security_stats"]=stats
     return event
@@ -1545,7 +1560,7 @@ async def a2a_endpoint(request: Request):
     if not isinstance(payload,dict):
         return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}},status_code=400)
     rpc_id=payload.get("id")
-    _record_inbound_traffic(request,payload=payload)
+    traffic_row=_record_inbound_traffic(request,payload=payload)
     requested_version=_a2a_requested_version(request)
     if not _a2a_version_supported(requested_version):
         return JSONResponse({
@@ -1564,6 +1579,37 @@ async def a2a_endpoint(request: Request):
         },status_code=404)
 
     inbound_text=_a2a_inbound_text(payload)
+    if traffic_row.get("category")=="malicious_solicitation":
+        security_verdict=classify_inbound_security(inbound_text)
+        event=_record_inbound_security_event(payload,request,security_verdict)
+        _save_local_state()
+        suppressed={
+            "role":"agent","messageId":"neo-suppressed-"+secrets.token_hex(8),
+            "contextId":event.get("thread_id"),"parts":[],
+            "metadata":{
+                "neo_version":VERSION,"a2a_version":requested_version,"brand":"MYCELIX",
+                "traffic_class":"MALICIOUS_SOLICITATION","response_suppressed":True,
+                "conversation_allowed_bounded":False,"commercial_influence":"NONE",
+                "fetch_allowed":False,"execution_allowed":False,"installation_allowed":False,
+                "protected_actions_enforced":True,
+            },
+        }
+        if requested_version=="0.3": suppressed["kind"]="message"
+        return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":suppressed})
+    if traffic_row.get("category") in {"real_contact_pending","crawler_probe"} and str(traffic_row.get("reason") or "").startswith("active_a2a_probe_"):
+        _save_local_state()
+        probe_result={
+            "role":"agent","messageId":"neo-probe-"+secrets.token_hex(8),
+            "contextId":None,"parts":[],
+            "metadata":{
+                "neo_version":VERSION,"a2a_version":requested_version,"brand":"MYCELIX",
+                "traffic_class":traffic_row.get("category"),"probe_only":True,
+                "conversation_allowed_bounded":False,"commercial_influence":"NONE",
+                "protected_actions_enforced":True,
+            },
+        }
+        if requested_version=="0.3": probe_result["kind"]="message"
+        return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":probe_result})
     dialect_reply=_neo_dialect_inbound_reply(inbound_text,payload,request)
     if dialect_reply is not None:
         message_id="neo-dialect-reply-"+secrets.token_hex(8)

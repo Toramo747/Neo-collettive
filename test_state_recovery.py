@@ -72,6 +72,20 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertEqual(len(merged["inbound_messages"]),1)
         self.assertIn("a",merged["inbound_agent_stats"])
 
+    def test_supplementary_merge_preserves_telemetry_across_restart(self):
+        before={
+            "cycles_completed":144,
+            "inbound_traffic_events":[{
+                "event_id":"traffic-1","timestamp_utc":"2026-09-28T08:00:00+00:00",
+                "endpoint":"/health","category":"crawler_probe",
+            }],
+        }
+        after=merge_supplementary_state(
+            {"cycles_completed":145,"inbound_traffic_events":[]},
+            [("local_snapshot",before)],
+        )
+        self.assertEqual([x["event_id"] for x in after["inbound_traffic_events"]],["traffic-1"])
+
 
     def test_cycle_floor_raises_only_counter(self):
         selected={
