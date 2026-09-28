@@ -1,18 +1,20 @@
 # Status-data age and Registry sample note — 2026-09-28
 
-Reference report time: `2026-09-28T20:10:00+00:00` (22:10 CEST).
+Reference report time: `2026-09-28T20:12:00+00:00` (22:12 CEST).
 
 ## Age of runtime data
 
-The status figures used in this report come from the persisted `neo_latest_result.json`, not from an assumption that the values are live.
+During this audit, `main` received runtime snapshot commit `d56bc90dd7aa6ad898032a70b5384991e98585f5`.
 
-- Last completed runtime cycle: `2026-09-28T18:37:05.644685+00:00`.
-  - Age at the reference report time: about **1 h 32 min 54 s**.
-- Endpoint-latency capture: `2026-09-28T18:41:38.234072+00:00`.
-  - Age at the reference report time: about **1 h 28 min 22 s**.
-- The individual first health sample was at `18:41:36.217Z`; the subsequent health sample was at `18:41:37.828Z`.
+- Cycle floor: **830**.
+- Last completed runtime cycle: `2026-09-28T20:07:50.943121+00:00`.
+  - Age at the reference report time: about **4 min 9 s**.
+- Latest endpoint-latency capture: `2026-09-28T20:09:28.715360+00:00`.
+  - Age at the reference report time: about **2 min 31 s**.
+- Latest first health sample: `2026-09-28T20:09:25.285Z`, 782.59 ms.
+- Latest subsequent health sample: `2026-09-28T20:09:28.091Z`, 670.33 ms.
 
-Any later runtime activity is outside this persisted snapshot and must not be inferred from these values.
+These ages are relative to the stated report reference time, not the time at which a reader later opens the file.
 
 ## Registry FINAL sample selection
 
