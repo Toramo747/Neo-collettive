@@ -62,6 +62,12 @@ def reclassify_known_self_events(events: list[dict]|None) -> list[dict]:
             source="user_authorized_session"
         elif "pathwren.workers.dev/mcp-lint" in hay or "growth-loop/1.0" in hay:
             source="pathwren_ci_validation"
+        elif (
+            _clean(row.get("user_agent"),300).startswith("python-httpx2/")
+            and _clean(row.get("ip_or_origin"),100)=="20.102.46.202"
+            and "2026-09-28T07:43:30" <= _clean(row.get("timestamp_utc"),80) <= "2026-09-28T07:44:23"
+        ):
+            source="github_actions_verify_mcp_live_probe"
         elif row.get("self_source"):
             source=_clean(row.get("self_source"),300)
         if source and row.get("category")!="self_traffic":

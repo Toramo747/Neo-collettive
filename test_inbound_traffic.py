@@ -95,5 +95,16 @@ class InboundTrafficTests(unittest.TestCase):
         self.assertEqual(rows[0]["self_source"],"pathwren_ci_validation")
 
 
+    def test_historical_verify_mcp_live_probe_is_self_traffic(self):
+        rows=reclassify_known_self_events([{
+            "timestamp_utc":"2026-09-28T07:44:02.944972+00:00",
+            "endpoint":"/mcp","method":"POST",
+            "user_agent":"python-httpx2/2.13.1","ip_or_origin":"20.102.46.202",
+            "category":"real_contact","reason":"mcp_tools_call","rpc_method":"tools/call",
+        }])
+        self.assertEqual(rows[0]["category"],"self_traffic")
+        self.assertEqual(rows[0]["self_source"],"github_actions_verify_mcp_live_probe")
+
+
 if __name__=="__main__":
     unittest.main()
