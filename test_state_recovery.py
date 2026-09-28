@@ -86,6 +86,32 @@ class StateRecoveryTests(unittest.TestCase):
         )
         self.assertEqual([x["event_id"] for x in after["inbound_traffic_events"]],["traffic-1"])
 
+    def test_security_and_traffic_survive_multiple_consecutive_deploy_merges(self):
+        mavis_traffic={
+            "event_id":"traffic-mavis","timestamp_utc":"2026-09-28T04:50:12.687030+00:00",
+            "endpoint":"/a2a","category":"malicious_solicitation",
+        }
+        mavis_security={
+            "event_id":"sec-mavis","received_at_utc":"2026-09-28T04:50:12.687030+00:00",
+            "traffic_class":"MALICIOUS_SOLICITATION",
+            "reason":"download_execute_or_reward_solicitation",
+        }
+        deploy1=merge_supplementary_state(
+            {"cycles_completed":200,"inbound_traffic_events":[],"inbound_security_events":[]},
+            [("render_env",{
+                "cycles_completed":199,
+                "inbound_traffic_events":[mavis_traffic],
+                "inbound_security_events":[mavis_security],
+            })],
+        )
+        deploy2=merge_supplementary_state(
+            {"cycles_completed":201,"inbound_traffic_events":[],"inbound_security_events":[]},
+            [("repo_snapshot",deploy1)],
+        )
+        self.assertEqual([x["event_id"] for x in deploy2["inbound_traffic_events"]],["traffic-mavis"])
+        self.assertEqual([x["event_id"] for x in deploy2["inbound_security_events"]],["sec-mavis"])
+        self.assertEqual(deploy2["inbound_security_stats"]["malicious_solicitations"],1)
+
     def test_supplementary_merge_preserves_pending_inbound_review(self):
         before={"cycles_completed":144,"inbound_review_queue":[{
             "received_at_utc":"2026-09-28T10:00:00Z","source_agent_id":"peer-1",
