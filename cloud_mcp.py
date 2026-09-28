@@ -11824,17 +11824,31 @@ class _InboundTrafficASGI:
         AUTOPILOT_STATE["inbound_traffic_events"]=events
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
         _save_local_state()
-        if rpc=="tools/call" and not explicit_review_authorized(header_map):
-            response={
-                "jsonrpc":"2.0","id":payload.get("id"),
-                "error":{"code":-32003,"message":"explicit_review_required","data":review_required_result("mcp_tools_call")},
-            }
-            raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
-            await send({"type":"http.response.start","status":403,"headers":[
-                (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
-            ]})
-            await send({"type":"http.response.body","body":raw})
-            return
+        if rpc=="tools/call":
+            if not explicit_review_authorized(header_map):
+                response={
+                    "jsonrpc":"2.0","id":payload.get("id"),
+                    "error":{"code":-32003,"message":"explicit_review_required","data":review_required_result("mcp_tools_call")},
+                }
+                raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                await send({"type":"http.response.start","status":403,"headers":[
+                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                ]})
+                await send({"type":"http.response.body","body":raw})
+                return
+            try:
+                endpoint_verifier.consume_rate_limit("mcp-tools:"+endpoint_verifier.caller_bucket(source))
+            except endpoint_verifier.VerificationError as exc:
+                response={
+                    "jsonrpc":"2.0","id":payload.get("id"),
+                    "error":{"code":-32029,"message":"rate_limited","data":{"error":exc.code}},
+                }
+                raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                await send({"type":"http.response.start","status":429,"headers":[
+                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                ]})
+                await send({"type":"http.response.body","body":raw})
+                return
         sent=False
         async def replay_receive():
             nonlocal sent
