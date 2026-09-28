@@ -44,6 +44,7 @@ class InboundTrafficTests(unittest.TestCase):
         self.assertEqual(s["counts"]["last_24h"]["real_contact"],1)
         self.assertEqual(s["counts"]["last_7d"]["unknown"],0)
         self.assertEqual(s["crawler_origins"][0]["name"],"agent-tools.cloud")
+        self.assertEqual(s["real_contact_origins"][0]["name"],"unknown")
 
     def test_retroactive_existing_a2a_text_is_real_contact_only(self):
         rows=retroactive_from_inbound_messages([
