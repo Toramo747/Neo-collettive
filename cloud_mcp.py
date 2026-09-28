@@ -261,7 +261,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "inbound_traffic_events": [],
-    "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0},"last_24h":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0},"last_7d":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
+    "inbound_traffic_summary": {"schema_v":2,"official_counting_since_utc":"2026-09-28T07:07:09+00:00","legacy_rule":"real_contact before commit 30aeb80 is preserved as legacy_unattributable and excluded from official real_contact counts","events_total":0,"counts":{"total":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"legacy_unattributable":0,"malicious_solicitation":0,"unknown":0},"last_24h":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"legacy_unattributable":0,"malicious_solicitation":0,"unknown":0},"last_7d":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"legacy_unattributable":0,"malicious_solicitation":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
     "inbound_security_events": [],
     "inbound_review_queue": [],
     "inbound_security_stats": {
