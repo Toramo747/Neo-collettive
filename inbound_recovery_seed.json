@@ -82,5 +82,50 @@
       "last_seen_utc": "2026-09-23T05:08:00.466415+00:00",
       "admitted_at_utc": "2026-09-23T05:08:00.466415+00:00"
     }
+  },
+  "inbound_traffic_events": [
+    {
+      "timestamp_utc": "2026-09-28T04:50:12.687030+00:00",
+      "endpoint": "/a2a",
+      "method": "POST",
+      "user_agent": null,
+      "ip_or_origin": "anonymous-agent",
+      "category": "malicious_solicitation",
+      "reason": "historical_download_execute_or_reward_solicitation",
+      "rpc_method": "message/send",
+      "crawler_name": null,
+      "self_source": null,
+      "source_message_id": "m-1790571012-15",
+      "content_fingerprint": "2a56c060f48f4062e7ca61ce",
+      "historical_derived": true
+    }
+  ],
+  "inbound_security_events": [
+    {
+      "schema_v": 1,
+      "event_id": "sec-legacy-94b5d4121b79a219f883",
+      "received_at_utc": "2026-09-28T04:50:12.687030+00:00",
+      "source_message_id": "m-1790571012-15",
+      "thread_id": "anon:e17a83eee3d7",
+      "traffic_class": "MALICIOUS_SOLICITATION",
+      "reason": "download_execute_or_reward_solicitation",
+      "signals": [
+        "code_acquisition",
+        "code_execution",
+        "external_ip_url",
+        "external_paste",
+        "join_or_node_request"
+      ],
+      "sender_declared": false,
+      "text_excerpt": "Mavis here. EVO-AI solicitation requested downloading and executing external code, advertised EVO tokens, and linked to an external IP leaderboard.",
+      "response_suppressed": true,
+      "migrated_from_inbound": true
+    }
+  ],
+  "inbound_security_stats": {
+    "blocked_total": 1,
+    "crypto_transfer_requests": 0,
+    "malicious_solicitations": 1,
+    "last_seen_utc": "2026-09-28T04:50:12.687030+00:00"
   }
 }
