@@ -30,7 +30,7 @@ from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
-from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages
+from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
@@ -513,6 +513,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_traffic_events"] = [x for x in payload.get("inbound_traffic_events")[-1200:] if isinstance(x,dict)]
     elif isinstance(payload.get("inbound_messages"), list):
         AUTOPILOT_STATE["inbound_traffic_events"] = retroactive_from_inbound_messages(payload.get("inbound_messages") or [])
+    AUTOPILOT_STATE["inbound_traffic_events"] = reclassify_known_self_events(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
     AUTOPILOT_STATE["inbound_traffic_summary"] = summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
     if isinstance(payload.get("inbound_security_events"), list):
         AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
@@ -9603,7 +9604,7 @@ async def api_render_diagnostics(request: Request):
                 "ownerId": owner_id,
                 "resource": resource_id,
                 "direction": "backward",
-                "limit": 160,
+                "limit": 1000,
             }),
             render_request(f"/services/{resource_id}/deploys", {"limit": 10}),
         )
@@ -9652,6 +9653,8 @@ async def api_render_diagnostics(request: Request):
             "ask_failures": 0,
             "health_requests": 0,
             "agent_card_requests": 0,
+            "agent_card_requests_last_24h": 0,
+            "health_requests_last_24h": 0,
         }
         important = []
         startup_events = []
@@ -9727,9 +9730,11 @@ async def api_render_diagnostics(request: Request):
                 matched.append("ask")
             if "/health" in low:
                 categories["health_requests"] += 1
+                if ts and ts >= datetime.now(timezone.utc)-timedelta(hours=24): categories["health_requests_last_24h"] += 1
                 matched.append("health")
             if "/.well-known/agent-card.json" in low or "/.well-known/agent.json" in low:
                 categories["agent_card_requests"] += 1
+                if ts and ts >= datetime.now(timezone.utc)-timedelta(hours=24): categories["agent_card_requests_last_24h"] += 1
                 matched.append("agent_card")
 
             if matched and len(important) < 30:

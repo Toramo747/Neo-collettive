@@ -32,7 +32,7 @@ def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", or
     self_hay=(" "+_clean(self_marker,300)+" "+_clean(declared_agent_id,300)+" "+_clean(user_agent,500)+" "+_clean(origin,500)).lower()
     if _clean(self_marker,300):
         return "self_traffic","explicit_mycelix_self_marker",None
-    if any(marker in self_hay for marker in ("chatgpt-research-session","mycelix-internal","jarvis-internal","neo-internal")):
+    if any(marker in self_hay for marker in ("chatgpt-research-session","mycelix-internal","jarvis-internal","neo-internal","pathwren.workers.dev/mcp-lint","growth-loop/1.0")):
         return "self_traffic","declared_internal_or_user_authorized_session",None
     crawler=known_crawler(user_agent,origin)
     if crawler:
@@ -48,6 +48,31 @@ def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", or
     if endpoint.startswith("/mcp") and rpc in {"initialize","tools/list"}:
         return "crawler_probe","mcp_handshake_or_discovery_without_observed_tool_call",None
     return "unknown","no_contact_or_probe_rule_matched",None
+
+def reclassify_known_self_events(events: list[dict]|None) -> list[dict]:
+    """Return a derived copy with known historical self traffic excluded from real contacts."""
+    out=[]
+    for item in events or []:
+        if not isinstance(item,dict):
+            continue
+        row=dict(item)
+        hay=(" "+_clean(row.get("user_agent"),500)+" "+_clean(row.get("ip_or_origin"),500)+" "+_clean(row.get("self_source"),300)).lower()
+        source=None
+        if "chatgpt-research-session" in hay:
+            source="user_authorized_session"
+        elif "pathwren.workers.dev/mcp-lint" in hay or "growth-loop/1.0" in hay:
+            source="pathwren_ci_validation"
+        elif row.get("self_source"):
+            source=_clean(row.get("self_source"),300)
+        if source and row.get("category")!="self_traffic":
+            row["original_category"]=row.get("category")
+            row["original_reason"]=row.get("reason")
+            row["category"]="self_traffic"
+            row["reason"]="retroactive_known_self_traffic"
+            row["self_source"]=source
+        out.append(row)
+    return out
+
 
 def source_key(event: dict) -> str:
     session=_clean(event.get("mcp_session_id"),300)
@@ -76,7 +101,7 @@ def append_event(events: list[dict]|None, event: dict, *, max_events: int=1200) 
 
 def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dict:
     now=now or datetime.now(timezone.utc)
-    rows=[x for x in (events or []) if isinstance(x,dict)]
+    rows=reclassify_known_self_events(events)
     windows={"total":Counter(),"last_24h":Counter(),"last_7d":Counter()}
     real_times=[]
     crawler_origins=Counter()

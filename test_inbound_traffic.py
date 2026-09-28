@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from inbound_traffic import classify_inbound_event, append_event, summarize_events, retroactive_from_inbound_messages
+from inbound_traffic import classify_inbound_event, append_event, summarize_events, retroactive_from_inbound_messages, reclassify_known_self_events
 
 class InboundTrafficTests(unittest.TestCase):
     def test_agent_card_fetch_is_crawler_probe(self):
@@ -76,6 +76,23 @@ class InboundTrafficTests(unittest.TestCase):
         self.assertEqual(s["counts"]["total"]["self_traffic"],1)
         self.assertEqual(s["counts"]["total"]["real_contact"],1)
         self.assertEqual(s["self_traffic_origins"][0]["name"],"github-actions-deploy")
+
+
+    def test_pathwren_ci_callback_is_self_traffic(self):
+        ua="growth-loop/1.0 (+https://www.pathwren.workers.dev/mcp-lint.html)"
+        c,r,n=classify_inbound_event(endpoint="/mcp",method="POST",user_agent=ua,rpc_method="tools/call")
+        self.assertEqual(c,"self_traffic")
+
+    def test_historical_pathwren_real_contact_is_reclassified(self):
+        rows=reclassify_known_self_events([{
+            "timestamp_utc":"2026-09-28T07:41:45+00:00",
+            "endpoint":"/mcp","method":"POST",
+            "user_agent":"growth-loop/1.0 (+https://www.pathwren.workers.dev/mcp-lint.html)",
+            "category":"real_contact","reason":"mcp_tools_call","rpc_method":"tools/call",
+        }])
+        self.assertEqual(rows[0]["category"],"self_traffic")
+        self.assertEqual(rows[0]["original_category"],"real_contact")
+        self.assertEqual(rows[0]["self_source"],"pathwren_ci_validation")
 
 
 if __name__=="__main__":
