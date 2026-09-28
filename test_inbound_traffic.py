@@ -72,7 +72,7 @@ class InboundTrafficTests(unittest.TestCase):
     def test_summary_windows_and_real_contact_bounds(self):
         rows=[
             {"timestamp_utc":"2026-09-28T05:00:00+00:00","category":"crawler_probe","crawler_name":"agent-tools.cloud"},
-            {"timestamp_utc":"2026-09-28T06:00:00+00:00","category":"real_contact"},
+            {"timestamp_utc":"2026-09-28T08:00:00+00:00","category":"real_contact"},
             {"timestamp_utc":"2026-09-20T06:00:00+00:00","category":"unknown"},
         ]
         s=summarize_events(rows,now=datetime(2026,9,28,7,0,tzinfo=timezone.utc))
@@ -81,6 +81,17 @@ class InboundTrafficTests(unittest.TestCase):
         self.assertEqual(s["counts"]["last_7d"]["unknown"],0)
         self.assertEqual(s["crawler_origins"][0]["name"],"agent-tools.cloud")
         self.assertEqual(s["real_contact_origins"][0]["name"],"unknown")
+
+    def test_pre_30aeb80_contact_is_legacy_and_excluded_from_official_count(self):
+        rows=[
+            {"timestamp_utc":"2026-09-28T07:00:00+00:00","category":"real_contact","reason":"a2a_text_message"},
+            {"timestamp_utc":"2026-09-28T07:10:00+00:00","category":"real_contact","reason":"a2a_text_message"},
+        ]
+        s=summarize_events(rows,now=datetime(2026,9,28,8,0,tzinfo=timezone.utc))
+        self.assertEqual(s["counts"]["total"]["legacy_unattributable"],1)
+        self.assertEqual(s["counts"]["total"]["real_contact"],1)
+        self.assertEqual(s["official_counting_since_utc"],"2026-09-28T07:07:09+00:00")
+        self.assertIn("30aeb80",s["legacy_rule"])
 
     def test_retroactive_existing_a2a_text_is_real_contact_only(self):
         rows=retroactive_from_inbound_messages([
@@ -106,7 +117,7 @@ class InboundTrafficTests(unittest.TestCase):
     def test_self_traffic_summary_separate_from_real_contact(self):
         rows=[
             {"timestamp_utc":"2026-09-28T06:00:00+00:00","category":"self_traffic","self_source":"github-actions-deploy"},
-            {"timestamp_utc":"2026-09-28T06:01:00+00:00","category":"real_contact","ip_or_origin":"198.51.100.5"},
+            {"timestamp_utc":"2026-09-28T08:01:00+00:00","category":"real_contact","ip_or_origin":"198.51.100.5"},
         ]
         s=summarize_events(rows,now=datetime(2026,9,28,7,0,tzinfo=timezone.utc))
         self.assertEqual(s["counts"]["total"]["self_traffic"],1)
