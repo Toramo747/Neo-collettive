@@ -8769,6 +8769,30 @@ async def render_request(path: str, params: dict[str, Any] | None = None) -> Any
         return r.json()
 
 
+MCP_TOOL_ACCESS = {
+    "neo_preflight":"read_only_bounded",
+    "neo_discover":"read_only_bounded",
+    "neo_ask_agents":"effectful",
+    "neo_collective":"effectful",
+    "neo_inspect_mcp":"read_only_bounded",
+    "verify_mcp_endpoint":"read_only_bounded",
+    "neo_web_search":"read_only_bounded",
+    "neo_jarvis":"effectful",
+    "neo_director":"effectful",
+    "neo_director_results":"read_only_bounded",
+    "neo_render_status":"effectful",
+    "neo_render_deploys":"effectful",
+    "neo_render_logs":"effectful",
+    "jarvis_render_status":"effectful",
+    "jarvis_render_deploys":"effectful",
+    "jarvis_render_logs":"effectful",
+}
+
+
+def _mcp_tool_access(name: str) -> str:
+    return MCP_TOOL_ACCESS.get(str(name or "").strip(),"effectful")
+
+
 @mcp.tool()
 async def neo_preflight() -> dict:
     """Check whether NEO can reach public discovery registries."""
@@ -11825,17 +11849,9 @@ class _InboundTrafficASGI:
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
         _save_local_state()
         if rpc=="tools/call":
-            if not explicit_review_authorized(header_map):
-                response={
-                    "jsonrpc":"2.0","id":payload.get("id"),
-                    "error":{"code":-32003,"message":"explicit_review_required","data":review_required_result("mcp_tools_call")},
-                }
-                raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
-                await send({"type":"http.response.start","status":403,"headers":[
-                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
-                ]})
-                await send({"type":"http.response.body","body":raw})
-                return
+            params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+            tool_name=str(params.get("name") or "").strip()
+            access=_mcp_tool_access(tool_name)
             try:
                 endpoint_verifier.consume_rate_limit("mcp-tools:"+endpoint_verifier.caller_bucket(source))
             except endpoint_verifier.VerificationError as exc:
@@ -11849,6 +11865,23 @@ class _InboundTrafficASGI:
                 ]})
                 await send({"type":"http.response.body","body":raw})
                 return
+            if access!="read_only_bounded" and not explicit_review_authorized(header_map):
+                data=review_required_result("mcp_tools_call")
+                data["tool_name"]=tool_name or None
+                data["tool_access"]=access
+                response={
+                    "jsonrpc":"2.0","id":payload.get("id"),
+                    "error":{"code":-32003,"message":"explicit_review_required","data":data},
+                }
+                raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                await send({"type":"http.response.start","status":403,"headers":[
+                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                ]})
+                await send({"type":"http.response.body","body":raw})
+                return
+            if access=="read_only_bounded":
+                row["tool_access"]="read_only_bounded"
+                row["tool_name"]=tool_name or None
         sent=False
         async def replay_receive():
             nonlocal sent
@@ -11971,7 +12004,6 @@ app = Starlette(
 class _ExplicitReviewASGI:
     """Deny externally-triggered network/state effects without server-side review."""
     guarded_methods={
-        "/api/discover":{"GET"},
         "/api/collective":{"GET"},
         "/api/director/run":{"GET"},
         "/api/market/run-cycles":{"POST"},
@@ -11992,7 +12024,12 @@ class _ExplicitReviewASGI:
         guarded=method in self.guarded_methods.get(path,set())
         if scope.get("type")=="http" and guarded:
             headers={k.decode("latin1").lower():v.decode("latin1") for k,v in (scope.get("headers") or [])}
-            if not explicit_review_authorized(headers):
+            heartbeat_ok=(
+                path=="/api/heartbeat"
+                and bool(HEARTBEAT_TOKEN)
+                and secrets.compare_digest(str(headers.get("x-neo-heartbeat-token") or ""),HEARTBEAT_TOKEN)
+            )
+            if not heartbeat_ok and not explicit_review_authorized(headers):
                 raw=json.dumps(review_required_result(path+":"+method),separators=(",",":"),ensure_ascii=False).encode("utf-8")
                 await send({"type":"http.response.start","status":403,"headers":[
                     (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
