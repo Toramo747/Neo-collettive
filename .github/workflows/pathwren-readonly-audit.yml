@@ -19,31 +19,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cat > /tmp/pathwren-request.json <<'JSON'
+          {"jsonrpc":"2.0","id":"mycelix-pathwren-audit","method":"message/send","params":{"message":{"role":"ROLE_USER","messageId":"mycelix-pathwren-audit-msg","parts":[{"text":"{\"skill\": \"score_card\", \"url\": \"https://neo-collettive.onrender.com/mcp\"}"}]}}}
+          JSON
+          curl --fail --silent --show-error --max-time 45 \
+            -H "Content-Type: application/json" -H "Accept: application/json" \
+            --data-binary @/tmp/pathwren-request.json \
+            "https://www.pathwren.workers.dev/a2a/score" > /tmp/pathwren-response.json
           python - <<'PY'
           import json
-          import urllib.request
-
-          payload={
-              "jsonrpc":"2.0",
-              "id":"mycelix-pathwren-audit",
-              "method":"message/send",
-              "params":{"message":{
-                  "role":"ROLE_USER",
-                  "messageId":"mycelix-pathwren-audit-msg",
-                  "parts":[{"text":json.dumps({
-                      "skill":"score_card",
-                      "url":"https://neo-collettive.onrender.com/mcp"
-                  })}],
-              }},
-          }
-          req=urllib.request.Request(
-              "https://www.pathwren.workers.dev/a2a/score",
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Content-Type":"application/json","Accept":"application/json"},
-              method="POST",
-          )
-          with urllib.request.urlopen(req,timeout=45) as response:
-              data=json.load(response)
+          data=json.load(open("/tmp/pathwren-response.json",encoding="utf-8"))
 
           print("PATHWREN_FULL_RESPONSE")
           print(json.dumps(data,ensure_ascii=False,indent=2))
