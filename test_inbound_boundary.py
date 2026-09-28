@@ -40,10 +40,15 @@ class InboundBoundaryTests(unittest.TestCase):
             self.assertIn('"'+path+'"',source)
         self.assertIn('guarded_methods={',source)
         self.assertIn('if rpc=="tools/call":',source)
-        self.assertIn('access=_mcp_tool_access(tool_name)',source)
+        self.assertIn('known_tool=tool_name in MCP_TOOL_ACCESS',source)
         self.assertIn('access!="read_only_bounded" and not explicit_review_authorized(header_map)',source)
         self.assertIn('endpoint_verifier.consume_rate_limit',source)
         self.assertNotIn('AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]\n        row["knowledge_id"]',source)
+
+    def test_invalid_mcp_tool_requests_reach_protocol_parser_without_review(self):
+        source=Path("cloud_mcp.py").read_text(encoding="utf-8")
+        self.assertIn('access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"',source)
+        self.assertIn('if known_tool and access!="read_only_bounded" and not explicit_review_authorized(header_map):',source)
 
     def test_mcp_tool_access_policy_is_complete_and_fail_closed(self):
         import cloud_mcp
