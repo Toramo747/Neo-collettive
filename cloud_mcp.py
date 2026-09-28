@@ -6737,51 +6737,46 @@ async def _revalidation_fetch_url(url: str, row: dict[str, Any]) -> dict:
         "User-Agent":"Mozilla/5.0 MYCELIX/"+VERSION+" quarantine-revalidation",
     }
     try:
-        for _ in range(4):
-            safe,why=_safe_public_https(current)
-            if not safe:
-                return {"ok":False,"error":"unsafe_url: "+why}
-            async with httpx.AsyncClient(
-                timeout=min(TIMEOUT,10),
-                follow_redirects=False,
-                headers=headers,
-            ) as client:
-                response=await client.get(current)
-            if response.status_code in {301,302,303,307,308}:
-                location=str(response.headers.get("location") or "").strip()
-                if not location:
-                    return {"ok":False,"error":"redirect_without_location"}
-                current=urljoin(current,location)
-                continue
-            if not response.is_success:
-                return {"ok":False,"error":"http_"+str(response.status_code)}
+        safe,why=_safe_public_https(current)
+        if not safe:
+            return {"ok":False,"error":"unsafe_url: "+why}
+        timeout=httpx.Timeout(connect=endpoint_verifier.CONNECT_TIMEOUT,read=endpoint_verifier.READ_TIMEOUT,write=endpoint_verifier.READ_TIMEOUT,pool=endpoint_verifier.CONNECT_TIMEOUT)
+        async with httpx.AsyncClient(timeout=timeout,follow_redirects=False,trust_env=False) as client:
+            response=await endpoint_verifier._bounded_request(
+                client,"GET",current,
+                max_redirects=endpoint_verifier.MAX_REDIRECTS,
+                user_agent=headers["User-Agent"],
+            )
+        status=int(response.get("status") or 0)
+        if not (200 <= status < 300):
+            return {"ok":False,"error":"http_"+str(status)}
 
-            ctype=(response.headers.get("content-type") or "").lower()
-            raw=(response.text or "")[:200000]
-            title=""
-            body=""
-            if "html" in ctype or "<html" in raw[:1000].lower():
-                m=re.search(r"<title[^>]*>(.*?)</title>",raw,flags=re.I|re.S)
-                if m:
-                    title=_strip_html_text(m.group(1),300)
-                body=_strip_html_text(raw,12000)
-            elif "json" in ctype:
-                body=_strip_html_text(raw,12000)
-            else:
-                body=" ".join(raw.split())[:12000]
+        ctype=str((response.get("headers") or {}).get("content-type") or "").lower()
+        raw=str(response.get("body") or "")[:endpoint_verifier.MAX_RESPONSE_BYTES]
+        title=""
+        body=""
+        if "html" in ctype or "<html" in raw[:1000].lower():
+            m=re.search(r"<title[^>]*>(.*?)</title>",raw,flags=re.I|re.S)
+            if m:
+                title=_strip_html_text(m.group(1),300)
+            body=_strip_html_text(raw,12000)
+        elif "json" in ctype:
+            body=_strip_html_text(raw,12000)
+        else:
+            body=" ".join(raw.split())[:12000]
 
-            if not title:
-                title=str(row.get("title") or "")[:300]
-            if not body:
-                return {"ok":False,"error":"empty_body"}
-            return {
-                "ok":True,
-                "url":current,
-                "title":title,
-                "body":body,
-                "status":response.status_code,
-                "content_type":ctype[:120],
-            }
+        if not title:
+            title=str(row.get("title") or "")[:300]
+        if not body:
+            return {"ok":False,"error":"empty_body"}
+        return {
+            "ok":True,
+            "url":current,
+            "title":title,
+            "body":body,
+            "status":response.status_code,
+            "content_type":ctype[:120],
+        }
         return {"ok":False,"error":"too_many_redirects"}
     except Exception as exc:
         return {"ok":False,"error":type(exc).__name__+": "+str(exc)[:220]}
@@ -6794,47 +6789,47 @@ async def _remotive_paid_search(query: str, meta: dict | None = None, limit: int
         return []
     try:
         async with httpx.AsyncClient(
-            timeout=min(TIMEOUT,12),
-            follow_redirects=True,
-            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+        timeout=min(TIMEOUT,12),
+        follow_redirects=True,
+        headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
         ) as client:
-            r=await client.get("https://remotive.com/api/remote-jobs",params={"search":seed,"limit":max(1,min(limit,10))})
+        r=await client.get("https://remotive.com/api/remote-jobs",params={"search":seed,"limit":max(1,min(limit,10))})
         if not r.is_success:
-            return []
+        return []
         data=r.json()
         out=[]
         for x in (data.get("jobs") or [])[:max(1,min(limit,10))]:
-            if not isinstance(x,dict):
-                continue
-            title=str(x.get("title") or "").strip()
-            url=str(x.get("url") or "").strip()
-            if not title or not url:
-                continue
-            description=_strip_html_text(x.get("description") or "",2600)
-            rel=structured_job_relevance(title,description,query,meta or {})
-            if not rel.get("relevant"):
-                continue
-            category=str(x.get("category") or "")
-            job_type=str(x.get("job_type") or "")
-            salary=str(x.get("salary") or "")
-            company=str(x.get("company_name") or "")
-            snippet=" ".join(v for v in [
-                "Hiring",title,
-                ("at "+company) if company else "",
-                ("Category: "+category) if category else "",
-                ("Job type: "+job_type) if job_type else "",
-                ("Compensation: "+salary) if salary else "",
-                description,
-            ] if v)
-            out.append({
-                "title":title,
-                "url":url,
-                "snippet":snippet[:3600],
-                "source":"remotive-api",
-                "commercial_source":True,
-                "published_at":x.get("publication_date"),
-                "query_relevance":rel,
-            })
+        if not isinstance(x,dict):
+            continue
+        title=str(x.get("title") or "").strip()
+        url=str(x.get("url") or "").strip()
+        if not title or not url:
+            continue
+        description=_strip_html_text(x.get("description") or "",2600)
+        rel=structured_job_relevance(title,description,query,meta or {})
+        if not rel.get("relevant"):
+            continue
+        category=str(x.get("category") or "")
+        job_type=str(x.get("job_type") or "")
+        salary=str(x.get("salary") or "")
+        company=str(x.get("company_name") or "")
+        snippet=" ".join(v for v in [
+            "Hiring",title,
+            ("at "+company) if company else "",
+            ("Category: "+category) if category else "",
+            ("Job type: "+job_type) if job_type else "",
+            ("Compensation: "+salary) if salary else "",
+            description,
+        ] if v)
+        out.append({
+            "title":title,
+            "url":url,
+            "snippet":snippet[:3600],
+            "source":"remotive-api",
+            "commercial_source":True,
+            "published_at":x.get("publication_date"),
+            "query_relevance":rel,
+        })
         return out
     except Exception:
         return []
@@ -6847,53 +6842,53 @@ async def _remoteok_paid_search(query: str, meta: dict | None = None, limit: int
         return []
     try:
         async with httpx.AsyncClient(
-            timeout=min(TIMEOUT,12),
-            follow_redirects=True,
-            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+        timeout=min(TIMEOUT,12),
+        follow_redirects=True,
+        headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
         ) as client:
-            r=await client.get("https://remoteok.com/api")
+        r=await client.get("https://remoteok.com/api")
         if not r.is_success:
-            return []
+        return []
         data=r.json()
         rows=data if isinstance(data,list) else []
         out=[]
         for x in rows:
-            if not isinstance(x,dict) or not x.get("position"):
-                continue
-            title=str(x.get("position") or "").strip()
-            company=str(x.get("company") or "").strip()
-            tags=" ".join(str(v) for v in (x.get("tags") or []) if str(v).strip())
-            description=_strip_html_text(x.get("description") or "",2200)
-            salary_min=x.get("salary_min")
-            salary_max=x.get("salary_max")
-            salary=""
-            if salary_min or salary_max:
-                salary="Compensation range: "+str(salary_min or "?")+"-"+str(salary_max or "?")
-            text=" ".join(v for v in [title,company,tags,description] if v)
-            rel=structured_job_relevance(title,text,query,meta or {})
-            if not rel.get("relevant"):
-                continue
-            url=str(x.get("url") or x.get("apply_url") or "").strip()
-            if not url:
-                continue
-            snippet=" ".join(v for v in [
-                "Hiring",title,
-                ("at "+company) if company else "",
-                ("Skills: "+tags) if tags else "",
-                salary,
-                description,
-            ] if v)
-            out.append({
-                "title":title,
-                "url":url,
-                "snippet":snippet[:3600],
-                "source":"remoteok-api",
-                "commercial_source":True,
-                "published_at":x.get("date"),
-                "query_relevance":rel,
-            })
-            if len(out)>=max(1,min(limit,10)):
-                break
+        if not isinstance(x,dict) or not x.get("position"):
+            continue
+        title=str(x.get("position") or "").strip()
+        company=str(x.get("company") or "").strip()
+        tags=" ".join(str(v) for v in (x.get("tags") or []) if str(v).strip())
+        description=_strip_html_text(x.get("description") or "",2200)
+        salary_min=x.get("salary_min")
+        salary_max=x.get("salary_max")
+        salary=""
+        if salary_min or salary_max:
+            salary="Compensation range: "+str(salary_min or "?")+"-"+str(salary_max or "?")
+        text=" ".join(v for v in [title,company,tags,description] if v)
+        rel=structured_job_relevance(title,text,query,meta or {})
+        if not rel.get("relevant"):
+            continue
+        url=str(x.get("url") or x.get("apply_url") or "").strip()
+        if not url:
+            continue
+        snippet=" ".join(v for v in [
+            "Hiring",title,
+            ("at "+company) if company else "",
+            ("Skills: "+tags) if tags else "",
+            salary,
+            description,
+        ] if v)
+        out.append({
+            "title":title,
+            "url":url,
+            "snippet":snippet[:3600],
+            "source":"remoteok-api",
+            "commercial_source":True,
+            "published_at":x.get("date"),
+            "query_relevance":rel,
+        })
+        if len(out)>=max(1,min(limit,10)):
+            break
         return out
     except Exception:
         return []
@@ -6918,34 +6913,34 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
     source_counts={}
     for batch in batches:
         if isinstance(batch,Exception):
-            continue
+        continue
         rows=batch.get("results") if isinstance(batch,dict) else batch
         if not isinstance(rows,list):
-            continue
+        continue
         for row in rows:
-            if not isinstance(row,dict):
-                continue
-            url=str(row.get("url") or "").strip()
-            if not url or url in seen:
-                continue
-            rel=row.get("query_relevance") if isinstance(row.get("query_relevance"),dict) else query_relevance(
-                str(row.get("title") or ""),
-                str(row.get("snippet") or ""),
-                query,
-                meta,
-            )
-            if not rel.get("relevant"):
-                continue
-            seen.add(url)
-            item=dict(row)
-            item["query_relevance"]=rel
-            results.append(item)
-            src=str(item.get("source") or "unknown")
-            source_counts[src]=source_counts.get(src,0)+1
-            if len(results)>=max(1,min(limit,12)):
-                break
+        if not isinstance(row,dict):
+            continue
+        url=str(row.get("url") or "").strip()
+        if not url or url in seen:
+            continue
+        rel=row.get("query_relevance") if isinstance(row.get("query_relevance"),dict) else query_relevance(
+            str(row.get("title") or ""),
+            str(row.get("snippet") or ""),
+            query,
+            meta,
+        )
+        if not rel.get("relevant"):
+            continue
+        seen.add(url)
+        item=dict(row)
+        item["query_relevance"]=rel
+        results.append(item)
+        src=str(item.get("source") or "unknown")
+        source_counts[src]=source_counts.get(src,0)+1
         if len(results)>=max(1,min(limit,12)):
             break
+        if len(results)>=max(1,min(limit,12)):
+        break
     return {
         "ok":True,
         "query":query,
@@ -6971,24 +6966,24 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
     if query_intent=="desire":
         tasks=[
-            free_web_search(query,max(2,min(limit,6))),
-            _hn_query_search(seed,3),
-            _github_issue_query_search(seed,3),
-            _stackexchange_query_search(seed,3,meta),
+        free_web_search(query,max(2,min(limit,6))),
+        _hn_query_search(seed,3),
+        _github_issue_query_search(seed,3),
+        _stackexchange_query_search(seed,3,meta),
         ]
     elif structured_first:
         tasks=[
-            _hn_query_search(seed,3),
-            _github_issue_query_search(seed,3),
-            _stackexchange_query_search(seed,3,meta),
-            free_web_search(seed,2),
+        _hn_query_search(seed,3),
+        _github_issue_query_search(seed,3),
+        _stackexchange_query_search(seed,3,meta),
+        free_web_search(seed,2),
         ]
     else:
         tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
         if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
-            tasks.append(_github_issue_query_search(seed,3))
+        tasks.append(_github_issue_query_search(seed,3))
         if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
-            tasks.append(_stackexchange_query_search(seed,3,meta))
+        tasks.append(_stackexchange_query_search(seed,3,meta))
     batches=await asyncio.gather(*tasks,return_exceptions=True)
     ingestion_diagnostics=(
         routed_search_diagnostics(batches,query,meta,query_relevance)
@@ -7000,34 +6995,34 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     source_counts={}
     for batch in batches:
         if isinstance(batch,Exception):
-            continue
+        continue
         rows=batch.get("results") if isinstance(batch,dict) else batch
         if not isinstance(rows,list):
-            continue
+        continue
         for row in rows:
-            if not isinstance(row,dict):
-                continue
-            url=str(row.get("url") or "")
-            if not url or url in seen:
-                continue
-            seen.add(url)
-            rel=query_relevance(
-                str(row.get("title") or ""),
-                str(row.get("snippet") or ""),
-                query,
-                meta,
-            )
-            if not rel.get("relevant"):
-                continue
-            item=dict(row)
-            item["query_relevance"]=rel
-            results.append(item)
-            src=str(item.get("source") or "unknown")
-            source_counts[src]=source_counts.get(src,0)+1
-            if len(results)>=max(1,min(limit,12)):
-                break
+        if not isinstance(row,dict):
+            continue
+        url=str(row.get("url") or "")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        rel=query_relevance(
+            str(row.get("title") or ""),
+            str(row.get("snippet") or ""),
+            query,
+            meta,
+        )
+        if not rel.get("relevant"):
+            continue
+        item=dict(row)
+        item["query_relevance"]=rel
+        results.append(item)
+        src=str(item.get("source") or "unknown")
+        source_counts[src]=source_counts.get(src,0)+1
         if len(results)>=max(1,min(limit,12)):
             break
+        if len(results)>=max(1,min(limit,12)):
+        break
     return {
         "ok":True,
         "query":query,
@@ -7067,34 +7062,34 @@ async def _bing_rss_search(query: str, limit: int = 6) -> dict:
     url = "https://www.bing.com/search?format=rss&q=" + quote_plus(q)
     try:
         async with httpx.AsyncClient(
-            timeout=min(TIMEOUT, 12),
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 MYCELIX/" + VERSION},
+        timeout=min(TIMEOUT, 12),
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 MYCELIX/" + VERSION},
         ) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            root = ET.fromstring(r.text)
-            results = []
-            seen = set()
-            for item in root.findall(".//item"):
-                title = (item.findtext("title") or "").strip()
-                link = (item.findtext("link") or "").strip()
-                desc = (item.findtext("description") or "").strip()
-                if not link or link in seen:
-                    continue
-                safe, why = _safe_public_https(link)
-                if not safe:
-                    continue
-                seen.add(link)
-                results.append({
-                    "title": title[:300],
-                    "url": link,
-                    "snippet": desc[:1200],
-                    "source": "bing-rss-free",
-                })
-                if len(results) >= max(1, min(limit, 10)):
-                    break
-            return {"ok": True, "query": q, "results": results, "count": len(results), "provider":"bing"}
+        r = await client.get(url)
+        r.raise_for_status()
+        root = ET.fromstring(r.text)
+        results = []
+        seen = set()
+        for item in root.findall(".//item"):
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            desc = (item.findtext("description") or "").strip()
+            if not link or link in seen:
+                continue
+            safe, why = _safe_public_https(link)
+            if not safe:
+                continue
+            seen.add(link)
+            results.append({
+                "title": title[:300],
+                "url": link,
+                "snippet": desc[:1200],
+                "source": "bing-rss-free",
+            })
+            if len(results) >= max(1, min(limit, 10)):
+                break
+        return {"ok": True, "query": q, "results": results, "count": len(results), "provider":"bing"}
     except Exception as e:
         return {
             "ok": False, "query": q, "results": [],
