@@ -7,6 +7,8 @@ on:
       - "data/arena/neo-dialect-evolution-report.json"
       - "test_neo_dialect_final_report.py"
       - "cloud_mcp.py"
+      - "inbound_traffic.py"
+      - "test_inbound_traffic.py"
       - ".github/workflows/neo-dialect-final-report-tests.yml"
 
 permissions:
@@ -26,7 +28,7 @@ jobs:
       - name: Validate final report and Arena publication
         run: |
           python -m py_compile cloud_mcp.py
-          python -m unittest -v test_neo_dialect_final_report.py
+          python -m unittest -v test_neo_dialect_final_report.py test_inbound_traffic.py
       - name: Assert official 1.0 spec and schemas unchanged
         run: |
           set -euo pipefail
