@@ -481,6 +481,8 @@ jobs:
           )
           r.raise_for_status()
           data=r.json()
+          print("PATHWREN_FULL_RESPONSE")
+          print(json.dumps(data,ensure_ascii=False,indent=2)[:30000])
           found=[]
           def walk(value):
               if isinstance(value,dict):
