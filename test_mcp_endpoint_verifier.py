@@ -74,6 +74,7 @@ class VerifierSecurityTests(unittest.IsolatedAsyncioTestCase):
         for url in [
             "https://service.internal/mcp",
             "https://foo.bar.internal/mcp",
+            "https://neo-collettive.internal/mcp",
             "https://metadata.google.internal/latest",
         ]:
             with self.subTest(url=url):
