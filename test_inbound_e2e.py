@@ -182,10 +182,23 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         old_token=cloud_mcp.HEARTBEAT_TOKEN
         cloud_mcp.HEARTBEAT_TOKEN="cron-secret"
         try:
-            status,response=await asgi_request(
-                cloud_mcp.app,"/api/heartbeat","GET",
-                extra_headers={"x-neo-heartbeat-token":"cron-secret"},
-            )
+            with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
+                status,response=await asgi_request(
+                    cloud_mcp.app,"/api/heartbeat","GET",
+                    extra_headers={"x-neo-heartbeat-token":"cron-secret"},
+                )
+        finally:
+            cloud_mcp.HEARTBEAT_TOKEN=old_token
+        self.assertEqual(status,200)
+        self.assertTrue(response.get("ok"))
+
+        cloud_mcp.HEARTBEAT_TOKEN=""
+        try:
+            with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
+                status,response=await asgi_request(
+                    cloud_mcp.app,"/api/heartbeat","GET",
+                    extra_headers={"x-mycelix-self-traffic":"github-actions-heartbeat"},
+                )
         finally:
             cloud_mcp.HEARTBEAT_TOKEN=old_token
         self.assertEqual(status,200)
