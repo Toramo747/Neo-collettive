@@ -3704,6 +3704,10 @@ async def jarvis_status() -> dict:
     safe, why = _safe_public_https(endpoint)
     if not safe:
         return {"configured": True, "ok": False, "reason": why}
+    try:
+        await endpoint_verifier.validate_public_https(endpoint)
+    except endpoint_verifier.VerificationError as exc:
+        return {"configured": True, "ok": False, "reason": "ssrf_guard:"+exc.code}
     headers = {"Accept": "application/json"}
     if JARVIS_API_KEY:
         headers["Authorization"] = "Bearer " + JARVIS_API_KEY
@@ -3998,6 +4002,21 @@ async def ask_jarvis(message: str, context: dict | None = None) -> dict:
             "payload_mode": "embedded_core",
             "response": local,
             "remote_advisory": {"ok": False, "reason": why},
+        }
+        _record_jarvis_runtime(result, context)
+        return result
+    try:
+        await endpoint_verifier.validate_public_https(endpoint)
+    except endpoint_verifier.VerificationError as exc:
+        result = {
+            "configured": True,
+            "endpoint": endpoint,
+            "ok": True,
+            "status": 200,
+            "attempt": 0,
+            "payload_mode": "embedded_core",
+            "response": local,
+            "remote_advisory": {"ok": False, "reason": "ssrf_guard:"+exc.code},
         }
         _record_jarvis_runtime(result, context)
         return result
