@@ -127,6 +127,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_public_http_effectful_entries_stop_before_application_code(self):
         cases=[
+            ("/api/discover","GET","q="+OBFUSCATED.replace(" ","%20")),
             ("/api/collective","GET","problem="+OBFUSCATED.replace(" ","%20")),
             ("/api/director/run","GET","goal="+OBFUSCATED.replace(" ","%20")),
             ("/api/market/run-cycles","POST",""),
@@ -151,12 +152,11 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
-    async def test_discover_is_public_read_only_and_heartbeat_token_bypasses_review(self):
-        with patch.object(cloud_mcp,"discover_data",return_value={"ok":True,"agents":[]}) as discover:
-            status,response=await asgi_request(cloud_mcp.app,"/api/discover","GET",query="q=test")
-        self.assertEqual(status,200)
-        self.assertTrue(response.get("ok"))
-        discover.assert_awaited_once()
+    async def test_directory_discovery_surfaces_remain_public_and_heartbeat_token_bypasses_review(self):
+        for path in ("/.well-known/agent-card.json","/.well-known/agent.json","/.well-known/mcp.json"):
+            with self.subTest(path=path):
+                status,response=await asgi_request(cloud_mcp.app,path,"GET")
+                self.assertEqual(status,200)
         old_token=cloud_mcp.HEARTBEAT_TOKEN
         cloud_mcp.HEARTBEAT_TOKEN="cron-secret"
         try:
