@@ -1133,6 +1133,7 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
     AUTOPILOT_STATE["inbound_traffic_events"]=events
     AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
+    _save_local_state()
     return row
 
 
@@ -11747,6 +11748,7 @@ class _InboundTrafficASGI:
         events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
         AUTOPILOT_STATE["inbound_traffic_events"]=events
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
+        _save_local_state()
         sent=False
         async def replay_receive():
             nonlocal sent
