@@ -75,6 +75,7 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
     windows={"total":Counter(),"last_24h":Counter(),"last_7d":Counter()}
     real_times=[]
     crawler_origins=Counter()
+    real_contact_origins=Counter()
     for row in rows:
         cat=str(row.get("category") or "unknown")
         if cat not in CATEGORIES: cat="unknown"
@@ -91,6 +92,9 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
         if cat=="crawler_probe":
             name=_clean(row.get("crawler_name") or row.get("ip_or_origin") or row.get("user_agent") or "unknown",300)
             crawler_origins[name]+=1
+        if cat=="real_contact":
+            name=_clean(row.get("ip_or_origin") or row.get("user_agent") or "unknown",300)
+            real_contact_origins[name]+=1
     def counts(c: Counter) -> dict:
         return {k:int(c.get(k,0)) for k in CATEGORIES}
     return {
@@ -104,6 +108,7 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
         "first_real_contact_utc":min(real_times).isoformat() if real_times else None,
         "last_real_contact_utc":max(real_times).isoformat() if real_times else None,
         "crawler_origins":[{"name":name,"requests":count} for name,count in crawler_origins.most_common()],
+        "real_contact_origins":[{"name":name,"requests":count} for name,count in real_contact_origins.most_common()],
     }
 
 def retroactive_from_inbound_messages(messages: list[dict]|None) -> list[dict]:
