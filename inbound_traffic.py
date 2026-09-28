@@ -40,13 +40,13 @@ def active_probe_candidate(user_agent: str="", declared_agent_id: str="") -> boo
     return bool(re.search(r"(?i)\b(?:probe|healthcheck|health-check|liveness)\b",_clean(user_agent,500)))
 
 def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", origin: str="",
-                           rpc_method: str="", has_text: bool=False, text: str="", self_marker: str="", declared_agent_id: str="") -> tuple[str,str,str|None]:
+                           rpc_method: str="", has_text: bool=False, text: str="", self_marker: str="", self_verified: bool=False, declared_agent_id: str="") -> tuple[str,str,str|None]:
     endpoint=_clean(endpoint,300)
     method=_clean(method,20).upper()
     rpc=_clean(rpc_method,120)
-    self_hay=(" "+_clean(self_marker,300)+" "+_clean(declared_agent_id,300)+" "+_clean(user_agent,500)+" "+_clean(origin,500)).lower()
-    if _clean(self_marker,300):
-        return "self_traffic","explicit_mycelix_self_marker",None
+    self_hay=(" "+_clean(declared_agent_id,300)+" "+_clean(user_agent,500)+" "+_clean(origin,500)).lower()
+    if _clean(self_marker,300) and bool(self_verified):
+        return "self_traffic","verified_mycelix_self_marker",None
     if any(marker in self_hay for marker in ("chatgpt-research-session","mycelix-internal","jarvis-internal","neo-internal","pathwren.workers.dev/mcp-lint","growth-loop/1.0")):
         return "self_traffic","declared_internal_or_user_authorized_session",None
     if endpoint=="/a2a" and rpc in {"message/send","SendMessage"} and has_text:

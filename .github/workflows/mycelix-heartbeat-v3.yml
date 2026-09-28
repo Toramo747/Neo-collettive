@@ -38,7 +38,7 @@ jobs:
           measure_health() {
             phase="$1"; first="$2"
             set +e
-            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" --output "/tmp/health-${phase}.json" --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
+            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/health' --marker github-actions-heartbeat)" --output "/tmp/health-${phase}.json" --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
             rc=$?
             set -e
             printf '%s\thealth\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
@@ -47,7 +47,7 @@ jobs:
             phase="$1"; first="$2"
             payload='{"jsonrpc":"2.0","id":"heartbeat-latency","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-heartbeat","version":"1"}}}'
             set +e
-            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" --output "/tmp/mcp-${phase}.txt" --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
+            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-heartbeat)" --output "/tmp/mcp-${phase}.txt" --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
             rc=$?
             set -e
             printf '%s\tmcp_initialize\t%s\t%s\t%s\t%s\n' "$(now)" "$phase" "$first" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
@@ -68,12 +68,12 @@ jobs:
         run: |
           set -uo pipefail
           if [ -n "${HEARTBEAT_TOKEN}" ]; then
-            curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \
+            curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)" \
               --retry 2 --retry-delay 5 --max-time 90 \
               -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
               "${HEARTBEAT_URL}" > /tmp/heartbeat.json
           else
-            curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \
+            curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)" \
               --retry 2 --retry-delay 5 --max-time 90 \
               "${HEARTBEAT_URL}" > /tmp/heartbeat.json
           fi
@@ -141,7 +141,7 @@ jobs:
 
           completed=0
           for i in $(seq 1 45); do
-            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" --max-time 30 \
+            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-heartbeat)" --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
               if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
                 completed=1
@@ -172,7 +172,7 @@ jobs:
           now() { date -u +"%Y-%m-%dT%H:%M:%S.%3NZ"; }
           measure_health() {
             set +e
-            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" --output /tmp/health-subsequent.json --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
+            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/health' --marker github-actions-heartbeat)" --output /tmp/health-subsequent.json --max-time 90               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/health")"
             rc=$?
             set -e
             printf '%s\thealth\tsubsequent_sample\tfalse\t%s\t%s\n' "$(now)" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv
@@ -180,7 +180,7 @@ jobs:
           measure_mcp() {
             payload='{"jsonrpc":"2.0","id":"heartbeat-latency-warm","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-heartbeat","version":"1"}}}'
             set +e
-            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" --output /tmp/mcp-subsequent.txt --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
+            metrics="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-heartbeat)" --output /tmp/mcp-subsequent.txt --max-time 90               --request POST               --header 'Content-Type: application/json'               --header 'Accept: application/json, text/event-stream'               --data "$payload"               --write-out '%{http_code}\t%{time_total}'               "https://neo-collettive.onrender.com/mcp")"
             rc=$?
             set -e
             printf '%s\tmcp_initialize\tsubsequent_sample\tfalse\t%s\t%s\n' "$(now)" "$metrics" "$rc" >> /tmp/endpoint-latency.tsv

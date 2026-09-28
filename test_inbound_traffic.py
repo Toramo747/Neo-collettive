@@ -104,11 +104,15 @@ class InboundTrafficTests(unittest.TestCase):
 
 
 
-    def test_explicit_self_marker_never_real_contact(self):
-        c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,self_marker="github-actions-deploy")
+    def test_verified_self_marker_never_real_contact(self):
+        c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,self_marker="github-actions-deploy",self_verified=True)
         self.assertEqual(c,"self_traffic")
-        c,r,n=classify_inbound_event(endpoint="/mcp",method="POST",rpc_method="tools/call",self_marker="jarvis-internal")
+        c,r,n=classify_inbound_event(endpoint="/mcp",method="POST",rpc_method="tools/call",self_marker="jarvis-internal",self_verified=True)
         self.assertEqual(c,"self_traffic")
+
+    def test_unsigned_self_marker_is_external(self):
+        c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,self_marker="github-actions-deploy",self_verified=False)
+        self.assertEqual(c,"real_contact")
 
     def test_user_authorized_chatgpt_session_is_self(self):
         c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,declared_agent_id="chatgpt-research-session-7e1c9a")
