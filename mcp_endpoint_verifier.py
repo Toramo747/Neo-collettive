@@ -37,6 +37,12 @@ _BLOCKED_HOSTS = {
     "metadata.azure.internal",
     "instance-data.ec2.internal",
 }
+_BLOCKED_HOST_SUFFIXES = (".local", ".internal")
+
+
+def _blocked_hostname(host: str) -> bool:
+    value = str(host or "").strip().lower().rstrip(".")
+    return value in _BLOCKED_HOSTS or any(value.endswith(suffix) for suffix in _BLOCKED_HOST_SUFFIXES)
 _GLOBAL_CALLS: deque[float] = deque()
 _CALLER_CALLS: dict[str, deque[float]] = defaultdict(deque)
 def _new_metrics() -> dict[str, Any]:
@@ -125,7 +131,7 @@ async def resolve_public_ips(host: str) -> list[str]:
     if not host:
         raise VerificationError("missing_host")
     host_low = host.lower().rstrip(".")
-    if host_low in _BLOCKED_HOSTS or host_low.endswith(".local"):
+    if _blocked_hostname(host_low):
         raise VerificationError("blocked_host", host_low)
     try:
         direct = ipaddress.ip_address(host_low)
