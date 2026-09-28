@@ -58,6 +58,17 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn("GitHub Actions does not guarantee",doc)
         self.assertIn("external uptime monitor",doc)
 
+    def test_runtime_snapshot_persists_inbound_audit_streams(self):
+        w=self.workflow
+        for field in (
+            '"inbound_traffic_events"',
+            '"inbound_traffic_summary"',
+            '"inbound_security_events"',
+            '"inbound_security_stats"',
+            '"inbound_review_queue"',
+        ):
+            self.assertIn(field,w)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
