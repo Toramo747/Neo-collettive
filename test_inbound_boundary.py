@@ -33,13 +33,12 @@ class InboundBoundaryTests(unittest.TestCase):
     def test_all_network_capable_inbound_entry_points_require_review(self):
         source=Path("cloud_mcp.py").read_text(encoding="utf-8")
         for path in (
-            "/api/collective","/api/director/run","/api/market/run-cycles",
+            "/api/discover","/api/collective","/api/director/run","/api/market/run-cycles",
             "/api/heartbeat","/api/runtime/snapshot-published","/api/trust/evaluate",
             "/venture","/api/venture/audit","/api/venture/measurement",
         ):
             self.assertIn('"'+path+'"',source)
         self.assertIn('guarded_methods={',source)
-        self.assertNotIn('"/api/discover":{"GET"}',source)
         self.assertIn('if rpc=="tools/call":',source)
         self.assertIn('access=_mcp_tool_access(tool_name)',source)
         self.assertIn('access!="read_only_bounded" and not explicit_review_authorized(header_map)',source)
