@@ -6964,24 +6964,24 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
     if query_intent=="desire":
         tasks=[
-        free_web_search(query,max(2,min(limit,6))),
-        _hn_query_search(seed,3),
-        _github_issue_query_search(seed,3),
-        _stackexchange_query_search(seed,3,meta),
+            free_web_search(query,max(2,min(limit,6))),
+            _hn_query_search(seed,3),
+            _github_issue_query_search(seed,3),
+            _stackexchange_query_search(seed,3,meta),
         ]
     elif structured_first:
         tasks=[
-        _hn_query_search(seed,3),
-        _github_issue_query_search(seed,3),
-        _stackexchange_query_search(seed,3,meta),
-        free_web_search(seed,2),
+            _hn_query_search(seed,3),
+            _github_issue_query_search(seed,3),
+            _stackexchange_query_search(seed,3,meta),
+            free_web_search(seed,2),
         ]
     else:
         tasks=[free_web_search(seed,max(2,min(limit,6))),_hn_query_search(seed,3)]
         if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
-        tasks.append(_github_issue_query_search(seed,3))
+            tasks.append(_github_issue_query_search(seed,3))
         if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
-        tasks.append(_stackexchange_query_search(seed,3,meta))
+            tasks.append(_stackexchange_query_search(seed,3,meta))
     batches=await asyncio.gather(*tasks,return_exceptions=True)
     ingestion_diagnostics=(
         routed_search_diagnostics(batches,query,meta,query_relevance)
@@ -6993,34 +6993,34 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     source_counts={}
     for batch in batches:
         if isinstance(batch,Exception):
-        continue
+            continue
         rows=batch.get("results") if isinstance(batch,dict) else batch
         if not isinstance(rows,list):
-        continue
+            continue
         for row in rows:
-        if not isinstance(row,dict):
-            continue
-        url=str(row.get("url") or "")
-        if not url or url in seen:
-            continue
-        seen.add(url)
-        rel=query_relevance(
-            str(row.get("title") or ""),
-            str(row.get("snippet") or ""),
-            query,
-            meta,
-        )
-        if not rel.get("relevant"):
-            continue
-        item=dict(row)
-        item["query_relevance"]=rel
-        results.append(item)
-        src=str(item.get("source") or "unknown")
-        source_counts[src]=source_counts.get(src,0)+1
+            if not isinstance(row,dict):
+                continue
+            url=str(row.get("url") or "")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            rel=query_relevance(
+                str(row.get("title") or ""),
+                str(row.get("snippet") or ""),
+                query,
+                meta,
+            )
+            if not rel.get("relevant"):
+                continue
+            item=dict(row)
+            item["query_relevance"]=rel
+            results.append(item)
+            src=str(item.get("source") or "unknown")
+            source_counts[src]=source_counts.get(src,0)+1
+            if len(results)>=max(1,min(limit,12)):
+                break
         if len(results)>=max(1,min(limit,12)):
             break
-        if len(results)>=max(1,min(limit,12)):
-        break
     return {
         "ok":True,
         "query":query,
@@ -7060,34 +7060,34 @@ async def _bing_rss_search(query: str, limit: int = 6) -> dict:
     url = "https://www.bing.com/search?format=rss&q=" + quote_plus(q)
     try:
         async with httpx.AsyncClient(
-        timeout=min(TIMEOUT, 12),
-        follow_redirects=True,
-        headers={"User-Agent": "Mozilla/5.0 MYCELIX/" + VERSION},
+            timeout=min(TIMEOUT, 12),
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 MYCELIX/" + VERSION},
         ) as client:
-        r = await client.get(url)
-        r.raise_for_status()
-        root = ET.fromstring(r.text)
-        results = []
-        seen = set()
-        for item in root.findall(".//item"):
-            title = (item.findtext("title") or "").strip()
-            link = (item.findtext("link") or "").strip()
-            desc = (item.findtext("description") or "").strip()
-            if not link or link in seen:
-                continue
-            safe, why = _safe_public_https(link)
-            if not safe:
-                continue
-            seen.add(link)
-            results.append({
-                "title": title[:300],
-                "url": link,
-                "snippet": desc[:1200],
-                "source": "bing-rss-free",
-            })
-            if len(results) >= max(1, min(limit, 10)):
-                break
-        return {"ok": True, "query": q, "results": results, "count": len(results), "provider":"bing"}
+            r = await client.get(url)
+            r.raise_for_status()
+            root = ET.fromstring(r.text)
+            results = []
+            seen = set()
+            for item in root.findall(".//item"):
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                desc = (item.findtext("description") or "").strip()
+                if not link or link in seen:
+                    continue
+                safe, why = _safe_public_https(link)
+                if not safe:
+                    continue
+                seen.add(link)
+                results.append({
+                    "title": title[:300],
+                    "url": link,
+                    "snippet": desc[:1200],
+                    "source": "bing-rss-free",
+                })
+                if len(results) >= max(1, min(limit, 10)):
+                    break
+            return {"ok": True, "query": q, "results": results, "count": len(results), "provider":"bing"}
     except Exception as e:
         return {
             "ok": False, "query": q, "results": [],
