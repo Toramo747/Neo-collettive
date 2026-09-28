@@ -2808,26 +2808,32 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
             try:
                 async with httpx.AsyncClient(
                     timeout=_a2a_timeout(transport_name),
-                    follow_redirects=True,
-                    headers=headers,
+                    follow_redirects=False,
+                    trust_env=False,
                 ) as client:
-                    r=await client.post(url,json=payload)
+                    bounded=await endpoint_verifier._bounded_request(
+                        client,"POST",url,json_body=payload,headers=headers,
+                        max_redirects=endpoint_verifier.MAX_REDIRECTS,
+                        user_agent="MYCELIX/"+VERSION,
+                    )
 
                 elapsed_ms=round((time.monotonic()-started)*1000)
-                ctype=(r.headers.get("content-type") or "").lower()
+                status=int(bounded.get("status") or 0)
+                ctype=str((bounded.get("headers") or {}).get("content-type") or "").lower()
+                raw_body=str(bounded.get("body") or "")
                 if "json" in ctype:
                     try:
-                        body=r.json()
+                        body=json.loads(raw_body)
                     except Exception:
-                        body={"text":r.text[:12000]}
+                        body={"text":raw_body[:12000]}
                 else:
-                    body={"text":r.text[:12000]}
+                    body={"text":raw_body[:12000]}
 
                 answer={
                     "agent":name,
                     "agent_id":agent_id,
-                    "ok":r.is_success,
-                    "status":r.status_code,
+                    "ok":200 <= status < 300,
+                    "status":status,
                     "response":body,
                     "transport":transport_name,
                     "transport_attempt":attempt_no,
@@ -2839,7 +2845,7 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
                 if r.is_success and quality_ok:
                     return answer
 
-                retryable=r.status_code in {408,409,425,429,500,502,503,504}
+                retryable=status in {408,409,425,429,500,502,503,504}
                 errors.append({
                     "transport":transport_name,
                     "attempt":attempt_no,
