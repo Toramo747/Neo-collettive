@@ -31,6 +31,7 @@ from intent_discovery import classify_agent_intent, intent_followup, upgrade_leg
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
 from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_boundary import explicit_review_authorized, origin_risk_flags, review_required_result, stage_inbound_claim
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
@@ -262,6 +263,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_traffic_events": [],
     "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0},"last_24h":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0},"last_7d":{"crawler_probe":0,"self_traffic":0,"real_contact_pending":0,"real_contact":0,"malicious_solicitation":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
     "inbound_security_events": [],
+    "inbound_review_queue": [],
     "inbound_security_stats": {
         "blocked_total":0,
         "crypto_transfer_requests":0,
@@ -412,6 +414,7 @@ def _state_payload() -> dict:
         "inbound_traffic_summary": AUTOPILOT_STATE.get("inbound_traffic_summary") or {},
         "inbound_security_events": list(AUTOPILOT_STATE.get("inbound_security_events") or [])[-80:],
         "inbound_security_stats": AUTOPILOT_STATE.get("inbound_security_stats") or {},
+        "inbound_review_queue": list(AUTOPILOT_STATE.get("inbound_review_queue") or [])[-80:],
         "agent_chat_events": list(AUTOPILOT_STATE.get("agent_chat_events") or [])[-240:],
         "agent_chat_monitor": AUTOPILOT_STATE.get("agent_chat_monitor") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
@@ -522,6 +525,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
     if isinstance(payload.get("inbound_security_stats"), dict):
         AUTOPILOT_STATE["inbound_security_stats"] = payload.get("inbound_security_stats") or {}
+    if isinstance(payload.get("inbound_review_queue"), list):
+        AUTOPILOT_STATE["inbound_review_queue"] = [x for x in payload.get("inbound_review_queue")[-80:] if isinstance(x,dict)]
     if isinstance(payload.get("agent_chat_events"), list):
         AUTOPILOT_STATE["agent_chat_events"] = payload.get("agent_chat_events")[-240:]
     if isinstance(payload.get("agent_chat_monitor"), dict):
@@ -1147,6 +1152,7 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "crawler_name":crawler,
         "self_source":meta["self_marker"] or (meta["declared_agent_id"] if category=="self_traffic" else None),
         "content_fingerprint":content_fingerprint(inbound_text),
+        "origin_risk_flags":origin_risk_flags(meta["ip_or_origin"]),
     }
     events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
     AUTOPILOT_STATE["inbound_traffic_events"]=events
@@ -1383,52 +1389,19 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         AUTOPILOT_STATE.get("inbound_agent_stats") or {},
     )
 
-    # First-contact material is quarantine/interview data, not collective knowledge.
-    # Only a peer that was already admitted before this message may contribute.
+    # Admission is never authorization to write collective knowledge. Every peer
+    # claim remains inert until a separate server-side explicit review promotes it.
     previously_admitted=str(old.get("status") or "").upper()=="ADMITTED"
     interview_complete=bool(old.get("interview_complete")) or bool(dialogue.get("interview_complete"))
     if previously_admitted and interview_complete and row["substantive"]:
-        ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
-        scores=_hypothesis_scores(text,AUTOPILOT_GOAL,ledger+list(AUTOPILOT_STATE.get("hypothesis_queue") or []))
-        knowledge={
-            "id":"know-in-"+secrets.token_hex(5),
-            "created_at_utc":now,
-            "state":"INBOUND_CLAIM",
-            "claim":text[:900],
-            "family":_commercial_family(text),
-            "source":"inbound_agent",
-            "source_agent_id":sender.get("agent_id"),
-            "source_agent":sender.get("agent"),
-            "thread_id":thread_id,
-            "supporting_agents":[sender.get("agent_id")] if sender.get("agent_id") else [],
-            "confidence":"unverified",
-            "next_action":"COLLECTIVE_REVIEW",
-            "scores":scores,
-        }
-        ledger.append(knowledge)
-        AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]
-        row["knowledge_id"]=knowledge["id"]
-
-        if scores.get("novelty",0)>=45 and scores.get("evidence_potential",0)>=40:
-            queue=list(AUTOPILOT_STATE.get("hypothesis_queue") or [])
-            duplicate=any(_novelty_score(text,[old_row])<28 for old_row in queue[-40:] if isinstance(old_row,dict))
-            if not duplicate:
-                hyp={
-                    "id":"hyp-in-"+secrets.token_hex(5),
-                    "created_at_utc":now,
-                    "status":"HYPOTHESIS",
-                    "source":"inbound_agent",
-                    "thread_id":thread_id,
-                    "family":knowledge["family"],
-                    "text":text[:900],
-                    "proposed_by":{"agent_id":sender.get("agent_id"),"agent":sender.get("agent"),"stage":"inbound"},
-                    "scores":scores,
-                    "priority":round(scores["novelty"]*0.35+scores["evidence_potential"]*0.35+scores["strategic_fit"]*0.30,1),
-                }
-                queue.append(hyp)
-                queue.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
-                AUTOPILOT_STATE["hypothesis_queue"]=queue[-40:]
-                row["hypothesis_id"]=hyp["id"]
+        review_queue,review_row=stage_inbound_claim(
+            AUTOPILOT_STATE.get("inbound_review_queue") or [], claim=text,
+            source_agent_id=str(sender.get("agent_id") or ""),
+            source_agent=str(sender.get("agent") or ""), thread_id=thread_id,
+            received_at_utc=now,
+        )
+        AUTOPILOT_STATE["inbound_review_queue"]=review_queue
+        row["review_status"]=review_row["review_status"]
 
     _save_local_state()
     return row
@@ -11811,11 +11784,23 @@ class _InboundTrafficASGI:
             "mcp_session_id":header_map.get("mcp-session-id") or None,
             "crawler_name":crawler,
             "self_source":header_map.get("x-mycelix-self-traffic") or (header_map.get("x-agent-id") if category=="self_traffic" else None),
+            "origin_risk_flags":origin_risk_flags(source),
         }
         events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
         AUTOPILOT_STATE["inbound_traffic_events"]=events
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
         _save_local_state()
+        if rpc=="tools/call" and not explicit_review_authorized(header_map):
+            response={
+                "jsonrpc":"2.0","id":payload.get("id"),
+                "error":{"code":-32003,"message":"explicit_review_required","data":review_required_result("mcp_tools_call")},
+            }
+            raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+            await send({"type":"http.response.start","status":403,"headers":[
+                (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+            ]})
+            await send({"type":"http.response.body","body":raw})
+            return
         sent=False
         async def replay_receive():
             nonlocal sent
@@ -11933,6 +11918,33 @@ app = Starlette(
     ],
     lifespan=lifespan,
 )
+
+
+class _ExplicitReviewASGI:
+    """Deny network-capable public HTTP entry points without server-side review."""
+    guarded_paths={
+        "/api/discover","/api/collective","/api/director/run",
+        "/api/market/run-cycles","/api/heartbeat",
+    }
+
+    def __init__(self, inner):
+        self.inner=inner
+
+    async def __call__(self, scope, receive, send):
+        path=str(scope.get("path") or "")
+        if scope.get("type")=="http" and path in self.guarded_paths:
+            headers={k.decode("latin1").lower():v.decode("latin1") for k,v in (scope.get("headers") or [])}
+            if not explicit_review_authorized(headers):
+                raw=json.dumps(review_required_result(path),separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                await send({"type":"http.response.start","status":403,"headers":[
+                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                ]})
+                await send({"type":"http.response.body","body":raw})
+                return
+        return await self.inner(scope,receive,send)
+
+
+app=_ExplicitReviewASGI(app)
 
 
 if __name__ == "__main__":

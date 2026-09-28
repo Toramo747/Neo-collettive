@@ -86,6 +86,15 @@ class StateRecoveryTests(unittest.TestCase):
         )
         self.assertEqual([x["event_id"] for x in after["inbound_traffic_events"]],["traffic-1"])
 
+    def test_supplementary_merge_preserves_pending_inbound_review(self):
+        before={"cycles_completed":144,"inbound_review_queue":[{
+            "received_at_utc":"2026-09-28T10:00:00Z","source_agent_id":"peer-1",
+            "thread_id":"t-1","claim_excerpt":"untrusted claim",
+            "review_status":"PENDING_EXPLICIT_REVIEW",
+        }]}
+        after=merge_supplementary_state({"cycles_completed":145},[("local_snapshot",before)])
+        self.assertEqual(after["inbound_review_queue"][0]["review_status"],"PENDING_EXPLICIT_REVIEW")
+
 
     def test_cycle_floor_raises_only_counter(self):
         selected={
