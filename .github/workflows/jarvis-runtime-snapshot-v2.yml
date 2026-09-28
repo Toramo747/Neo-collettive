@@ -55,10 +55,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --retry 3 --retry-delay 5 \
-            "https://neo-collettive.onrender.com/api/render/diagnostics?target=jarvis" \
-            -o /tmp/jarvis-diagnostics.json
-          python - <<'PY'
+          source_url="https://neo-collettive.onrender.com/api/render/diagnostics?target=jarvis"
+          if ! curl --fail --silent --show-error --retry 2 --retry-delay 5 \
+            "$source_url" -o /tmp/jarvis-diagnostics.json; then
+            source_url="https://neo-collettive.onrender.com/api/render/diagnostics?target=neo"
+            curl --fail --silent --show-error --retry 3 --retry-delay 5 \
+              "$source_url" -o /tmp/jarvis-diagnostics.json
+          fi
+          SOURCE_URL="$source_url" python - <<'PY'
           import json
           from datetime import datetime, timezone
 
@@ -70,7 +74,7 @@ jobs:
 
           safe = {
               "snapshot_utc": datetime.now(timezone.utc).isoformat(),
-              "source": "neo-collettive:/api/render/diagnostics?target=jarvis",
+              "source": __import__("os").environ.get("SOURCE_URL"),
               "target": src.get("target"),
               "resource": src.get("resource"),
               "service": src.get("service"),
