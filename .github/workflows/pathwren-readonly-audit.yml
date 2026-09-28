@@ -1,0 +1,68 @@
+name: Pathwren Read-Only Audit
+
+on:
+  push:
+    branches: [mycelix-self-traffic-hardening-20260928]
+    paths:
+      - ".github/workflows/pathwren-readonly-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query Pathwren score card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import urllib.request
+
+          payload={
+              "jsonrpc":"2.0",
+              "id":"mycelix-pathwren-audit",
+              "method":"message/send",
+              "params":{"message":{
+                  "role":"ROLE_USER",
+                  "messageId":"mycelix-pathwren-audit-msg",
+                  "parts":[{"text":json.dumps({
+                      "skill":"score_card",
+                      "url":"https://neo-collettive.onrender.com/mcp"
+                  })}],
+              }},
+          }
+          req=urllib.request.Request(
+              "https://www.pathwren.workers.dev/a2a/score",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type":"application/json","Accept":"application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req,timeout=45) as response:
+              data=json.load(response)
+
+          print("PATHWREN_FULL_RESPONSE")
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+
+          found=[]
+          def walk(value):
+              if isinstance(value,dict):
+                  verdict=value.get("verdict")
+                  if isinstance(verdict,dict) and "score" in verdict:
+                      found.append(verdict)
+                  for item in value.values():
+                      walk(item)
+              elif isinstance(value,list):
+                  for item in value:
+                      walk(item)
+          walk(data)
+          if not found:
+              raise SystemExit("Pathwren verdict missing")
+          verdict=found[0]
+          print("PATHWREN_VERDICT")
+          print(json.dumps(verdict,ensure_ascii=False,indent=2))
+          PY
