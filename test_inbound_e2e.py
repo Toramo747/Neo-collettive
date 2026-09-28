@@ -88,6 +88,28 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(metadata.get("knowledge_id"))
         self.assertIsNone(metadata.get("hypothesis_id"))
 
+    async def test_invalid_mcp_tool_requests_bypass_review_only_to_protocol_parser(self):
+        seen=[]
+        async def downstream(scope,receive,send):
+            body=(await receive()).get("body",b"")
+            seen.append(json.loads(body.decode("utf-8")))
+            await send({"type":"http.response.start","status":200,"headers":[(b"content-type",b"application/json")]})
+            await send({"type":"http.response.body","body":b'{"jsonrpc":"2.0","id":"x","error":{"code":-32601,"message":"Method not found"}}'})
+        wrapper=cloud_mcp._InboundTrafficASGI(downstream)
+        cases=[
+            {"jsonrpc":"2.0","id":"x","method":"tools/call","params":{"name":"does_not_exist","arguments":{}}},
+            {"jsonrpc":"2.0","id":"x","method":"tools/call","params":{"arguments":{}}},
+        ]
+        for payload in cases:
+            with self.subTest(payload=payload):
+                with patch.object(cloud_mcp,"_save_local_state",return_value=None), \
+                     patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
+                    status,_=await asgi_request(wrapper,"/mcp","POST",payload)
+                self.assertEqual(status,200)
+        self.assertEqual(len(seen),2)
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
+
     async def test_effectful_mcp_tools_call_obfuscated_instruction_never_reaches_tool(self):
         payload={
             "jsonrpc":"2.0","id":"e2e-mcp","method":"tools/call",
