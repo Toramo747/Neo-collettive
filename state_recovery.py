@@ -186,6 +186,7 @@ def merge_supplementary_state(
     messages={}
     stats={}
     traffic_events={}
+    security_events={}
     review_items={}
     for _source,payload in candidates:
         if not isinstance(payload,dict):
@@ -214,6 +215,14 @@ def merge_supplementary_state(
             ))
             if key:
                 traffic_events[key]=row
+        for row in payload.get("inbound_security_events") or []:
+            if not isinstance(row,dict):
+                continue
+            key=str(row.get("event_id") or "").strip() or "|".join(str(row.get(field) or "") for field in (
+                "received_at_utc","source_message_id","thread_id","traffic_class","reason"
+            ))
+            if key:
+                security_events[key]=row
         for row in payload.get("inbound_review_queue") or []:
             if not isinstance(row,dict):
                 continue
@@ -242,6 +251,15 @@ def merge_supplementary_state(
     if traffic_events:
         ordered=sorted(traffic_events.values(),key=lambda row:str(row.get("timestamp_utc") or ""))
         merged["inbound_traffic_events"]=ordered[-1200:]
+    if security_events:
+        ordered=sorted(security_events.values(),key=lambda row:str(row.get("received_at_utc") or ""))
+        merged["inbound_security_events"]=ordered[-80:]
+        stats=dict(merged.get("inbound_security_stats") or {})
+        stats["blocked_total"]=max(int(stats.get("blocked_total") or 0),len(ordered))
+        stats["crypto_transfer_requests"]=sum(1 for row in ordered if row.get("reason")=="execution_shaped_crypto_transfer_request")
+        stats["malicious_solicitations"]=sum(1 for row in ordered if row.get("traffic_class")=="MALICIOUS_SOLICITATION")
+        stats["last_seen_utc"]=str(ordered[-1].get("received_at_utc") or "") or stats.get("last_seen_utc")
+        merged["inbound_security_stats"]=stats
     if review_items:
         ordered=sorted(review_items.values(),key=lambda row:str(row.get("received_at_utc") or ""))
         merged["inbound_review_queue"]=ordered[-80:]
