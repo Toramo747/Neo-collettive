@@ -57,5 +57,26 @@ class InboundTrafficTests(unittest.TestCase):
 
 
 
+    def test_explicit_self_marker_never_real_contact(self):
+        c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,self_marker="github-actions-deploy")
+        self.assertEqual(c,"self_traffic")
+        c,r,n=classify_inbound_event(endpoint="/mcp",method="POST",rpc_method="tools/call",self_marker="jarvis-internal")
+        self.assertEqual(c,"self_traffic")
+
+    def test_user_authorized_chatgpt_session_is_self(self):
+        c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,declared_agent_id="chatgpt-research-session-7e1c9a")
+        self.assertEqual(c,"self_traffic")
+
+    def test_self_traffic_summary_separate_from_real_contact(self):
+        rows=[
+            {"timestamp_utc":"2026-09-28T06:00:00+00:00","category":"self_traffic","self_source":"github-actions-deploy"},
+            {"timestamp_utc":"2026-09-28T06:01:00+00:00","category":"real_contact","ip_or_origin":"198.51.100.5"},
+        ]
+        s=summarize_events(rows,now=datetime(2026,9,28,7,0,tzinfo=timezone.utc))
+        self.assertEqual(s["counts"]["total"]["self_traffic"],1)
+        self.assertEqual(s["counts"]["total"]["real_contact"],1)
+        self.assertEqual(s["self_traffic_origins"][0]["name"],"github-actions-deploy")
+
+
 if __name__=="__main__":
     unittest.main()

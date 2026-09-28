@@ -260,7 +260,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "inbound_messages": [],
     "inbound_agent_stats": {},
     "inbound_traffic_events": [],
-    "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"real_contact":0,"unknown":0},"last_24h":{"crawler_probe":0,"real_contact":0,"unknown":0},"last_7d":{"crawler_probe":0,"real_contact":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
+    "inbound_traffic_summary": {"schema_v":1,"events_total":0,"counts":{"total":{"crawler_probe":0,"self_traffic":0,"real_contact":0,"unknown":0},"last_24h":{"crawler_probe":0,"self_traffic":0,"real_contact":0,"unknown":0},"last_7d":{"crawler_probe":0,"self_traffic":0,"real_contact":0,"unknown":0}},"first_real_contact_utc":None,"last_real_contact_utc":None,"crawler_origins":[]},
     "inbound_security_events": [],
     "inbound_security_stats": {
         "blocked_total":0,
@@ -1100,6 +1100,8 @@ def _inbound_request_meta(request: Request) -> dict:
         "user_agent":str(headers.get("user-agent") or "")[:500],
         "ip_or_origin":declared or client_ip[:180],
         "mcp_session_id":str(headers.get("mcp-session-id") or "")[:300],
+        "self_marker":str(headers.get("x-mycelix-self-traffic") or "")[:300],
+        "declared_agent_id":str(headers.get("x-agent-id") or "")[:300],
     }
 
 
@@ -1117,6 +1119,7 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
         origin=meta["ip_or_origin"],rpc_method=rpc_method,has_text=has_text,
+        self_marker=meta["self_marker"],declared_agent_id=meta["declared_agent_id"],
     )
     row={
         "timestamp_utc":datetime.now(timezone.utc).isoformat(),
@@ -1129,6 +1132,7 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "rpc_method":rpc_method or None,
         "mcp_session_id":meta["mcp_session_id"] or None,
         "crawler_name":crawler,
+        "self_source":meta["self_marker"] or (meta["declared_agent_id"] if category=="self_traffic" else None),
     }
     events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
     AUTOPILOT_STATE["inbound_traffic_events"]=events
@@ -1472,6 +1476,11 @@ def _inbound_reply_text(row: dict) -> str:
     )
 
 async def a2a_agent_card(request: Request):
+    _record_inbound_traffic(request)
+    return JSONResponse(_neo_agent_card())
+
+
+async def a2a_agent_json(request: Request):
     _record_inbound_traffic(request)
     return JSONResponse(_neo_agent_card())
 
@@ -9642,6 +9651,7 @@ async def api_render_diagnostics(request: Request):
             "ask_2xx": 0,
             "ask_failures": 0,
             "health_requests": 0,
+            "agent_card_requests": 0,
         }
         important = []
         startup_events = []
@@ -9718,6 +9728,9 @@ async def api_render_diagnostics(request: Request):
             if "/health" in low:
                 categories["health_requests"] += 1
                 matched.append("health")
+            if "/.well-known/agent-card.json" in low or "/.well-known/agent.json" in low:
+                categories["agent_card_requests"] += 1
+                matched.append("agent_card")
 
             if matched and len(important) < 30:
                 important.append({"timestamp_utc": ts.isoformat() if ts else None, "categories": matched, "log": text})
@@ -9751,6 +9764,7 @@ async def api_render_diagnostics(request: Request):
             "neo_jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") if target == "jarvis" else None,
             "last_dialogue": (list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-1] if target == "jarvis" and AUTOPILOT_STATE.get("jarvis_dialogue_history") else None),
             "inbound_traffic_summary": summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or []),
+            "recent_inbound_traffic": [dict(x) for x in (AUTOPILOT_STATE.get("inbound_traffic_events") or [])[-200:] if isinstance(x,dict)],
             "log_rows_scanned": len(rows),
             "categories": categories,
             "startup_events": startup_events[:20],
@@ -11732,6 +11746,7 @@ class _InboundTrafficASGI:
         category,reason,crawler=classify_inbound_event(
             endpoint=str(scope.get("path") or "/mcp"),method=str(scope.get("method") or "POST"),
             user_agent=header_map.get("user-agent",""),origin=source,rpc_method=rpc,has_text=False,
+            self_marker=header_map.get("x-mycelix-self-traffic",""),declared_agent_id=header_map.get("x-agent-id",""),
         )
         row={
             "timestamp_utc":datetime.now(timezone.utc).isoformat(),
@@ -11744,6 +11759,7 @@ class _InboundTrafficASGI:
             "rpc_method":rpc or None,
             "mcp_session_id":header_map.get("mcp-session-id") or None,
             "crawler_name":crawler,
+            "self_source":header_map.get("x-mycelix-self-traffic") or (header_map.get("x-agent-id") if category=="self_traffic" else None),
         }
         events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
         AUTOPILOT_STATE["inbound_traffic_events"]=events
@@ -11806,6 +11822,7 @@ app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
         Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
+        Route("/.well-known/agent.json", a2a_agent_json, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),
         Route("/a2a", a2a_endpoint, methods=["POST"]),
         Route("/inbox", inbound_page, methods=["GET"]),

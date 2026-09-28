@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
-CATEGORIES=("crawler_probe","real_contact","unknown")
+CATEGORIES=("crawler_probe","self_traffic","real_contact","unknown")
 
 KNOWN_CRAWLERS=(
     ("agent-tools.cloud",("agent-tools.cloud","agent-tools")),
@@ -25,10 +25,15 @@ def known_crawler(user_agent: str="", origin: str="") -> str|None:
     return None
 
 def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", origin: str="",
-                           rpc_method: str="", has_text: bool=False) -> tuple[str,str,str|None]:
+                           rpc_method: str="", has_text: bool=False, self_marker: str="", declared_agent_id: str="") -> tuple[str,str,str|None]:
     endpoint=_clean(endpoint,300)
     method=_clean(method,20).upper()
     rpc=_clean(rpc_method,120)
+    self_hay=(" "+_clean(self_marker,300)+" "+_clean(declared_agent_id,300)+" "+_clean(user_agent,500)+" "+_clean(origin,500)).lower()
+    if _clean(self_marker,300):
+        return "self_traffic","explicit_mycelix_self_marker",None
+    if any(marker in self_hay for marker in ("chatgpt-research-session","mycelix-internal","jarvis-internal","neo-internal")):
+        return "self_traffic","declared_internal_or_user_authorized_session",None
     crawler=known_crawler(user_agent,origin)
     if crawler:
         return "crawler_probe","known_directory_or_crawler_origin",crawler
@@ -76,6 +81,7 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
     real_times=[]
     crawler_origins=Counter()
     real_contact_origins=Counter()
+    self_traffic_origins=Counter()
     for row in rows:
         cat=str(row.get("category") or "unknown")
         if cat not in CATEGORIES: cat="unknown"
@@ -95,6 +101,9 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
         if cat=="real_contact":
             name=_clean(row.get("ip_or_origin") or row.get("user_agent") or "unknown",300)
             real_contact_origins[name]+=1
+        if cat=="self_traffic":
+            name=_clean(row.get("self_source") or row.get("ip_or_origin") or row.get("user_agent") or "unknown",300)
+            self_traffic_origins[name]+=1
     def counts(c: Counter) -> dict:
         return {k:int(c.get(k,0)) for k in CATEGORIES}
     return {
@@ -109,6 +118,7 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
         "last_real_contact_utc":max(real_times).isoformat() if real_times else None,
         "crawler_origins":[{"name":name,"requests":count} for name,count in crawler_origins.most_common()],
         "real_contact_origins":[{"name":name,"requests":count} for name,count in real_contact_origins.most_common()],
+        "self_traffic_origins":[{"name":name,"requests":count} for name,count in self_traffic_origins.most_common()],
     }
 
 def retroactive_from_inbound_messages(messages: list[dict]|None) -> list[dict]:
@@ -121,16 +131,18 @@ def retroactive_from_inbound_messages(messages: list[dict]|None) -> list[dict]:
             continue
         sender=row.get("sender") if isinstance(row.get("sender"),dict) else {}
         origin=_clean(row.get("agent_card_url") or sender.get("agent_id") or sender.get("agent") or "historical_a2a",300)
+        is_self="chatgpt-research-session" in origin.lower()
         out.append({
             "timestamp_utc":row.get("received_at_utc"),
             "endpoint":"/a2a",
             "method":"POST",
             "user_agent":None,
             "ip_or_origin":origin,
-            "category":"real_contact",
-            "reason":"historical_a2a_text_message_from_existing_log",
+            "category":"self_traffic" if is_self else "real_contact",
+            "reason":"historical_user_authorized_session" if is_self else "historical_a2a_text_message_from_existing_log",
             "rpc_method":rpc,
             "crawler_name":None,
+            "self_source":"user_authorized_session" if is_self else None,
             "historical_derived":True,
         })
     return out
