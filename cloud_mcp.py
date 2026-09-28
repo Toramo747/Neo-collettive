@@ -3041,21 +3041,26 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3, trust_
     }
 
 def _safe_public_https(url: str) -> tuple[bool, str]:
+    """Cheap synchronous prefilter; network calls must also use the async DNS guard."""
     try:
         p = urlparse(url)
     except Exception:
         return False, "invalid URL"
     if p.scheme != "https":
         return False, "HTTPS required"
+    if p.username or p.password:
+        return False, "userinfo forbidden"
+    if p.port not in (None,443):
+        return False, "nonstandard port blocked"
     host = (p.hostname or "").lower().strip(".")
     if not host:
         return False, "missing host"
-    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
-        return False, "local host blocked"
+    if host in {"localhost", "localhost.localdomain"} or host.endswith((".local",".internal")):
+        return False, "local/internal host blocked"
     try:
         ip = ipaddress.ip_address(host)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
-            return False, "private/local IP blocked"
+        if not ip.is_global:
+            return False, "non-public IP blocked"
     except ValueError:
         pass
     return True, "ok"
