@@ -3130,24 +3130,35 @@ async def inspect_mcp_server(server: dict) -> dict:
             },
         }
         try:
-            async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
-                r1 = await client.post(url, headers=headers, json=init)
-                if r1.status_code in (401, 403):
-                    return {"ok": False, "url": url, "auth_required": True, "status": r1.status_code}
-                if r1.status_code >= 300:
-                    last_error = "initialize HTTP " + str(r1.status_code)
+            timeout=httpx.Timeout(connect=endpoint_verifier.CONNECT_TIMEOUT,read=endpoint_verifier.READ_TIMEOUT,write=endpoint_verifier.READ_TIMEOUT,pool=endpoint_verifier.CONNECT_TIMEOUT)
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=False, trust_env=False) as client:
+                r1 = await endpoint_verifier._bounded_request(
+                    client,"POST",url,json_body=init,headers=headers,
+                    max_redirects=endpoint_verifier.MAX_REDIRECTS,
+                    user_agent="MYCELIX/0.14 MCP-Inspector",
+                )
+                status1=int(r1.get("status") or 0)
+                if status1 in (401, 403):
+                    return {"ok": False, "url": url, "auth_required": True, "status": status1}
+                if status1 >= 300:
+                    last_error = "initialize HTTP " + str(status1)
                     continue
-                init_data = _decode_mcp_response(r1)
-                sid = r1.headers.get("mcp-session-id")
+                init_data = endpoint_verifier._json_payload(r1)
+                sid = (r1.get("headers") or {}).get("mcp-session-id")
                 h2 = dict(headers)
                 if sid:
                     h2["mcp-session-id"] = sid
                 tools_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
-                r2 = await client.post(url, headers=h2, json=tools_req)
-                if r2.status_code >= 300:
-                    last_error = "tools/list HTTP " + str(r2.status_code)
+                r2 = await endpoint_verifier._bounded_request(
+                    client,"POST",url,json_body=tools_req,headers=h2,
+                    max_redirects=endpoint_verifier.MAX_REDIRECTS,
+                    user_agent="MYCELIX/0.14 MCP-Inspector",
+                )
+                status2=int(r2.get("status") or 0)
+                if status2 >= 300:
+                    last_error = "tools/list HTTP " + str(status2)
                     continue
-                tools_data = _decode_mcp_response(r2)
+                tools_data = endpoint_verifier._json_payload(r2)
                 result = tools_data.get("result") if isinstance(tools_data, dict) else None
                 tools = result.get("tools") if isinstance(result, dict) else None
                 if not isinstance(tools, list):
