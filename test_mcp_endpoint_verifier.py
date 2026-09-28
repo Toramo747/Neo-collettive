@@ -70,6 +70,17 @@ class VerifierSecurityTests(unittest.IsolatedAsyncioTestCase):
                     await v.validate_public_https(url)
                 self.assertEqual(cm.exception.code,code)
 
+    async def test_render_and_internal_hostnames_are_blocked(self):
+        for url in [
+            "https://service.internal/mcp",
+            "https://foo.bar.internal/mcp",
+            "https://metadata.google.internal/latest",
+        ]:
+            with self.subTest(url=url):
+                with self.assertRaises(v.VerificationError) as cm:
+                    await v.validate_public_https(url)
+                self.assertEqual(cm.exception.code,"blocked_host")
+
     async def test_dns_resolution_to_private_ip_is_blocked(self):
         fake=[(2,1,6,"",("10.1.2.3",443))]
         with patch("mcp_endpoint_verifier.socket.getaddrinfo",return_value=fake):
