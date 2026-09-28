@@ -8,7 +8,8 @@ from typing import Any
 from urllib.parse import urlparse
 from inbound_security import classify_inbound_security
 
-CATEGORIES=("crawler_probe","self_traffic","real_contact_pending","real_contact","malicious_solicitation","unknown")
+CATEGORIES=("crawler_probe","self_traffic","real_contact_pending","real_contact","legacy_unattributable","malicious_solicitation","unknown")
+OFFICIAL_COUNTING_SINCE_UTC="2026-09-28T07:07:09+00:00"
 
 KNOWN_CRAWLERS=(
     ("agent-tools.cloud",("agent-tools.cloud","agent-tools")),
@@ -68,6 +69,31 @@ def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", or
     if endpoint.startswith("/mcp") and rpc in {"initialize","tools/list"}:
         return "crawler_probe","mcp_handshake_or_discovery_without_observed_tool_call",None
     return "unknown","no_contact_or_probe_rule_matched",None
+
+def reclassify_legacy_contacts(events: list[dict] | None) -> list[dict]:
+    """Preserve pre-baseline real contacts but exclude them from official counts."""
+    out=[]
+    cutoff=datetime.fromisoformat(OFFICIAL_COUNTING_SINCE_UTC)
+    for item in events or []:
+        if not isinstance(item,dict):
+            continue
+        row=dict(item)
+        if row.get("category")=="real_contact":
+            try:
+                ts=datetime.fromisoformat(str(row.get("timestamp_utc") or "").replace("Z","+00:00"))
+                if ts.tzinfo is None:
+                    ts=ts.replace(tzinfo=timezone.utc)
+            except Exception:
+                ts=None
+            if ts is not None and ts < cutoff:
+                row["original_category"]=row.get("original_category") or "real_contact"
+                row["original_reason"]=row.get("original_reason") or row.get("reason")
+                row["category"]="legacy_unattributable"
+                row["reason"]="pre_30aeb80_unattributable"
+                row["official_counted"]=False
+        out.append(row)
+    return out
+
 
 def reclassify_known_self_events(events: list[dict]|None) -> list[dict]:
     """Return a derived copy with known historical self traffic excluded from real contacts."""
@@ -155,7 +181,7 @@ def append_event(events: list[dict]|None, event: dict, *, max_events: int=1200) 
 
 def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dict:
     now=now or datetime.now(timezone.utc)
-    rows=reclassify_known_self_events(events)
+    rows=reclassify_legacy_contacts(reclassify_known_self_events(events))
     windows={"total":Counter(),"last_24h":Counter(),"last_7d":Counter()}
     real_times=[]
     crawler_origins=Counter()
@@ -186,7 +212,9 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
     def counts(c: Counter) -> dict:
         return {k:int(c.get(k,0)) for k in CATEGORIES}
     return {
-        "schema_v":1,
+        "schema_v":2,
+        "official_counting_since_utc":OFFICIAL_COUNTING_SINCE_UTC,
+        "legacy_rule":"real_contact before commit 30aeb80 is preserved as legacy_unattributable and excluded from official real_contact counts",
         "events_total":len(rows),
         "counts":{
             "total":counts(windows["total"]),
