@@ -110,6 +110,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
             ("/api/heartbeat","GET",""),
             ("/api/trust/evaluate","POST",""),
             ("/venture","POST",""),
+            ("/api/venture/audit","GET",""),
             ("/api/venture/audit","POST",""),
             ("/api/venture/measurement","POST",""),
         ]
