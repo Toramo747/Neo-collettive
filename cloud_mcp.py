@@ -2842,14 +2842,14 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
                 quality_ok,quality_reason=_quality_check(answer,question)
                 answer["quality_ok"]=quality_ok
                 answer["quality_reason"]=quality_reason
-                if r.is_success and quality_ok:
+                if 200 <= status < 300 and quality_ok:
                     return answer
 
                 retryable=status in {408,409,425,429,500,502,503,504}
                 errors.append({
                     "transport":transport_name,
                     "attempt":attempt_no,
-                    "status":r.status_code,
+                    "status":status,
                     "content_type":ctype[:120],
                     "elapsed_ms":elapsed_ms,
                     "quality_reason":quality_reason,
