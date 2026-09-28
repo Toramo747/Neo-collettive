@@ -34,6 +34,7 @@ def review_required_result(action: str) -> dict[str, Any]:
         "execution_allowed": False,
         "installation_allowed": False,
         "knowledge_ledger_write_allowed": False,
+        "hypothesis_creation_allowed": False,
     }
 
 
@@ -54,6 +55,7 @@ def stage_inbound_claim(review_queue: list[dict] | None, *, claim: str,
         "execution_allowed": False,
         "installation_allowed": False,
         "knowledge_ledger_write_allowed": False,
+        "hypothesis_creation_allowed": False,
     }
     rows = [dict(x) for x in (review_queue or []) if isinstance(x, dict)]
     rows.append(row)
