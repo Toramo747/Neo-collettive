@@ -11764,15 +11764,11 @@ async def readyz(request: Request):
     if limited is not None:
         return limited
     readiness=_readiness_status()
+    if readiness["ready"]:
+        return JSONResponse({"status":"ready"},status_code=200)
     return JSONResponse(
-        {
-            "status":"ready" if readiness["ready"] else "not_ready",
-            "checks":{
-                "runtime":readiness["runtime_ready"],
-                "storage":readiness["storage_ready"],
-            },
-        },
-        status_code=200 if readiness["ready"] else 503,
+        {"status":"not_ready","reason":"dependency_not_ready"},
+        status_code=503,
     )
 
 
