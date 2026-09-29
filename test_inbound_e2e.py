@@ -175,24 +175,19 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
-    async def test_directory_discovery_surfaces_remain_public_and_heartbeat_auth_is_cryptographic(self):
+    async def test_directory_discovery_surfaces_remain_public_and_heartbeat_auth_is_hmac_only(self):
         for path in ("/.well-known/agent-card.json","/.well-known/agent.json","/.well-known/mcp.json"):
             with self.subTest(path=path):
                 status,response=await asgi_request(cloud_mcp.app,path,"GET")
                 self.assertEqual(status,200)
         old_token=cloud_mcp.HEARTBEAT_TOKEN
-        cloud_mcp.HEARTBEAT_TOKEN="cron-secret"
+        cloud_mcp.HEARTBEAT_TOKEN="cron-secret-super-sensitive"
         try:
-            with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
-                status,response=await asgi_request(
-                    cloud_mcp.app,"/api/heartbeat","GET",
-                    extra_headers={"x-neo-heartbeat-token":"cron-secret"},
-                )
-            self.assertEqual(status,200)
-            self.assertTrue(response.get("ok"))
-
-            valid=cloud_mcp.make_self_traffic_proof("cron-secret","/api/heartbeat")
-            with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
+            valid=cloud_mcp.make_self_traffic_proof(
+                "cron-secret-super-sensitive","/api/heartbeat"
+            )
+            with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+                 patch.object(cloud_mcp,"_save_local_state",return_value=None):
                 status,response=await asgi_request(
                     cloud_mcp.app,"/api/heartbeat","GET",
                     extra_headers={
@@ -202,15 +197,36 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertEqual(status,200)
             self.assertTrue(response.get("ok"))
+            hmac_event=cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"][-1]
+            self.assertEqual(hmac_event.get("category"),"self_traffic")
+            self.assertFalse(hmac_event.get("legacy_heartbeat_token_rejected"))
+
+            with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+                 patch.object(cloud_mcp,"_save_local_state",return_value=None):
+                status,response=await asgi_request(
+                    cloud_mcp.app,"/api/heartbeat","GET",
+                    extra_headers={
+                        "x-neo-heartbeat-token":"cron-secret-super-sensitive",
+                    },
+                )
+            self.assertEqual(status,401)
+            self.assertEqual(response.get("error"),"unauthorized")
+            legacy_event=cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"][-1]
+            self.assertNotEqual(legacy_event.get("category"),"self_traffic")
+            self.assertTrue(legacy_event.get("legacy_heartbeat_token_rejected"))
+            self.assertNotIn(
+                "cron-secret-super-sensitive",
+                json.dumps(legacy_event,sort_keys=True),
+            )
 
             status,response=await asgi_request(
                 cloud_mcp.app,"/api/heartbeat","GET",
                 extra_headers={"x-mycelix-self-traffic":"github-actions-heartbeat"},
             )
-            self.assertEqual(status,403)
+            self.assertEqual(status,401)
 
             expired=cloud_mcp.make_self_traffic_proof(
-                "cron-secret","/api/heartbeat",timestamp=int(time.time())-301
+                "cron-secret-super-sensitive","/api/heartbeat",timestamp=int(time.time())-301
             )
             status,response=await asgi_request(
                 cloud_mcp.app,"/api/heartbeat","GET",
@@ -219,7 +235,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
                     "x-mycelix-self-traffic-proof":expired,
                 },
             )
-            self.assertEqual(status,403)
+            self.assertEqual(status,401)
         finally:
             cloud_mcp.HEARTBEAT_TOKEN=old_token
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
