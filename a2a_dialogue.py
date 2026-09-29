@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
 from typing import Any
 
@@ -141,6 +143,16 @@ def plan_untrusted_reply(text: str, *, identity_status: str="", intro_received: 
     if intro_received:
         reply += " Your body introduction has already been noted as SELF_DECLARED_UNVERIFIED, so I will not ask you to repeat it in this thread."
     return {"mode":"substantive","reason":mode_reason,"reply":outbound_filter(reply)}
+
+
+def origin_rate_key(client_ip: str, salt: str) -> str:
+    """Return a salted non-public bucket key without retaining the raw IP."""
+    ip=_clean(client_ip,180)
+    secret=str(salt or "")
+    if not ip or not secret:
+        return "origin:unknown"
+    digest=hmac.new(secret.encode("utf-8"),ip.encode("utf-8"),hashlib.sha256).hexdigest()[:24]
+    return "origin:"+digest
 
 
 def consume_rate(bucket: dict, key: str, now_seconds: float, *, limit: int=6, window_seconds: int=600) -> dict:

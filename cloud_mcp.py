@@ -9,7 +9,7 @@ import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
-from a2a_dialogue import consume_rate as consume_a2a_response_rate, plan_untrusted_reply
+from a2a_dialogue import consume_rate as consume_a2a_response_rate, origin_rate_key, plan_untrusted_reply
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
@@ -212,6 +212,7 @@ AUTOPILOT_GOAL = os.getenv(
 AUTOPILOT_LOCK = asyncio.Lock()
 SEARCH_PROVIDER_LOCK = asyncio.Lock()
 A2A_RESPONSE_RATE: dict[str,list[float]] = {}
+A2A_ORIGIN_RESPONSE_RATE: dict[str,list[float]] = {}
 BRAND_NAME = "MYCELIX"
 BRAND_TAGLINE = "Collective Intelligence Network"
 RUNTIME_PROFILE = load_runtime_profile()
@@ -1122,6 +1123,7 @@ def _inbound_request_meta(request: Request) -> dict:
         "self_marker":str(headers.get("x-mycelix-self-traffic") or "")[:300],
         "self_proof":str(headers.get("x-mycelix-self-traffic-proof") or "")[:300],
         "declared_agent_id":str(headers.get("x-agent-id") or "")[:300],
+        "client_ip":client_ip[:180],
     }
 
 
@@ -1354,6 +1356,9 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     method=str(payload.get("method") or "message/send")
     card_url=_a2a_agent_card_url(payload,request)
     body_intro=parse_body_introduction(text)
+    request_meta=_inbound_request_meta(request)
+    origin_salt=os.getenv("MYCELIX_ORIGIN_RATE_SALT") or HEARTBEAT_TOKEN
+    origin_key=origin_rate_key(str(request_meta.get("client_ip") or ""),origin_salt)
 
     stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
     stat_key=conversation_identity_key(str(sender.get("agent_id") or ""),thread_id)
@@ -1412,6 +1417,7 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "interview_complete":bool(dialogue.get("interview_complete")),
         "next_question":dialogue.get("next_question"),
         "response_rate_key":conversation_identity_key(str(sender.get("agent_id") or ""),thread_id),
+        "origin_rate_key":origin_key,
     }
 
     inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
@@ -1502,28 +1508,50 @@ def _inbound_reply_text(row: dict) -> str:
         row["block_reason"]=plan.get("reason")
         return str(plan.get("reply") or "")
     if plan.get("mode")=="substantive" and status in {"ANONYMOUS","PARKED"}:
+        now_seconds=time.time()
         rate=consume_a2a_response_rate(
             A2A_RESPONSE_RATE,
             str(row.get("response_rate_key") or row.get("thread_id") or "anonymous"),
-            time.time(),
+            now_seconds,
+        )
+        origin_rate=consume_a2a_response_rate(
+            A2A_ORIGIN_RESPONSE_RATE,
+            str(row.get("origin_rate_key") or "origin:unknown"),
+            now_seconds,
+            limit=12,
+            window_seconds=600,
         )
         if not rate.get("allowed"):
             row["response_reason"]="substantive_rate_limited"
             return "MYCELIX received the message, but this conversation has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+        if not origin_rate.get("allowed"):
+            row["response_reason"]="origin_rate_limited"
+            return "MYCELIX received the message, but this network origin has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
         return str(plan.get("reply") or "")
 
     if status=="ANONYMOUS":
         return str(plan.get("reply") or "")
     if status=="PARKED" and dialogue_stage=="IDENTITY":
         if plan.get("mode")=="substantive":
+            now_seconds=time.time()
             rate=consume_a2a_response_rate(
                 A2A_RESPONSE_RATE,
                 str(row.get("response_rate_key") or row.get("thread_id") or "anonymous"),
-                time.time(),
+                now_seconds,
+            )
+            origin_rate=consume_a2a_response_rate(
+                A2A_ORIGIN_RESPONSE_RATE,
+                str(row.get("origin_rate_key") or "origin:unknown"),
+                now_seconds,
+                limit=12,
+                window_seconds=600,
             )
             if not rate.get("allowed"):
                 row["response_reason"]="substantive_rate_limited"
                 return "MYCELIX received the message, but this conversation has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+            if not origin_rate.get("allowed"):
+                row["response_reason"]="origin_rate_limited"
+                return "MYCELIX received the message, but this network origin has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
             return str(plan.get("reply") or "")
         return (
             str(plan.get("reply") or "")

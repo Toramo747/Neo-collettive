@@ -1,6 +1,6 @@
 import unittest
 
-from a2a_dialogue import consume_rate, outbound_filter, plan_untrusted_reply
+from a2a_dialogue import consume_rate, origin_rate_key, outbound_filter, plan_untrusted_reply
 
 
 class A2ADialogueTests(unittest.TestCase):
@@ -67,6 +67,21 @@ class A2ADialogueTests(unittest.TestCase):
         self.assertFalse(limited["allowed"])
         self.assertEqual(limited["reason"],"substantive_rate_limited")
         self.assertTrue(consume_rate(bucket,"thread:b",1007)["allowed"])
+
+    def test_origin_hash_is_salted_stable_and_never_plain_ip(self):
+        first=origin_rate_key("198.51.100.23","private-salt-a")
+        same=origin_rate_key("198.51.100.23","private-salt-a")
+        changed=origin_rate_key("198.51.100.23","private-salt-b")
+        self.assertEqual(first,same)
+        self.assertNotEqual(first,changed)
+        self.assertNotIn("198.51.100.23",first)
+
+    def test_origin_limit_cannot_be_bypassed_with_new_threads(self):
+        bucket={}
+        origin=origin_rate_key("198.51.100.23","private-salt-a")
+        for second in range(12):
+            self.assertTrue(consume_rate(bucket,origin,2000+second,limit=12,window_seconds=600)["allowed"])
+        self.assertFalse(consume_rate(bucket,origin,2013,limit=12,window_seconds=600)["allowed"])
 
 
 if __name__=="__main__":
