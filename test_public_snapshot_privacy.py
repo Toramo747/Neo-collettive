@@ -48,6 +48,26 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(public["inbound_traffic_events"][0]["reason"],"a2a_text_message")
         self.assertEqual(public["inbound_traffic_summary"]["counts"]["total"]["real_contact"],1)
 
+    def test_public_snapshot_excludes_agent_demand_peer_list(self):
+        raw={
+            "agent_demand_observatory":{
+                "messages_observed":4,
+                "agents":[
+                    {"agent_id":"peer-secret","thread_id":"thread-secret","last_text":"PRIVATE PEER TEXT"}
+                ],
+                "patterns":["research"],
+                "boundary":{"commercial_gate_influence":"NONE"},
+            },
+        }
+        public=sanitize_public_autopilot(raw)
+        encoded=json.dumps(public,sort_keys=True)
+        self.assertNotIn("peer-secret",encoded)
+        self.assertNotIn("thread-secret",encoded)
+        self.assertNotIn("PRIVATE PEER TEXT",encoded)
+        self.assertEqual(public["agent_demand_observatory"]["messages_observed"],4)
+        self.assertEqual(public["agent_demand_observatory"]["patterns"],["research"])
+        self.assertEqual(public["agent_demand_observatory"]["agents"],[])
+
     def test_public_snapshot_excludes_agent_chat_monitor_threads(self):
         raw={
             "agent_chat_monitor":{
