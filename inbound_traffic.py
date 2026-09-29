@@ -62,6 +62,12 @@ def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", or
         verdict=classify_inbound_security(text)
         if verdict.get("traffic_class")=="MALICIOUS_SOLICITATION":
             return "malicious_solicitation","download_execute_or_reward_solicitation",None
+    if declared_user_session and not bool(self_verified):
+        if endpoint=="/a2a" and rpc in {"message/send","SendMessage"} and has_text:
+            return "real_contact","declared_user_authorized_unverified",None
+        if endpoint.startswith("/mcp") and rpc=="tools/call":
+            return "real_contact","declared_user_authorized_unverified",None
+        return "unknown","declared_user_authorized_unverified",None
     crawler=known_crawler(user_agent,origin)
     if crawler:
         return "crawler_probe","known_directory_or_crawler_origin",crawler
