@@ -1329,6 +1329,15 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "text":text,
         "substantive":_inbound_is_substantive(text),
         "treated_as":"untrusted_evidence",
+        "user_agent":str(request.headers.get("user-agent") or "")[:500] or None,
+        "content_fingerprint":content_fingerprint(text),
+        "traffic_category":None,
+        "traffic_reason":None,
+        "intent_markers":intent.get("markers") or {},
+        "intent_negated_markers":intent.get("negated_markers") or {},
+        "classification_reason":intent.get("reason") or "intent_marker_classification",
+        "neo_response_message_id":None,
+        "response_reason":None,
         "intent_primary":intent.get("primary"),
         "intent_secondary":intent.get("secondary") or [],
         "intent_confidence":intent.get("confidence"),
@@ -1347,6 +1356,18 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "interview_complete":bool(dialogue.get("interview_complete")),
         "next_question":dialogue.get("next_question"),
     }
+
+    # Correlate the private message record with the already-recorded request telemetry.
+    for traffic in reversed(list(AUTOPILOT_STATE.get("inbound_traffic_events") or [])):
+        if not isinstance(traffic,dict):
+            continue
+        if str(traffic.get("endpoint") or "")!="/a2a":
+            continue
+        if str(traffic.get("content_fingerprint") or "")!=str(row.get("content_fingerprint") or ""):
+            continue
+        row["traffic_category"]=traffic.get("category")
+        row["traffic_reason"]=traffic.get("reason")
+        break
 
     inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
     inbox.append(row)
@@ -1418,6 +1439,7 @@ def _inbound_reply_text(row: dict) -> str:
     next_question=str(row.get("next_question") or "").strip()
 
     if status=="ANONYMOUS":
+        row["response_reason"]="anonymous_intent_followup"
         return (
             intent_followup({
                 "primary":row.get("intent_primary"),
@@ -1427,6 +1449,7 @@ def _inbound_reply_text(row: dict) -> str:
             + " If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available."
         )
     if status=="PARKED" and dialogue_stage=="IDENTITY":
+        row["response_reason"]="parked_identity_followup"
         return (
             intent_followup({
                 "primary":row.get("intent_primary"),
@@ -1437,31 +1460,37 @@ def _inbound_reply_text(row: dict) -> str:
               "If you want peer admission, also provide identity, concrete capabilities, supported protocol, limitations and public documentation if available."
         )
     if status=="ADMITTED" and dialogue_status=="ACTIVE" and next_question:
+        row["response_reason"]="admitted_interview_question"
         return (
             "MYCELIX continues the bounded peer interview. "
             + next_question
             + " Your answer remains interview material and will not enter collective/commercial memory until the interview is complete."
         )
     if status=="ADMITTED" and dialogue_status=="PARKED":
+        row["response_reason"]="admitted_interview_parked"
         return (
             "MYCELIX has parked the peer interview after repeated weak or incomplete answers. "
             "No contribution was promoted to collective or commercial memory."
         )
     if status=="ADMITTED" and dialogue_status=="COMPLETE":
+        row["response_reason"]="admitted_interview_complete"
         return (
             "MYCELIX completed the three-round peer interview. Identity remains self-declared unless independently verified. "
             "From your next message onward, substantive claims may be recorded as untrusted collective evidence and remain subject "
             "to independent corroboration, falsification checks and all commercial quality gates."
         )
     if not row.get("text"):
+        row["response_reason"]="no_text_fallback"
         return (
             "MYCELIX received the A2A request but no text message was found. "
             "Send a concrete claim, criticism, evidence or new hypothesis."
         )
     if not row.get("substantive"):
+        row["response_reason"]="non_substantive_fallback"
         return (
             "MYCELIX received your message. Provide a substantive, falsifiable contribution with evidence and controls."
         )
+    row["response_reason"]="admitted_untrusted_evidence_ack"
     return (
         "MYCELIX recorded your admitted peer contribution as untrusted evidence"
         + ((" in knowledge item "+str(row.get("knowledge_id"))) if row.get("knowledge_id") else "")
@@ -1636,6 +1665,9 @@ async def a2a_endpoint(request: Request):
     row=_record_inbound_agent_message(payload,request)
     reply=_inbound_reply_text(row)
     message_id="neo-reply-"+secrets.token_hex(8)
+    row["neo_response_message_id"]=message_id
+    if not row.get("response_reason"):
+        row["response_reason"]="a2a_bounded_reply"
     sent_at=datetime.now(timezone.utc).isoformat()
     AUTOPILOT_STATE["agent_chat_events"]=append_exchange(
         AUTOPILOT_STATE.get("agent_chat_events") or [],

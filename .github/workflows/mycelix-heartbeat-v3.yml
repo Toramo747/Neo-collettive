@@ -366,6 +366,8 @@ jobs:
               "manual_run": raw.get("manual_run") or {},
               "latest_result": ap.get("latest_result")
           }
+          from public_snapshot import sanitize_public_snapshot
+          snapshot = sanitize_public_snapshot(snapshot)
           with open("neo_latest_result.json","w",encoding="utf-8") as f:
               json.dump(snapshot,f,indent=2,ensure_ascii=False,default=str)
               f.write("\n")
