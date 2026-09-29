@@ -176,19 +176,32 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
     async def test_livez_readyz_and_health_contracts(self):
-        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
-             patch.object(cloud_mcp,"_save_local_state",side_effect=AssertionError("livez wrote state")), \
+        cloud_mcp._LIVEZ_CALLS.clear()
+        cloud_mcp._LIVEZ_CALLS_BY_CALLER.clear()
+        with patch.object(cloud_mcp,"_save_local_state",side_effect=AssertionError("livez wrote state")), \
              patch.object(cloud_mcp,"_record_inbound_traffic",side_effect=AssertionError("livez persisted telemetry")):
-            status,response=await asgi_request(cloud_mcp.app,"/livez","GET")
-        self.assertEqual(status,200)
-        self.assertEqual(response,{"status":"ok"})
+            statuses=[]
+            for _ in range(100):
+                status,response=await asgi_request(cloud_mcp.app,"/livez","GET")
+                statuses.append(status)
+                self.assertEqual(response,{"status":"ok"})
+        self.assertEqual(statuses,[200]*100)
 
         with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
-             patch.object(cloud_mcp.os,"access",return_value=False):
+             patch.object(cloud_mcp,"_readiness_status",return_value={"ready":True,"runtime_ready":True,"storage_ready":True}):
+            status,response=await asgi_request(cloud_mcp.app,"/readyz","GET")
+        self.assertEqual(status,200)
+        self.assertEqual(response,{"status":"ready"})
+
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp,"_readiness_status",return_value={"ready":False,"runtime_ready":False,"storage_ready":False}):
             status,response=await asgi_request(cloud_mcp.app,"/readyz","GET")
         self.assertEqual(status,503)
-        self.assertEqual(response.get("status"),"not_ready")
-        self.assertFalse((response.get("checks") or {}).get("storage"))
+        self.assertEqual(response,{"status":"not_ready","reason":"dependency_not_ready"})
+        self.assertNotIn("checks",response)
+        self.assertNotIn("path",response)
+        self.assertNotIn("profile",response)
+        self.assertNotIn("role",response)
 
         with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
              patch.object(cloud_mcp,"_record_inbound_traffic",return_value=None):
