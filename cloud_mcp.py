@@ -11724,7 +11724,83 @@ async def mcp_discovery_document(request: Request):
     )
 
 
+LIVEZ_RATE_WINDOW_SECONDS=60.0
+LIVEZ_PER_CALLER_LIMIT=10000
+LIVEZ_GLOBAL_LIMIT=100000
+_LIVEZ_CALLS=[]
+_LIVEZ_CALLS_BY_CALLER={}
+
+
+def _livez_rate_limit(request: Request) -> JSONResponse | None:
+    now=time.monotonic()
+    cutoff=now-LIVEZ_RATE_WINDOW_SECONDS
+    meta=_inbound_request_meta(request)
+    caller=endpoint_verifier.caller_bucket(meta.get("ip_or_origin") or "unknown")
+
+    _LIVEZ_CALLS[:]=[ts for ts in _LIVEZ_CALLS if ts>cutoff]
+    caller_calls=[ts for ts in _LIVEZ_CALLS_BY_CALLER.get(caller,[]) if ts>cutoff]
+
+    if len(_LIVEZ_CALLS)>=LIVEZ_GLOBAL_LIMIT or len(caller_calls)>=LIVEZ_PER_CALLER_LIMIT:
+        return JSONResponse({"status":"rate_limited"},status_code=429)
+
+    _LIVEZ_CALLS.append(now)
+    caller_calls.append(now)
+    _LIVEZ_CALLS_BY_CALLER[caller]=caller_calls
+    return None
+
+
+def _probe_rate_limit(request: Request, probe: str) -> JSONResponse | None:
+    meta=_inbound_request_meta(request)
+    try:
+        endpoint_verifier.consume_rate_limit(
+            "probe:"+probe+":"+endpoint_verifier.caller_bucket(meta.get("ip_or_origin") or "unknown")
+        )
+    except endpoint_verifier.VerificationError as exc:
+        return JSONResponse({"ok":False,"error":exc.code},status_code=429)
+    return None
+
+
+async def livez(request: Request):
+    limited=_livez_rate_limit(request)
+    if limited is not None:
+        return limited
+    return JSONResponse({"status":"ok"},status_code=200)
+
+
+def _readiness_status() -> dict:
+    state_dir=os.path.dirname(STATE_SNAPSHOT_PATH) or "."
+    runtime_ready=(
+        isinstance(AUTOPILOT_STATE,dict)
+        and isinstance(RUNTIME_IDENTITY,dict)
+        and str(RUNTIME_IDENTITY.get("profile_id") or "")=="mycelix-prod-main"
+        and str(RUNTIME_IDENTITY.get("deployment_role") or "")=="production"
+        and isinstance(AUTOPILOT_STATE.get("restore_source"),str)
+    )
+    storage_ready=os.path.isdir(state_dir) and os.access(state_dir,os.W_OK)
+    return {
+        "ready":bool(runtime_ready and storage_ready),
+        "runtime_ready":bool(runtime_ready),
+        "storage_ready":bool(storage_ready),
+    }
+
+
+async def readyz(request: Request):
+    limited=_probe_rate_limit(request,"readyz")
+    if limited is not None:
+        return limited
+    readiness=_readiness_status()
+    if readiness["ready"]:
+        return JSONResponse({"status":"ready"},status_code=200)
+    return JSONResponse(
+        {"status":"not_ready","reason":"dependency_not_ready"},
+        status_code=503,
+    )
+
+
 async def health(request: Request):
+    limited=_probe_rate_limit(request,"health")
+    if limited is not None:
+        return limited
     _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
     return JSONResponse({
@@ -12184,6 +12260,8 @@ app = Starlette(
         Route("/arena/neo-dialect", arena_neo_dialect_page, methods=["GET"]),
         Route("/arena/micelio", arena_micelio_page, methods=["GET"]),
         Route("/arena/evoluzione", arena_evolution_page, methods=["GET"]),
+        Route("/livez", livez, methods=["GET"]),
+        Route("/readyz", readyz, methods=["GET"]),
         Route("/health", health, methods=["GET"]),
         Route("/api/discover", api_discover, methods=["GET"]),
         Route("/api/collective", api_collective, methods=["GET"]),

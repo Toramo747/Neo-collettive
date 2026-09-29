@@ -175,6 +175,44 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
+    async def test_livez_readyz_and_health_contracts(self):
+        cloud_mcp._LIVEZ_CALLS.clear()
+        cloud_mcp._LIVEZ_CALLS_BY_CALLER.clear()
+        with patch.object(cloud_mcp,"_save_local_state",side_effect=AssertionError("livez wrote state")), \
+             patch.object(cloud_mcp,"_record_inbound_traffic",side_effect=AssertionError("livez persisted telemetry")):
+            statuses=[]
+            for _ in range(100):
+                status,response=await asgi_request(cloud_mcp.app,"/livez","GET")
+                statuses.append(status)
+                self.assertEqual(response,{"status":"ok"})
+        self.assertEqual(statuses,[200]*100)
+
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp,"_readiness_status",return_value={"ready":True,"runtime_ready":True,"storage_ready":True}):
+            status,response=await asgi_request(cloud_mcp.app,"/readyz","GET")
+        self.assertEqual(status,200)
+        self.assertEqual(response,{"status":"ready"})
+
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp,"_readiness_status",return_value={"ready":False,"runtime_ready":False,"storage_ready":False}):
+            status,response=await asgi_request(cloud_mcp.app,"/readyz","GET")
+        self.assertEqual(status,503)
+        self.assertEqual(response,{"status":"not_ready","reason":"dependency_not_ready"})
+        self.assertNotIn("checks",response)
+        self.assertNotIn("path",response)
+        self.assertNotIn("profile",response)
+        self.assertNotIn("role",response)
+
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp,"_record_inbound_traffic",return_value=None):
+            status,response=await asgi_request(cloud_mcp.app,"/health","GET")
+        self.assertEqual(status,200)
+        self.assertEqual(response.get("status"),"ok")
+        self.assertEqual(response.get("service"),"neo-collective")
+        self.assertEqual(response.get("version"),cloud_mcp.VERSION)
+        self.assertIn("runtime_profile",response)
+        self.assertIn("runtime_snapshot",response)
+
     async def test_directory_discovery_surfaces_remain_public_and_heartbeat_auth_is_hmac_only(self):
         for path in ("/.well-known/agent-card.json","/.well-known/agent.json","/.well-known/mcp.json"):
             with self.subTest(path=path):
