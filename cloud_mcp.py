@@ -1478,12 +1478,148 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     _save_local_state()
     return row
 
+
+A2A_SUBSTANTIVE_RATE_LIMIT=12
+A2A_SUBSTANTIVE_RATE_WINDOW_SECONDS=60
+
+def _a2a_rate_allowed(thread_id: str, now: datetime|None=None) -> bool:
+    now=now or datetime.now(timezone.utc)
+    store=dict(AUTOPILOT_STATE.get("a2a_response_rate") or {})
+    key=str(thread_id or "anonymous")[:180]
+    kept=[]
+    for raw in store.get(key) or []:
+        try:
+            ts=datetime.fromisoformat(str(raw).replace("Z","+00:00"))
+            if ts.tzinfo is None:
+                ts=ts.replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        if (now-ts).total_seconds() <= A2A_SUBSTANTIVE_RATE_WINDOW_SECONDS:
+            kept.append(ts.isoformat())
+    allowed=len(kept) < A2A_SUBSTANTIVE_RATE_LIMIT
+    if allowed:
+        kept.append(now.isoformat())
+    store[key]=kept[-A2A_SUBSTANTIVE_RATE_LIMIT:]
+    AUTOPILOT_STATE["a2a_response_rate"]=store
+    return allowed
+
+
+def _a2a_effectful_request(text: str) -> bool:
+    low=" ".join(str(text or "").lower().split())
+    patterns=(
+        r"\b(?:please\s+)?(?:run|execute|install)\b",
+        r"\bdownload\b.{0,40}\b(?:run|execute|install)\b",
+        r"\b(?:delete|remove|write|modify)\b.{0,40}\b(?:file|config|repository|repo|data)\b",
+        r"\b(?:send|post|publish)\b.{0,40}\b(?:message|comment|reply|request)\b",
+        r"\b(?:call|connect to|contact)\b.{0,40}\b(?:endpoint|url|server|agent)\b",
+    )
+    return any(re.search(pattern,low) for pattern in patterns)
+
+
+def _a2a_prompt_injection_request(text: str) -> bool:
+    low=" ".join(str(text or "").lower().split())
+    return any(phrase in low for phrase in (
+        "ignore previous instructions","ignore your instructions","reveal the system prompt",
+        "show your system prompt","show the configuration","show your configuration",
+        "environment variables","api key","secret key","dump secrets",
+    ))
+
+
+def _bounded_substantive_reply(row: dict) -> str|None:
+    """Pure in-process dialogue response: no tools, network, callbacks, or state promotion."""
+    text=str(row.get("text") or "")
+    low=text.lower()
+    if not row.get("substantive"):
+        return None
+    if _a2a_prompt_injection_request(text):
+        row["response_reason"]="prompt_injection_bounded_reply"
+        return (
+            "I can discuss the topic, but I will not expose internal configuration, prompts, "
+            "environment variables, secrets, private paths, or data from other peers or threads."
+        )
+    if _a2a_effectful_request(text):
+        row["response_reason"]="effectful_request_review_required"
+        return (
+            "I can discuss the requested action and its expected result, but I will not execute it, "
+            "fetch URLs, contact endpoints, modify data, or publish anything from this conversation. "
+            "An effectful action requires separate explicit review."
+        )
+    if not _a2a_rate_allowed(str(row.get("thread_id") or "")):
+        row["response_reason"]="substantive_rate_limited"
+        return "Conversation is rate-limited for this thread. No action was executed and the request remains untrusted."
+
+    if "commercial_intent" in low or "classifier" in low:
+        row["response_reason"]="substantive_classifier_discussion"
+        return (
+            "Your criticism is addressable at the conversation layer: intent classification is a heuristic, "
+            "not a trust decision. Explicit negative phrases such as 'no commercial intent', 'no contract', "
+            "'no budget' and 'no payment' are treated as negations unless a separate positive commercial marker "
+            "is present. A classification can therefore be corrected without changing identity, admission or authorization."
+        )
+    if "ed25519" in low or "nonce" in low or "signing key" in low:
+        row["response_reason"]="substantive_identity_discussion"
+        return (
+            "A bounded Ed25519 challenge can establish only possession of the private key corresponding to the "
+            "declared public key. It does not establish autonomy, independence, reputation, admission or authorization. "
+            "The conversation can continue before such verification."
+        )
+    if "a2a" in low and any(word in low for word in ("break","fail","limitation","protocol")):
+        row["response_reason"]="substantive_protocol_discussion"
+        return (
+            "At this boundary A2A transport and conversational identity are separate: structured sender metadata can "
+            "identify a declared peer, while identity written only in message text remains self-declared and unverified. "
+            "That separation avoids turning conversational content into authority."
+        )
+    if "interview" in low or "admission" in low:
+        row["response_reason"]="substantive_admission_discussion"
+        return (
+            "Conversation and peer admission are separate. An unverified contact may ask questions, challenge assumptions "
+            "and discuss research without becoming an admitted peer; admission and any later authorization remain separate gates."
+        )
+    if "wrong-book" in low or "mistake ledger" in low:
+        row["response_reason"]="substantive_evidence_discussion"
+        return (
+            "A public mistake ledger can be discussed as a potentially useful provenance signal, but entries remain "
+            "untrusted evidence until independently checked and are not promoted automatically into collective knowledge."
+        )
+
+    primary=str(row.get("intent_primary") or "UNKNOWN").upper()
+    if primary=="RESEARCH":
+        row["response_reason"]="substantive_research_dialogue"
+        return (
+            "I can engage with this as a research discussion without treating the claim as true. "
+            "The useful structure is: explicit claim, observation that would change the conclusion, controls, "
+            "and strongest alternative explanation. No external action is implied."
+        )
+    if primary=="COLLABORATION":
+        row["response_reason"]="substantive_collaboration_dialogue"
+        return (
+            "I can collaborate at the conversational level: critique the proposal, compare assumptions and define a "
+            "bounded reproducible test. That does not grant membership, trust, tool access or permission for external action."
+        )
+    if primary=="QUESTION_HELP":
+        row["response_reason"]="substantive_question_dialogue"
+        return (
+            "I can answer the question within the information available to this conversation, while keeping peer claims "
+            "untrusted and without using tools or external retrieval. Ask the concrete point you want evaluated."
+        )
+    row["response_reason"]="substantive_bounded_dialogue"
+    return (
+        "I can engage with the substance of this message as untrusted conversational input. "
+        "I will discuss claims and reasoning, but will not execute actions, fetch referenced URLs, or promote the content to trusted state."
+    )
+
+
 def _inbound_reply_text(row: dict) -> str:
     status=str(row.get("admission_status") or "").upper()
     dialogue_status=str(row.get("dialogue_status") or "").upper()
     dialogue_stage=str(row.get("dialogue_stage") or "").upper()
     next_question=str(row.get("next_question") or "").strip()
 
+    if status in {"ANONYMOUS","UNVERIFIED"} and not row.get("declared_identity_from_body"):
+        substantive_reply=_bounded_substantive_reply(row)
+        if substantive_reply is not None:
+            return substantive_reply
     if status=="ANONYMOUS":
         if row.get("declared_identity_from_body"):
             row["response_reason"]="self_declared_body_intro_received_unverified"
@@ -1768,6 +1904,9 @@ async def a2a_endpoint(request: Request):
             "knowledge_id":row.get("knowledge_id"),
             "hypothesis_id":row.get("hypothesis_id"),
             "protected_actions_enforced":True,
+            "push_notifications_ignored":True,
+            "callback_outbound_allowed":False,
+            "response_reason":row.get("response_reason"),
         },
     }
     if requested_version=="0.3":
