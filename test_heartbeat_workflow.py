@@ -69,6 +69,12 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         ):
             self.assertIn(field,w)
 
+    def test_self_traffic_marker_requires_hmac_proof(self):
+        w=self.workflow
+        self.assertIn("X-MYCELIX-Self-Traffic-Proof",w)
+        self.assertIn("self_traffic_auth.py sign-url",w)
+        self.assertIn("secrets.NEO_HEARTBEAT_TOKEN",w)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
