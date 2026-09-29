@@ -328,8 +328,8 @@ jobs:
       - name: Smoke test A2A discovery surface
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
           curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/inbound/agents' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
           python - <<'PY'
           import json
           card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
