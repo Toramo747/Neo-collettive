@@ -126,6 +126,68 @@ PUBLIC_SNAPSHOT_SCHEMA = {
     },
 }
 
+PUBLIC_JARVIS_SNAPSHOT_SCHEMA = {
+    "snapshot_utc": None,
+    "target": None,
+    "resource": None,
+    "latest_log_utc": None,
+    "service": {
+        "name": None,
+        "type": None,
+        "region": None,
+        "suspended": None,
+        "plan": None,
+        "updatedAt": None,
+    },
+    "inbound_traffic_summary": {
+        "schema_v": None,
+        "official_counting_since_utc": None,
+        "events_total": None,
+        "logical_messages_total": None,
+        "technical_evidence_total": None,
+        "dedup_window_seconds": None,
+        "counts": {
+            "total": {key: None for key in TRAFFIC_CATEGORIES},
+            "last_24h": {key: None for key in TRAFFIC_CATEGORIES},
+            "last_7d": {key: None for key in TRAFFIC_CATEGORIES},
+        },
+        "first_real_contact_utc": None,
+        "last_real_contact_utc": None,
+    },
+    "log_rows_scanned": None,
+    "categories": {
+        "errors_5xx": None,
+        "timeouts": None,
+        "restarts_shutdowns": None,
+        "startup": None,
+        "deploy_startups": None,
+        "possible_cold_starts": None,
+        "ask_requests": None,
+        "ask_2xx": None,
+        "ask_failures": None,
+        "health_requests": None,
+        "agent_card_requests": None,
+        "agent_card_requests_last_24h": None,
+        "health_requests_last_24h": None,
+    },
+    "startup_events": [{
+        "timestamp_utc": None,
+        "classification": None,
+    }],
+    "recent_deploys": [{
+        "id": None,
+        "status": None,
+        "createdAt": None,
+        "updatedAt": None,
+        "finishedAt": None,
+        "commit": {
+            "id": None,
+            "createdAt": None,
+        },
+    }],
+}
+
+
 _FORBIDDEN_FREE_TEXT_KEYS = {
     "text", "message", "messages", "reply", "response", "prompt", "content",
     "excerpt", "raw", "body", "question", "answer", "claim", "last_ask",
@@ -258,6 +320,49 @@ def sanitize_public_snapshot(snapshot: dict | None) -> dict:
     return out
 
 
+
+def sanitize_public_jarvis_snapshot(snapshot: dict | None) -> dict:
+    """Project Jarvis diagnostics into the same fail-closed public telemetry model."""
+    src = snapshot if isinstance(snapshot, dict) else {}
+    service = src.get("service") if isinstance(src.get("service"), dict) else {}
+    summary = src.get("inbound_traffic_summary") if isinstance(src.get("inbound_traffic_summary"), dict) else {}
+    categories = src.get("categories") if isinstance(src.get("categories"), dict) else {}
+
+    out = _copy_keys(src, ("snapshot_utc", "target", "resource", "latest_log_utc"))
+    out["service"] = _copy_keys(service, ("name", "type", "region", "suspended", "plan", "updatedAt"))
+    out["inbound_traffic_summary"] = {
+        **_copy_keys(summary, (
+            "schema_v", "official_counting_since_utc", "events_total",
+            "logical_messages_total", "technical_evidence_total",
+            "dedup_window_seconds", "first_real_contact_utc", "last_real_contact_utc",
+        )),
+        "counts": _project_counts(summary.get("counts")),
+    }
+    out["log_rows_scanned"] = src.get("log_rows_scanned")
+    out["categories"] = _copy_keys(categories, (
+        "errors_5xx", "timeouts", "restarts_shutdowns", "startup",
+        "deploy_startups", "possible_cold_starts", "ask_requests", "ask_2xx",
+        "ask_failures", "health_requests", "agent_card_requests",
+        "agent_card_requests_last_24h", "health_requests_last_24h",
+    ))
+    out["startup_events"] = _project_rows(
+        src.get("startup_events"),
+        ("timestamp_utc", "classification"),
+        20,
+    )
+    deployments = []
+    for row in list(src.get("recent_deploys") or [])[:10]:
+        if not isinstance(row, dict):
+            continue
+        projected = _copy_keys(row, ("id", "status", "createdAt", "updatedAt", "finishedAt"))
+        commit = row.get("commit") if isinstance(row.get("commit"), dict) else {}
+        projected["commit"] = _copy_keys(commit, ("id", "createdAt"))
+        deployments.append(projected)
+    out["recent_deploys"] = deployments
+    validate_public_jarvis_snapshot(out)
+    return out
+
+
 def _schema_for_child(schema: Any, key_or_index: Any) -> Any:
     if isinstance(schema, dict):
         if key_or_index not in schema:
@@ -289,8 +394,7 @@ def _contains_ip(value: str) -> bool:
     return False
 
 
-def validate_public_snapshot(snapshot: Any) -> None:
-    """Fail closed on unknown keys, identifiers, long/free text, IPs or email addresses."""
+def _validate_against_schema(snapshot: Any, schema_root: Any) -> None:
     def walk(value: Any, schema: Any, path: str) -> None:
         if isinstance(value, dict):
             if not isinstance(schema, dict):
@@ -316,7 +420,17 @@ def validate_public_snapshot(snapshot: Any) -> None:
             if _contains_ip(value):
                 raise ValueError(f"public_snapshot_ip:{path}")
 
-    walk(snapshot, PUBLIC_SNAPSHOT_SCHEMA, "$")
+    walk(snapshot, schema_root, "$")
+
+
+def validate_public_snapshot(snapshot: Any) -> None:
+    """Fail closed on unknown keys, identifiers, long/free text, IPs or email addresses."""
+    _validate_against_schema(snapshot, PUBLIC_SNAPSHOT_SCHEMA)
+
+
+def validate_public_jarvis_snapshot(snapshot: Any) -> None:
+    """Apply the same fail-closed privacy guard to public Jarvis telemetry."""
+    _validate_against_schema(snapshot, PUBLIC_JARVIS_SNAPSHOT_SCHEMA)
 
 
 __all__ = [
@@ -324,7 +438,10 @@ __all__ = [
     "MAX_TRAFFIC_EVENTS",
     "MAX_SECURITY_EVENTS",
     "PUBLIC_SNAPSHOT_SCHEMA",
+    "PUBLIC_JARVIS_SNAPSHOT_SCHEMA",
     "sanitize_public_autopilot",
     "sanitize_public_snapshot",
+    "sanitize_public_jarvis_snapshot",
     "validate_public_snapshot",
+    "validate_public_jarvis_snapshot",
 ]
