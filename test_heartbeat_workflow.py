@@ -84,6 +84,11 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
                 offenders.append(path.name)
         self.assertEqual(offenders,[])
 
+    def test_hmac_signer_uses_runtime_env_value_without_literal_quote_escaping(self):
+        w=self.workflow
+        self.assertIn('NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}"',w)
+        self.assertNotIn('NEO_HEARTBEAT_TOKEN=\\\"',w)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
