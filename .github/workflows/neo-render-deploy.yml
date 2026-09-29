@@ -3,6 +3,12 @@ name: NEO Render Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      extended_validation:
+        description: "Run outbound/effectful extended post-deploy validation"
+        required: false
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -584,6 +590,7 @@ jobs:
           PY
 
       - name: Run three market validation cycles
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
         env:
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
@@ -611,7 +618,7 @@ jobs:
           PY
 
       - name: Dispatch zero-cost local LLM probe for v0.99.39
-        if: success()
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -624,7 +631,7 @@ jobs:
           echo "Local LLM diagnostic dispatched as workflow_dispatch"
 
       - name: Dispatch local LLM comparison for v0.99.42
-        if: success()
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -643,6 +650,7 @@ jobs:
           echo "Local LLM comparison dispatched via workflow_dispatch"
 
       - name: Dispatch fresh Jarvis snapshot
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -651,7 +659,7 @@ jobs:
           echo "Jarvis runtime snapshot workflow dispatched"
 
       - name: Dispatch authorized 30-minute Registry Health SAMPLE once
-        if: success()
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -675,7 +683,7 @@ jobs:
           echo "Authorized Registry Health SAMPLE phase=first max_minutes=30 dispatched once"
 
       - name: Dispatch authorized Registry Health scan for v0.99.40
-        if: success()
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
