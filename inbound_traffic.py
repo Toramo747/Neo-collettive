@@ -258,8 +258,33 @@ def retroactive_from_inbound_messages(messages: list[dict]|None) -> list[dict]:
         })
     return out
 
+def _event_time(row: dict) -> datetime|None:
+    try:
+        ts=datetime.fromisoformat(str(row.get("timestamp_utc") or "").replace("Z","+00:00"))
+        if ts.tzinfo is None:
+            ts=ts.replace(tzinfo=timezone.utc)
+        return ts
+    except Exception:
+        return None
+
+
+def _same_logical_a2a_evidence(live: dict, derived: dict, *, window_seconds: int=5) -> bool:
+    """Match one live request with its historical reconstruction only."""
+    if live.get("endpoint")!="/a2a" or derived.get("endpoint")!="/a2a":
+        return False
+    if str(live.get("rpc_method") or "") != str(derived.get("rpc_method") or ""):
+        return False
+    fp=str(live.get("content_fingerprint") or "")
+    if not fp or fp != str(derived.get("content_fingerprint") or ""):
+        return False
+    if bool(live.get("historical_derived")) == bool(derived.get("historical_derived")):
+        return False
+    a,b=_event_time(live),_event_time(derived)
+    return bool(a and b and abs((a-b).total_seconds()) <= window_seconds)
+
+
 def reconcile_message_events(events: list[dict]|None, messages: list[dict]|None) -> list[dict]:
-    """Overlay authoritative message-derived safety classes without rewriting evidence."""
+    """Overlay safety classes and coalesce only duplicate live/historical evidence."""
     rows=[dict(x) for x in (events or []) if isinstance(x,dict)]
     for derived in retroactive_from_inbound_messages(messages):
         matched=None
@@ -271,18 +296,39 @@ def reconcile_message_events(events: list[dict]|None, messages: list[dict]|None)
                 and row.get("endpoint")=="/a2a"
                 and row.get("rpc_method")==derived.get("rpc_method")
             )
-            if same_id or same_shape:
+            same_evidence=_same_logical_a2a_evidence(row,derived)
+            if same_id or same_shape or same_evidence:
                 matched=row
                 break
         if matched is None:
+            derived["logical_message_id"]="a2a:"+str(derived.get("source_message_id") or derived.get("content_fingerprint") or "historical")
+            derived["logical_evidence_count"]=1
             rows=append_event(rows,derived)
             continue
+
+        evidence=list(matched.get("logical_evidence") or [])
+        if not evidence:
+            evidence.append({
+                "timestamp_utc":matched.get("timestamp_utc"),
+                "user_agent":matched.get("user_agent"),
+                "ip_or_origin":matched.get("ip_or_origin"),
+                "historical_derived":bool(matched.get("historical_derived")),
+            })
+        evidence.append({
+            "timestamp_utc":derived.get("timestamp_utc"),
+            "user_agent":derived.get("user_agent"),
+            "ip_or_origin":derived.get("ip_or_origin"),
+            "historical_derived":bool(derived.get("historical_derived")),
+        })
+        matched["logical_evidence"]=evidence
+        matched["logical_evidence_count"]=len(evidence)
+        matched["logical_message_id"]=matched.get("logical_message_id") or ("a2a:"+str(derived.get("source_message_id") or derived.get("content_fingerprint") or "unknown"))
+        matched["source_message_id"]=matched.get("source_message_id") or derived.get("source_message_id")
         if derived.get("category") in {"malicious_solicitation","self_traffic"}:
             if matched.get("category")!=derived.get("category"):
                 matched["original_category"]=matched.get("category")
                 matched["original_reason"]=matched.get("reason")
             matched["category"]=derived.get("category")
             matched["reason"]=derived.get("reason")
-            matched["source_message_id"]=derived.get("source_message_id")
             matched["content_fingerprint"]=derived.get("content_fingerprint")
     return rows[-1200:]

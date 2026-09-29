@@ -156,6 +156,31 @@ class InboundTrafficTests(unittest.TestCase):
         self.assertEqual(rows[0]["category"],"self_traffic")
         self.assertEqual(rows[0]["self_source"],"github_actions_verify_mcp_live_probe")
 
+    def test_live_plus_historical_same_payload_is_one_logical_message_two_evidence(self):
+        events=[{
+            "timestamp_utc":"2026-09-29T00:04:46.731553+00:00","endpoint":"/a2a",
+            "rpc_method":"message/send","category":"real_contact","reason":"a2a_text_message",
+            "user_agent":"musekey-agent/1.0","ip_or_origin":"203.0.113.10",
+            "content_fingerprint":content_fingerprint("same payload"),
+        }]
+        messages=[{
+            "message_id":"muse-1","received_at_utc":"2026-09-29T00:04:47.134481+00:00",
+            "method":"message/send","text":"same payload","sender":{"agent":"anonymous-agent"},
+        }]
+        rows=reconcile_message_events(events,messages)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["logical_evidence_count"],2)
+        self.assertEqual(rows[0]["source_message_id"],"muse-1")
+
+    def test_same_ping_from_two_live_origins_stays_two_logical_messages(self):
+        fp=content_fingerprint("ping")
+        events=[
+            {"timestamp_utc":"2026-09-29T01:00:00+00:00","endpoint":"/a2a","rpc_method":"message/send","category":"real_contact","reason":"a2a_text_message","user_agent":"peer-a","ip_or_origin":"203.0.113.1","content_fingerprint":fp},
+            {"timestamp_utc":"2026-09-29T01:00:01+00:00","endpoint":"/a2a","rpc_method":"message/send","category":"real_contact","reason":"a2a_text_message","user_agent":"peer-b","ip_or_origin":"203.0.113.2","content_fingerprint":fp},
+        ]
+        rows=reconcile_message_events(events,[])
+        self.assertEqual(len(rows),2)
+
 
 if __name__=="__main__":
     unittest.main()
