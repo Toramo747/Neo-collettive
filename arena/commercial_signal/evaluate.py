@@ -110,9 +110,11 @@ def main()->int:
     for path in sorted(Path(args.proposals_dir).glob("*.json")):
         p=load_proposal(path); results[path.stem]=metrics(rows,p)
     eligible=[(name,m) for name,m in results.items() if not m["disqualified"]]
-    winner=max(eligible,key=lambda x:(x[1]["recall_real_demand"],x[1]["precision_real_demand"]),default=(None,None))[0]
-    out={"dataset_size":len(rows),"results":results,"winner_by_arena_rule":winner,
-         "note":"Arena-only evaluation; no production adoption."}
+    best_recall=max((m["recall_real_demand"] for _,m in eligible),default=None)
+    top_recall=sorted(name for name,m in eligible if m["recall_real_demand"]==best_recall) if best_recall is not None else []
+    out={"dataset_size":len(rows),"results":results,"top_by_arena_rule":top_recall,
+         "best_recall_real_demand":best_recall,
+         "note":"Arena-only evaluation; ties are retained; no production adoption."}
     text=json.dumps(out,sort_keys=True,indent=2)
     if args.out: Path(args.out).write_text(text+"\n",encoding="utf-8")
     print(text)
