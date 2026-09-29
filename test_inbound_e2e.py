@@ -150,24 +150,24 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_public_http_effectful_entries_stop_before_application_code(self):
         cases=[
-            ("/api/discover","GET","q="+OBFUSCATED.replace(" ","%20")),
-            ("/api/collective","GET","problem="+OBFUSCATED.replace(" ","%20")),
-            ("/api/director/run","GET","goal="+OBFUSCATED.replace(" ","%20")),
-            ("/api/market/run-cycles","POST",""),
-            ("/api/heartbeat","GET",""),
-            ("/api/trust/evaluate","POST",""),
-            ("/venture","POST",""),
-            ("/api/venture/audit","GET",""),
-            ("/api/venture/audit","POST",""),
-            ("/api/venture/measurement","POST",""),
+            ("/api/discover","GET","q="+OBFUSCATED.replace(" ","%20"),403),
+            ("/api/collective","GET","problem="+OBFUSCATED.replace(" ","%20"),403),
+            ("/api/director/run","GET","goal="+OBFUSCATED.replace(" ","%20"),403),
+            ("/api/market/run-cycles","POST","",403),
+            ("/api/heartbeat","GET","",401),
+            ("/api/trust/evaluate","POST","",403),
+            ("/venture","POST","",403),
+            ("/api/venture/audit","GET","",403),
+            ("/api/venture/audit","POST","",403),
+            ("/api/venture/measurement","POST","",403),
         ]
-        for path,method,query in cases:
+        for path,method,query,expected_status in cases:
             with self.subTest(path=path,method=method):
                 with patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
                     status,response=await asgi_request(
                         cloud_mcp.app,path,method,{"message":OBFUSCATED},query=query
                     )
-                self.assertEqual(status,403)
+                self.assertEqual(status,expected_status)
                 self.assertFalse(response.get("fetch_allowed"))
                 self.assertFalse(response.get("execution_allowed"))
                 self.assertFalse(response.get("knowledge_ledger_write_allowed"))
