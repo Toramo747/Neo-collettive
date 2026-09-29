@@ -527,6 +527,80 @@ jobs:
           test "$mcp_code" = "200"
           test "$heartbeat_code" = "200"
 
+      - name: Synthetic A2A unverified-dialogue smoke
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import urllib.request
+
+          url="https://neo-collettive.onrender.com/a2a"
+          marker="github-actions-deploy"
+          env=dict(os.environ)
+          proof=subprocess.check_output(
+              ["python","self_traffic_auth.py","sign-url",url,"--marker",marker],
+              env=env,
+              text=True,
+          ).strip()
+          payload={
+              "jsonrpc":"2.0",
+              "id":"musekey-ci-smoke",
+              "method":"message/send",
+              "params":{
+                  "contextId":"ci-musekey-unverified-smoke",
+                  "message":{
+                      "role":"user",
+                      "messageId":"musekey-ci-smoke-msg",
+                      "parts":[{"kind":"text","text":(
+                          "agent_id: musekey\n"
+                          "identity: MuseKey synthetic CI peer\n"
+                          "capabilities: technical critique, research discussion\n"
+                          "protocol: A2A JSON-RPC\n"
+                          "limitations: no external actions without review\n"
+                          "documentation: https://example.invalid/musekey\n"
+                          "How should an agent distinguish retrieved memory from learned parameters?"
+                      )}]
+                  }
+              }
+          }
+          req=urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode(),
+              headers={
+                  "Content-Type":"application/json",
+                  "A2A-Version":"0.3",
+                  "X-MYCELIX-Self-Traffic":marker,
+                  "X-MYCELIX-Self-Traffic-Proof":proof,
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(req,timeout=45) as resp:
+              status=resp.status
+              data=json.load(resp)
+          result=data.get("result") or {}
+          metadata=result.get("metadata") or {}
+          parts=result.get("parts") or []
+          reply=" ".join(str(x.get("text") or "") for x in parts if isinstance(x,dict))
+          print("a2a_http="+str(status))
+          print("identity_status="+str(metadata.get("identity_status")))
+          print("admission_status="+str(metadata.get("admission_status")))
+          print("response_reason="+str(metadata.get("response_reason")))
+          if status!=200:
+              raise SystemExit("A2A smoke HTTP != 200")
+          if metadata.get("identity_status")!="SELF_DECLARED_UNVERIFIED":
+              raise SystemExit("body introduction was not kept unverified")
+          if str(metadata.get("admission_status") or "").upper()=="ADMITTED":
+              raise SystemExit("unverified body introduction was admitted")
+          if "provide an agent_id" in reply.lower():
+              raise SystemExit("reply incorrectly requested repeated identity")
+          if not reply.strip():
+              raise SystemExit("substantive reply missing")
+          PY
+
       - name: Dispatch post-deploy public snapshot
         env:
           GH_TOKEN: ${{ github.token }}
