@@ -15,7 +15,9 @@ import neo_dialect as nd
 
 NAMESPACE="mycelix-arena"
 MAX_CHARS=3200
-DEFAULT_MODELS=("qwen2.5:0.5b-instruct","qwen2.5:3b-instruct-q4_K_M")
+PRIMARY_MODEL="qwen2.5:3b-instruct-q4_K_M"
+FALLBACK_MODEL="qwen2.5:0.5b-instruct"
+DEFAULT_MODELS=(PRIMARY_MODEL,FALLBACK_MODEL)
 ROLES=("Scout","Analyst","Critic","Builder-planner")
 TOPIC="quale tool MCP gratuito sarebbe più utile agli sviluppatori"
 SCHEMA_DIR=Path("schemas/neo-dialect/1.0")
@@ -182,15 +184,27 @@ def run_model(model: str) -> dict[str,Any]:
 def main() -> int:
     p=argparse.ArgumentParser()
     p.add_argument("--models",nargs="+",default=list(DEFAULT_MODELS))
+    p.add_argument("--primary-model",default=PRIMARY_MODEL)
     p.add_argument("--out",default="data/arena/local-llm-comparison.json")
     args=p.parse_args()
     results=[run_model(m) for m in args.models]
+    selected={r["model"] for r in results}
+    if args.primary_model not in selected:
+        raise SystemExit(f"primary_model_not_compared: {args.primary_model}")
+    fallback=FALLBACK_MODEL if FALLBACK_MODEL in selected and FALLBACK_MODEL != args.primary_model else None
     report={
         "schema_v":1,"namespace":NAMESPACE,"status":"COMPLETED",
         "provider":"local_ollama","cost_eur":0,"score_weight":0.0,
         "external_agent_contact":False,"production_influence":"NONE",
         "promotion":"NONE","completed_at_utc":now_utc(),"topic":TOPIC,
         "format_mode":"ollama_json_schema",
+        "model_policy":{
+            "primary_model":args.primary_model,
+            "fallback_model":fallback,
+            "scope":"arena_cognitive_roles",
+            "basis":"arena_comparison_2026-09-29",
+            "production_promotion":False,
+        },
         "glossary":{"MCP":"Model Context Protocol","A2A":"Agent2Agent"},
         "models":results,
         "guardrails":{
