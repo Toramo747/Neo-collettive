@@ -31,5 +31,9 @@ jobs:
           PY
       - name: Compile Python sources
         run: python -m compileall -q .
+      - name: Privacy and self-traffic guards
+        run: |
+          python -m unittest -v             test_public_snapshot_privacy             test_inbound_traffic             test_self_traffic_hmac_port
+
       - name: Full unittest suite
         run: python -m unittest discover -v
