@@ -20,6 +20,18 @@ class CommercialSignalArenaTests(unittest.TestCase):
     def test_dataset_has_three_labels(self):
         rows=load_dataset(ROOT/"train.jsonl")
         self.assertEqual({r["proposed_label"] for r in rows},{"REAL_DEMAND","VENDOR_OR_SELLER","NOISE"})
+    def test_evaluator_has_no_network_imports(self):
+        import ast
+        from pathlib import Path
+        p=Path(__file__).with_name("evaluate.py")
+        tree=ast.parse(p.read_text(encoding="utf-8"))
+        banned={"socket","urllib","requests","http","ftplib","smtplib","websocket"}
+        imports=set()
+        for n in ast.walk(tree):
+            if isinstance(n,ast.Import): imports.update(x.name.split(".")[0] for x in n.names)
+            elif isinstance(n,ast.ImportFrom) and n.module: imports.add(n.module.split(".")[0])
+        self.assertFalse(imports & banned)
+
     def test_baseline_zero_vendor_fp(self):
         rows=load_dataset(ROOT/"train.jsonl")
         m=metrics(rows,BASE)
