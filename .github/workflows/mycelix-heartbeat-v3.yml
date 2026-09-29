@@ -282,7 +282,9 @@ jobs:
           raw=load("/tmp/status.json",{})
           hb=load("/tmp/heartbeat.json",{})
           latency=load("/tmp/endpoint-latency.json",{})
-          ap=raw.get("autopilot") or {}
+          ap_private=raw.get("autopilot") or {}
+          from public_snapshot import sanitize_public_autopilot
+          ap=sanitize_public_autopilot(ap_private)
           err=""
           try:
               err=open("/tmp/status-errors.txt",encoding="utf-8").read().strip()

@@ -63,6 +63,31 @@ class IntentDiscoveryTests(unittest.TestCase):
         self.assertEqual(stat["status"],"ADMITTED")
         self.assertEqual(stat["identity_status"],"self_declared")
 
+    def test_commercial_negation_is_local_and_conservative(self):
+        cases=[
+            ("no commercial intent",False),
+            ("no contract, no budget, no payment",False),
+            ("I want a paid contract",True),
+            ("budget is 500 EUR",True),
+            ("no payment upfront",True),
+            ("not just commercial",True),
+            ("no contract needed, just pay",True),
+            ("No contract is needed, but we will pay 500 EUR for the product.",True),
+            ("nothing commercial, no money, no product",False),
+        ]
+        for text,expected in cases:
+            with self.subTest(text=text):
+                result=classify_agent_intent(text)
+                self.assertEqual(result["commercial_intent"],expected)
+                self.assertIn("commercial_score",result)
+                self.assertIn("commercial_reason",result)
+        negated=classify_agent_intent("no contract, no budget, no payment")
+        self.assertIn("COMMERCIAL",negated["negated_markers"])
+        self.assertEqual(negated["commercial_score"],0)
+        qualified=classify_agent_intent("no payment upfront")
+        self.assertGreater(qualified["commercial_score"],0)
+        self.assertEqual(qualified["commercial_reason"],"positive_commercial_marker_survived_negation")
+
 
 if __name__=="__main__":
     unittest.main()

@@ -8,6 +8,8 @@ import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import a2a_peer as peer_a2a
+from a2a_identity import conversation_identity_key, parse_body_introduction
+from a2a_dialogue import consume_rate as consume_a2a_response_rate, origin_rate_key, plan_untrusted_reply
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
@@ -209,6 +211,8 @@ AUTOPILOT_GOAL = os.getenv(
 )
 AUTOPILOT_LOCK = asyncio.Lock()
 SEARCH_PROVIDER_LOCK = asyncio.Lock()
+A2A_RESPONSE_RATE: dict[str,list[float]] = {}
+A2A_ORIGIN_RESPONSE_RATE: dict[str,list[float]] = {}
 BRAND_NAME = "MYCELIX"
 BRAND_TAGLINE = "Collective Intelligence Network"
 RUNTIME_PROFILE = load_runtime_profile()
@@ -1119,6 +1123,7 @@ def _inbound_request_meta(request: Request) -> dict:
         "self_marker":str(headers.get("x-mycelix-self-traffic") or "")[:300],
         "self_proof":str(headers.get("x-mycelix-self-traffic-proof") or "")[:300],
         "declared_agent_id":str(headers.get("x-agent-id") or "")[:300],
+        "client_ip":client_ip[:180],
     }
 
 
@@ -1135,6 +1140,24 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         except Exception:
             has_text=False
     meta=_inbound_request_meta(request)
+    source_message_id=None
+    thread_id=None
+    intent={}
+    identity_status="ANONYMOUS_UNVERIFIED"
+    if path=="/a2a":
+        try:
+            sender=_a2a_sender(payload,request)
+            thread_id=_a2a_thread_id(payload,sender)
+            source_message_id=str(((payload.get("params") or {}).get("message") or {}).get("messageId") or "")[:180] or None
+            intent=classify_agent_intent(inbound_text)
+            if sender.get("declared"):
+                identity_status="SELF_DECLARED_UNVERIFIED"
+        except Exception:
+            pass
+    tool_name=None
+    if path.startswith("/mcp") and rpc_method=="tools/call":
+        params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+        tool_name=str(params.get("name") or "").strip()[:180] or None
     self_auth=verify_self_traffic_proof(HEARTBEAT_TOKEN,path,meta["self_proof"])
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
@@ -1157,6 +1180,20 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "spoofed_self_marker":bool(meta["self_marker"] and not self_auth.get("valid")),
         "self_proof_reason":self_auth.get("reason") if meta["self_marker"] else None,
         "content_fingerprint":content_fingerprint(inbound_text),
+        "source_message_id":source_message_id,
+        "thread_id":thread_id,
+        "intent_primary":intent.get("primary"),
+        "intent_secondary":intent.get("secondary") or [],
+        "intent_confidence":intent.get("confidence"),
+        "intent_markers":intent.get("markers") or {},
+        "intent_negated_markers":intent.get("negated_markers") or {},
+        "commercial_intent":bool(intent.get("commercial_intent")),
+        "identity_status":identity_status,
+        "response_message_id":None,
+        "fallback_reason":None,
+        "review_reason":None,
+        "block_reason":reason if category=="malicious_solicitation" else None,
+        "tool_name":tool_name,
         "origin_risk_flags":origin_risk_flags(meta["ip_or_origin"]),
     }
     events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
@@ -1164,6 +1201,27 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
     _save_local_state()
     return dict(events[-1]) if events else row
+
+
+def _annotate_inbound_traffic(source_message_id: str | None, *, response_message_id: str | None=None,
+                              fallback_reason: str | None=None, review_reason: str | None=None,
+                              block_reason: str | None=None) -> None:
+    if not source_message_id:
+        return
+    events=list(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
+    for event in reversed(events):
+        if event.get("source_message_id")!=source_message_id:
+            continue
+        if response_message_id:
+            event["response_message_id"]=str(response_message_id)[:180]
+        if fallback_reason:
+            event["fallback_reason"]=str(fallback_reason)[:180]
+        if review_reason:
+            event["review_reason"]=str(review_reason)[:180]
+        if block_reason:
+            event["block_reason"]=str(block_reason)[:180]
+        break
+    AUTOPILOT_STATE["inbound_traffic_events"]=events
 
 
 def _a2a_sender(payload: dict, request: Request) -> dict:
@@ -1297,9 +1355,13 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     now=datetime.now(timezone.utc).isoformat()
     method=str(payload.get("method") or "message/send")
     card_url=_a2a_agent_card_url(payload,request)
+    body_intro=parse_body_introduction(text)
+    request_meta=_inbound_request_meta(request)
+    origin_salt=os.getenv("MYCELIX_ORIGIN_RATE_SALT") or HEARTBEAT_TOKEN
+    origin_key=origin_rate_key(str(request_meta.get("client_ip") or ""),origin_salt)
 
     stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
-    stat_key=str(sender.get("agent_id") or "anonymous")
+    stat_key=conversation_identity_key(str(sender.get("agent_id") or ""),thread_id)
     old=dict(stats.get(stat_key) or {})
     intent=classify_agent_intent(text,old)
     admission=inbound_admission_transition(bool(sender.get("declared")),text,old)
@@ -1336,7 +1398,15 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "commercial_intent":bool(intent.get("commercial_intent")),
         "admission_status":admission.get("status"),
         "interview_score":admission.get("interview_score"),
-        "identity_status":admission.get("identity_status"),
+        "identity_status":(
+            body_intro.get("identity_status")
+            if body_intro.get("declared_identity_from_body") and not sender.get("declared")
+            else admission.get("identity_status")
+        ),
+        "declared_identity_from_body":bool(body_intro.get("declared_identity_from_body")),
+        "declared_agent_id":body_intro.get("declared_agent_id"),
+        "introduction_fields":body_intro.get("introduction_fields") or [],
+        "declared_public_key_observation":body_intro.get("declared_public_key_observation"),
         "agent_card_url":card_url,
         "dialogue_status":dialogue.get("dialogue_status"),
         "dialogue_stage":dialogue.get("dialogue_stage"),
@@ -1346,6 +1416,8 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "round_passed":dialogue.get("round_passed"),
         "interview_complete":bool(dialogue.get("interview_complete")),
         "next_question":dialogue.get("next_question"),
+        "response_rate_key":conversation_identity_key(str(sender.get("agent_id") or ""),thread_id),
+        "origin_rate_key":origin_key,
     }
 
     inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
@@ -1357,7 +1429,11 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "agent":sender.get("agent"),
         "declared":bool(sender.get("declared")),
         "status":admission.get("status"),
-        "identity_status":admission.get("identity_status"),
+        "identity_status":row.get("identity_status"),
+        "declared_identity_from_body":bool(row.get("declared_identity_from_body")),
+        "declared_agent_id":row.get("declared_agent_id"),
+        "introduction_fields":row.get("introduction_fields") or [],
+        "declared_public_key_observation":row.get("declared_public_key_observation"),
         "agent_card_url":card_url or old.get("agent_card_url"),
         "messages":int(old.get("messages") or 0)+1,
         "substantive_messages":int(old.get("substantive_messages") or 0)+(1 if row["substantive"] else 0),
@@ -1417,24 +1493,69 @@ def _inbound_reply_text(row: dict) -> str:
     dialogue_stage=str(row.get("dialogue_stage") or "").upper()
     next_question=str(row.get("next_question") or "").strip()
 
-    if status=="ANONYMOUS":
-        return (
-            intent_followup({
-                "primary":row.get("intent_primary"),
-                "secondary":row.get("intent_secondary") or [],
-                "confidence":row.get("intent_confidence"),
-            })
-            + " If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available."
+    plan=plan_untrusted_reply(
+        str(row.get("text") or ""),
+        identity_status=str(row.get("identity_status") or ""),
+        intro_received=bool(row.get("declared_identity_from_body")),
+    )
+    row["response_reason"]=plan.get("reason")
+
+    if plan.get("mode")=="review":
+        row["review_status"]="PENDING_EXPLICIT_REVIEW"
+        row["review_reason"]=plan.get("reason")
+        return str(plan.get("reply") or "")
+    if plan.get("mode")=="security":
+        row["block_reason"]=plan.get("reason")
+        return str(plan.get("reply") or "")
+    if plan.get("mode")=="substantive" and status in {"ANONYMOUS","PARKED"}:
+        now_seconds=time.time()
+        rate=consume_a2a_response_rate(
+            A2A_RESPONSE_RATE,
+            str(row.get("response_rate_key") or row.get("thread_id") or "anonymous"),
+            now_seconds,
         )
+        origin_rate=consume_a2a_response_rate(
+            A2A_ORIGIN_RESPONSE_RATE,
+            str(row.get("origin_rate_key") or "origin:unknown"),
+            now_seconds,
+            limit=12,
+            window_seconds=600,
+        )
+        if not rate.get("allowed"):
+            row["response_reason"]="substantive_rate_limited"
+            return "MYCELIX received the message, but this conversation has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+        if not origin_rate.get("allowed"):
+            row["response_reason"]="origin_rate_limited"
+            return "MYCELIX received the message, but this network origin has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+        return str(plan.get("reply") or "")
+
+    if status=="ANONYMOUS":
+        return str(plan.get("reply") or "")
     if status=="PARKED" and dialogue_stage=="IDENTITY":
+        if plan.get("mode")=="substantive":
+            now_seconds=time.time()
+            rate=consume_a2a_response_rate(
+                A2A_RESPONSE_RATE,
+                str(row.get("response_rate_key") or row.get("thread_id") or "anonymous"),
+                now_seconds,
+            )
+            origin_rate=consume_a2a_response_rate(
+                A2A_ORIGIN_RESPONSE_RATE,
+                str(row.get("origin_rate_key") or "origin:unknown"),
+                now_seconds,
+                limit=12,
+                window_seconds=600,
+            )
+            if not rate.get("allowed"):
+                row["response_reason"]="substantive_rate_limited"
+                return "MYCELIX received the message, but this conversation has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+            if not origin_rate.get("allowed"):
+                row["response_reason"]="origin_rate_limited"
+                return "MYCELIX received the message, but this network origin has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+            return str(plan.get("reply") or "")
         return (
-            intent_followup({
-                "primary":row.get("intent_primary"),
-                "secondary":row.get("intent_secondary") or [],
-                "confidence":row.get("intent_confidence"),
-            })
-            + " The identity/admission interview is parked, not the conversation. "
-              "If you want peer admission, also provide identity, concrete capabilities, supported protocol, limitations and public documentation if available."
+            str(plan.get("reply") or "")
+            + " The identity/admission interview is parked, not the conversation."
         )
     if status=="ADMITTED" and dialogue_status=="ACTIVE" and next_question:
         return (
@@ -1450,24 +1571,11 @@ def _inbound_reply_text(row: dict) -> str:
     if status=="ADMITTED" and dialogue_status=="COMPLETE":
         return (
             "MYCELIX completed the three-round peer interview. Identity remains self-declared unless independently verified. "
-            "From your next message onward, substantive claims may be recorded as untrusted collective evidence and remain subject "
-            "to independent corroboration, falsification checks and all commercial quality gates."
+            "Substantive claims remain untrusted evidence and require explicit review before any collective knowledge write."
         )
-    if not row.get("text"):
-        return (
-            "MYCELIX received the A2A request but no text message was found. "
-            "Send a concrete claim, criticism, evidence or new hypothesis."
-        )
-    if not row.get("substantive"):
-        return (
-            "MYCELIX received your message. Provide a substantive, falsifiable contribution with evidence and controls."
-        )
-    return (
-        "MYCELIX recorded your admitted peer contribution as untrusted evidence"
-        + ((" in knowledge item "+str(row.get("knowledge_id"))) if row.get("knowledge_id") else "")
-        + ". Continue with independent evidence and the strongest contradiction. "
-          "No inbound message can bypass evidence or commercial quality gates."
-    )
+    if plan.get("mode")=="substantive":
+        return str(plan.get("reply") or "")
+    return str(plan.get("reply") or "")
 
 async def a2a_agent_card(request: Request):
     _record_inbound_traffic(request)
@@ -1538,6 +1646,11 @@ async def a2a_endpoint(request: Request):
     if not isinstance(payload,dict):
         return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}},status_code=400)
     rpc_id=payload.get("id")
+    params_for_callback=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+    push_notification_ignored=bool(
+        params_for_callback.get("pushNotificationConfig")
+        or params_for_callback.get("push_notification_config")
+    )
     traffic_row=_record_inbound_traffic(request,payload=payload)
     requested_version=_a2a_requested_version(request)
     if not _a2a_version_supported(requested_version):
@@ -1573,6 +1686,12 @@ async def a2a_endpoint(request: Request):
             },
         }
         if requested_version=="0.3": suppressed["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=suppressed.get("messageId"),
+            block_reason=event.get("reason"),
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":suppressed})
     if traffic_row.get("category") in {"real_contact_pending","crawler_probe"} and str(traffic_row.get("reason") or "").startswith("active_a2a_probe_"):
         _save_local_state()
@@ -1587,6 +1706,12 @@ async def a2a_endpoint(request: Request):
             },
         }
         if requested_version=="0.3": probe_result["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=probe_result.get("messageId"),
+            fallback_reason="active_probe_minimal_response",
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":probe_result})
     dialect_reply=_neo_dialect_inbound_reply(inbound_text,payload,request)
     if dialect_reply is not None:
@@ -1608,6 +1733,12 @@ async def a2a_endpoint(request: Request):
         }
         if requested_version=="0.3":
             result["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=result.get("messageId"),
+            fallback_reason="neo_dialect_response",
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
     security_verdict=classify_inbound_security(inbound_text)
     if security_verdict.get("blocked"):
@@ -1631,6 +1762,12 @@ async def a2a_endpoint(request: Request):
         }
         if requested_version=="0.3":
             suppressed["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=suppressed.get("messageId"),
+            block_reason=event.get("reason"),
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":suppressed})
 
     row=_record_inbound_agent_message(payload,request)
@@ -1679,10 +1816,20 @@ async def a2a_endpoint(request: Request):
             "knowledge_id":row.get("knowledge_id"),
             "hypothesis_id":row.get("hypothesis_id"),
             "protected_actions_enforced":True,
+            "push_notification_ignored":push_notification_ignored,
+            "synchronous_response_only":True,
         },
     }
     if requested_version=="0.3":
         result["kind"]="message"
+    _annotate_inbound_traffic(
+        traffic_row.get("source_message_id"),
+        response_message_id=message_id,
+        fallback_reason=row.get("response_reason"),
+        review_reason=row.get("review_reason") or row.get("review_status"),
+        block_reason=row.get("block_reason"),
+    )
+    _save_local_state()
     return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
 
 
@@ -11850,6 +11997,8 @@ class _InboundTrafficASGI:
             user_agent=header_map.get("user-agent",""),origin=source,rpc_method=rpc,has_text=False,
             self_marker=self_marker,self_verified=bool(self_auth.get("valid")),declared_agent_id=header_map.get("x-agent-id",""),
         )
+        params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+        requested_tool_name=str(params.get("name") or "").strip()[:180] or None if rpc=="tools/call" else None
         row={
             "timestamp_utc":datetime.now(timezone.utc).isoformat(),
             "endpoint":str(scope.get("path") or "/mcp"),
@@ -11865,13 +12014,13 @@ class _InboundTrafficASGI:
             "spoofed_self_marker":bool(self_marker and not self_auth.get("valid")),
             "self_proof_reason":self_auth.get("reason") if self_marker else None,
             "origin_risk_flags":origin_risk_flags(source),
+            "tool_name":requested_tool_name,
         }
         events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
         AUTOPILOT_STATE["inbound_traffic_events"]=events
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
         _save_local_state()
         if rpc=="tools/call":
-            params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
             tool_name=str(params.get("name") or "").strip()
             known_tool=tool_name in MCP_TOOL_ACCESS
             access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"
