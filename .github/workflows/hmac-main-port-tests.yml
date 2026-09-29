@@ -10,6 +10,10 @@ on:
       - "cloud_mcp.py"
       - "test_self_traffic_hmac_port.py"
       - "test_inbound_traffic.py"
+      - "test_inbound_e2e.py"
+      - "test_heartbeat_workflow.py"
+      - ".github/workflows/mycelix-heartbeat-v3.yml"
+      - ".github/workflows/neo-render-deploy.yml"
       - ".github/workflows/hmac-main-port-tests.yml"
 
 permissions:
@@ -24,4 +28,6 @@ jobs:
       - name: Install locked test dependencies
         run: python -m pip install -r requirements.lock
       - name: Run HMAC hardening tests
-        run: python -m unittest -v test_self_traffic_hmac_port.py test_inbound_traffic.py
+        run: |
+          python -m py_compile cloud_mcp.py self_traffic_auth.py inbound_traffic.py
+          python -m unittest -v test_self_traffic_hmac_port.py test_inbound_traffic.py test_inbound_e2e.py test_heartbeat_workflow.py
