@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -63,7 +64,7 @@ INTENT_MARKERS={
     ),
     "COMMERCIAL":(
         "price","pricing","quote","budget","paid","payment","pay you","pay us",
-        "buy","purchase","sell","contract","commercial","revenue","customer",
+        "buy","purchase","sell","contract","commercial","revenue","customer","product","money","eur","usd","just pay",
     ),
     "RESEARCH":(
         "research","experiment","falsifiable","hypothesis","study","studying",
@@ -87,6 +88,43 @@ def _marker_hits(text: str, markers: tuple[str,...]) -> list[str]:
     return hits
 
 
+def _commercial_marker_hits(text: str) -> tuple[list[str],list[str]]:
+    """Return positive and narrowly negated commercial markers.
+
+    Negation is intentionally local and conservative. It suppresses explicit
+    absence statements (no budget, no contract, no commercial intent, etc.)
+    but does not suppress qualified terms such as "no payment upfront" or
+    "not just commercial".
+    """
+    low=" "+_clean(text).lower()+" "
+    positive=[]
+    negated=[]
+    for marker in INTENT_MARKERS["COMMERCIAL"]:
+        needle=marker.lower()
+        if needle not in low:
+            continue
+        escaped=re.escape(needle)
+        patterns=(
+            rf"\bno\s+{escaped}\b",
+            rf"\bnot\s+{escaped}\b",
+            rf"\bnothing\s+{escaped}\b",
+            rf"\bno\s+{escaped}\s+(?:intent|involved|required|needed|available)\b",
+        )
+        is_negated=any(re.search(pattern,low) for pattern in patterns)
+        if marker=="commercial" and re.search(r"\bno\s+commercial\s+intent\b",low):
+            is_negated=True
+        # These are commercial qualifiers, not denials of the underlying intent.
+        if marker in {"payment","paid","pay you","pay us"} and re.search(r"\bno\s+payment\s+(?:upfront|in\s+advance|initially|today)\b",low):
+            is_negated=False
+        if marker=="commercial" and re.search(r"\bnot\s+just\s+commercial\b",low):
+            is_negated=False
+        if is_negated:
+            negated.append(marker)
+        else:
+            positive.append(marker)
+    return positive,negated
+
+
 def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
     """Classify conversational purpose without assigning trust or truth.
 
@@ -97,8 +135,14 @@ def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
     previous=previous if isinstance(previous,dict) else {}
     scores={}
     markers={}
+    negated_markers={}
     for intent,terms in INTENT_MARKERS.items():
-        hits=_marker_hits(cleaned,terms)
+        if intent=="COMMERCIAL":
+            hits,negated=_commercial_marker_hits(cleaned)
+            if negated:
+                negated_markers[intent]=negated
+        else:
+            hits=_marker_hits(cleaned,terms)
         markers[intent]=hits
         scores[intent]=len(hits)
 
@@ -130,6 +174,14 @@ def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
         confidence=max(confidence,float(previous.get("intent_confidence") or 0.35))
 
     needs_clarification=primary in {"UNKNOWN","CONTACT"}
+    commercial_score=int(scores.get("COMMERCIAL") or 0)
+    commercial_intent=bool(primary=="COMMERCIAL" or "COMMERCIAL" in secondary)
+    if commercial_intent:
+        commercial_reason="positive_commercial_marker_survived_negation"
+    elif negated_markers.get("COMMERCIAL") and not markers.get("COMMERCIAL"):
+        commercial_reason="commercial_markers_explicitly_negated"
+    else:
+        commercial_reason="no_positive_commercial_marker"
     return {
         "schema_v":1,
         "primary":primary,
@@ -137,7 +189,11 @@ def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
         "confidence":round(confidence,2),
         "needs_clarification":needs_clarification,
         "markers":{k:v for k,v in markers.items() if v},
-        "commercial_intent":bool(primary=="COMMERCIAL" or "COMMERCIAL" in secondary),
+        "negated_markers":negated_markers,
+        "scores":scores,
+        "commercial_score":commercial_score,
+        "commercial_reason":commercial_reason,
+        "commercial_intent":commercial_intent,
         "boundary":"Intent describes apparent conversational purpose only; it is not evidence of identity, truth, capability or commercial demand.",
     }
 
