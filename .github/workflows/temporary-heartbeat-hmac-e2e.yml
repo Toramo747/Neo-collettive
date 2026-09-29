@@ -1,0 +1,39 @@
+name: Temporary heartbeat HMAC e2e
+
+on:
+  push:
+    branches:
+      - mycelix-self-traffic-hardening-20260928
+    paths:
+      - .github/workflows/temporary-heartbeat-hmac-e2e.yml
+
+permissions:
+  contents: read
+
+jobs:
+  hmac-e2e:
+    runs-on: ubuntu-latest
+    env:
+      NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+    steps:
+      - name: Verify HMAC proof against Render
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NEO_HEARTBEAT_TOKEN"
+          ts="$(date +%s)"
+          path="/api/heartbeat"
+          sig="$(printf '%s\n%s' "$ts" "$path" | openssl dgst -sha256 -hmac "$NEO_HEARTBEAT_TOKEN" -hex | awk '{print $2}')"
+          proof="$ts:$sig"
+          code="$(curl --silent --show-error --output /tmp/heartbeat.json --write-out '%{http_code}'             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat"             -H "X-MYCELIX-Self-Traffic-Proof: $proof"             "https://neo-collettive.onrender.com/api/heartbeat")"
+          echo "http_status=$code"
+          python - <<'PY'
+          import json
+          p="/tmp/heartbeat.json"
+          data=json.load(open(p,encoding="utf-8"))
+          print("ok="+str(bool(data.get("ok"))).lower())
+          print("neo_version="+str(data.get("neo_version","")))
+          if not data.get("ok"):
+              raise SystemExit("heartbeat returned ok=false")
+          PY
+          test "$code" = "200"
