@@ -11,6 +11,7 @@ from inbound_security import classify_inbound_security
 CATEGORIES=("crawler_probe","self_traffic","real_contact_pending","real_contact","legacy_unattributable","malicious_solicitation","unknown")
 OFFICIAL_COUNTING_SINCE_UTC="2026-09-28T07:07:09+00:00"
 LOGICAL_DEDUP_WINDOW_SECONDS=300
+DECLARED_USER_AUTHORIZED_PROOF_REQUIRED_SINCE_UTC="2026-09-29T16:47:26+00:00"
 
 KNOWN_CRAWLERS=(
     ("agent-tools.cloud",("agent-tools.cloud","agent-tools")),
@@ -40,16 +41,23 @@ def active_probe_candidate(user_agent: str="", declared_agent_id: str="") -> boo
         return False
     return bool(re.search(r"(?i)\b(?:probe|healthcheck|health-check|liveness)\b",_clean(user_agent,500)))
 
+def declared_user_authorized_unverified(declared_agent_id: str="", *, self_verified: bool=False) -> bool:
+    declared=_clean(declared_agent_id,300).lower()
+    return declared.startswith("chatgpt-research-session") and not bool(self_verified)
+
+
 def classify_inbound_event(*, endpoint: str, method: str, user_agent: str="", origin: str="",
                            rpc_method: str="", has_text: bool=False, text: str="", self_marker: str="", self_verified: bool=False, declared_agent_id: str="") -> tuple[str,str,str|None]:
     endpoint=_clean(endpoint,300)
     method=_clean(method,20).upper()
     rpc=_clean(rpc_method,120)
-    self_hay=(" "+_clean(declared_agent_id,300)+" "+_clean(user_agent,500)+" "+_clean(origin,500)).lower()
-    if _clean(self_marker,300) and bool(self_verified):
-        return "self_traffic","verified_mycelix_self_marker",None
-    if any(marker in self_hay for marker in ("chatgpt-research-session","mycelix-internal","jarvis-internal","neo-internal","pathwren.workers.dev/mcp-lint","growth-loop/1.0")):
-        return "self_traffic","declared_internal_or_user_authorized_session",None
+    declared=_clean(declared_agent_id,300)
+    self_hay=(" "+declared+" "+_clean(user_agent,500)+" "+_clean(origin,500)).lower()
+    declared_user_session=declared.lower().startswith("chatgpt-research-session")
+    if bool(self_verified) and (_clean(self_marker,300) or declared_user_session):
+        return "self_traffic","verified_mycelix_self_proof",None
+    if any(marker in self_hay for marker in ("mycelix-internal","jarvis-internal","neo-internal","pathwren.workers.dev/mcp-lint","growth-loop/1.0")):
+        return "self_traffic","declared_internal_session",None
     if endpoint=="/a2a" and rpc in {"message/send","SendMessage"} and has_text:
         verdict=classify_inbound_security(text)
         if verdict.get("traffic_class")=="MALICIOUS_SOLICITATION":
@@ -106,7 +114,14 @@ def reclassify_known_self_events(events: list[dict]|None) -> list[dict]:
         hay=(" "+_clean(row.get("user_agent"),500)+" "+_clean(row.get("ip_or_origin"),500)+" "+_clean(row.get("self_source"),300)).lower()
         source=None
         if "chatgpt-research-session" in hay:
-            source="user_authorized_session"
+            try:
+                ts=_event_time(row)
+                cutoff=datetime.fromisoformat(DECLARED_USER_AUTHORIZED_PROOF_REQUIRED_SINCE_UTC)
+            except Exception:
+                ts=None
+                cutoff=None
+            if row.get("historical_derived") or (ts is not None and cutoff is not None and ts < cutoff):
+                source="user_authorized_session"
         elif "pathwren.workers.dev/mcp-lint" in hay or "growth-loop/1.0" in hay:
             source="pathwren_ci_validation"
         elif (
@@ -348,7 +363,10 @@ def reconcile_message_events(events: list[dict]|None, messages: list[dict]|None)
         if matched is None:
             rows=append_event(rows,derived)
             continue
-        if derived.get("category") in {"malicious_solicitation","self_traffic"}:
+        should_overlay=derived.get("category")=="malicious_solicitation"
+        if derived.get("category")=="self_traffic" and matched.get("category")=="self_traffic":
+            should_overlay=True
+        if should_overlay:
             if matched.get("category")!=derived.get("category"):
                 matched["original_category"]=matched.get("category")
                 matched["original_reason"]=matched.get("reason")
