@@ -48,6 +48,25 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(public["inbound_traffic_events"][0]["reason"],"a2a_text_message")
         self.assertEqual(public["inbound_traffic_summary"]["counts"]["total"]["real_contact"],1)
 
+    def test_public_snapshot_excludes_agent_chat_monitor_threads(self):
+        raw={
+            "agent_chat_monitor":{
+                "thread_count":2,
+                "threads":[
+                    {"thread_id":"thread-secret","last_text":"PRIVATE INBOUND TEXT"},
+                    {"thread_id":"peer-secret","last_text":"PRIVATE NEO REPLY"},
+                ],
+            },
+        }
+        public=sanitize_public_autopilot(raw)
+        encoded=json.dumps(public,sort_keys=True)
+        self.assertNotIn("thread-secret",encoded)
+        self.assertNotIn("peer-secret",encoded)
+        self.assertNotIn("PRIVATE INBOUND TEXT",encoded)
+        self.assertNotIn("PRIVATE NEO REPLY",encoded)
+        self.assertEqual(public["agent_chat_monitor"].get("thread_count"),2)
+        self.assertNotIn("threads",public["agent_chat_monitor"])
+
 
 if __name__=="__main__":
     unittest.main()

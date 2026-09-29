@@ -36,6 +36,8 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     src=deepcopy(autopilot) if isinstance(autopilot,dict) else {}
     src["inbound_messages"]=[]
     src["agent_chat_events"]=[]
+    monitor=src.get("agent_chat_monitor") if isinstance(src.get("agent_chat_monitor"),dict) else {}
+    src["agent_chat_monitor"]={key:value for key,value in monitor.items() if key!="threads"}
     src["inbound_review_queue"]=[]
     src["inbound_agent_stats"]={}
     src["trust_lab_evaluations"]=[]
