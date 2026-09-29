@@ -175,6 +175,31 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
+    async def test_livez_readyz_and_health_contracts(self):
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp,"_save_local_state",side_effect=AssertionError("livez wrote state")), \
+             patch.object(cloud_mcp,"_record_inbound_traffic",side_effect=AssertionError("livez persisted telemetry")):
+            status,response=await asgi_request(cloud_mcp.app,"/livez","GET")
+        self.assertEqual(status,200)
+        self.assertEqual(response,{"status":"ok"})
+
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp.os,"access",return_value=False):
+            status,response=await asgi_request(cloud_mcp.app,"/readyz","GET")
+        self.assertEqual(status,503)
+        self.assertEqual(response.get("status"),"not_ready")
+        self.assertFalse((response.get("checks") or {}).get("storage"))
+
+        with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
+             patch.object(cloud_mcp,"_record_inbound_traffic",return_value=None):
+            status,response=await asgi_request(cloud_mcp.app,"/health","GET")
+        self.assertEqual(status,200)
+        self.assertEqual(response.get("status"),"ok")
+        self.assertEqual(response.get("service"),"neo-collective")
+        self.assertEqual(response.get("version"),cloud_mcp.VERSION)
+        self.assertIn("runtime_profile",response)
+        self.assertIn("runtime_snapshot",response)
+
     async def test_directory_discovery_surfaces_remain_public_and_heartbeat_auth_is_hmac_only(self):
         for path in ("/.well-known/agent-card.json","/.well-known/agent.json","/.well-known/mcp.json"):
             with self.subTest(path=path):
