@@ -32,7 +32,7 @@ from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
-from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, declared_user_authorized_unverified, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
 from inbound_boundary import explicit_review_authorized, origin_risk_flags, review_required_result, stage_inbound_claim
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
@@ -1144,9 +1144,11 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     thread_id=None
     intent={}
     identity_status="ANONYMOUS_UNVERIFIED"
+    payload_declared_agent_id=""
     if path=="/a2a":
         try:
             sender=_a2a_sender(payload,request)
+            payload_declared_agent_id=str(sender.get("agent_id") or "")[:300]
             thread_id=_a2a_thread_id(payload,sender)
             source_message_id=str(((payload.get("params") or {}).get("message") or {}).get("messageId") or "")[:180] or None
             intent=classify_agent_intent(inbound_text)
@@ -1159,11 +1161,12 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
         tool_name=str(params.get("name") or "").strip()[:180] or None
     self_auth=verify_self_traffic_proof(HEARTBEAT_TOKEN,path,meta["self_proof"])
+    declared_agent_id=meta["declared_agent_id"] or payload_declared_agent_id
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
         origin=meta["ip_or_origin"],rpc_method=rpc_method,has_text=has_text,
         text=inbound_text,
-        self_marker=meta["self_marker"],self_verified=bool(self_auth.get("valid")),declared_agent_id=meta["declared_agent_id"],
+        self_marker=meta["self_marker"],self_verified=bool(self_auth.get("valid")),declared_agent_id=declared_agent_id,
     )
     row={
         "timestamp_utc":datetime.now(timezone.utc).isoformat(),
@@ -1176,7 +1179,10 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "rpc_method":rpc_method or None,
         "mcp_session_id":meta["mcp_session_id"] or None,
         "crawler_name":crawler,
-        "self_source":(meta["self_marker"] or meta["declared_agent_id"]) if category=="self_traffic" else None,
+        "self_source":(meta["self_marker"] or declared_agent_id) if category=="self_traffic" else None,
+        "declared_user_authorized_unverified":declared_user_authorized_unverified(
+            declared_agent_id,self_verified=bool(self_auth.get("valid"))
+        ),
         "spoofed_self_marker":bool(meta["self_marker"] and not self_auth.get("valid")),
         "self_proof_reason":self_auth.get("reason") if meta["self_marker"] else None,
         "content_fingerprint":content_fingerprint(inbound_text),
@@ -12011,6 +12017,9 @@ class _InboundTrafficASGI:
             "mcp_session_id":header_map.get("mcp-session-id") or None,
             "crawler_name":crawler,
             "self_source":(self_marker or header_map.get("x-agent-id")) if category=="self_traffic" else None,
+            "declared_user_authorized_unverified":declared_user_authorized_unverified(
+                header_map.get("x-agent-id",""),self_verified=bool(self_auth.get("valid"))
+            ),
             "spoofed_self_marker":bool(self_marker and not self_auth.get("valid")),
             "self_proof_reason":self_auth.get("reason") if self_marker else None,
             "origin_risk_flags":origin_risk_flags(source),

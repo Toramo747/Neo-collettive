@@ -486,9 +486,11 @@ jobs:
               timeout=45,
           )
           r.raise_for_status()
+          response_bytes=r.content
+          with open("/tmp/pathwren-full-response.json","wb") as fh:
+              fh.write(response_bytes)
           data=r.json()
-          print("PATHWREN_FULL_RESPONSE")
-          print(json.dumps(data,ensure_ascii=False,indent=2)[:30000])
+          print("pathwren_full_response_bytes="+str(len(response_bytes)))
           found=[]
           def walk(value):
               if isinstance(value,dict):
@@ -510,6 +512,15 @@ jobs:
           if int(verdict.get("warnings") or 0)!=0:
               raise SystemExit("Pathwren warnings regressed above zero")
           PY
+
+      - name: Preserve full Pathwren response as private Actions artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pathwren-full-response-${{ github.run_id }}
+          path: /tmp/pathwren-full-response.json
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Standard post-deploy smoke
         env:

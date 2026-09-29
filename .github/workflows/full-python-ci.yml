@@ -2,7 +2,7 @@ name: Full Python CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, mycelix-public-snapshot-allowlist-20260929]
   pull_request:
   workflow_dispatch:
 
@@ -31,5 +31,12 @@ jobs:
           PY
       - name: Compile Python sources
         run: python -m compileall -q .
+      - name: Privacy and self-traffic guards
+        run: |
+          python -m unittest -v \
+            test_public_snapshot_privacy \
+            test_inbound_traffic \
+            test_self_traffic_hmac_port
+
       - name: Full unittest suite
         run: python -m unittest discover -v
