@@ -37,6 +37,7 @@ from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_co
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 from self_traffic_auth import make_self_traffic_proof, verify_self_traffic_proof
+from a2a_handshake import create_handshake_challenge, verify_handshake_response
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
@@ -272,6 +273,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "trust_lab_evaluations": [],
     "agent_chat_events": [],
+    "a2a_handshakes": {},
     "agent_chat_monitor": {
         "schema_v":1,
         "threads":[],
@@ -417,6 +419,7 @@ def _state_payload() -> dict:
         "inbound_security_stats": AUTOPILOT_STATE.get("inbound_security_stats") or {},
         "inbound_review_queue": list(AUTOPILOT_STATE.get("inbound_review_queue") or [])[-80:],
         "agent_chat_events": list(AUTOPILOT_STATE.get("agent_chat_events") or [])[-240:],
+        "a2a_handshakes": AUTOPILOT_STATE.get("a2a_handshakes") or {},
         "agent_chat_monitor": AUTOPILOT_STATE.get("agent_chat_monitor") or {},
         "trust_lab_evaluations": list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])[-80:],
         "agent_demand_observatory": AUTOPILOT_STATE.get("agent_demand_observatory") or {},
@@ -530,6 +533,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["inbound_review_queue"] = [x for x in payload.get("inbound_review_queue")[-80:] if isinstance(x,dict)]
     if isinstance(payload.get("agent_chat_events"), list):
         AUTOPILOT_STATE["agent_chat_events"] = payload.get("agent_chat_events")[-240:]
+    if isinstance(payload.get("a2a_handshakes"), dict):
+        AUTOPILOT_STATE["a2a_handshakes"] = payload.get("a2a_handshakes") or {}
     if isinstance(payload.get("agent_chat_monitor"), dict):
         AUTOPILOT_STATE["agent_chat_monitor"] = payload.get("agent_chat_monitor") or {}
     if isinstance(payload.get("trust_lab_evaluations"), list):
@@ -1610,8 +1615,72 @@ def _bounded_substantive_reply(row: dict) -> str|None:
     )
 
 
+def _a2a_handshake_reply(row: dict) -> str|None:
+    """Handle key-possession challenge entirely in-band on the current A2A thread."""
+    text=str(row.get("text") or "")
+    low=text.lower()
+    thread_id=str(row.get("thread_id") or "")
+    nonce_match=re.search(r"(?im)^\s*handshake_nonce\s*:\s*([^\s]+)\s*$",text)
+    sig_match=re.search(r"(?im)^\s*handshake_signature\s*:\s*([^\s]+)\s*$",text)
+    if nonce_match or sig_match:
+        if not (nonce_match and sig_match):
+            row["response_reason"]="handshake_response_incomplete"
+            return "Handshake response rejected: provide both handshake_nonce and handshake_signature. No admission or authorization changed."
+        store,result=verify_handshake_response(
+            AUTOPILOT_STATE.get("a2a_handshakes") or {},
+            thread_id=thread_id,
+            nonce=nonce_match.group(1),
+            signature_b64=sig_match.group(1),
+        )
+        AUTOPILOT_STATE["a2a_handshakes"]=store
+        row["key_possession_verified"]=bool(result.get("key_possession_verified"))
+        row["handshake_status"]=result.get("status")
+        row["handshake_reason"]=result.get("reason")
+        row["response_reason"]="handshake_verification_"+str(result.get("reason") or "unknown")
+        if result.get("ok"):
+            return (
+                "Ed25519 key-possession challenge verified. This establishes only possession of the private key "
+                "corresponding to the declared public key. Identity trust, peer admission and action authorization are unchanged."
+            )
+        return "Ed25519 key-possession challenge rejected: "+str(result.get("reason") or "verification_failed")+". No admission or authorization changed."
+
+    wants_challenge=bool(re.search(
+        r"(?i)\b(?:handshake|nonce challenge|send (?:me )?a nonce|issue (?:me )?a nonce|key-possession challenge|signing challenge)\b",
+        text,
+    ))
+    if not wants_challenge:
+        return None
+    public_key=str(row.get("declared_public_key") or "")
+    if not public_key:
+        stat_key=("thread:"+thread_id)
+        stat=(AUTOPILOT_STATE.get("inbound_agent_stats") or {}).get(stat_key) or {}
+        public_key=str(stat.get("declared_public_key") or "")
+    if not public_key:
+        return None
+    try:
+        store,challenge=create_handshake_challenge(
+            AUTOPILOT_STATE.get("a2a_handshakes") or {},
+            thread_id=thread_id,
+            public_key=public_key,
+        )
+    except ValueError as exc:
+        row["response_reason"]="handshake_challenge_rejected_"+str(exc)
+        return "Ed25519 challenge not issued: "+str(exc)+". No identity, admission or authorization changed."
+    AUTOPILOT_STATE["a2a_handshakes"]=store
+    row["response_reason"]="handshake_challenge_issued"
+    row["handshake_status"]="CHALLENGE_ISSUED"
+    return (
+        "HANDSHAKE_CHALLENGE "+str(challenge.get("message"))
+        +" ; reply in this same thread with handshake_nonce: <nonce> and handshake_signature: <base64-ed25519-signature>. "
+         "This test proves only possession of the declared private key and changes no admission or authorization."
+    )
+
+
 def _inbound_reply_text(row: dict) -> str:
     status=str(row.get("admission_status") or "").upper()
+    handshake_reply=_a2a_handshake_reply(row)
+    if handshake_reply is not None:
+        return handshake_reply
     dialogue_status=str(row.get("dialogue_status") or "").upper()
     dialogue_stage=str(row.get("dialogue_stage") or "").upper()
     next_question=str(row.get("next_question") or "").strip()
