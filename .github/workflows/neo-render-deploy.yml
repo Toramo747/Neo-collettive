@@ -228,7 +228,7 @@ jobs:
             else
               render_ready=0
             fi
-            if [ "$render_ready" -eq 1 ] && curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/health' --marker github-actions-deploy)" --max-time 30 \
+            if [ "$render_ready" -eq 1 ] && curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/health' --marker github-actions-deploy)" --max-time 30 \
               "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
               cat /tmp/health.json
               if EXPECTED="$expected" python - <<'PY'
@@ -284,7 +284,7 @@ jobs:
         run: |
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-deploy)" --retry 3 --retry-delay 5 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-deploy)" --retry 3 --retry-delay 5 \
             "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json
           cat /tmp/status.json
           EXPECTED="$expected" python - <<'PY'
@@ -301,11 +301,11 @@ jobs:
       - name: Smoke test autonomous subsystems
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
             "https://neo-collettive.onrender.com/api/memory/status" > /tmp/memory.json
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/builder/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/builder/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
             "https://neo-collettive.onrender.com/api/builder/status" > /tmp/builder.json
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
             "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/autonomy.json
           python - <<'PY'
           import json
@@ -334,8 +334,8 @@ jobs:
       - name: Smoke test A2A discovery surface
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/inbound/agents' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/inbound/agents' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
           python - <<'PY'
           import json
           card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
@@ -363,11 +363,11 @@ jobs:
       - name: Smoke test neo-dialect surface
         run: |
           set -euo pipefail
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/neo-dialect/1.0' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/neo-dialect/1.0' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
           grep -q "neo-dialect/1.0" /tmp/neo-dialect.md
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/council' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/api/council" > /tmp/council.json
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/council/neo-dialect/example' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/council/neo-dialect/example" > /tmp/dialect-example.json
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/council' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/api/council" > /tmp/council.json
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/council/neo-dialect/example' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/council/neo-dialect/example" > /tmp/dialect-example.json
           python - <<'PY'
           import json
           card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
@@ -388,9 +388,9 @@ jobs:
       - name: Smoke test Registry Health static pages
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health' --marker github-actions-deploy)" --max-time 30 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health' --marker github-actions-deploy)" --max-time 30 \
             "https://neo-collettive.onrender.com/registry-health" > /tmp/registry-health.html
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health/about' --marker github-actions-deploy)" --max-time 30 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health/about' --marker github-actions-deploy)" --max-time 30 \
             "https://neo-collettive.onrender.com/registry-health/about" > /tmp/registry-health-about.html
           grep -q "MCP Registry Health" /tmp/registry-health.html
           grep -q "Disabled pending Andrea Gava" /tmp/registry-health.html
@@ -404,17 +404,17 @@ jobs:
       - name: Smoke test NEO Arena read-only surface
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena" > /tmp/arena.html
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena" > /tmp/arena.html
           grep -q "NEO Arena" /tmp/arena.html
           grep -q "mycelix-arena" /tmp/arena.html
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/neo-dialect' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/neo-dialect" > /tmp/arena-neo-dialect.html
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/neo-dialect' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/neo-dialect" > /tmp/arena-neo-dialect.html
           grep -q "neo-dialect evolution study" /tmp/arena-neo-dialect.html
           grep -q "neo-dialect 1.0 is sufficient for now" /tmp/arena-neo-dialect.html
           grep -q "arena-dialect-study-" /tmp/arena-neo-dialect.html
-                    curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/micelio' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/micelio" > /tmp/micelio.html
+                    curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/micelio' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/micelio" > /tmp/micelio.html
           grep -q "Micelio" /tmp/micelio.html
           grep -q "Memoria verificata" /tmp/micelio.html
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/evoluzione' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/evoluzione" > /tmp/evoluzione.html
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/evoluzione' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/evoluzione" > /tmp/evoluzione.html
           grep -q "Evoluzione" /tmp/evoluzione.html
           grep -q "promozione automatica" /tmp/evoluzione.html
           echo "Arena, Micelio and Evoluzione read-only surfaces healthy"
@@ -441,7 +441,7 @@ jobs:
       - name: Report Render service plan
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/render/diagnostics?target=neo' --marker github-actions-deploy)" --max-time 45             "https://neo-collettive.onrender.com/api/render/diagnostics?target=neo"             > /tmp/render-plan.json
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/render/diagnostics?target=neo' --marker github-actions-deploy)" --max-time 45             "https://neo-collettive.onrender.com/api/render/diagnostics?target=neo"             > /tmp/render-plan.json
           python - <<'PY'
           import json
           d=json.load(open("/tmp/render-plan.json",encoding="utf-8"))
@@ -630,7 +630,7 @@ jobs:
           fi
           echo "expect_seti_engine_retry=$expect_engine_retry"
           for i in $(seq 1 30); do
-            curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-deploy)" --max-time 30 \
+            curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-deploy)" --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/seti-status.json
             if EXPECTED="$expected" EXPECT_ENGINE_RETRY="$expect_engine_retry" python - <<'PY'
           import json,os,sys
@@ -676,7 +676,7 @@ jobs:
             fi
             sleep 10
           done
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/seti/interviews' --marker github-actions-deploy)" --max-time 30 \
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/seti/interviews' --marker github-actions-deploy)" --max-time 30 \
             "https://neo-collettive.onrender.com/api/seti/interviews" > /tmp/seti-interviews.json
           python - <<'PY'
           import json
@@ -707,7 +707,7 @@ jobs:
           target="https://neo-collettive.onrender.com/api/market/run-cycles?count=3"
           args=(-X POST --fail --show-error --silent --max-time 600)
           args+=(-H "X-MYCELIX-Self-Traffic: github-actions-heartbeat")
-          args+=(-H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"${HEARTBEAT_TOKEN}\" python self_traffic_auth.py sign-url "${target}" --marker github-actions-heartbeat)")
+          args+=(-H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-heartbeat)")
           curl "${args[@]}" \
             "${target}" \
             > /tmp/market-cycles.json
