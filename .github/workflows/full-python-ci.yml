@@ -40,3 +40,33 @@ jobs:
 
       - name: Full unittest suite
         run: python -m unittest discover -v
+
+      - name: Measure health probe handler latency
+        run: |
+          python - <<'PY'
+          import asyncio,json,time
+          from unittest.mock import patch
+          import cloud_mcp
+          from test_inbound_e2e import asgi_request
+
+          async def main():
+              rows=[]
+              for path in ("/livez","/readyz","/health"):
+                  patches=[
+                      patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None),
+                  ]
+                  if path=="/health":
+                      patches.append(patch.object(cloud_mcp,"_record_inbound_traffic",return_value=None))
+                  for p in patches: p.start()
+                  try:
+                      start=time.perf_counter()
+                      status,_=await asgi_request(cloud_mcp.app,path,"GET")
+                      elapsed=(time.perf_counter()-start)*1000.0
+                  finally:
+                      for p in reversed(patches): p.stop()
+                  rows.append({"path":path,"status":status,"latency_ms":round(elapsed,3)})
+              print(json.dumps(rows,separators=(",",":")))
+              if any(r["status"]!=200 for r in rows):
+                  raise SystemExit(1)
+          asyncio.run(main())
+          PY
