@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from inbound_traffic import classify_inbound_event, append_event, content_fingerprint, logical_message_groups, reconcile_message_events, summarize_events, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_traffic import classify_inbound_event, append_event, content_fingerprint, declared_user_authorized_unverified, logical_message_groups, reconcile_message_events, summarize_events, retroactive_from_inbound_messages, reclassify_known_self_events
 
 class InboundTrafficTests(unittest.TestCase):
     def test_agent_card_fetch_is_crawler_probe(self):
@@ -114,9 +114,44 @@ class InboundTrafficTests(unittest.TestCase):
         c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,self_marker="github-actions-deploy",self_verified=False)
         self.assertEqual(c,"real_contact")
 
-    def test_user_authorized_chatgpt_session_is_self(self):
-        c,r,n=classify_inbound_event(endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,declared_agent_id="chatgpt-research-session-7e1c9a")
+    def test_user_authorized_chatgpt_session_without_proof_is_external(self):
+        c,r,n=classify_inbound_event(
+            endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,
+            declared_agent_id="chatgpt-research-session-7e1c9a",self_verified=False,
+        )
+        self.assertEqual(c,"real_contact")
+        self.assertTrue(declared_user_authorized_unverified(
+            "chatgpt-research-session-7e1c9a",self_verified=False
+        ))
+
+    def test_user_authorized_chatgpt_session_with_valid_proof_is_self(self):
+        c,r,n=classify_inbound_event(
+            endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,
+            declared_agent_id="chatgpt-research-session-7e1c9a",self_verified=True,
+        )
         self.assertEqual(c,"self_traffic")
+        self.assertFalse(declared_user_authorized_unverified(
+            "chatgpt-research-session-7e1c9a",self_verified=True
+        ))
+
+    def test_unverified_chatgpt_claim_does_not_reclassify_future_event(self):
+        rows=reclassify_known_self_events([{
+            "timestamp_utc":"2026-09-29T17:00:00+00:00",
+            "endpoint":"/a2a","rpc_method":"message/send",
+            "user_agent":"chatgpt-research-session-claimed",
+            "category":"real_contact","reason":"a2a_text_message",
+        }])
+        self.assertEqual(rows[0]["category"],"real_contact")
+
+    def test_historical_chatgpt_self_classification_is_preserved(self):
+        rows=reclassify_known_self_events([{
+            "timestamp_utc":"2026-09-23T05:08:00.466415+00:00",
+            "endpoint":"/a2a","rpc_method":"message/send",
+            "user_agent":"chatgpt-research-session-7e1c9a",
+            "category":"real_contact","reason":"a2a_text_message",
+            "historical_derived":True,
+        }])
+        self.assertEqual(rows[0]["category"],"self_traffic")
 
     def test_self_traffic_summary_separate_from_real_contact(self):
         rows=[
