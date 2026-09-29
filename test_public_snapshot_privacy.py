@@ -5,7 +5,9 @@ from public_snapshot import (
     MAX_PUBLIC_STRING_LENGTH,
     sanitize_public_autopilot,
     sanitize_public_snapshot,
+    sanitize_public_jarvis_snapshot,
     validate_public_snapshot,
+    validate_public_jarvis_snapshot,
 )
 
 
@@ -114,6 +116,73 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         }]
         with self.assertRaises(ValueError):
             validate_public_snapshot(public)
+
+
+    def test_jarvis_allowlist_drops_inbound_text_identifiers_and_commit_message(self):
+        raw={
+            "snapshot_utc":"2026-09-29T16:40:00Z",
+            "source":"https://neo-collettive.onrender.com/api/render/diagnostics?target=neo",
+            "target":"neo",
+            "resource":"srv-1",
+            "latest_log_utc":"2026-09-29T16:39:00Z",
+            "latest_ask":{"message":"PRIVATE ASK"},
+            "last_dialogue":{"reply":"PRIVATE REPLY"},
+            "recent_inbound_traffic":[{
+                "ip_or_origin":"203.0.113.55",
+                "user_agent":"peer-agent/1.0",
+                "source_message_id":"m1",
+                "agent_id":"peer-secret",
+            }],
+            "service":{
+                "name":"neo-collective-cloud",
+                "type":"web_service",
+                "region":"frankfurt",
+                "suspended":False,
+                "plan":"free",
+                "updatedAt":"2026-09-29T16:00:00Z",
+            },
+            "inbound_traffic_summary":{
+                "schema_v":2,
+                "events_total":12,
+                "counts":{"total":{"real_contact":2}},
+                "real_contact_origins":[{"name":"203.0.113.55","requests":2}],
+            },
+            "categories":{"errors_5xx":1,"health_requests":4},
+            "recent_deploys":[{
+                "id":"dep-1","status":"live","createdAt":"2026-09-29T15:00:00Z",
+                "updatedAt":"2026-09-29T15:01:00Z","finishedAt":"2026-09-29T15:02:00Z",
+                "commit":{"id":"abcdef123456","message":"PRIVATE COMMIT MESSAGE","createdAt":"2026-09-29T14:59:00Z"},
+            }],
+            "note":"PRIVATE FREE TEXT",
+        }
+        public=sanitize_public_jarvis_snapshot(raw)
+        encoded=json.dumps(public,sort_keys=True)
+        for forbidden in (
+            "source","latest_ask","last_dialogue","recent_inbound_traffic",
+            "203.0.113.55","peer-agent/1.0","peer-secret","PRIVATE ASK",
+            "PRIVATE REPLY","PRIVATE COMMIT MESSAGE","PRIVATE FREE TEXT",
+            "real_contact_origins",
+        ):
+            self.assertNotIn(forbidden,encoded)
+        self.assertEqual(public["inbound_traffic_summary"]["counts"]["total"]["real_contact"],2)
+        self.assertEqual(public["recent_deploys"][0]["commit"]["id"],"abcdef123456")
+        validate_public_jarvis_snapshot(public)
+
+    def test_jarvis_guard_rejects_unknown_key_ip_email_long_and_text(self):
+        cases=[
+            ("unknown", lambda d: d.__setitem__("future_field","x")),
+            ("ipv4", lambda d: d.__setitem__("target","203.0.113.7")),
+            ("ipv6", lambda d: d.__setitem__("target","2001:db8::7")),
+            ("email", lambda d: d.__setitem__("target","peer@example.test")),
+            ("long", lambda d: d.__setitem__("target","x"*(MAX_PUBLIC_STRING_LENGTH+1))),
+            ("text", lambda d: d.__setitem__("message","PRIVATE")),
+        ]
+        for name,mutate in cases:
+            public=sanitize_public_jarvis_snapshot({"snapshot_utc":"2026-09-29T16:40:00Z"})
+            mutate(public)
+            with self.subTest(case=name):
+                with self.assertRaises(ValueError):
+                    validate_public_jarvis_snapshot(public)
 
 
 if __name__=="__main__":
