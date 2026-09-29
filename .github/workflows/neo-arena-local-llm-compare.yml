@@ -17,6 +17,7 @@ jobs:
     env:
       MODEL_SMALL: qwen2.5:0.5b-instruct
       MODEL_LARGE: qwen2.5:3b-instruct-q4_K_M
+      MODEL_PRIMARY: qwen2.5:3b-instruct-q4_K_M
       REPORT: data/arena/local-llm-comparison.json
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +69,7 @@ jobs:
       - name: Run same-scenario JSON-schema comparison
         run: |
           set -euo pipefail
-          timeout 600 python arena_local_llm_compare.py             --models "$MODEL_SMALL" "$MODEL_LARGE"             --out "$REPORT"
+          timeout 600 python arena_local_llm_compare.py             --models "$MODEL_SMALL" "$MODEL_LARGE"             --primary-model "$MODEL_PRIMARY"             --out "$REPORT"
           python - <<'PY'
           import json,os
           p=os.environ["REPORT"]
@@ -88,7 +89,7 @@ jobs:
       - name: Assert zero-weight isolation
         run: |
           python - <<'PY'
-          import json
+          import json,os
           d=json.load(open("data/arena/local-llm-comparison.json",encoding="utf-8"))
           assert d["namespace"]=="mycelix-arena"
           assert d["cost_eur"]==0
@@ -97,6 +98,10 @@ jobs:
           assert d["production_influence"]=="NONE"
           assert d["promotion"]=="NONE"
           assert d["format_mode"]=="ollama_json_schema"
+          assert d["model_policy"]["primary_model"]==os.environ["MODEL_PRIMARY"]
+          assert d["model_policy"]["fallback_model"]==os.environ["MODEL_SMALL"]
+          assert d["model_policy"]["scope"]=="arena_cognitive_roles"
+          assert d["model_policy"]["production_promotion"] is False
           assert len(d["models"])==2
           print("Local LLM comparison isolation verified")
           PY
