@@ -1135,6 +1135,24 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         except Exception:
             has_text=False
     meta=_inbound_request_meta(request)
+    source_message_id=None
+    thread_id=None
+    intent={}
+    identity_status="ANONYMOUS_UNVERIFIED"
+    if path=="/a2a":
+        try:
+            sender=_a2a_sender(payload,request)
+            thread_id=_a2a_thread_id(payload,sender)
+            source_message_id=str(((payload.get("params") or {}).get("message") or {}).get("messageId") or "")[:180] or None
+            intent=classify_agent_intent(inbound_text)
+            if sender.get("declared"):
+                identity_status="SELF_DECLARED_UNVERIFIED"
+        except Exception:
+            pass
+    tool_name=None
+    if path.startswith("/mcp") and rpc_method=="tools/call":
+        params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+        tool_name=str(params.get("name") or "").strip()[:180] or None
     self_auth=verify_self_traffic_proof(HEARTBEAT_TOKEN,path,meta["self_proof"])
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
@@ -1157,6 +1175,20 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "spoofed_self_marker":bool(meta["self_marker"] and not self_auth.get("valid")),
         "self_proof_reason":self_auth.get("reason") if meta["self_marker"] else None,
         "content_fingerprint":content_fingerprint(inbound_text),
+        "source_message_id":source_message_id,
+        "thread_id":thread_id,
+        "intent_primary":intent.get("primary"),
+        "intent_secondary":intent.get("secondary") or [],
+        "intent_confidence":intent.get("confidence"),
+        "intent_markers":intent.get("markers") or {},
+        "intent_negated_markers":intent.get("negated_markers") or {},
+        "commercial_intent":bool(intent.get("commercial_intent")),
+        "identity_status":identity_status,
+        "response_message_id":None,
+        "fallback_reason":None,
+        "review_reason":None,
+        "block_reason":reason if category=="malicious_solicitation" else None,
+        "tool_name":tool_name,
         "origin_risk_flags":origin_risk_flags(meta["ip_or_origin"]),
     }
     events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
@@ -1164,6 +1196,27 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
     _save_local_state()
     return dict(events[-1]) if events else row
+
+
+def _annotate_inbound_traffic(source_message_id: str | None, *, response_message_id: str | None=None,
+                              fallback_reason: str | None=None, review_reason: str | None=None,
+                              block_reason: str | None=None) -> None:
+    if not source_message_id:
+        return
+    events=list(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
+    for event in reversed(events):
+        if event.get("source_message_id")!=source_message_id:
+            continue
+        if response_message_id:
+            event["response_message_id"]=str(response_message_id)[:180]
+        if fallback_reason:
+            event["fallback_reason"]=str(fallback_reason)[:180]
+        if review_reason:
+            event["review_reason"]=str(review_reason)[:180]
+        if block_reason:
+            event["block_reason"]=str(block_reason)[:180]
+        break
+    AUTOPILOT_STATE["inbound_traffic_events"]=events
 
 
 def _a2a_sender(payload: dict, request: Request) -> dict:
@@ -1573,6 +1626,12 @@ async def a2a_endpoint(request: Request):
             },
         }
         if requested_version=="0.3": suppressed["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=suppressed.get("messageId"),
+            block_reason=event.get("reason"),
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":suppressed})
     if traffic_row.get("category") in {"real_contact_pending","crawler_probe"} and str(traffic_row.get("reason") or "").startswith("active_a2a_probe_"):
         _save_local_state()
@@ -1587,6 +1646,12 @@ async def a2a_endpoint(request: Request):
             },
         }
         if requested_version=="0.3": probe_result["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=probe_result.get("messageId"),
+            fallback_reason="active_probe_minimal_response",
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":probe_result})
     dialect_reply=_neo_dialect_inbound_reply(inbound_text,payload,request)
     if dialect_reply is not None:
@@ -1608,6 +1673,12 @@ async def a2a_endpoint(request: Request):
         }
         if requested_version=="0.3":
             result["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=result.get("messageId"),
+            fallback_reason="neo_dialect_response",
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
     security_verdict=classify_inbound_security(inbound_text)
     if security_verdict.get("blocked"):
@@ -1631,6 +1702,12 @@ async def a2a_endpoint(request: Request):
         }
         if requested_version=="0.3":
             suppressed["kind"]="message"
+        _annotate_inbound_traffic(
+            traffic_row.get("source_message_id"),
+            response_message_id=suppressed.get("messageId"),
+            block_reason=event.get("reason"),
+        )
+        _save_local_state()
         return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":suppressed})
 
     row=_record_inbound_agent_message(payload,request)
@@ -1683,6 +1760,13 @@ async def a2a_endpoint(request: Request):
     }
     if requested_version=="0.3":
         result["kind"]="message"
+    _annotate_inbound_traffic(
+        traffic_row.get("source_message_id"),
+        response_message_id=message_id,
+        fallback_reason=row.get("response_reason"),
+        review_reason=row.get("review_status"),
+    )
+    _save_local_state()
     return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})
 
 
@@ -11850,6 +11934,8 @@ class _InboundTrafficASGI:
             user_agent=header_map.get("user-agent",""),origin=source,rpc_method=rpc,has_text=False,
             self_marker=self_marker,self_verified=bool(self_auth.get("valid")),declared_agent_id=header_map.get("x-agent-id",""),
         )
+        params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+        requested_tool_name=str(params.get("name") or "").strip()[:180] or None if rpc=="tools/call" else None
         row={
             "timestamp_utc":datetime.now(timezone.utc).isoformat(),
             "endpoint":str(scope.get("path") or "/mcp"),
@@ -11865,13 +11951,13 @@ class _InboundTrafficASGI:
             "spoofed_self_marker":bool(self_marker and not self_auth.get("valid")),
             "self_proof_reason":self_auth.get("reason") if self_marker else None,
             "origin_risk_flags":origin_risk_flags(source),
+            "tool_name":requested_tool_name,
         }
         events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
         AUTOPILOT_STATE["inbound_traffic_events"]=events
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
         _save_local_state()
         if rpc=="tools/call":
-            params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
             tool_name=str(params.get("name") or "").strip()
             known_tool=tool_name in MCP_TOOL_ACCESS
             access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"
