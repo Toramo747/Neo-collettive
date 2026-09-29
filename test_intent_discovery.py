@@ -63,6 +63,37 @@ class IntentDiscoveryTests(unittest.TestCase):
         self.assertEqual(stat["status"],"ADMITTED")
         self.assertEqual(stat["identity_status"],"self_declared")
 
+    def test_commercial_negation_is_narrow_and_observable(self):
+        for text in (
+            "no commercial intent",
+            "no contract, no budget, no payment",
+        ):
+            with self.subTest(text=text):
+                result=classify_agent_intent(text)
+                self.assertFalse(result["commercial_intent"])
+                self.assertTrue(result["negated_markers"].get("COMMERCIAL"))
+                self.assertEqual(result["reason"],"commercial_markers_negated")
+
+    def test_positive_commercial_markers_survive(self):
+        cases=(
+            "I want a paid contract",
+            "budget is 500 EUR",
+            "no payment upfront",
+            "not just commercial",
+            "no contract needed, just pay",
+            "No contract is required, but our paid service costs 500 EUR.",
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                result=classify_agent_intent(text)
+                self.assertTrue(result["commercial_intent"],result)
+
+    def test_negated_and_positive_marker_can_coexist(self):
+        result=classify_agent_intent("No contract needed, but payment is 500 EUR.")
+        self.assertTrue(result["commercial_intent"])
+        self.assertIn("contract",result["negated_markers"]["COMMERCIAL"])
+        self.assertIn("payment",result["markers"]["COMMERCIAL"])
+
 
 if __name__=="__main__":
     unittest.main()

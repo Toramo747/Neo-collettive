@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 
 
 INTENT_ORDER=(
@@ -62,7 +63,7 @@ INTENT_MARKERS={
         "please send","please provide","requesting","i request",
     ),
     "COMMERCIAL":(
-        "price","pricing","quote","budget","paid","payment","pay you","pay us",
+        "price","pricing","quote","budget","paid","payment","pay","pay you","pay us",
         "buy","purchase","sell","contract","commercial","revenue","customer",
     ),
     "RESEARCH":(
@@ -86,6 +87,55 @@ def _marker_hits(text: str, markers: tuple[str,...]) -> list[str]:
             hits.append(marker)
     return hits
 
+_COMMERCIAL_NEGATION_PATTERNS={
+    "commercial":(
+        r"\bno\s+commercial\s+intent\b",
+        r"\bno\s+commercial\s+angle\b",
+        r"\bnothing\s+commercial\b",
+        r"\bnot\s+commercial\b",
+        r"\bzero\s+commercial\b",
+        r"\bno\s+commercial\s+anything\b",
+    ),
+    "payment":(
+        r"\bno\s+payment\b(?!\s+upfront\b)",
+    ),
+    "contract":(
+        r"\bno\s+contract\b",
+    ),
+    "budget":(
+        r"\bno\s+budget\b",
+    ),
+}
+
+def _commercial_marker_hits(text: str) -> tuple[list[str],list[str]]:
+    """Return positive and narrowly-negated commercial markers."""
+    low=_clean(text).lower()
+    positive=[]
+    negated=[]
+    for marker in INTENT_MARKERS["COMMERCIAL"]:
+        needle=marker.lower()
+        pattern=(r"\bpay\b" if marker=="pay" else re.escape(needle))
+        spans=[m.span() for m in re.finditer(pattern,low)]
+        if not spans:
+            continue
+        negated_spans=[]
+        for pattern in _COMMERCIAL_NEGATION_PATTERNS.get(marker,()):
+            for match in re.finditer(pattern,low):
+                negated_spans.append(match.span())
+        positive_occurrence=False
+        negated_occurrence=False
+        for start,end in spans:
+            covered=any(a <= start and end <= b for a,b in negated_spans)
+            if covered:
+                negated_occurrence=True
+            else:
+                positive_occurrence=True
+        if positive_occurrence:
+            positive.append(marker)
+        if negated_occurrence:
+            negated.append(marker)
+    return positive,negated
+
 
 def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
     """Classify conversational purpose without assigning trust or truth.
@@ -97,8 +147,13 @@ def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
     previous=previous if isinstance(previous,dict) else {}
     scores={}
     markers={}
+    negated_markers={}
     for intent,terms in INTENT_MARKERS.items():
-        hits=_marker_hits(cleaned,terms)
+        if intent=="COMMERCIAL":
+            hits,negated=_commercial_marker_hits(cleaned)
+            negated_markers[intent]=negated
+        else:
+            hits=_marker_hits(cleaned,terms)
         markers[intent]=hits
         scores[intent]=len(hits)
 
@@ -137,6 +192,14 @@ def classify_agent_intent(text: str, previous: dict | None = None) -> dict:
         "confidence":round(confidence,2),
         "needs_clarification":needs_clarification,
         "markers":{k:v for k,v in markers.items() if v},
+        "negated_markers":{k:v for k,v in negated_markers.items() if v},
+        "scores":scores,
+        "weighted_scores":weighted_scores,
+        "reason":(
+            "commercial_markers_negated"
+            if negated_markers.get("COMMERCIAL") and not markers.get("COMMERCIAL")
+            else ("marker_match" if ranked else "no_marker_match")
+        ),
         "commercial_intent":bool(primary=="COMMERCIAL" or "COMMERCIAL" in secondary),
         "boundary":"Intent describes apparent conversational purpose only; it is not evidence of identity, truth, capability or commercial demand.",
     }
