@@ -11724,6 +11724,31 @@ async def mcp_discovery_document(request: Request):
     )
 
 
+LIVEZ_RATE_WINDOW_SECONDS=60.0
+LIVEZ_PER_CALLER_LIMIT=10000
+LIVEZ_GLOBAL_LIMIT=100000
+_LIVEZ_CALLS=[]
+_LIVEZ_CALLS_BY_CALLER={}
+
+
+def _livez_rate_limit(request: Request) -> JSONResponse | None:
+    now=time.monotonic()
+    cutoff=now-LIVEZ_RATE_WINDOW_SECONDS
+    meta=_inbound_request_meta(request)
+    caller=endpoint_verifier.caller_bucket(meta.get("ip_or_origin") or "unknown")
+
+    _LIVEZ_CALLS[:]=[ts for ts in _LIVEZ_CALLS if ts>cutoff]
+    caller_calls=[ts for ts in _LIVEZ_CALLS_BY_CALLER.get(caller,[]) if ts>cutoff]
+
+    if len(_LIVEZ_CALLS)>=LIVEZ_GLOBAL_LIMIT or len(caller_calls)>=LIVEZ_PER_CALLER_LIMIT:
+        return JSONResponse({"status":"rate_limited"},status_code=429)
+
+    _LIVEZ_CALLS.append(now)
+    caller_calls.append(now)
+    _LIVEZ_CALLS_BY_CALLER[caller]=caller_calls
+    return None
+
+
 def _probe_rate_limit(request: Request, probe: str) -> JSONResponse | None:
     meta=_inbound_request_meta(request)
     try:
@@ -11736,7 +11761,7 @@ def _probe_rate_limit(request: Request, probe: str) -> JSONResponse | None:
 
 
 async def livez(request: Request):
-    limited=_probe_rate_limit(request,"livez")
+    limited=_livez_rate_limit(request)
     if limited is not None:
         return limited
     return JSONResponse({"status":"ok"},status_code=200)
