@@ -8,6 +8,7 @@ import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import a2a_peer as peer_a2a
+from a2a_identity import conversation_identity_key, parse_body_introduction
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
@@ -1350,9 +1351,10 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     now=datetime.now(timezone.utc).isoformat()
     method=str(payload.get("method") or "message/send")
     card_url=_a2a_agent_card_url(payload,request)
+    body_intro=parse_body_introduction(text)
 
     stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
-    stat_key=str(sender.get("agent_id") or "anonymous")
+    stat_key=conversation_identity_key(str(sender.get("agent_id") or ""),thread_id)
     old=dict(stats.get(stat_key) or {})
     intent=classify_agent_intent(text,old)
     admission=inbound_admission_transition(bool(sender.get("declared")),text,old)
@@ -1389,7 +1391,15 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "commercial_intent":bool(intent.get("commercial_intent")),
         "admission_status":admission.get("status"),
         "interview_score":admission.get("interview_score"),
-        "identity_status":admission.get("identity_status"),
+        "identity_status":(
+            body_intro.get("identity_status")
+            if body_intro.get("declared_identity_from_body") and not sender.get("declared")
+            else admission.get("identity_status")
+        ),
+        "declared_identity_from_body":bool(body_intro.get("declared_identity_from_body")),
+        "declared_agent_id":body_intro.get("declared_agent_id"),
+        "introduction_fields":body_intro.get("introduction_fields") or [],
+        "declared_public_key_observation":body_intro.get("declared_public_key_observation"),
         "agent_card_url":card_url,
         "dialogue_status":dialogue.get("dialogue_status"),
         "dialogue_stage":dialogue.get("dialogue_stage"),
@@ -1410,7 +1420,11 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "agent":sender.get("agent"),
         "declared":bool(sender.get("declared")),
         "status":admission.get("status"),
-        "identity_status":admission.get("identity_status"),
+        "identity_status":row.get("identity_status"),
+        "declared_identity_from_body":bool(row.get("declared_identity_from_body")),
+        "declared_agent_id":row.get("declared_agent_id"),
+        "introduction_fields":row.get("introduction_fields") or [],
+        "declared_public_key_observation":row.get("declared_public_key_observation"),
         "agent_card_url":card_url or old.get("agent_card_url"),
         "messages":int(old.get("messages") or 0)+1,
         "substantive_messages":int(old.get("substantive_messages") or 0)+(1 if row["substantive"] else 0),
@@ -1471,12 +1485,20 @@ def _inbound_reply_text(row: dict) -> str:
     next_question=str(row.get("next_question") or "").strip()
 
     if status=="ANONYMOUS":
+        base=intent_followup({
+            "primary":row.get("intent_primary"),
+            "secondary":row.get("intent_secondary") or [],
+            "confidence":row.get("intent_confidence"),
+        })
+        if row.get("declared_identity_from_body"):
+            return (
+                base
+                + " Your structured body introduction was received and will not be requested again in this thread. "
+                  "Its identity, capabilities, protocol, limitations and documentation remain SELF_DECLARED_UNVERIFIED; "
+                  "they do not grant peer admission, trust or action authorization."
+            )
         return (
-            intent_followup({
-                "primary":row.get("intent_primary"),
-                "secondary":row.get("intent_secondary") or [],
-                "confidence":row.get("intent_confidence"),
-            })
+            base
             + " If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available."
         )
     if status=="PARKED" and dialogue_stage=="IDENTITY":
