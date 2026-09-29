@@ -129,7 +129,6 @@ PUBLIC_SNAPSHOT_SCHEMA = {
 PUBLIC_JARVIS_SNAPSHOT_SCHEMA = {
     "snapshot_utc": None,
     "target": None,
-    "resource": None,
     "latest_log_utc": None,
     "service": {
         "name": None,
@@ -325,7 +324,7 @@ def sanitize_public_jarvis_snapshot(snapshot: dict | None) -> dict:
     summary = src.get("inbound_traffic_summary") if isinstance(src.get("inbound_traffic_summary"), dict) else {}
     categories = src.get("categories") if isinstance(src.get("categories"), dict) else {}
 
-    out = _copy_keys(src, ("snapshot_utc", "target", "resource", "latest_log_utc"))
+    out = _copy_keys(src, ("snapshot_utc", "target", "latest_log_utc"))
     out["service"] = _copy_keys(service, ("name", "type", "region", "suspended", "plan", "updatedAt"))
     out["inbound_traffic_summary"] = {
         **_copy_keys(summary, (
