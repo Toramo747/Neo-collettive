@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime, timezone
 from inbound_traffic import classify_inbound_event, append_event, content_fingerprint, declared_user_authorized_unverified, logical_message_groups, reconcile_message_events, summarize_events, retroactive_from_inbound_messages, reclassify_known_self_events
+from self_traffic_auth import make_self_traffic_proof, verify_self_traffic_proof
 
 class InboundTrafficTests(unittest.TestCase):
     def test_agent_card_fetch_is_crawler_probe(self):
@@ -125,13 +126,18 @@ class InboundTrafficTests(unittest.TestCase):
         ))
 
     def test_user_authorized_chatgpt_session_with_valid_proof_is_self(self):
+        secret="test-only-secret"
+        proof=make_self_traffic_proof(secret,"/a2a",timestamp=1000)
+        verified=verify_self_traffic_proof(secret,"/a2a",proof,now=1000)
+        self.assertTrue(verified["valid"])
         c,r,n=classify_inbound_event(
             endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,
-            declared_agent_id="chatgpt-research-session-7e1c9a",self_verified=True,
+            declared_agent_id="chatgpt-research-session-7e1c9a",
+            self_verified=bool(verified["valid"]),
         )
         self.assertEqual(c,"self_traffic")
         self.assertFalse(declared_user_authorized_unverified(
-            "chatgpt-research-session-7e1c9a",self_verified=True
+            "chatgpt-research-session-7e1c9a",self_verified=bool(verified["valid"])
         ))
 
     def test_unverified_chatgpt_claim_does_not_reclassify_future_event(self):
