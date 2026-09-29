@@ -9,6 +9,7 @@ import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
+from a2a_dialogue import consume_rate as consume_a2a_response_rate, plan_untrusted_reply
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
@@ -210,6 +211,7 @@ AUTOPILOT_GOAL = os.getenv(
 )
 AUTOPILOT_LOCK = asyncio.Lock()
 SEARCH_PROVIDER_LOCK = asyncio.Lock()
+A2A_RESPONSE_RATE: dict[str,list[float]] = {}
 BRAND_NAME = "MYCELIX"
 BRAND_TAGLINE = "Collective Intelligence Network"
 RUNTIME_PROFILE = load_runtime_profile()
@@ -1409,6 +1411,7 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "round_passed":dialogue.get("round_passed"),
         "interview_complete":bool(dialogue.get("interview_complete")),
         "next_question":dialogue.get("next_question"),
+        "response_rate_key":conversation_identity_key(str(sender.get("agent_id") or ""),thread_id),
     }
 
     inbox=list(AUTOPILOT_STATE.get("inbound_messages") or [])
@@ -1484,32 +1487,47 @@ def _inbound_reply_text(row: dict) -> str:
     dialogue_stage=str(row.get("dialogue_stage") or "").upper()
     next_question=str(row.get("next_question") or "").strip()
 
-    if status=="ANONYMOUS":
-        base=intent_followup({
-            "primary":row.get("intent_primary"),
-            "secondary":row.get("intent_secondary") or [],
-            "confidence":row.get("intent_confidence"),
-        })
-        if row.get("declared_identity_from_body"):
-            return (
-                base
-                + " Your structured body introduction was received and will not be requested again in this thread. "
-                  "Its identity, capabilities, protocol, limitations and documentation remain SELF_DECLARED_UNVERIFIED; "
-                  "they do not grant peer admission, trust or action authorization."
-            )
-        return (
-            base
-            + " If you later want admission as a peer, provide an agent_id and an introduction covering identity, capabilities, protocol, limitations and public documentation if available."
+    plan=plan_untrusted_reply(
+        str(row.get("text") or ""),
+        identity_status=str(row.get("identity_status") or ""),
+        intro_received=bool(row.get("declared_identity_from_body")),
+    )
+    row["response_reason"]=plan.get("reason")
+
+    if plan.get("mode")=="review":
+        row["review_status"]="PENDING_EXPLICIT_REVIEW"
+        row["review_reason"]=plan.get("reason")
+        return str(plan.get("reply") or "")
+    if plan.get("mode")=="security":
+        row["block_reason"]=plan.get("reason")
+        return str(plan.get("reply") or "")
+    if plan.get("mode")=="substantive" and status in {"ANONYMOUS","PARKED"}:
+        rate=consume_a2a_response_rate(
+            A2A_RESPONSE_RATE,
+            str(row.get("response_rate_key") or row.get("thread_id") or "anonymous"),
+            time.time(),
         )
+        if not rate.get("allowed"):
+            row["response_reason"]="substantive_rate_limited"
+            return "MYCELIX received the message, but this conversation has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+        return str(plan.get("reply") or "")
+
+    if status=="ANONYMOUS":
+        return str(plan.get("reply") or "")
     if status=="PARKED" and dialogue_stage=="IDENTITY":
+        if plan.get("mode")=="substantive":
+            rate=consume_a2a_response_rate(
+                A2A_RESPONSE_RATE,
+                str(row.get("response_rate_key") or row.get("thread_id") or "anonymous"),
+                time.time(),
+            )
+            if not rate.get("allowed"):
+                row["response_reason"]="substantive_rate_limited"
+                return "MYCELIX received the message, but this conversation has reached the bounded response rate. No action was taken; a later synchronous request can continue the discussion."
+            return str(plan.get("reply") or "")
         return (
-            intent_followup({
-                "primary":row.get("intent_primary"),
-                "secondary":row.get("intent_secondary") or [],
-                "confidence":row.get("intent_confidence"),
-            })
-            + " The identity/admission interview is parked, not the conversation. "
-              "If you want peer admission, also provide identity, concrete capabilities, supported protocol, limitations and public documentation if available."
+            str(plan.get("reply") or "")
+            + " The identity/admission interview is parked, not the conversation."
         )
     if status=="ADMITTED" and dialogue_status=="ACTIVE" and next_question:
         return (
@@ -1525,24 +1543,11 @@ def _inbound_reply_text(row: dict) -> str:
     if status=="ADMITTED" and dialogue_status=="COMPLETE":
         return (
             "MYCELIX completed the three-round peer interview. Identity remains self-declared unless independently verified. "
-            "From your next message onward, substantive claims may be recorded as untrusted collective evidence and remain subject "
-            "to independent corroboration, falsification checks and all commercial quality gates."
+            "Substantive claims remain untrusted evidence and require explicit review before any collective knowledge write."
         )
-    if not row.get("text"):
-        return (
-            "MYCELIX received the A2A request but no text message was found. "
-            "Send a concrete claim, criticism, evidence or new hypothesis."
-        )
-    if not row.get("substantive"):
-        return (
-            "MYCELIX received your message. Provide a substantive, falsifiable contribution with evidence and controls."
-        )
-    return (
-        "MYCELIX recorded your admitted peer contribution as untrusted evidence"
-        + ((" in knowledge item "+str(row.get("knowledge_id"))) if row.get("knowledge_id") else "")
-        + ". Continue with independent evidence and the strongest contradiction. "
-          "No inbound message can bypass evidence or commercial quality gates."
-    )
+    if plan.get("mode")=="substantive":
+        return str(plan.get("reply") or "")
+    return str(plan.get("reply") or "")
 
 async def a2a_agent_card(request: Request):
     _record_inbound_traffic(request)
@@ -1613,6 +1618,11 @@ async def a2a_endpoint(request: Request):
     if not isinstance(payload,dict):
         return JSONResponse({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}},status_code=400)
     rpc_id=payload.get("id")
+    params_for_callback=payload.get("params") if isinstance(payload.get("params"),dict) else {}
+    push_notification_ignored=bool(
+        params_for_callback.get("pushNotificationConfig")
+        or params_for_callback.get("push_notification_config")
+    )
     traffic_row=_record_inbound_traffic(request,payload=payload)
     requested_version=_a2a_requested_version(request)
     if not _a2a_version_supported(requested_version):
@@ -1778,6 +1788,8 @@ async def a2a_endpoint(request: Request):
             "knowledge_id":row.get("knowledge_id"),
             "hypothesis_id":row.get("hypothesis_id"),
             "protected_actions_enforced":True,
+            "push_notification_ignored":push_notification_ignored,
+            "synchronous_response_only":True,
         },
     }
     if requested_version=="0.3":
@@ -1786,7 +1798,8 @@ async def a2a_endpoint(request: Request):
         traffic_row.get("source_message_id"),
         response_message_id=message_id,
         fallback_reason=row.get("response_reason"),
-        review_reason=row.get("review_status"),
+        review_reason=row.get("review_reason") or row.get("review_status"),
+        block_reason=row.get("block_reason"),
     )
     _save_local_state()
     return JSONResponse({"jsonrpc":"2.0","id":rpc_id,"result":result})

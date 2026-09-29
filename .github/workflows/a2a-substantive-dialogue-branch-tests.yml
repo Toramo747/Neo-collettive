@@ -18,6 +18,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile changed stdlib modules
-        run: python -m compileall -q public_snapshot.py inbound_traffic.py intent_discovery.py inbound_security.py a2a_identity.py
+        run: python -m compileall -q public_snapshot.py inbound_traffic.py intent_discovery.py inbound_security.py a2a_identity.py a2a_dialogue.py
       - name: Run safety and telemetry tests without network dependencies
-        run: python -m unittest -v test_public_snapshot_privacy.py test_inbound_traffic.py test_intent_discovery.py test_inbound_security.py test_a2a_identity.py
+        run: python -m unittest -v test_public_snapshot_privacy.py test_inbound_traffic.py test_intent_discovery.py test_inbound_security.py test_a2a_identity.py test_a2a_dialogue.py test_a2a_endpoint_policy.py test_a2a_peer.py test_agent_chat.py test_agent_demand.py test_inbound_interview.py test_peer_quality.py test_runtime_boundary.py test_neo_dialect_a2a_overlap_docs.py
