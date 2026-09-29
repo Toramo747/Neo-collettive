@@ -101,20 +101,40 @@ def metrics(rows:list[dict],p:dict)->dict:
 
 def main()->int:
     ap=argparse.ArgumentParser()
-    ap.add_argument("--dataset",default="arena/commercial_signal/train.jsonl")
+    ap.add_argument("--dataset",default="")
     ap.add_argument("--proposals-dir",default="arena/commercial_signal/proposals")
     ap.add_argument("--out",default="")
     args=ap.parse_args()
-    rows=load_dataset(Path(args.dataset))
-    results={}
-    for path in sorted(Path(args.proposals_dir).glob("*.json")):
-        p=load_proposal(path); results[path.stem]=metrics(rows,p)
-    eligible=[(name,m) for name,m in results.items() if not m["disqualified"]]
-    best_recall=max((m["recall_real_demand"] for _,m in eligible),default=None)
-    top_recall=sorted(name for name,m in eligible if m["recall_real_demand"]==best_recall) if best_recall is not None else []
-    out={"dataset_size":len(rows),"results":results,"top_by_arena_rule":top_recall,
-         "best_recall_real_demand":best_recall,
-         "note":"Arena-only evaluation; ties are retained; no production adoption."}
+    dataset_paths=[Path(args.dataset)] if args.dataset else [
+        Path("arena/commercial_signal/train_synthetic.jsonl"),
+        Path("arena/commercial_signal/train_real_review.jsonl"),
+    ]
+    datasets={}
+    for dataset_path in dataset_paths:
+        rows=load_dataset(dataset_path)
+        results={}
+        for path in sorted(Path(args.proposals_dir).glob("*.json")):
+            p=load_proposal(path); results[path.stem]=metrics(rows,p)
+        eligible=[(name,m) for name,m in results.items() if not m["disqualified"]]
+        best_recall=max((m["recall_real_demand"] for _,m in eligible),default=None)
+        top_recall=sorted(name for name,m in eligible if m["recall_real_demand"]==best_recall) if best_recall is not None else []
+        label_counts={}
+        family_counts={}
+        missing_counts={}
+        for row in rows:
+            label=str(row.get("proposed_label") or "")
+            family=str(row.get("family") or "unspecified")
+            label_counts[label]=label_counts.get(label,0)+1
+            family_counts[family]=family_counts.get(family,0)+1
+            for reason in row.get("gate_missing") or []:
+                missing_counts[str(reason)]=missing_counts.get(str(reason),0)+1
+        datasets[dataset_path.name]={
+            "dataset_size":len(rows),"label_counts":label_counts,"family_counts":family_counts,
+            "gate_missing_counts":missing_counts,"results":results,"top_by_arena_rule":top_recall,
+            "best_recall_real_demand":best_recall,
+        }
+    out={"datasets":datasets,
+         "note":"Arena-only evaluation; synthetic validates infrastructure only; real labels remain proposed; no production adoption."}
     text=json.dumps(out,sort_keys=True,indent=2)
     if args.out: Path(args.out).write_text(text+"\n",encoding="utf-8")
     print(text)
