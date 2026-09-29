@@ -18,8 +18,9 @@ class CommercialSignalArenaTests(unittest.TestCase):
             p=Path(d)/"p.json"; p.write_bytes(b" "+b"x"*70000)
             with self.assertRaises(ValueError): load_proposal(p)
     def test_dataset_has_three_labels(self):
-        rows=load_dataset(ROOT/"train.jsonl")
-        self.assertEqual({r["proposed_label"] for r in rows},{"REAL_DEMAND","VENDOR_OR_SELLER","NOISE"})
+        for name in ("train_synthetic.jsonl","train_real_review.jsonl"):
+            rows=load_dataset(ROOT/name)
+            self.assertEqual({r["proposed_label"] for r in rows},{"REAL_DEMAND","VENDOR_OR_SELLER","NOISE"})
     def test_evaluator_has_no_network_imports(self):
         import ast
         from pathlib import Path
@@ -33,7 +34,7 @@ class CommercialSignalArenaTests(unittest.TestCase):
         self.assertFalse(imports & banned)
 
     def test_baseline_zero_vendor_fp(self):
-        rows=load_dataset(ROOT/"train.jsonl")
+        rows=load_dataset(ROOT/"train_synthetic.jsonl")
         m=metrics(rows,BASE)
         self.assertEqual(m["vendor_false_positive_rate"],0.0)
         self.assertFalse(m["disqualified"])
