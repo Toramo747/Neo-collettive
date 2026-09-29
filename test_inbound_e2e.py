@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import unittest
 from unittest.mock import patch
 
@@ -187,22 +188,40 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
                     cloud_mcp.app,"/api/heartbeat","GET",
                     extra_headers={"x-neo-heartbeat-token":"cron-secret"},
                 )
-        finally:
-            cloud_mcp.HEARTBEAT_TOKEN=old_token
-        self.assertEqual(status,200)
-        self.assertTrue(response.get("ok"))
+            self.assertEqual(status,200)
+            self.assertTrue(response.get("ok"))
 
-        cloud_mcp.HEARTBEAT_TOKEN="cron-secret"
-        try:
+            valid=cloud_mcp.make_self_traffic_proof("cron-secret","/api/heartbeat")
             with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
                 status,response=await asgi_request(
                     cloud_mcp.app,"/api/heartbeat","GET",
                     extra_headers={
+                        "x-mycelix-self-traffic":"github-actions-heartbeat",
+                        "x-mycelix-self-traffic-proof":valid,
+                    },
                 )
+            self.assertEqual(status,200)
+            self.assertTrue(response.get("ok"))
+
+            status,response=await asgi_request(
+                cloud_mcp.app,"/api/heartbeat","GET",
+                extra_headers={"x-mycelix-self-traffic":"github-actions-heartbeat"},
+            )
+            self.assertEqual(status,403)
+
+            expired=cloud_mcp.make_self_traffic_proof(
+                "cron-secret","/api/heartbeat",timestamp=int(time.time())-301
+            )
+            status,response=await asgi_request(
+                cloud_mcp.app,"/api/heartbeat","GET",
+                extra_headers={
+                    "x-mycelix-self-traffic":"github-actions-heartbeat",
+                    "x-mycelix-self-traffic-proof":expired,
+                },
+            )
+            self.assertEqual(status,403)
         finally:
             cloud_mcp.HEARTBEAT_TOKEN=old_token
-        self.assertEqual(status,200)
-        self.assertTrue(response.get("ok"))
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
