@@ -25,16 +25,11 @@ jobs:
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -uo pipefail
-          if [ -n "${HEARTBEAT_TOKEN}" ]; then
-            curl --fail --show-error --silent \
-              --retry 2 --retry-delay 5 --max-time 90 \
-              -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
-              "${HEARTBEAT_URL}" > /tmp/heartbeat.json
-          else
-            curl --fail --show-error --silent \
-              --retry 2 --retry-delay 5 --max-time 90 \
-              "${HEARTBEAT_URL}" > /tmp/heartbeat.json
-          fi
+          curl --fail --show-error --silent \
+            -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \
+            -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"${HEARTBEAT_TOKEN}\" python self_traffic_auth.py sign-url "${HEARTBEAT_URL}" --marker github-actions-heartbeat)" \
+            --retry 2 --retry-delay 5 --max-time 90 \
+            "${HEARTBEAT_URL}" > /tmp/heartbeat.json
           cat /tmp/heartbeat.json || true
 
       - name: Poll MYCELIX runtime

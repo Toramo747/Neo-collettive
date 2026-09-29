@@ -1122,6 +1122,7 @@ def _inbound_request_meta(request: Request) -> dict:
         "mcp_session_id":str(headers.get("mcp-session-id") or "")[:300],
         "self_marker":str(headers.get("x-mycelix-self-traffic") or "")[:300],
         "self_proof":str(headers.get("x-mycelix-self-traffic-proof") or "")[:300],
+        "legacy_heartbeat_token_rejected":bool(headers.get("x-neo-heartbeat-token")),
         "declared_agent_id":str(headers.get("x-agent-id") or "")[:300],
         "client_ip":client_ip[:180],
     }
@@ -1161,12 +1162,14 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
         tool_name=str(params.get("name") or "").strip()[:180] or None
     self_auth=verify_self_traffic_proof(HEARTBEAT_TOKEN,path,meta["self_proof"])
+    legacy_heartbeat_token_rejected=bool(meta.get("legacy_heartbeat_token_rejected"))
+    self_verified=bool(self_auth.get("valid")) and not legacy_heartbeat_token_rejected
     declared_agent_id=meta["declared_agent_id"] or payload_declared_agent_id
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
         origin=meta["ip_or_origin"],rpc_method=rpc_method,has_text=has_text,
         text=inbound_text,
-        self_marker=meta["self_marker"],self_verified=bool(self_auth.get("valid")),declared_agent_id=declared_agent_id,
+        self_marker=meta["self_marker"],self_verified=self_verified,declared_agent_id=declared_agent_id,
     )
     row={
         "timestamp_utc":datetime.now(timezone.utc).isoformat(),
@@ -1181,9 +1184,10 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "crawler_name":crawler,
         "self_source":(meta["self_marker"] or declared_agent_id) if category=="self_traffic" else None,
         "declared_user_authorized_unverified":declared_user_authorized_unverified(
-            declared_agent_id,self_verified=bool(self_auth.get("valid"))
+            declared_agent_id,self_verified=self_verified
         ),
-        "spoofed_self_marker":bool(meta["self_marker"] and not self_auth.get("valid")),
+        "legacy_heartbeat_token_rejected":legacy_heartbeat_token_rejected,
+        "spoofed_self_marker":bool(meta["self_marker"] and not self_verified),
         "self_proof_reason":self_auth.get("reason") if meta["self_marker"] else None,
         "content_fingerprint":content_fingerprint(inbound_text),
         "source_message_id":source_message_id,
@@ -10068,10 +10072,11 @@ def _runtime_snapshot_freshness() -> dict:
 
 
 async def api_runtime_snapshot_published(request: Request):
-    if HEARTBEAT_TOKEN:
-        supplied=(request.headers.get("x-neo-heartbeat-token") or "").strip()
-        if supplied != HEARTBEAT_TOKEN:
-            return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
+    proof=verify_self_traffic_proof(
+        HEARTBEAT_TOKEN,request.url.path,request.headers.get("x-mycelix-self-traffic-proof") or ""
+    )
+    if not HEARTBEAT_TOKEN or request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or not proof.get("valid"):
+        return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
     try:
         payload=await request.json()
     except Exception:
@@ -10102,21 +10107,23 @@ async def api_self_improvement_proposal(request: Request):
 async def api_heartbeat(request: Request):
     """Wake-safe idempotent trigger for an external free scheduler."""
     meta=_inbound_request_meta(request)
+    _record_inbound_traffic(request)
     try:
         endpoint_verifier.consume_rate_limit(
             "heartbeat:"+endpoint_verifier.caller_bucket(meta.get("ip_or_origin") or "unknown")
         )
     except endpoint_verifier.VerificationError as exc:
         return JSONResponse({"ok":False,"error":exc.code},status_code=429)
-    if HEARTBEAT_TOKEN:
-        supplied = (request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or "").strip()
-        proof=verify_self_traffic_proof(
-            HEARTBEAT_TOKEN,
-            request.url.path,
-            request.headers.get("x-mycelix-self-traffic-proof") or "",
-        )
-        if not (secrets.compare_digest(supplied,HEARTBEAT_TOKEN) or bool(proof.get("valid"))):
-            return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
+    proof=verify_self_traffic_proof(
+        HEARTBEAT_TOKEN,
+        request.url.path,
+        request.headers.get("x-mycelix-self-traffic-proof") or "",
+    )
+    legacy_heartbeat_token_rejected=bool(
+        request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token")
+    )
+    if not HEARTBEAT_TOKEN or legacy_heartbeat_token_rejected or not bool(proof.get("valid")):
+        return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
     age = _iso_age_seconds(AUTOPILOT_STATE.get("last_started_utc"))
     busy = AUTOPILOT_LOCK.locked()
@@ -11214,10 +11221,11 @@ async def _autopilot_loop() -> None:
 
 async def api_run_market_cycles(request: Request):
     """Authenticated bounded validation runner; waits for an active cycle and never bypasses gates."""
-    if HEARTBEAT_TOKEN:
-        supplied=(request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or "").strip()
-        if supplied != HEARTBEAT_TOKEN:
-            return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
+    proof=verify_self_traffic_proof(
+        HEARTBEAT_TOKEN,request.url.path,request.headers.get("x-mycelix-self-traffic-proof") or ""
+    )
+    if not HEARTBEAT_TOKEN or request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or not proof.get("valid"):
+        return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
     try:
         requested=max(1,min(int(request.query_params.get("count") or "1"),3))
     except ValueError:
@@ -11997,11 +12005,13 @@ class _InboundTrafficASGI:
         rpc=str(payload.get("method") or "")[:120]
         path=str(scope.get("path") or "/mcp")
         self_marker=header_map.get("x-mycelix-self-traffic","")
+        legacy_heartbeat_token_rejected=bool(header_map.get("x-neo-heartbeat-token"))
         self_auth=verify_self_traffic_proof(HEARTBEAT_TOKEN,path,header_map.get("x-mycelix-self-traffic-proof",""))
+        self_verified=bool(self_auth.get("valid")) and not legacy_heartbeat_token_rejected
         category,reason,crawler=classify_inbound_event(
             endpoint=path,method=str(scope.get("method") or "POST"),
             user_agent=header_map.get("user-agent",""),origin=source,rpc_method=rpc,has_text=False,
-            self_marker=self_marker,self_verified=bool(self_auth.get("valid")),declared_agent_id=header_map.get("x-agent-id",""),
+            self_marker=self_marker,self_verified=self_verified,declared_agent_id=header_map.get("x-agent-id",""),
         )
         params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
         requested_tool_name=str(params.get("name") or "").strip()[:180] or None if rpc=="tools/call" else None
@@ -12018,9 +12028,10 @@ class _InboundTrafficASGI:
             "crawler_name":crawler,
             "self_source":(self_marker or header_map.get("x-agent-id")) if category=="self_traffic" else None,
             "declared_user_authorized_unverified":declared_user_authorized_unverified(
-                header_map.get("x-agent-id",""),self_verified=bool(self_auth.get("valid"))
+                header_map.get("x-agent-id",""),self_verified=self_verified
             ),
-            "spoofed_self_marker":bool(self_marker and not self_auth.get("valid")),
+            "legacy_heartbeat_token_rejected":legacy_heartbeat_token_rejected,
+            "spoofed_self_marker":bool(self_marker and not self_verified),
             "self_proof_reason":self_auth.get("reason") if self_marker else None,
             "origin_risk_flags":origin_risk_flags(source),
             "tool_name":requested_tool_name,
@@ -12210,14 +12221,7 @@ class _ExplicitReviewASGI:
             heartbeat_proof=verify_self_traffic_proof(
                 HEARTBEAT_TOKEN,path,str(headers.get("x-mycelix-self-traffic-proof") or "")
             )
-            heartbeat_ok=(
-                path=="/api/heartbeat"
-                and bool(HEARTBEAT_TOKEN)
-                and (
-                    secrets.compare_digest(str(headers.get("x-neo-heartbeat-token") or ""),HEARTBEAT_TOKEN)
-                    or (heartbeat_marker=="github-actions-heartbeat" and bool(heartbeat_proof.get("valid")))
-                )
-            )
+            heartbeat_ok=(path=="/api/heartbeat")
             if not heartbeat_ok and not explicit_review_authorized(headers):
                 raw=json.dumps(review_required_result(path+":"+method),separators=(",",":"),ensure_ascii=False).encode("utf-8")
                 await send({"type":"http.response.start","status":403,"headers":[

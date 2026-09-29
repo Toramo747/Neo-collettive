@@ -704,12 +704,12 @@ jobs:
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/market/run-cycles?count=3"
           args=(-X POST --fail --show-error --silent --max-time 600)
-          if [ -n "${HEARTBEAT_TOKEN}" ]; then
-            args+=(-H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}")
-          fi
+          args+=(-H "X-MYCELIX-Self-Traffic: github-actions-heartbeat")
+          args+=(-H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"${HEARTBEAT_TOKEN}\" python self_traffic_auth.py sign-url "${target}" --marker github-actions-heartbeat)")
           curl "${args[@]}" \
-            "https://neo-collettive.onrender.com/api/market/run-cycles?count=3" \
+            "${target}" \
             > /tmp/market-cycles.json
           cat /tmp/market-cycles.json
           python - <<'PY'
