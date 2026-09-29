@@ -11724,7 +11724,62 @@ async def mcp_discovery_document(request: Request):
     )
 
 
+def _probe_rate_limit(request: Request, probe: str) -> JSONResponse | None:
+    meta=_inbound_request_meta(request)
+    try:
+        endpoint_verifier.consume_rate_limit(
+            "probe:"+probe+":"+endpoint_verifier.caller_bucket(meta.get("ip_or_origin") or "unknown")
+        )
+    except endpoint_verifier.VerificationError as exc:
+        return JSONResponse({"ok":False,"error":exc.code},status_code=429)
+    return None
+
+
+async def livez(request: Request):
+    limited=_probe_rate_limit(request,"livez")
+    if limited is not None:
+        return limited
+    return JSONResponse({"status":"ok"},status_code=200)
+
+
+def _readiness_status() -> dict:
+    state_dir=os.path.dirname(STATE_SNAPSHOT_PATH) or "."
+    runtime_ready=(
+        isinstance(AUTOPILOT_STATE,dict)
+        and isinstance(RUNTIME_IDENTITY,dict)
+        and str(RUNTIME_IDENTITY.get("profile_id") or "")=="mycelix-prod-main"
+        and str(RUNTIME_IDENTITY.get("deployment_role") or "")=="production"
+        and isinstance(AUTOPILOT_STATE.get("restore_source"),str)
+    )
+    storage_ready=os.path.isdir(state_dir) and os.access(state_dir,os.W_OK)
+    return {
+        "ready":bool(runtime_ready and storage_ready),
+        "runtime_ready":bool(runtime_ready),
+        "storage_ready":bool(storage_ready),
+    }
+
+
+async def readyz(request: Request):
+    limited=_probe_rate_limit(request,"readyz")
+    if limited is not None:
+        return limited
+    readiness=_readiness_status()
+    return JSONResponse(
+        {
+            "status":"ready" if readiness["ready"] else "not_ready",
+            "checks":{
+                "runtime":readiness["runtime_ready"],
+                "storage":readiness["storage_ready"],
+            },
+        },
+        status_code=200 if readiness["ready"] else 503,
+    )
+
+
 async def health(request: Request):
+    limited=_probe_rate_limit(request,"health")
+    if limited is not None:
+        return limited
     _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
     return JSONResponse({
@@ -12184,7 +12239,7 @@ app = Starlette(
         Route("/arena/neo-dialect", arena_neo_dialect_page, methods=["GET"]),
         Route("/arena/micelio", arena_micelio_page, methods=["GET"]),
         Route("/arena/evoluzione", arena_evolution_page, methods=["GET"]),
-        Route("/health", health, methods=["GET"]),
+        Route("/livez", livez, methods=["GET"]),\n        Route("/readyz", readyz, methods=["GET"]),\n        Route("/health", health, methods=["GET"]),
         Route("/api/discover", api_discover, methods=["GET"]),
         Route("/api/collective", api_collective, methods=["GET"]),
         Mount("/", app=mcp_app),
