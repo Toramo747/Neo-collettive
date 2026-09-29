@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timezone
-from inbound_traffic import classify_inbound_event, append_event, content_fingerprint, reconcile_message_events, summarize_events, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_traffic import classify_inbound_event, append_event, content_fingerprint, logical_message_groups, reconcile_message_events, summarize_events, retroactive_from_inbound_messages, reclassify_known_self_events
 
 class InboundTrafficTests(unittest.TestCase):
     def test_agent_card_fetch_is_crawler_probe(self):
@@ -155,6 +155,40 @@ class InboundTrafficTests(unittest.TestCase):
         }])
         self.assertEqual(rows[0]["category"],"self_traffic")
         self.assertEqual(rows[0]["self_source"],"github_actions_verify_mcp_live_probe")
+
+    def test_live_and_historical_companion_are_one_logical_message_two_evidences(self):
+        fp=content_fingerprint("same payload")
+        rows=[
+            {"timestamp_utc":"2026-09-29T12:00:00+00:00","endpoint":"/a2a","rpc_method":"message/send",
+             "user_agent":"real-peer/1","ip_or_origin":"198.51.100.10","source_message_id":"msg-1",
+             "content_fingerprint":fp,"category":"real_contact","reason":"a2a_text_message"},
+            {"timestamp_utc":"2026-09-29T12:00:01+00:00","endpoint":"/a2a","rpc_method":"message/send",
+             "user_agent":None,"ip_or_origin":"anonymous-agent","source_message_id":"msg-1",
+             "content_fingerprint":fp,"category":"real_contact","reason":"historical_a2a_text_message_from_existing_log",
+             "historical_derived":True},
+        ]
+        groups=logical_message_groups(rows)
+        self.assertEqual(len(groups),1)
+        self.assertEqual(len(groups[0]["evidence"]),2)
+        summary=summarize_events(rows,now=datetime(2026,9,29,12,1,tzinfo=timezone.utc))
+        self.assertEqual(summary["technical_evidence_total"],2)
+        self.assertEqual(summary["logical_messages_total"],1)
+        self.assertEqual(summary["counts"]["total"]["real_contact"],1)
+        self.assertEqual(summary["dedup_window_seconds"],300)
+
+    def test_same_ping_from_two_origins_stays_two_logical_messages(self):
+        fp=content_fingerprint("ping")
+        rows=[
+            {"timestamp_utc":"2026-09-29T12:00:00+00:00","endpoint":"/a2a","rpc_method":"message/send",
+             "user_agent":"peer-a","ip_or_origin":"198.51.100.10","source_message_id":"a-1",
+             "content_fingerprint":fp,"category":"real_contact","reason":"a2a_text_message"},
+            {"timestamp_utc":"2026-09-29T12:00:01+00:00","endpoint":"/a2a","rpc_method":"message/send",
+             "user_agent":"peer-b","ip_or_origin":"198.51.100.11","source_message_id":"b-1",
+             "content_fingerprint":fp,"category":"real_contact","reason":"a2a_text_message"},
+        ]
+        groups=logical_message_groups(rows)
+        self.assertEqual(len(groups),2)
+        self.assertTrue(all(len(group["evidence"])==1 for group in groups))
 
 
 if __name__=="__main__":

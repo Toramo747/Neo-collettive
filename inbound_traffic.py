@@ -10,6 +10,7 @@ from inbound_security import classify_inbound_security
 
 CATEGORIES=("crawler_probe","self_traffic","real_contact_pending","real_contact","legacy_unattributable","malicious_solicitation","unknown")
 OFFICIAL_COUNTING_SINCE_UTC="2026-09-28T07:07:09+00:00"
+LOGICAL_DEDUP_WINDOW_SECONDS=300
 
 KNOWN_CRAWLERS=(
     ("agent-tools.cloud",("agent-tools.cloud","agent-tools")),
@@ -179,15 +180,82 @@ def append_event(events: list[dict]|None, event: dict, *, max_events: int=1200) 
                     break
     return rows[-max_events:]
 
+def _event_time(row: dict) -> datetime|None:
+    try:
+        ts=datetime.fromisoformat(str(row.get("timestamp_utc") or "").replace("Z","+00:00"))
+        if ts.tzinfo is None:
+            ts=ts.replace(tzinfo=timezone.utc)
+        return ts
+    except Exception:
+        return None
+
+
+def logical_message_groups(events: list[dict]|None, *, window_seconds: int=LOGICAL_DEDUP_WINDOW_SECONDS) -> list[dict]:
+    """Group duplicate technical evidence without deleting or rewriting source events.
+
+    A2A evidence is considered the same logical message only when it has the
+    same content fingerprint and either the same source_message_id or the same
+    technical origin. A historical-derived companion may join a live event by
+    source_message_id. The five-minute window bounds accidental coalescing.
+    """
+    groups=[]
+    for index,item in enumerate(events or []):
+        if not isinstance(item,dict):
+            continue
+        row=dict(item)
+        if row.get("endpoint")!="/a2a" or row.get("rpc_method") not in {"message/send","SendMessage"}:
+            groups.append({"logical_id":"event:"+str(index),"evidence":[row],"representative":row})
+            continue
+        fp=_clean(row.get("content_fingerprint"),100)
+        if not fp:
+            groups.append({"logical_id":"event:"+str(index),"evidence":[row],"representative":row})
+            continue
+        msg_id=_clean(row.get("source_message_id"),180)
+        origin=source_key(row)
+        ts=_event_time(row)
+        matched=None
+        for group in reversed(groups):
+            rep=group.get("representative") or {}
+            if rep.get("endpoint")!="/a2a" or rep.get("rpc_method") not in {"message/send","SendMessage"}:
+                continue
+            if _clean(rep.get("content_fingerprint"),100)!=fp:
+                continue
+            rep_id=_clean(rep.get("source_message_id"),180)
+            same_identity=bool(msg_id and rep_id and msg_id==rep_id)
+            same_origin=(source_key(rep)==origin and origin!="source:|")
+            if not (same_identity or same_origin):
+                continue
+            rep_ts=_event_time(rep)
+            if ts is not None and rep_ts is not None and abs((ts-rep_ts).total_seconds())>window_seconds:
+                continue
+            matched=group
+            break
+        if matched is None:
+            groups.append({
+                "logical_id":"a2a:"+hashlib.sha256((fp+"|"+(msg_id or origin)+"|"+str(index)).encode()).hexdigest()[:20],
+                "evidence":[row],
+                "representative":row,
+            })
+        else:
+            matched["evidence"].append(row)
+            # Prefer the live, richer evidence as representative.
+            current=matched.get("representative") or {}
+            if current.get("historical_derived") and not row.get("historical_derived"):
+                matched["representative"]=row
+    return groups
+
+
 def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dict:
     now=now or datetime.now(timezone.utc)
     rows=reclassify_legacy_contacts(reclassify_known_self_events(events))
+    logical_groups=logical_message_groups(rows)
+    logical_rows=[dict(group.get("representative") or {}) for group in logical_groups]
     windows={"total":Counter(),"last_24h":Counter(),"last_7d":Counter()}
     real_times=[]
     crawler_origins=Counter()
     real_contact_origins=Counter()
     self_traffic_origins=Counter()
-    for row in rows:
+    for row in logical_rows:
         cat=str(row.get("category") or "unknown")
         if cat not in CATEGORIES: cat="unknown"
         windows["total"][cat]+=1
@@ -216,6 +284,9 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
         "official_counting_since_utc":OFFICIAL_COUNTING_SINCE_UTC,
         "legacy_rule":"real_contact before commit 30aeb80 is preserved as legacy_unattributable and excluded from official real_contact counts",
         "events_total":len(rows),
+        "logical_messages_total":len(logical_rows),
+        "technical_evidence_total":len(rows),
+        "dedup_window_seconds":LOGICAL_DEDUP_WINDOW_SECONDS,
         "counts":{
             "total":counts(windows["total"]),
             "last_24h":counts(windows["last_24h"]),
