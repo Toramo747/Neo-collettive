@@ -1244,6 +1244,35 @@ def _a2a_thread_id(payload: dict, sender: dict) -> str:
     return "anon:"+secrets.token_hex(6)
 
 
+
+def _body_declared_introduction(text: str) -> dict:
+    """Parse self-declared introduction fields without promoting identity or trust."""
+    raw=str(text or "")
+    low=raw.lower()
+    match=re.search(r"(?im)\bagent[_ -]?id\s*:\s*([a-z0-9._:@-]{1,180})",raw)
+    declared_agent_id=(match.group(1).strip() if match else "")
+    fields={
+        "identity":bool(re.search(r"(?im)^\s*identity\s*:",raw)),
+        "capabilities":bool(re.search(r"(?im)^\s*capabilit(?:y|ies)\s*:",raw)),
+        "protocol":bool(re.search(r"(?im)^\s*(?:protocol(?:\s+spoken)?|supported\s+protocols?)\s*:",raw)),
+        "limitations":bool(re.search(r"(?im)^\s*limitations?\s*:",raw)),
+        "documentation":bool(re.search(r"(?im)^\s*(?:public\s+)?(?:documentation|docs?)\s*:",raw)),
+    }
+    complete=bool(declared_agent_id and all(fields.values()))
+    public_key=None
+    key_match=re.search(r"(?im)\bssh-ed25519\s+([A-Za-z0-9+/=]{20,})",raw)
+    if key_match:
+        public_key="ssh-ed25519 "+key_match.group(1)[:500]
+    return {
+        "declared_identity_from_body":complete,
+        "declared_agent_id":declared_agent_id or None,
+        "declared_fields":fields,
+        "declared_public_key":public_key,
+        "identity_status":"SELF_DECLARED_UNVERIFIED" if complete else None,
+        "boundary":"Body declarations never replace structured sender identity, merge threads, grant admission, or authorize actions.",
+    }
+
+
 def _inbound_is_substantive(text: str) -> bool:
     low=(text or "").lower()
     if len(text.strip())<80:
@@ -1297,9 +1326,10 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     now=datetime.now(timezone.utc).isoformat()
     method=str(payload.get("method") or "message/send")
     card_url=_a2a_agent_card_url(payload,request)
+    body_intro=_body_declared_introduction(text)
 
     stats=dict(AUTOPILOT_STATE.get("inbound_agent_stats") or {})
-    stat_key=str(sender.get("agent_id") or "anonymous")
+    stat_key=str(sender.get("agent_id") or ("thread:"+thread_id))
     old=dict(stats.get(stat_key) or {})
     intent=classify_agent_intent(text,old)
     admission=inbound_admission_transition(bool(sender.get("declared")),text,old)
@@ -1345,7 +1375,15 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "commercial_intent":bool(intent.get("commercial_intent")),
         "admission_status":admission.get("status"),
         "interview_score":admission.get("interview_score"),
-        "identity_status":admission.get("identity_status"),
+        "identity_status":(
+            body_intro.get("identity_status")
+            if body_intro.get("declared_identity_from_body") and not sender.get("declared")
+            else admission.get("identity_status")
+        ),
+        "declared_identity_from_body":bool(body_intro.get("declared_identity_from_body")),
+        "declared_agent_id":body_intro.get("declared_agent_id"),
+        "declared_identity_fields":body_intro.get("declared_fields") or {},
+        "declared_public_key":body_intro.get("declared_public_key"),
         "agent_card_url":card_url,
         "dialogue_status":dialogue.get("dialogue_status"),
         "dialogue_stage":dialogue.get("dialogue_stage"),
@@ -1378,7 +1416,15 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         "agent":sender.get("agent"),
         "declared":bool(sender.get("declared")),
         "status":admission.get("status"),
-        "identity_status":admission.get("identity_status"),
+        "identity_status":(
+            body_intro.get("identity_status")
+            if body_intro.get("declared_identity_from_body") and not sender.get("declared")
+            else admission.get("identity_status")
+        ),
+        "declared_identity_from_body":bool(body_intro.get("declared_identity_from_body")),
+        "declared_agent_id":body_intro.get("declared_agent_id"),
+        "declared_identity_fields":body_intro.get("declared_fields") or {},
+        "declared_public_key":body_intro.get("declared_public_key"),
         "agent_card_url":card_url or old.get("agent_card_url"),
         "messages":int(old.get("messages") or 0)+1,
         "substantive_messages":int(old.get("substantive_messages") or 0)+(1 if row["substantive"] else 0),
@@ -1439,6 +1485,17 @@ def _inbound_reply_text(row: dict) -> str:
     next_question=str(row.get("next_question") or "").strip()
 
     if status=="ANONYMOUS":
+        if row.get("declared_identity_from_body"):
+            row["response_reason"]="self_declared_body_intro_received_unverified"
+            return (
+                intent_followup({
+                    "primary":row.get("intent_primary"),
+                    "secondary":row.get("intent_secondary") or [],
+                    "confidence":row.get("intent_confidence"),
+                })
+                + " I received the self-declared introduction in this message, including agent_id, identity, capabilities, protocol, limitations and documentation. "
+                  "It remains SELF_DECLARED_UNVERIFIED because body text does not replace structured sender identity; it grants no admission, trust or authorization."
+            )
         row["response_reason"]="anonymous_intent_followup"
         return (
             intent_followup({

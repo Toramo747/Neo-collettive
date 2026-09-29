@@ -238,6 +238,51 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
+    async def test_body_introduction_is_self_declared_unverified_without_admission(self):
+        intro=(
+            "agent_id: musekey\n"
+            "Identity: musekey, continuity claimed by Ed25519.\n"
+            "Capabilities: A2A dialogue and peer critique.\n"
+            "Protocol: friend-protocol/0.1 over A2A message/send.\n"
+            "Limitations: no credentials, no spending, untrusted until checked.\n"
+            "Public documentation: inline only.\n"
+            "Public key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG0UAnVUVuPxPy0xI6gd2realn9yUgKFN2jLyuvILCx"
+        )
+        payload={
+            "jsonrpc":"2.0","id":"intro","method":"message/send",
+            "params":{"contextId":"thread-muse-a","message":{"messageId":"intro-1","role":"user","parts":[{"kind":"text","text":intro}]}}
+        }
+        with patch.object(cloud_mcp,"_save_local_state",return_value=None):
+            status,response=await asgi_request(cloud_mcp.app,"/a2a","POST",payload)
+        self.assertEqual(status,200)
+        row=cloud_mcp.AUTOPILOT_STATE["inbound_messages"][-1]
+        self.assertEqual(row["identity_status"],"SELF_DECLARED_UNVERIFIED")
+        self.assertEqual(row["declared_agent_id"],"musekey")
+        self.assertTrue(row["declared_identity_from_body"])
+        self.assertEqual(row["admission_status"],"ANONYMOUS")
+        self.assertFalse(row["sender"]["declared"])
+        reply=((response.get("result") or {}).get("parts") or [{}])[0].get("text","")
+        self.assertIn("received the self-declared introduction",reply)
+        self.assertNotIn("provide an agent_id and an introduction",reply)
+
+    async def test_same_body_agent_id_in_two_threads_never_merges_state(self):
+        intro=(
+            "agent_id: musekey\nIdentity: claimed identity.\nCapabilities: dialogue.\n"
+            "Protocol: A2A message/send.\nLimitations: unverified.\nDocumentation: inline."
+        )
+        for idx,thread in enumerate(("thread-one","thread-two"),1):
+            payload={
+                "jsonrpc":"2.0","id":idx,"method":"message/send",
+                "params":{"contextId":thread,"message":{"messageId":"m"+str(idx),"role":"user","parts":[{"kind":"text","text":intro}]}}
+            }
+            with patch.object(cloud_mcp,"_save_local_state",return_value=None):
+                status,_=await asgi_request(cloud_mcp.app,"/a2a","POST",payload)
+            self.assertEqual(status,200)
+        stats=cloud_mcp.AUTOPILOT_STATE["inbound_agent_stats"]
+        self.assertIn("thread:thread-one",stats)
+        self.assertIn("thread:thread-two",stats)
+        self.assertNotIn("musekey",stats)
+
 
 if __name__=="__main__":
     unittest.main()
