@@ -11934,10 +11934,22 @@ async def _startup_neo_dialect_probe() -> None:
         AUTOPILOT_STATE["neo_dialect_seti_probe"]=state
 
 
+def _warn_if_self_traffic_secret_missing(secret: str) -> bool:
+    """Warn without exposing secret material; callers can continue fail-closed."""
+    if str(secret or "").strip():
+        return False
+    LOGGER.warning(
+        "SELF_TRAFFIC_AUTH_DISABLED: NEO_HEARTBEAT_TOKEN is empty or unset; "
+        "self-traffic markers will not be trusted"
+    )
+    return True
+
+
 async def lifespan(app: Starlette):
     autopilot_task = None
     advertisement_task = None
     dialect_probe_task = None
+    _warn_if_self_traffic_secret_missing(HEARTBEAT_TOKEN)
     async with mcp.session_manager.run():
         if AUTOPILOT_ENABLED:
             autopilot_task = asyncio.create_task(_autopilot_loop())
