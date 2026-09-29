@@ -165,7 +165,10 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden,encoded)
         self.assertEqual(public["inbound_traffic_summary"]["counts"]["total"]["real_contact"],2)
-        self.assertEqual(public["recent_deploys"][0]["commit"]["id"],"abcdef123456")
+        self.assertNotIn("resource",public)
+        self.assertNotIn("id",public["recent_deploys"][0])
+        self.assertEqual(public["recent_deploys"][0]["commit_sha"],"abcdef123456")
+        self.assertEqual(public["recent_deploys"][0]["commit_created_at"],"2026-09-29T14:59:00Z")
         validate_public_jarvis_snapshot(public)
 
     def test_jarvis_guard_rejects_unknown_key_ip_email_long_and_text(self):
