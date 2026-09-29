@@ -1,0 +1,31 @@
+name: Temporary heartbeat token fingerprint
+
+on:
+  push:
+    branches: [mycelix-self-traffic-hardening-20260928]
+    paths:
+      - ".github/workflows/temporary-heartbeat-token-fingerprint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fingerprint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print non-secret token metadata
+        env:
+          NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+
+          token = os.environ.get("NEO_HEARTBEAT_TOKEN", "")
+          print(f"length={len(token)}")
+          print(f"empty={'yes' if not token else 'no'}")
+          if len(token) >= 43:
+              print(f"sha256_12={hashlib.sha256(token.encode('utf-8')).hexdigest()[:12]}")
+          else:
+              print("too_short=yes")
+          PY
