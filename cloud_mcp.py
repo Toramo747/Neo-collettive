@@ -1144,9 +1144,11 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
     thread_id=None
     intent={}
     identity_status="ANONYMOUS_UNVERIFIED"
+    payload_declared_agent_id=""
     if path=="/a2a":
         try:
             sender=_a2a_sender(payload,request)
+            payload_declared_agent_id=str(sender.get("agent_id") or "")[:300]
             thread_id=_a2a_thread_id(payload,sender)
             source_message_id=str(((payload.get("params") or {}).get("message") or {}).get("messageId") or "")[:180] or None
             intent=classify_agent_intent(inbound_text)
@@ -1159,11 +1161,12 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
         tool_name=str(params.get("name") or "").strip()[:180] or None
     self_auth=verify_self_traffic_proof(HEARTBEAT_TOKEN,path,meta["self_proof"])
+    declared_agent_id=meta["declared_agent_id"] or payload_declared_agent_id
     category,reason,crawler=classify_inbound_event(
         endpoint=path,method=request.method,user_agent=meta["user_agent"],
         origin=meta["ip_or_origin"],rpc_method=rpc_method,has_text=has_text,
         text=inbound_text,
-        self_marker=meta["self_marker"],self_verified=bool(self_auth.get("valid")),declared_agent_id=meta["declared_agent_id"],
+        self_marker=meta["self_marker"],self_verified=bool(self_auth.get("valid")),declared_agent_id=declared_agent_id,
     )
     row={
         "timestamp_utc":datetime.now(timezone.utc).isoformat(),
@@ -1176,9 +1179,9 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "rpc_method":rpc_method or None,
         "mcp_session_id":meta["mcp_session_id"] or None,
         "crawler_name":crawler,
-        "self_source":(meta["self_marker"] or meta["declared_agent_id"]) if category=="self_traffic" else None,
+        "self_source":(meta["self_marker"] or declared_agent_id) if category=="self_traffic" else None,
         "declared_user_authorized_unverified":declared_user_authorized_unverified(
-            meta["declared_agent_id"],self_verified=bool(self_auth.get("valid"))
+            declared_agent_id,self_verified=bool(self_auth.get("valid"))
         ),
         "spoofed_self_marker":bool(meta["self_marker"] and not self_auth.get("valid")),
         "self_proof_reason":self_auth.get("reason") if meta["self_marker"] else None,
