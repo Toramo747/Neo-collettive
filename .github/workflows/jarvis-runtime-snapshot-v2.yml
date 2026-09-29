@@ -1,17 +1,174 @@
-name: Jarvis runtime snapshot v2 (publication disabled)
+name: Jarvis runtime snapshot v2
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "13,33,53 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "neo_latest_result.json"
+      - "public_snapshot.py"
+      - ".github/workflows/jarvis-runtime-snapshot-v2.yml"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: jarvis-runtime-snapshot
+  cancel-in-progress: false
 
 jobs:
-  publication-disabled:
+  snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     steps:
-      - name: Confirm public runtime snapshot publication is disabled
+      - name: Checkout sanitizer source
+        uses: actions/checkout@v4
+
+      - name: Fallback wake MYCELIX
+        shell: bash
+        env:
+          HEARTBEAT_URL: https://neo-collettive.onrender.com/api/heartbeat
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
-          echo "runtime/jarvis_diagnostics.json publication to runtime-snapshots is disabled."
-          echo "No runtime fetch, commit, push, secret read, or external contact is performed."
+          set -euo pipefail
+          if [ -n "${HEARTBEAT_TOKEN}" ]; then
+            curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-snapshot" --retry 2 --retry-delay 5 --max-time 45 \
+              -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
+              "${HEARTBEAT_URL}" > /tmp/neo-heartbeat-fallback.json
+          else
+            curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-snapshot" --retry 2 --retry-delay 5 --max-time 45 \
+              "${HEARTBEAT_URL}" > /tmp/neo-heartbeat-fallback.json
+          fi
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/neo-heartbeat-fallback.json",encoding="utf-8"))
+          if not d.get("ok"):
+              raise SystemExit("MYCELIX fallback heartbeat returned ok=false")
+          print({
+              "fallback_wake_started":d.get("started"),
+              "busy":d.get("busy"),
+              "cooldown":d.get("cooldown"),
+              "cycles_completed":d.get("cycles_completed"),
+              "neo_version":d.get("neo_version"),
+          })
+          PY
+
+      - name: Fetch private diagnostics and build allowlisted snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_url="https://neo-collettive.onrender.com/api/render/diagnostics?target=neo"
+          if ! curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-snapshot" --retry 2 --retry-delay 5 \
+            "$source_url" -o /tmp/jarvis-diagnostics.json; then
+            source_url="https://neo-collettive.onrender.com/api/render/diagnostics?target=jarvis"
+            curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-snapshot" --retry 3 --retry-delay 5 \
+              "$source_url" -o /tmp/jarvis-diagnostics.json
+          fi
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from public_snapshot import sanitize_public_jarvis_snapshot
+
+          with open("/tmp/jarvis-diagnostics.json","r",encoding="utf-8") as fh:
+              src=json.load(fh)
+          if not src.get("ok"):
+              raise SystemExit("NEO diagnostics endpoint returned ok=false")
+
+          candidate=dict(src)
+          candidate["snapshot_utc"]=datetime.now(timezone.utc).isoformat()
+          safe=sanitize_public_jarvis_snapshot(candidate)
+
+          with open("/tmp/jarvis-runtime-snapshot.json","w",encoding="utf-8") as fh:
+              json.dump(safe,fh,ensure_ascii=False,indent=2)
+              fh.write("\n")
+          PY
+          cp public_snapshot.py /tmp/public_snapshot.py
+
+      - name: Checkout runtime branch
+        uses: actions/checkout@v4
+        with:
+          ref: runtime-snapshots
+          fetch-depth: 1
+
+      - name: Guard allowlisted snapshot before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=/tmp python - <<'PY'
+          import json
+          from public_snapshot import validate_public_jarvis_snapshot
+          with open("/tmp/jarvis-runtime-snapshot.json",encoding="utf-8") as fh:
+              snapshot=json.load(fh)
+          validate_public_jarvis_snapshot(snapshot)
+          print("Jarvis public snapshot allowlist guard passed")
+          PY
+
+      - name: Commit snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime
+          cp /tmp/jarvis-runtime-snapshot.json runtime/jarvis_diagnostics.json
+          git config user.name "neo-runtime-bot"
+          git config user.email "neo-runtime-bot@users.noreply.github.com"
+          git add runtime/jarvis_diagnostics.json
+          if git diff --cached --quiet; then
+            echo "No snapshot changes"
+            exit 0
+          fi
+          git commit -m "runtime: update allowlisted Jarvis diagnostics"
+          for attempt in 1 2 3; do
+            git fetch origin runtime-snapshots
+            if git rebase origin/runtime-snapshots && git push origin HEAD:runtime-snapshots; then
+              exit 0
+            fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt * 3))
+          done
+          echo "Failed to publish runtime snapshot after 3 attempts" >&2
+          exit 1
+
+      - name: Record snapshot freshness
+        shell: bash
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          snapshot_utc="$(python - <<'PY'
+          import json
+          print(json.load(open("/tmp/jarvis-runtime-snapshot.json",encoding="utf-8"))["snapshot_utc"])
+          PY
+          )"
+          payload="$(python - <<PY
+          import json
+          print(json.dumps({"snapshot_utc":"$snapshot_utc"}))
+          PY
+          )"
+          for attempt in $(seq 1 18); do
+            if [ -n "${HEARTBEAT_TOKEN}" ]; then
+              code="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-snapshot" --max-time 30 -o /tmp/snapshot-published.json -w '%{http_code}' \
+                -X POST -H "Content-Type: application/json" \
+                -H "X-NEO-Heartbeat-Token: ${HEARTBEAT_TOKEN}" \
+                --data "${payload}" \
+                "https://neo-collettive.onrender.com/api/runtime/snapshot-published" || true)"
+            else
+              code="$(curl --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-snapshot" --max-time 30 -o /tmp/snapshot-published.json -w '%{http_code}' \
+                -X POST -H "Content-Type: application/json" \
+                --data "${payload}" \
+                "https://neo-collettive.onrender.com/api/runtime/snapshot-published" || true)"
+            fi
+            if [ "${code}" = "200" ]; then
+              python - <<'PY'
+              import json
+              d=json.load(open("/tmp/snapshot-published.json",encoding="utf-8"))
+              print({"ok":bool(d.get("ok")),"snapshot_recorded":bool(d.get("snapshot_utc"))})
+              PY
+              exit 0
+            fi
+            echo "snapshot freshness endpoint returned HTTP ${code}; retry ${attempt}/18"
+            sleep 10
+          done
+          echo "Could not record snapshot freshness after deployment grace period" >&2
+          exit 1
