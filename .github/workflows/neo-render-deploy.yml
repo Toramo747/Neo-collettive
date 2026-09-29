@@ -511,6 +511,30 @@ jobs:
               raise SystemExit("Pathwren warnings regressed above zero")
           PY
 
+      - name: Standard post-deploy smoke
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          health_code="$(curl --silent --show-error --output /tmp/release-health.json --max-time 45 --write-out '%{http_code}' "https://neo-collettive.onrender.com/health")"
+          mcp_payload='{"jsonrpc":"2.0","id":"release-smoke-init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-release-smoke","version":"1"}}}'
+          mcp_code="$(curl --silent --show-error --output /tmp/release-mcp.json --max-time 45 --write-out '%{http_code}'             -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"             -H "X-MYCELIX-Self-Traffic: github-actions-deploy"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-deploy)"             --data "$mcp_payload" "https://neo-collettive.onrender.com/mcp")"
+          heartbeat_code="$(curl --silent --show-error --output /tmp/release-heartbeat.json --max-time 45 --write-out '%{http_code}'             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)"             "https://neo-collettive.onrender.com/api/heartbeat")"
+          echo "health_http=$health_code"
+          echo "mcp_initialize_http=$mcp_code"
+          echo "heartbeat_hmac_only_http=$heartbeat_code"
+          test "$health_code" = "200"
+          test "$mcp_code" = "200"
+          test "$heartbeat_code" = "200"
+
+      - name: Dispatch post-deploy public snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run mycelix-heartbeat-v3.yml --ref main
+          echo "Post-deploy heartbeat snapshot workflow dispatched"
+
       - name: Verify post-deploy SETI readiness
         run: |
           set -euo pipefail
