@@ -175,15 +175,12 @@ PUBLIC_JARVIS_SNAPSHOT_SCHEMA = {
         "classification": None,
     }],
     "recent_deploys": [{
-        "id": None,
         "status": None,
         "createdAt": None,
         "updatedAt": None,
         "finishedAt": None,
-        "commit": {
-            "id": None,
-            "createdAt": None,
-        },
+        "commit_sha": None,
+        "commit_created_at": None,
     }],
 }
 
@@ -354,9 +351,12 @@ def sanitize_public_jarvis_snapshot(snapshot: dict | None) -> dict:
     for row in list(src.get("recent_deploys") or [])[:10]:
         if not isinstance(row, dict):
             continue
-        projected = _copy_keys(row, ("id", "status", "createdAt", "updatedAt", "finishedAt"))
+        projected = _copy_keys(row, ("status", "createdAt", "updatedAt", "finishedAt"))
         commit = row.get("commit") if isinstance(row.get("commit"), dict) else {}
-        projected["commit"] = _copy_keys(commit, ("id", "createdAt"))
+        if commit.get("id") is not None:
+            projected["commit_sha"] = deepcopy(commit.get("id"))
+        if commit.get("createdAt") is not None:
+            projected["commit_created_at"] = deepcopy(commit.get("createdAt"))
         deployments.append(projected)
     out["recent_deploys"] = deployments
     validate_public_jarvis_snapshot(out)
