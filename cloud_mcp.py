@@ -490,7 +490,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
             if not OBSERVED_CANDIDATE_REVALIDATION_ENABLED:
                 kept.append(candidate)
                 continue
-            valid,reason=validate_observed_candidate(
+            candidate_valid,reason=validate_observed_candidate(
                 candidate,
                 reject_self_contamination=SELF_CONTAMINATION_GUARD_ENABLED,
                 require_family_in_pain=OBSERVED_FAMILY_GUARD_ENABLED,
@@ -498,7 +498,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
                 reject_vendor_content=VENDOR_CONTENT_GUARD_ENABLED,
                 require_web_buyer_voice=WEB_BUYER_VOICE_GUARD_ENABLED,
             )
-            if valid:
+            if candidate_valid:
                 kept.append(candidate)
             else:
                 purge_reasons[reason]=int(purge_reasons.get(reason) or 0)+1
