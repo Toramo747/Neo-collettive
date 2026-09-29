@@ -284,7 +284,7 @@ jobs:
           hb=load("/tmp/heartbeat.json",{})
           latency=load("/tmp/endpoint-latency.json",{})
           ap_private=raw.get("autopilot") or {}
-          from public_snapshot import sanitize_public_autopilot
+          from public_snapshot import sanitize_public_autopilot, sanitize_public_snapshot
           ap=sanitize_public_autopilot(ap_private)
           err=""
           try:
@@ -369,6 +369,7 @@ jobs:
               "manual_run": raw.get("manual_run") or {},
               "latest_result": ap.get("latest_result")
           }
+          snapshot=sanitize_public_snapshot(snapshot)
           with open("neo_latest_result.json","w",encoding="utf-8") as f:
               json.dump(snapshot,f,indent=2,ensure_ascii=False,default=str)
               f.write("\n")
@@ -452,6 +453,14 @@ jobs:
                   ensure_ascii=False,
               )
               f.write("\n")
+          PY
+          python - <<'PY'
+          import json
+          from public_snapshot import validate_public_snapshot
+          with open("neo_latest_result.json",encoding="utf-8") as fh:
+              snapshot=json.load(fh)
+          validate_public_snapshot(snapshot)
+          print("public snapshot allowlist guard passed")
           PY
           git add neo_latest_result.json neo_cycle_floor.json
           git diff --cached --quiet && exit 0
