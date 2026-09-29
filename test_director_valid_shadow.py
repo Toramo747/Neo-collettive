@@ -8,7 +8,7 @@ class DirectorValidShadowRegressionTests(unittest.TestCase):
         self.assertIn("valid = []",src)
         self.assertIn("candidate_valid,reason=validate_observed_candidate(",src)
         self.assertIn("if candidate_valid:",src)
-        self.assertNotIn("valid,reason=validate_observed_candidate(",src)
+        self.assertNotIn("\n            valid,reason=validate_observed_candidate(",src)
 
     def test_valid_external_answers_len_remains_list_based(self):
         tree=ast.parse(pathlib.Path("cloud_mcp.py").read_text(encoding="utf-8"))
