@@ -68,6 +68,25 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(public["agent_demand_observatory"]["patterns"],["research"])
         self.assertEqual(public["agent_demand_observatory"]["agents"],[])
 
+    def test_public_snapshot_recursively_removes_peer_and_thread_identifiers(self):
+        raw={
+            "agent_demand_observatory":{
+                "patterns":[
+                    {"need":"RESEARCH","agent_ids":["peer-a","peer-b"]},
+                ],
+                "agents":[],
+            },
+            "build_history":[
+                {"ui_review":{"specialists":[{"agent_id":"internal-or-peer-id"}]}}
+            ],
+            "misc":{"thread_id":"thread-secret","peer_id":"peer-secret"},
+        }
+        public=sanitize_public_autopilot(raw)
+        encoded=json.dumps(public,sort_keys=True)
+        for forbidden in ("peer-a","peer-b","internal-or-peer-id","thread-secret","peer-secret"):
+            self.assertNotIn(forbidden,encoded)
+        self.assertEqual(public["agent_demand_observatory"]["patterns"][0]["need"],"RESEARCH")
+
     def test_public_snapshot_excludes_agent_chat_monitor_threads(self):
         raw={
             "agent_chat_monitor":{

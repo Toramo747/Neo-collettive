@@ -17,6 +17,23 @@ _PUBLIC_SECURITY_KEYS = (
 )
 
 
+_PUBLIC_IDENTIFIER_KEYS={
+    "agent_id","agent_ids","peer_id","source_agent_id","declared_agent_id","thread_id",
+}
+
+
+def _strip_public_identifiers(value: Any) -> Any:
+    if isinstance(value,dict):
+        return {
+            key:_strip_public_identifiers(item)
+            for key,item in value.items()
+            if key not in _PUBLIC_IDENTIFIER_KEYS
+        }
+    if isinstance(value,list):
+        return [_strip_public_identifiers(item) for item in value]
+    return value
+
+
 def _project(rows: Any, allowed: tuple[str, ...], limit: int) -> list[dict]:
     out=[]
     for row in list(rows or [])[-limit:]:
@@ -47,4 +64,4 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
         src["agent_demand_observatory"]["agents"]=[]
     src["inbound_traffic_events"]=_project(src.get("inbound_traffic_events"),_PUBLIC_TRAFFIC_KEYS,1200)
     src["inbound_security_events"]=_project(src.get("inbound_security_events"),_PUBLIC_SECURITY_KEYS,80)
-    return src
+    return _strip_public_identifiers(src)
