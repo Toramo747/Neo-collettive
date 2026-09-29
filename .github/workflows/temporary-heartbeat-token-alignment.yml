@@ -1,0 +1,24 @@
+name: Temporary heartbeat token alignment check
+
+on:
+  push:
+    branches: [mycelix-self-traffic-hardening-20260928]
+    paths:
+      - ".github/workflows/temporary-heartbeat-token-alignment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify GitHub secret matches Render
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$HEARTBEAT_TOKEN"
+          status="$(curl --silent --show-error --output /tmp/heartbeat-response.json --write-out '%{http_code}' --max-time 90 -H "X-NEO-Heartbeat-Token: $HEARTBEAT_TOKEN" "https://neo-collettive.onrender.com/api/heartbeat")"
+          echo "http_status=$status"
+          test "$status" = "200"
