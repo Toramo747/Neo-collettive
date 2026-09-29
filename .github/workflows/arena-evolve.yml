@@ -1,0 +1,118 @@
+name: Arena evolve commercial signal
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+  push:
+    branches:
+      - main
+      - mycelix-arena-evolution-20260929
+    paths:
+      - 'arena/commercial_signal/train_real.jsonl'
+      - 'arena/commercial_signal/evolve.py'
+      - 'arena/commercial_signal/judge.py'
+      - 'arena/commercial_signal/prepare_evolve_train.py'
+      - 'arena/commercial_signal/test_evolve.py'
+      - 'arena/commercial_signal/proposals/**'
+      - 'arena/commercial_signal/evolve_holdout_manifest.json'
+      - 'arena/commercial_signal/holdout_evolve.jsonl'
+      - '.github/workflows/arena-evolve.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arena-evolve-commercial-signal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cycle state cache
+        id: restore-state
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/arena-state-cache
+          key: arena-evolve-state-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            arena-evolve-state-${{ github.ref_name }}-
+
+      - name: Check terminal state
+        id: cycle
+        run: |
+          mkdir -p /tmp/arena-state-cache
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          p=Path('/tmp/arena-state-cache/evolve-state.json')
+          status='NEW'
+          if p.exists():
+              status=str(json.loads(p.read_text()).get('status','RUNNING'))
+          print('previous_status='+status)
+          print('active='+('false' if status in {'SUCCESS','STALLED'} else 'true'))
+          print('cycle_status='+status)
+          PY
+
+      - name: Validate split and tests
+        if: steps.cycle.outputs.active == 'true'
+        run: python3 -m unittest -v arena.commercial_signal.test_evolve
+
+      - name: Build current train without reading holdout
+        if: steps.cycle.outputs.active == 'true'
+        run: |
+          python3 arena/commercial_signal/prepare_evolve_train.py \
+            --source arena/commercial_signal/train_real.jsonl \
+            --manifest arena/commercial_signal/evolve_holdout_manifest.json \
+            --out /tmp/arena-train.jsonl
+
+      - name: Evolve on train only
+        if: steps.cycle.outputs.active == 'true'
+        run: |
+          python3 arena/commercial_signal/evolve.py \
+            --train /tmp/arena-train.jsonl \
+            --proposals-dir arena/commercial_signal/proposals \
+            --state-in /tmp/arena-state-cache/evolve-state.json \
+            --candidate-out /tmp/evolved-candidate.json \
+            --metrics-out /tmp/evolve-train-metrics.json
+
+      - name: Judge on isolated public holdout
+        if: steps.cycle.outputs.active == 'true'
+        run: |
+          python3 arena/commercial_signal/judge.py \
+            --holdout arena/commercial_signal/holdout_evolve.jsonl \
+            --candidate /tmp/evolved-candidate.json \
+            --train-metrics /tmp/evolve-train-metrics.json \
+            --baseline arena/commercial_signal/proposals/baseline.json \
+            --proposals-dir arena/commercial_signal/proposals \
+            --state-in /tmp/arena-state-cache/evolve-state.json \
+            --state-out /tmp/evolve-state.json \
+            --report-out /tmp/evolve-report.json
+          cp /tmp/evolve-state.json /tmp/arena-state-cache/evolve-state.json
+
+      - name: Save cycle state cache
+        if: steps.cycle.outputs.active == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/arena-state-cache
+          key: arena-evolve-state-${{ github.ref_name }}-${{ github.run_id }}
+
+      - name: Upload auditable state and candidate
+        if: steps.cycle.outputs.active == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-evolve-state-${{ github.run_number }}
+          path: |
+            /tmp/evolved-candidate.json
+            /tmp/evolve-state.json
+            /tmp/evolve-report.json
+            /tmp/evolve-train-metrics.json
+          retention-days: 30
+
+      - name: Terminal no-op
+        if: steps.cycle.outputs.active == 'false'
+        run: echo "cycle_status=${{ steps.cycle.outputs.cycle_status }}; no evolution executed"
