@@ -2,11 +2,6 @@ name: Arena Commercial Signal Phase 0
 
 on:
   workflow_dispatch:
-  push:
-    branches: [mycelix-arena-commercial-signal-phase0-20260929]
-    paths:
-      - "arena/commercial_signal/**"
-      - ".github/workflows/arena-commercial-signal-phase0.yml"
 
 permissions:
   contents: read
@@ -17,23 +12,32 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: Assert offline workflow contract
         run: |
-          python - <<'PY'
-          import os
-          forbidden=[k for k in os.environ if k.endswith("_TOKEN") or k.endswith("_KEY") or k.endswith("_SECRET")]
-          print("secret_like_env_count="+str(len(forbidden)))
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          p=Path("arena/commercial_signal/evaluate.py")
+          tree=ast.parse(p.read_text(encoding="utf-8"))
+          banned={"socket","urllib","requests","http","ftplib","smtplib","websocket"}
+          imports=set()
+          for n in ast.walk(tree):
+              if isinstance(n,ast.Import):
+                  imports.update(x.name.split(".")[0] for x in n.names)
+              elif isinstance(n,ast.ImportFrom) and n.module:
+                  imports.add(n.module.split(".")[0])
+          bad=sorted(imports & banned)
+          if bad:
+              raise SystemExit("network_imports_forbidden:"+",".join(bad))
+          print("offline_evaluator_contract=ok")
           PY
       - name: Validate schema and evaluator tests
         run: |
-          python -m json.tool arena/commercial_signal/proposal.schema.json >/dev/null
-          python -m unittest -v arena.commercial_signal.test_evaluate
+          python3 -m json.tool arena/commercial_signal/proposal.schema.json >/dev/null
+          python3 -m unittest -v arena.commercial_signal.test_evaluate
       - name: Evaluate baseline and alternatives
         run: |
-          python -m arena.commercial_signal.evaluate --out arena-commercial-signal-scores.json
+          python3 -m arena.commercial_signal.evaluate --out arena-commercial-signal-scores.json
       - name: Publish aggregate scores only
         uses: actions/upload-artifact@v4
         with:
