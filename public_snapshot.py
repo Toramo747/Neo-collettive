@@ -41,6 +41,10 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     src["inbound_review_queue"]=[]
     src["inbound_agent_stats"]={}
     src["trust_lab_evaluations"]=[]
+    demand=src.get("agent_demand_observatory") if isinstance(src.get("agent_demand_observatory"),dict) else {}
+    if demand:
+        src["agent_demand_observatory"]={key:deepcopy(value) for key,value in demand.items() if key!="agents"}
+        src["agent_demand_observatory"]["agents"]=[]
     src["inbound_traffic_events"]=_project(src.get("inbound_traffic_events"),_PUBLIC_TRAFFIC_KEYS,1200)
     src["inbound_security_events"]=_project(src.get("inbound_security_events"),_PUBLIC_SECURITY_KEYS,80)
     return src
