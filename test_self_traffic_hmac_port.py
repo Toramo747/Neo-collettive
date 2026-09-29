@@ -49,6 +49,19 @@ class SelfTrafficHmacPortTests(unittest.TestCase):
         self.assertFalse(verified["valid"])
         self.assertEqual(verified["reason"],"proof_expired")
 
+    def test_chatgpt_research_session_expired_proof_is_external(self):
+        proof=make_self_traffic_proof("secret","/a2a",timestamp=1000)
+        verified=verify_self_traffic_proof("secret","/a2a",proof,now=1301)
+        self.assertFalse(verified["valid"])
+        self.assertEqual(verified["reason"],"proof_expired")
+        category,reason,_=classify_inbound_event(
+            endpoint="/a2a",method="POST",rpc_method="message/send",has_text=True,
+            declared_agent_id="chatgpt-research-session-test",
+            self_verified=bool(verified["valid"]),
+        )
+        self.assertEqual(category,"real_contact")
+        self.assertEqual(reason,"declared_user_authorized_unverified")
+
     def test_wrong_path_is_rejected(self):
         proof=make_self_traffic_proof("secret","/api/heartbeat",timestamp=1000)
         verified=verify_self_traffic_proof("secret","/mcp",proof,now=1000)
