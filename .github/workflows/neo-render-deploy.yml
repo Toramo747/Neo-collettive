@@ -359,9 +359,9 @@ jobs:
           set -euo pipefail
           curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/neo-dialect/1.0' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
           grep -q "neo-dialect/1.0" /tmp/neo-dialect.md
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" --max-time 30             "https://neo-collettive.onrender.com/api/council" > /tmp/council.json
           curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/council' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/api/council" > /tmp/council.json
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN=\"\${{ secrets.NEO_HEARTBEAT_TOKEN }}\" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/council/neo-dialect/example' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/council/neo-dialect/example" > /tmp/dialect-example.json
           python - <<'PY'
           import json
           card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
