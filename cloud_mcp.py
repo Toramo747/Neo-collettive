@@ -32,7 +32,7 @@ from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
-from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, declared_user_authorized_unverified, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
 from inbound_boundary import explicit_review_authorized, origin_risk_flags, review_required_result, stage_inbound_claim
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
@@ -1177,6 +1177,9 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "mcp_session_id":meta["mcp_session_id"] or None,
         "crawler_name":crawler,
         "self_source":(meta["self_marker"] or meta["declared_agent_id"]) if category=="self_traffic" else None,
+        "declared_user_authorized_unverified":declared_user_authorized_unverified(
+            meta["declared_agent_id"],self_verified=bool(self_auth.get("valid"))
+        ),
         "spoofed_self_marker":bool(meta["self_marker"] and not self_auth.get("valid")),
         "self_proof_reason":self_auth.get("reason") if meta["self_marker"] else None,
         "content_fingerprint":content_fingerprint(inbound_text),
@@ -12011,6 +12014,9 @@ class _InboundTrafficASGI:
             "mcp_session_id":header_map.get("mcp-session-id") or None,
             "crawler_name":crawler,
             "self_source":(self_marker or header_map.get("x-agent-id")) if category=="self_traffic" else None,
+            "declared_user_authorized_unverified":declared_user_authorized_unverified(
+                header_map.get("x-agent-id",""),self_verified=bool(self_auth.get("valid"))
+            ),
             "spoofed_self_marker":bool(self_marker and not self_auth.get("valid")),
             "self_proof_reason":self_auth.get("reason") if self_marker else None,
             "origin_risk_flags":origin_risk_flags(source),
