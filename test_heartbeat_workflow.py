@@ -75,6 +75,15 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn("self_traffic_auth.py sign-url",w)
         self.assertIn("secrets.NEO_HEARTBEAT_TOKEN",w)
 
+    def test_no_workflow_sends_legacy_heartbeat_header(self):
+        workflows=Path(".github/workflows")
+        offenders=[]
+        for path in sorted(workflows.glob("*.yml")):
+            text=path.read_text(encoding="utf-8")
+            if "X-NEO-Heartbeat-Token" in text:
+                offenders.append(path.name)
+        self.assertEqual(offenders,[])
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
