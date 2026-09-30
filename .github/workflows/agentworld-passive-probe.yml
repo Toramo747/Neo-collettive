@@ -26,11 +26,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Hydrate samples from dedicated data branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin refs/heads/research/agentworld-data >/dev/null 2>&1; then
+            git fetch --no-tags origin               refs/heads/research/agentworld-data:refs/remotes/origin/research/agentworld-data
+            rm -rf research/agentworld
+            mkdir -p research
+            git checkout refs/remotes/origin/research/agentworld-data -- research/agentworld
+          fi
 
       - name: Enforce probe policy tests
         run: python -m unittest -v test_agentworld_probe.py
@@ -52,14 +64,37 @@ jobs:
                       raise SystemExit(f"forbidden query-bearing endpoint pattern found in {file}")
           PY
 
-      - name: Commit research outputs only
+      - name: Publish research outputs to dedicated orphan data branch
         shell: bash
         run: |
           set -euo pipefail
+
+          tmpdir="$(mktemp -d)"
+          mkdir -p "$tmpdir/research"
+          cp -a research/agentworld "$tmpdir/research/agentworld"
+
+          if git ls-remote --exit-code --heads origin refs/heads/research/agentworld-data >/dev/null 2>&1; then
+            git fetch --no-tags origin               refs/heads/research/agentworld-data:refs/remotes/origin/research/agentworld-data
+            git checkout -B research/agentworld-data refs/remotes/origin/research/agentworld-data
+            git rm -rf . >/dev/null 2>&1 || true
+          else
+            git checkout --orphan research/agentworld-data
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p research
+          cp -a "$tmpdir/research/agentworld" research/agentworld
           git add research/agentworld
+
+          unexpected="$(git ls-files | grep -v '^research/agentworld/' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Refusing to publish non-AgentWorld paths to data branch:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 3
+          fi
+
           git diff --cached --quiet && exit 0
           git config user.name "MYCELIX Passive Research"
           git config user.email "actions@users.noreply.github.com"
           git commit -m "Record AgentWorld passive research sample"
-          git pull --rebase origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:research/agentworld-data
