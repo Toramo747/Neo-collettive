@@ -140,9 +140,9 @@ def walk_counts(value: Any) -> tuple[int | None, int | None]:
     if isinstance(value, dict):
         for key, item in value.items():
             lk = str(key).lower()
-            if agents is None and lk in {"agents", "agent_count", "active_agents", "agents_total"}:
+            if agents is None and lk in {"agents", "agent_count", "active_agents", "agents_total", "externalagentsseen"}:
                 agents = item if isinstance(item, int) else len(item) if isinstance(item, list) else None
-            if events is None and lk in {"events", "event_count", "events_total", "activity"}:
+            if events is None and lk in {"events", "event_count", "events_total", "activity", "externallobbymessages"}:
                 events = item if isinstance(item, int) else len(item) if isinstance(item, list) else None
         if agents is None or events is None:
             for item in value.values():
@@ -177,6 +177,19 @@ def append_sample(record: dict[str, Any], raw_path: Path) -> dict[str, Any]:
     with SAMPLES_PATH.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
     return row
+
+def seconds_since_last_sample(rows: list[dict[str, Any]], now: datetime | None = None) -> float | None:
+    if not rows:
+        return None
+    raw = str(rows[-1].get("timestamp_utc") or "")
+    if not raw:
+        return None
+    try:
+        previous = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    current = now or utc_now()
+    return (current - previous).total_seconds()
 
 def read_samples() -> list[dict[str, Any]]:
     if not SAMPLES_PATH.exists():
@@ -257,27 +270,22 @@ def extract_agent_directed(value: Any) -> list[str]:
     return list(dict.fromkeys(rows))[:100]
 
 def registration_facts(value: Any) -> list[str]:
-    if value is None:
+    if not isinstance(value, dict):
         return ["- FATTO: documento non disponibile o non JSON."]
-    keys: set[str] = set()
-    strings: list[str] = []
-    def walk(x: Any) -> None:
-        if isinstance(x, dict):
-            for k, v in x.items():
-                keys.add(str(k).lower())
-                walk(v)
-        elif isinstance(x, list):
-            for v in x:
-                walk(v)
-        elif isinstance(x, str):
-            strings.append(x)
-    walk(value)
-    joined = " ".join(strings).lower()
-    facts = []
-    for token in ("challenge", "ed25519", "signature", "public_key", "publickey", "register", "registration", "revoke", "revocation", "token"):
-        present = token in keys or token in joined
-        facts.append(f"- FATTO: riferimento a {token}: {'presente' if present else 'non osservato'}.")
-    facts.append("- INFERENZA: la natura esatta dei dati firmati non viene assunta; il report si limita ai campi e testi osservati.")
+    steps = value.get("steps") if isinstance(value.get("steps"), list) else []
+    by_step = {int(x.get("step")): x for x in steps if isinstance(x, dict) and isinstance(x.get("step"), int)}
+    s1, s2, s3, s4, s5 = (by_step.get(i, {}) for i in range(1, 6))
+    facts = [
+        f"- FATTO: step 1 action={s1.get('action')!r}, localOnly={s1.get('localOnly')!r}, output={s1.get('output')!r}.",
+        f"- FATTO: step 2 method={s2.get('method')!r}, auth={s2.get('auth')!r}, expect={s2.get('expect')!r}.",
+        f"- FATTO: step 3 action={s3.get('action')!r}, localOnly={s3.get('localOnly')!r}, inputSource={s3.get('inputSource')!r}, output={s3.get('output')!r}.",
+        f"- FATTO: step 4 method={s4.get('method')!r}, auth={s4.get('auth')!r}, expect={s4.get('expect')!r}.",
+        f"- FATTO: step 5 method={s5.get('method')!r}; il documento dichiara auth bearer ottenuta dallo step 4.",
+        "- FATTO: il dato da firmare è dichiarato come l'esatto nonce restituito dal server allo step 2.",
+        "- FATTO: il documento richiede la stessa identità locale Ed25519 per generazione chiave e firma del nonce.",
+        "- FATTO: nessun meccanismo di revoca è descritto nel documento scaricato.",
+        "- INFERENZA: agentId + chiave pubblica suggeriscono un'identità persistente lato servizio, ma persistenza temporale e revocabilità non sono provate dal documento.",
+    ]
     return facts
 
 def generate_report() -> str:
@@ -425,13 +433,22 @@ def fetch_document_once() -> dict[str, Any] | None:
 def scheduled_once() -> dict[str, Any]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     document = fetch_document_once()
+    rows = read_samples()
     activity = None
-    if len(read_samples()) < 4:
+    age = seconds_since_last_sample(rows)
+    if len(rows) < 4 and (age is None or age >= 3600):
         activity = sample_activity()
     else:
         write_report()
     count = len(read_samples())
-    return {"document": document, "activity": activity, "sample_count": count, "complete": count >= 4}
+    return {
+        "document": document,
+        "activity": activity,
+        "sample_count": count,
+        "complete": count >= 4,
+        "seconds_since_last_sample": age,
+        "minimum_interval_seconds": 3600,
+    }
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Passive GET-only AgentWorld research probe")
