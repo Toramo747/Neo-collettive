@@ -89,6 +89,10 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn('NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}"',w)
         self.assertNotIn('NEO_HEARTBEAT_TOKEN=\\\"',w)
 
+    def test_poll_accepts_top_level_latest_result_fallback(self):
+        w=self.workflow
+        self.assertIn('latest=ap.get("latest_result") or d.get("latest_result")',w)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
