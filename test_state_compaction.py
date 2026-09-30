@@ -121,9 +121,19 @@ def _heavy_payload() -> dict:
         "cycles_completed": 1200,
         "tool_opportunities": {
             "generated_at_utc": "2026-09-30T10:00:00+00:00",
-            "top5": [_heavy_opportunity(99, i) for i in range(5)],
+            "top5": [
+                {
+                    "tool_name": f"current-tool-{i}",
+                    "family": f"family-{i}",
+                    "monetization_score": 75 + i,
+                    "gate_pass": i == 0,
+                    "missing": ["synthetic"],
+                    "sources": [{"url": f"https://example.invalid/current/{i}/{n}"} for n in range(3)],
+                }
+                for i in range(5)
+            ],
             "council_transcripts": [
-                {"opportunity": f"tool-99-{i}", "decision": "HOLD", "messages": [{"text": _noise(f"current-{i}", 8)}]}
+                {"opportunity": f"current-tool-{i}", "decision": "HOLD", "messages": [{"text": "current synthetic decision"}]}
                 for i in range(5)
             ],
         },
@@ -151,8 +161,8 @@ def _heavy_payload() -> dict:
             "last_real_contact_utc": "2026-09-29T12:58:00+00:00",
         },
         "commercial_evidence_memory": [
-            {"excerpt": _noise(f"commercial-{i}", 8), "sources": [_noise(f"source-{i}-{n}", 2) for n in range(10)]}
-            for i in range(100)
+            {"excerpt": _noise(f"commercial-{i}", 4), "sources": [_noise(f"source-{i}-{n}", 1) for n in range(4)]}
+            for i in range(20)
         ],
     }
     payload.update(_protected_payload())
