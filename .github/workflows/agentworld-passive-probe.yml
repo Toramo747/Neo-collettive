@@ -81,6 +81,11 @@ jobs:
           mkdir -p "$tmpdir/research"
           cp -a research/agentworld "$tmpdir/research/agentworld"
 
+          # Source worktree is disposable after outputs are copied to tmp.
+          # Reset before switching branches so generated files can never be committed to the source branch.
+          git reset --hard HEAD
+          git clean -fd
+
           if git ls-remote --exit-code --heads origin refs/heads/research/agentworld-data >/dev/null 2>&1; then
             git fetch --no-tags origin               refs/heads/research/agentworld-data:refs/remotes/origin/research/agentworld-data
             git checkout -B research/agentworld-data refs/remotes/origin/research/agentworld-data
