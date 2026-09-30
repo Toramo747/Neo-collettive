@@ -232,6 +232,8 @@ def _bounded_history_value(value: Any, *, depth: int = 0) -> Any:
         return out
     if isinstance(value, list):
         return [_bounded_history_value(x, depth=depth + 1) for x in value[-80:]]
+    if isinstance(value, str):
+        return value[:800]
     return value
 
 
