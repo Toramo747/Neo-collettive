@@ -123,6 +123,23 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "last_scan_utc": None,
             "signal_memory_count": None,
         },
+        "last_checkpoint": {
+            "ok": None,
+            "status": None,
+            "raw_bytes": None,
+            "stored_bytes": None,
+            "limit_bytes": None,
+            "compaction": {
+                "applied": None,
+                "before_raw_bytes": None,
+                "before_encoded_bytes": None,
+                "after_raw_bytes": None,
+                "after_encoded_bytes": None,
+                "target_bytes": None,
+                "trigger_bytes": None,
+                "limit_bytes": None,
+            },
+        },
     },
 }
 
@@ -248,6 +265,8 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     monitor = src.get("agent_chat_monitor") if isinstance(src.get("agent_chat_monitor"), dict) else {}
     demand = src.get("agent_demand_observatory") if isinstance(src.get("agent_demand_observatory"), dict) else {}
     seti = src.get("seti") if isinstance(src.get("seti"), dict) else {}
+    checkpoint = src.get("last_checkpoint") if isinstance(src.get("last_checkpoint"), dict) else {}
+    compaction = checkpoint.get("compaction") if isinstance(checkpoint.get("compaction"), dict) else {}
 
     out = _copy_keys(src, (
         "enabled", "running", "cycles_completed", "last_started_utc",
@@ -278,6 +297,17 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     out["seti"] = {
         **_copy_keys(seti, ("enabled", "mode", "every_cycles", "last_scan_utc")),
         "signal_memory_count": len(seti.get("signal_memory") or {}) if "signal_memory_count" not in seti else seti.get("signal_memory_count"),
+    }
+    out["last_checkpoint"] = {
+        **_copy_keys(checkpoint, ("ok", "status", "raw_bytes", "stored_bytes", "limit_bytes")),
+        "compaction": _copy_keys(
+            compaction,
+            (
+                "applied", "before_raw_bytes", "before_encoded_bytes",
+                "after_raw_bytes", "after_encoded_bytes", "target_bytes",
+                "trigger_bytes", "limit_bytes",
+            ),
+        ),
     }
     return out
 
