@@ -93,6 +93,11 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         w=self.workflow
         self.assertIn('latest=ap.get("latest_result") or d.get("latest_result")',w)
 
+    def test_snapshot_source_is_hmac_gated_full_state_endpoint(self):
+        w=self.workflow
+        self.assertIn("https://neo-collettive.onrender.com/api/runtime/snapshot-state",w)
+        self.assertNotIn("https://neo-collettive.onrender.com/api/autonomy/status",w)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
