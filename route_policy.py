@@ -66,6 +66,8 @@ ROUTE_POLICY = {
     "/api/seti/interviews": ADMIN,
     "/admin/seti-interviews": ADMIN,
     "/api/admin/seti-interviews": ADMIN,
+    "/api/admin/inbound": ADMIN,
+    "/api/admin/agent-chats": ADMIN,
     "/api/self-improvement/proposal": ADMIN,
     "/api/collective": ADMIN,
     "/director": ADMIN,
