@@ -91,7 +91,7 @@ async def main():
     ]
 
     report={"mycelix_mcp":MYCELIX_MCP,"random_registry_peers":chosen,"results":[]}
-    async with streamable_http_client(MYCELIX_MCP,headers={"X-MYCELIX-Self-Traffic":"github-actions-verify-mcp-live"}) as streams:
+    async with streamable_http_client(MYCELIX_MCP) as streams:
         read,write=streams[0],streams[1]
         async with ClientSession(read,write) as session:
             await session.initialize()
