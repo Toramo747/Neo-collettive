@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from tools.agentworld_probe import probe
@@ -90,6 +91,18 @@ class AgentWorldProbePolicyTests(unittest.TestCase):
         now = datetime(2026, 9, 30, 7, 32, 11, tzinfo=timezone.utc)
         self.assertEqual(probe.seconds_since_last_sample(rows, now=now), 1800.0)
 
+
+    def test_workflow_publishes_only_to_dedicated_data_branch(self):
+        workflow = Path(".github/workflows/agentworld-passive-probe.yml").read_text(encoding="utf-8")
+        self.assertIn("git push origin HEAD:research/agentworld-data", workflow)
+        self.assertNotIn("github.ref_name", workflow)
+        self.assertNotIn("git push origin HEAD:main", workflow)
+
+    def test_workflow_initializes_data_branch_as_orphan_and_allowlists_paths(self):
+        workflow = Path(".github/workflows/agentworld-passive-probe.yml").read_text(encoding="utf-8")
+        self.assertIn("git checkout --orphan research/agentworld-data", workflow)
+        self.assertIn("grep -v '^research/agentworld/'", workflow)
+        self.assertIn("refs/heads/research/agentworld-data", workflow)
 
 if __name__ == "__main__":
     unittest.main()
