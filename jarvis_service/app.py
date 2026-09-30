@@ -2,10 +2,13 @@
 # Copyright (c) 2026 Andrea Gava
 import json
 import os
+import hmac
+import time
+from collections import defaultdict, deque
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 VERSION = "0.8.2"
@@ -40,11 +43,29 @@ def _bounded_context(value: Any, depth: int = 0) -> Any:
     return value
 
 
+_ASK_RATE_LIMIT = 30
+_ASK_RATE_WINDOW_SECONDS = 3600.0
+_ASK_CALLS: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _rate_limit_ask(request: Request) -> None:
+    now=time.monotonic()
+    cutoff=now-_ASK_RATE_WINDOW_SECONDS
+    origin=str((request.client.host if request.client else "") or "unknown")
+    bucket=_ASK_CALLS[origin]
+    while bucket and bucket[0] <= cutoff:
+        bucket.popleft()
+    if len(bucket) >= _ASK_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Too Many Requests")
+    bucket.append(now)
+
+
 def authorize(authorization: str | None) -> None:
     if not JARVIS_SHARED_SECRET:
-        return
+        raise HTTPException(status_code=503, detail="Service Unavailable")
     expected = "Bearer " + JARVIS_SHARED_SECRET
-    if authorization != expected:
+    supplied=str(authorization or "")
+    if not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -722,7 +743,9 @@ def health():
 
 
 @app.get("/ask")
-def ask_status():
+def ask_status(request: Request, authorization: str | None = Header(default=None)):
+    _rate_limit_ask(request)
+    authorize(authorization)
     return {
         "status": "ready",
         "service": "jarvis",
@@ -736,7 +759,8 @@ def ask_status():
 
 
 @app.post("/ask")
-def ask(req: AskRequest, authorization: str | None = Header(default=None)):
+def ask(req: AskRequest, request: Request, authorization: str | None = Header(default=None)):
+    _rate_limit_ask(request)
     authorize(authorization)
     return {
         "ok": True,
