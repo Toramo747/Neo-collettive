@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-import secrets
+import hmac
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -111,14 +111,14 @@ def admin_header_authorized(headers: dict[str, str], admin_token: str) -> bool:
     lower = auth.lower()
     if lower.startswith("bearer "):
         supplied = auth[7:].strip()
-        return bool(supplied) and secrets.compare_digest(supplied, expected)
+        return bool(supplied) and hmac.compare_digest(supplied, expected)
     if lower.startswith("basic "):
         try:
             raw = base64.b64decode(auth.split(None, 1)[1], validate=True).decode("utf-8", "strict")
             _username, supplied = raw.split(":", 1)
         except Exception:
             return False
-        return bool(supplied) and secrets.compare_digest(supplied, expected)
+        return bool(supplied) and hmac.compare_digest(supplied, expected)
     return False
 
 
