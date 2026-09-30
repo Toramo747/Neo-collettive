@@ -2024,7 +2024,7 @@ async def trust_lab_page(request: Request):
     return layout("Trust Lab",body)
 
 
-async def _agent_chat_monitor_snapshot()async def _agent_chat_monitor_snapshot() -> tuple[list[dict],dict]:
+async def _agent_chat_monitor_snapshot() -> tuple[list[dict],dict]:
     events=backfill_inbound_chat_events(
         AUTOPILOT_STATE.get("inbound_messages") or [],
         AUTOPILOT_STATE.get("agent_chat_events") or [],
