@@ -30,7 +30,7 @@ from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
 from state_compaction import compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
 from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
-from public_projection import project_agent_chats, project_inbox, project_inbound_agents, project_intelligence
+from public_projection import project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -1995,35 +1995,36 @@ async def api_trust_evaluate(request: Request):
 
 
 async def trust_lab_page(request: Request):
-    rows=list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])
+    try:
+        data=project_trust_evaluations(
+            list(AUTOPILOT_STATE.get("trust_lab_evaluations") or []),
+            secret_material=_projection_secret_material(),
+        )
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">EXPERIMENTAL</span><h2>MYCELIX Trust Lab</h2>'
-        '<p>Sidecar experiment: conversational intent, identity, capability interview and evidence integrity. '
-        'It does not replace NEO commercial discovery or quality gates.</p>'
+        '<p>Public bounded evaluation metadata. Raw identity, evidence and reasons remain private.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Evaluations</div><h2>'+str(len(rows))+'</h2></article>'
-        '<article><div class="muted">API</div><h3>POST /api/trust/evaluate</h3></article>'
+        '<article><div class="muted">Evaluations</div><h2>'+str(data.get("evaluation_count") or 0)+'</h2></article>'
         '<article><div class="muted">Commercial gate</div><h3>UNCHANGED</h3></article>'
         '</div></section>'
     )
     body+='<section class="card"><h2>Recent bounded decisions</h2><div class="grid">'
-    if not rows:
-        body+='<article><p class="muted">No Trust Lab evaluations recorded yet.</p></article>'
-    for row in reversed(rows[-12:]):
+    for row in reversed(data.get("evaluations") or []):
         body+=(
             '<article><span class="tag">'+html.escape(str(row.get("decision") or "UNKNOWN"))+'</span>'
-            '<h3>'+html.escape(str(row.get("agent_id") or "anonymous"))+'</h3>'
+            '<h3>'+html.escape(str(row.get("agent_ref") or ""))+'</h3>'
             '<p>score '+html.escape(str(row.get("trust_score") or 0))+
             ' · identity '+html.escape(str(row.get("identity_status") or ""))+
             ' · intent '+html.escape(str(row.get("intent_primary") or "UNKNOWN"))+
-            ' · sources '+html.escape(str(row.get("source_count") or 0))+'</p>'
-            '<div class="muted">'+html.escape(", ".join(str(x) for x in (row.get("reasons") or [])[:6]))+'</div></article>'
+            ' · sources '+html.escape(str(row.get("source_count") or 0))+'</p></article>'
         )
     body+='</div></section>'
     return layout("Trust Lab",body)
 
 
-async def _agent_chat_monitor_snapshot() -> tuple[list[dict],dict]:
+async def _agent_chat_monitor_snapshot()async def _agent_chat_monitor_snapshot() -> tuple[list[dict],dict]:
     events=backfill_inbound_chat_events(
         AUTOPILOT_STATE.get("inbound_messages") or [],
         AUTOPILOT_STATE.get("agent_chat_events") or [],
@@ -2095,10 +2096,14 @@ async def api_agent_demand(request: Request):
         AUTOPILOT_STATE.get("inbound_agent_stats") or {},
     )
     AUTOPILOT_STATE["agent_demand_observatory"]=summary
+    try:
+        public=project_agent_demand(summary)
+    except Exception:
+        return _projection_failure()
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
-        "observatory":summary,
+        "observatory":public,
         "commercial_gate_unchanged":True,
     })
 
@@ -2109,21 +2114,21 @@ async def agent_demand_page(request: Request):
         AUTOPILOT_STATE.get("inbound_agent_stats") or {},
     )
     AUTOPILOT_STATE["agent_demand_observatory"]=summary
+    try:
+        public=project_agent_demand(summary)
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">OBSERVATIONAL</span><h2>Agent Demand Observatory</h2>'
-        '<p>What independent inbound agents appear to be seeking from MYCELIX or the wider agent ecosystem. '
-        'This telemetry never counts as human commercial demand.</p>'
+        '<p>Aggregate ecosystem telemetry only. Raw agent identifiers and inbound text are not published.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Declared independent agents</div><h2>'+str(summary.get("declared_independent_agents") or 0)+'</h2></article>'
-        '<article><div class="muted">Anonymous observations</div><h2>'+str(summary.get("anonymous_observations") or 0)+'</h2></article>'
-        '<article><div class="muted">Strongest signal</div><h3>'+html.escape(str(summary.get("strongest_signal") or "NONE"))+'</h3></article>'
+        '<article><div class="muted">Declared independent agents</div><h2>'+str(public.get("declared_independent_agents") or 0)+'</h2></article>'
+        '<article><div class="muted">Anonymous observations</div><h2>'+str(public.get("anonymous_observations") or 0)+'</h2></article>'
+        '<article><div class="muted">Strongest signal</div><h3>'+html.escape(str(public.get("strongest_signal") or "NONE"))+'</h3></article>'
         '</div></section>'
     )
     body+='<section class="card"><h2>Observed needs</h2><div class="grid">'
-    patterns=summary.get("patterns") or []
-    if not patterns:
-        body+='<article><p class="muted">No agent needs observed yet.</p></article>'
-    for row in patterns:
+    for row in public.get("patterns") or []:
         body+=(
             '<article><span class="tag">'+html.escape(str(row.get("signal_level") or "NONE"))+'</span>'
             '<h3>'+html.escape(str(row.get("need") or ""))+'</h3>'
@@ -2131,7 +2136,7 @@ async def agent_demand_page(request: Request):
             +str(int(row.get("observations") or 0))+' observations · '
             +str(int(row.get("anonymous_observations") or 0))+' anonymous</p></article>'
         )
-    body+='</div><p class="muted">Boundary: agent demand is ecosystem telemetry only; commercial gate influence = NONE.</p></section>'
+    body+='</div></section>'
     return layout("Agent Demand",body)
 
 
