@@ -39,7 +39,7 @@ from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_co
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 from self_traffic_auth import make_self_traffic_proof, verify_self_traffic_proof
-from human_authorized_replies import human_authorized_agentworld_reply
+from human_authorized_replies import AGENTWORLD_REPLY_KEY, human_authorized_agentworld_reply
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
@@ -1499,27 +1499,15 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     return row
 
 def _inbound_reply_text(row: dict) -> str:
-    human_reply=human_authorized_agentworld_reply(str(row.get("text") or ""))
-    reply_key="agentworld_clarification_20260930"
-    already_sent=any(
-        isinstance(event,dict)
-        and event.get("type")=="human_authorized_reply_sent"
-        and event.get("reply_key")==reply_key
-        for event in (AUTOPILOT_STATE.get("boundary_events") or [])
+    human_reply=human_authorized_agentworld_reply(
+        row.get("sender") if isinstance(row.get("sender"),dict) else {},
+        str(row.get("agent_card_url") or ""),
+        AUTOPILOT_STATE.get("boundary_events") or [],
     )
-    if human_reply and not already_sent:
+    if human_reply:
         row["response_reason"]="human_authorized_agentworld_clarification"
         row["human_authorized_reply"]=True
-        events=list(AUTOPILOT_STATE.get("boundary_events") or [])
-        events.append({
-            "type":"human_authorized_reply_sent",
-            "reply_key":reply_key,
-            "thread_id":row.get("thread_id"),
-            "sent_at_utc":datetime.now(timezone.utc).isoformat(),
-            "commercial_influence":"NONE",
-            "authorized_scope":"clarification_only",
-        })
-        AUTOPILOT_STATE["boundary_events"]=events[-40:]
+        row["human_authorized_reply_key"]=AGENTWORLD_REPLY_KEY
         return human_reply
 
     status=str(row.get("admission_status") or "").upper()
@@ -1672,6 +1660,35 @@ def _neo_dialect_inbound_reply(inbound_text: str, payload: dict, request: Reques
     )
 
 
+async def _persist_human_authorized_reply_receipt(row: dict) -> dict:
+    events=list(AUTOPILOT_STATE.get("boundary_events") or [])
+    receipt={
+        "type":"human_authorized_reply_sent",
+        "reply_key":AGENTWORLD_REPLY_KEY,
+        "thread_id":row.get("thread_id"),
+        "sent_at_utc":datetime.now(timezone.utc).isoformat(),
+        "commercial_influence":"NONE",
+        "authorized_scope":"clarification_only",
+    }
+    events.append(receipt)
+    AUTOPILOT_STATE["boundary_events"]=events[-40:]
+    checkpoint=await _checkpoint_state_to_render()
+    if not checkpoint.get("ok"):
+        AUTOPILOT_STATE["boundary_events"]=[
+            event for event in (AUTOPILOT_STATE.get("boundary_events") or [])
+            if not (
+                isinstance(event,dict)
+                and event.get("type")=="human_authorized_reply_sent"
+                and event.get("reply_key")==AGENTWORLD_REPLY_KEY
+                and event.get("sent_at_utc")==receipt["sent_at_utc"]
+            )
+        ][-40:]
+        _save_local_state()
+        return {"ok":False,"checkpoint":checkpoint}
+    _save_local_state()
+    return {"ok":True,"checkpoint":checkpoint}
+
+
 async def a2a_endpoint(request: Request):
     try:
         payload=await request.json()
@@ -1806,6 +1823,15 @@ async def a2a_endpoint(request: Request):
 
     row=_record_inbound_agent_message(payload,request)
     reply=_inbound_reply_text(row)
+    if row.get("human_authorized_reply"):
+        persisted=await _persist_human_authorized_reply_receipt(row)
+        if not persisted.get("ok"):
+            row["human_authorized_reply"]=False
+            row["response_reason"]="human_authorized_reply_persistence_failed"
+            reply=(
+                "MYCELIX received the message and retained it as untrusted inbound data, "
+                "but the human-authorized clarification was not sent because durable receipt persistence failed."
+            )
     message_id="neo-reply-"+secrets.token_hex(8)
     sent_at=datetime.now(timezone.utc).isoformat()
     AUTOPILOT_STATE["agent_chat_events"]=append_exchange(
