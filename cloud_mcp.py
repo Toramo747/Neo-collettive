@@ -39,6 +39,7 @@ from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_co
 from venture_measurement import complete_observed_measurement, measurement_summary, start_observed_measurement
 from inbound_security import classify_inbound_security, quarantine_legacy_inbound_security, redact_security_text, security_fingerprint
 from self_traffic_auth import make_self_traffic_proof, verify_self_traffic_proof
+from human_authorized_replies import human_authorized_agentworld_reply
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
@@ -1498,6 +1499,12 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     return row
 
 def _inbound_reply_text(row: dict) -> str:
+    human_reply=human_authorized_agentworld_reply(str(row.get("text") or ""))
+    if human_reply:
+        row["response_reason"]="human_authorized_agentworld_clarification"
+        row["human_authorized_reply"]=True
+        return human_reply
+
     status=str(row.get("admission_status") or "").upper()
     dialogue_status=str(row.get("dialogue_status") or "").upper()
     dialogue_stage=str(row.get("dialogue_stage") or "").upper()
