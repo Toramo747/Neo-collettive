@@ -72,8 +72,18 @@ def _sender_is_anonymous(sender: dict | None, agent_card_url: str = "") -> bool:
     sender = sender if isinstance(sender, dict) else {}
     agent_id = _norm(sender.get("agent_id"))
     agent = _norm(sender.get("agent"))
+    declared = bool(sender.get("declared"))
     card = str(agent_card_url or "").strip()
-    return agent_id in _ANONYMOUS_PLACEHOLDERS and agent in _ANONYMOUS_PLACEHOLDERS and not card
+
+    # Fallback is only for truly absent identity. "anonymous-agent" is accepted
+    # solely as MYCELIX's internal placeholder when no identity was declared.
+    if agent_id:
+        return False
+    if agent not in {"", "anonymous-agent"}:
+        return False
+    if declared:
+        return False
+    return not card
 
 
 def _iter_absolute_https_urls(text: str):
