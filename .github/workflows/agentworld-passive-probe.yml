@@ -38,14 +38,19 @@ jobs:
       - name: Run one isolated GET-only sample
         run: python tools/agentworld_probe/probe.py scheduled
 
-      - name: Verify forbidden invitation pattern is absent from code and logs input
+      - name: Verify no query-bearing document endpoint is encoded
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R --line-number --fixed-string "/.well-known/agentworld.json?" tools/agentworld_probe .github/workflows/agentworld-passive-probe.yml; then
-            echo "Forbidden invitation URL pattern found" >&2
-            exit 1
-          fi
+          python - <<'PY'
+          from pathlib import Path
+          needle = "/.well-known/agentworld.json" + "?"
+          for path in (Path("tools/agentworld_probe"), Path("test_agentworld_probe.py")):
+              files = [path] if path.is_file() else list(path.rglob("*"))
+              for file in files:
+                  if file.is_file() and needle in file.read_text(encoding="utf-8", errors="ignore"):
+                      raise SystemExit(f"forbidden query-bearing endpoint pattern found in {file}")
+          PY
 
       - name: Commit research outputs only
         shell: bash
