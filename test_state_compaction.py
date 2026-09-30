@@ -293,9 +293,13 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
     def test_key_weight_report_names_only(self):
         payload = _heavy_payload()
         compacted, _ = compact_state_payload(payload, max_bytes=100_000, force=True)
+        before_total = encoded_sizes(payload)
+        after_total = encoded_sizes(compacted)
         before = key_weight_report(payload)
         after = key_weight_report(compacted)
         self.assertTrue(before)
+        print("STATE_WEIGHT_TOTAL_BEFORE=" + json.dumps({"raw_bytes": before_total[0], "encoded_bytes": before_total[1]}, separators=(",", ":")))
+        print("STATE_WEIGHT_TOTAL_AFTER=" + json.dumps({"raw_bytes": after_total[0], "encoded_bytes": after_total[1]}, separators=(",", ":")))
         self.assertEqual(set(before[0]), {"key", "raw_bytes", "encoded_bytes"})
         print("STATE_WEIGHT_BEFORE=" + json.dumps(before, separators=(",", ":")))
         print("STATE_WEIGHT_AFTER=" + json.dumps(after, separators=(",", ":")))
