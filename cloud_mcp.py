@@ -1556,15 +1556,17 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
     return row
 
 def _inbound_reply_text(row: dict) -> str:
-    human_reply=human_authorized_agentworld_reply(
+    human_reply,match_path=human_authorized_agentworld_reply(
         row.get("sender") if isinstance(row.get("sender"),dict) else {},
         str(row.get("agent_card_url") or ""),
         AUTOPILOT_STATE.get("boundary_events") or [],
+        str(row.get("text") or ""),
     )
     if human_reply:
         row["response_reason"]="human_authorized_agentworld_clarification"
         row["human_authorized_reply"]=True
         row["human_authorized_reply_key"]=AGENTWORLD_REPLY_KEY
+        row["human_authorized_match_path"]=match_path
         return human_reply
 
     status=str(row.get("admission_status") or "").upper()
@@ -1726,6 +1728,7 @@ async def _persist_human_authorized_reply_receipt(row: dict) -> dict:
         "sent_at_utc":datetime.now(timezone.utc).isoformat(),
         "commercial_influence":"NONE",
         "authorized_scope":"clarification_only",
+        "match_path":str(row.get("human_authorized_match_path") or ""),
     }
     events.append(receipt)
     AUTOPILOT_STATE["boundary_events"]=events[-40:]
