@@ -56,10 +56,10 @@
 - https://agentworld.beat-side.de/openapi.json
 
 ## 4. Campionamento
-| # | Timestamp UTC | HTTP | Agenti | Eventi | SHA256 body | Delta |
-|---:|---|---:|---:|---:|---|---|
-| 1 | 2026-09-30T07:02:11.157333+00:00 | 200 | 5 | 6 | 54088d9810cb7a03... | prima lettura |
-| 2 | 2026-09-30T09:37:35.639301+00:00 | 200 | 5 | 6 | e56a66e62253224a... | body cambiato |
+| # | Timestamp UTC | HTTP | Agenti | Eventi | SHA256 body | Substantive hash | Changed substantively | Delta |
+|---:|---|---:|---:|---:|---|---|---|---|
+| 1 | 2026-09-30T07:02:11.157333+00:00 | 200 | 5 | 6 | 54088d9810cb7a03... | 98b076690e647403... | false | prima lettura |
+| 2 | 2026-09-30T09:37:35.639301+00:00 | 200 | 5 | 6 | e56a66e62253224a... | 98b076690e647403... | false | body cambiato |
 
 ### Valutazione di plausibilità
 - FATTO: hash body distinti nel campione HTTP 200: **2**.
