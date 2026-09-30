@@ -1500,9 +1500,26 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
 
 def _inbound_reply_text(row: dict) -> str:
     human_reply=human_authorized_agentworld_reply(str(row.get("text") or ""))
-    if human_reply:
+    reply_key="agentworld_clarification_20260930"
+    already_sent=any(
+        isinstance(event,dict)
+        and event.get("type")=="human_authorized_reply_sent"
+        and event.get("reply_key")==reply_key
+        for event in (AUTOPILOT_STATE.get("boundary_events") or [])
+    )
+    if human_reply and not already_sent:
         row["response_reason"]="human_authorized_agentworld_clarification"
         row["human_authorized_reply"]=True
+        events=list(AUTOPILOT_STATE.get("boundary_events") or [])
+        events.append({
+            "type":"human_authorized_reply_sent",
+            "reply_key":reply_key,
+            "thread_id":row.get("thread_id"),
+            "sent_at_utc":datetime.now(timezone.utc).isoformat(),
+            "commercial_influence":"NONE",
+            "authorized_scope":"clarification_only",
+        })
+        AUTOPILOT_STATE["boundary_events"]=events[-40:]
         return human_reply
 
     status=str(row.get("admission_status") or "").upper()
