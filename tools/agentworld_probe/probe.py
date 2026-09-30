@@ -25,7 +25,7 @@ RAW_DIR = OUTPUT_DIR / "raw"
 SAMPLES_PATH = OUTPUT_DIR / "samples.jsonl"
 REPORT_PATH = OUTPUT_DIR / "report.md"
 
-URL_RE = re.compile(r"https://[^\\s\\\"'<>]+")
+URL_RE = re.compile(r'https://[^ \\t\\r\\n"\'<>]+')
 AGENT_DIRECTED_RE = re.compile(
     r"\\b(agent|agents|you|your|register|registration|sign|signature|challenge|token|lobby|forum|invite)\\b",
     re.I,
@@ -206,6 +206,33 @@ def read_samples() -> list[dict[str, Any]]:
             rows.append(row)
     return rows
 
+def normalize_samples(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    changed = False
+    normalized = []
+    for original in rows:
+        row = dict(original)
+        if row.get("agents") is None or row.get("events") is None:
+            raw_rel = str(row.get("raw_path") or "")
+            raw_path = ROOT / raw_rel if raw_rel else None
+            try:
+                raw_record = json.loads(raw_path.read_text(encoding="utf-8")) if raw_path and raw_path.exists() else {}
+                body = json.loads(str(raw_record.get("body_raw") or ""))
+                agents, events = walk_counts(body)
+                if row.get("agents") is None and agents is not None:
+                    row["agents"] = agents
+                    changed = True
+                if row.get("events") is None and events is not None:
+                    row["events"] = events
+                    changed = True
+            except Exception:
+                pass
+        normalized.append(row)
+    if changed:
+        with SAMPLES_PATH.open("w", encoding="utf-8") as fh:
+            for row in normalized:
+                fh.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+    return normalized
+
 def load_latest_raw(slug: str) -> dict[str, Any] | None:
     if not RAW_DIR.exists():
         return None
@@ -289,7 +316,7 @@ def registration_facts(value: Any) -> list[str]:
     return facts
 
 def generate_report() -> str:
-    samples = read_samples()
+    samples = normalize_samples(read_samples())
     activity = load_latest_raw("activity")
     document = load_latest_raw("document")
     activity_json = parse_body(activity)
