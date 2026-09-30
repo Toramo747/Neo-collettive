@@ -108,6 +108,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    env:
+      HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
