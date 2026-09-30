@@ -10210,10 +10210,7 @@ def _runtime_snapshot_freshness() -> dict:
 
 
 async def api_runtime_snapshot_published(request: Request):
-    proof=verify_self_traffic_proof(
-        HEARTBEAT_TOKEN,request.url.path,request.headers.get("x-mycelix-self-traffic-proof") or ""
-    )
-    if not HEARTBEAT_TOKEN or request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or not proof.get("valid"):
+    if not _ops_request_authorized(request):
         return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
     try:
         payload=await request.json()
@@ -10252,15 +10249,7 @@ async def api_heartbeat(request: Request):
         )
     except endpoint_verifier.VerificationError as exc:
         return JSONResponse({"ok":False,"error":exc.code},status_code=429)
-    proof=verify_self_traffic_proof(
-        HEARTBEAT_TOKEN,
-        request.url.path,
-        request.headers.get("x-mycelix-self-traffic-proof") or "",
-    )
-    legacy_heartbeat_token_rejected=bool(
-        request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token")
-    )
-    if not HEARTBEAT_TOKEN or legacy_heartbeat_token_rejected or not bool(proof.get("valid")):
+    if not _ops_request_authorized(request):
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
     age = _iso_age_seconds(AUTOPILOT_STATE.get("last_started_utc"))
@@ -10394,6 +10383,19 @@ def _admin_authorized(request: Request) -> bool:
         except Exception:
             return False
     return False
+
+
+def _ops_request_authorized(request: Request) -> bool:
+    if _admin_authorized(request):
+        return True
+    if request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token"):
+        return False
+    proof=verify_self_traffic_proof(
+        HEARTBEAT_TOKEN,
+        request.url.path,
+        request.headers.get("x-mycelix-self-traffic-proof") or "",
+    )
+    return bool(HEARTBEAT_TOKEN and proof.get("valid"))
 
 
 def _admin_auth_failure() -> JSONResponse:
@@ -11359,10 +11361,7 @@ async def _autopilot_loop() -> None:
 
 async def api_run_market_cycles(request: Request):
     """Authenticated bounded validation runner; waits for an active cycle and never bypasses gates."""
-    proof=verify_self_traffic_proof(
-        HEARTBEAT_TOKEN,request.url.path,request.headers.get("x-mycelix-self-traffic-proof") or ""
-    )
-    if not HEARTBEAT_TOKEN or request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or not proof.get("valid"):
+    if not _ops_request_authorized(request):
         return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
     try:
         requested=max(1,min(int(request.query_params.get("count") or "1"),3))
