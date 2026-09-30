@@ -140,6 +140,49 @@ def project_inbound_agents(stats: dict | None, *, secret_material: str = "") -> 
     return out
 
 
+def project_agent_demand(summary: dict | None) -> dict:
+    src=summary if isinstance(summary,dict) else {}
+    patterns=[]
+    for row in list(src.get("patterns") or [])[:32]:
+        if not isinstance(row,dict):
+            continue
+        patterns.append({
+            "need":_safe_scalar(row.get("need")),
+            "independent_agents":int(row.get("independent_agents") or 0),
+            "observations":int(row.get("observations") or 0),
+            "anonymous_observations":int(row.get("anonymous_observations") or 0),
+            "signal_level":_safe_scalar(row.get("signal_level")),
+        })
+    out={
+        "declared_independent_agents":int(src.get("declared_independent_agents") or 0),
+        "anonymous_observations":int(src.get("anonymous_observations") or 0),
+        "messages_observed":int(src.get("messages_observed") or 0),
+        "strongest_signal":_safe_scalar(src.get("strongest_signal")),
+        "patterns":patterns,
+    }
+    validate_public_projection(out)
+    return out
+
+
+def project_trust_evaluations(rows: list[dict] | None, *, secret_material: str = "") -> dict:
+    salt=projection_salt(secret_material)
+    projected=[]
+    for raw in list(rows or [])[-24:]:
+        if not isinstance(raw,dict):
+            continue
+        projected.append({
+            "agent_ref":pseudonym(raw.get("agent_id") or raw.get("agent"),salt,prefix="agent"),
+            "decision":_safe_scalar(raw.get("decision")),
+            "trust_score":_safe_scalar(raw.get("trust_score")),
+            "identity_status":_safe_scalar(raw.get("identity_status")),
+            "intent_primary":_safe_scalar(raw.get("intent_primary")),
+            "source_count":int(raw.get("source_count") or 0),
+        })
+    out={"evaluation_count":len(list(rows or [])),"evaluations":projected}
+    validate_public_projection(out)
+    return out
+
+
 def project_intelligence(state: dict | None) -> dict:
     src=state if isinstance(state,dict) else {}
     queue=[x for x in list(src.get("hypothesis_queue") or []) if isinstance(x,dict)]
@@ -194,6 +237,8 @@ __all__=[
     "project_agent_chats",
     "project_inbox",
     "project_inbound_agents",
+    "project_agent_demand",
+    "project_trust_evaluations",
     "project_intelligence",
     "validate_public_projection",
 ]
