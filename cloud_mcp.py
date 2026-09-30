@@ -2191,8 +2191,6 @@ async def inbound_page(request: Request):
 
 
 mcp = MCPServer(
-
-mcp = MCPServer(
     name="MYCELIX",
     version=VERSION,
     instructions=(
@@ -9522,7 +9520,7 @@ async def api_intelligence(request: Request):
     return JSONResponse({"ok":True,"neo_version":VERSION,**projected})
 
 
-def _public_seti_interviews()def _public_seti_interviews() -> list[dict]:
+def _public_seti_interviews() -> list[dict]:
     """Return a sanitized transcript view without exposing private target coordinates."""
     interviews=SETI_PRIVATE_STATE.get("interviews") or {}
     candidates=SETI_PRIVATE_STATE.get("candidates") or {}
