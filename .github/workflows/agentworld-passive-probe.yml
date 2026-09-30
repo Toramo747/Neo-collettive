@@ -42,6 +42,14 @@ jobs:
             rm -rf research/agentworld
             mkdir -p research
             git checkout refs/remotes/origin/research/agentworld-data -- research/agentworld
+
+            if [ -d research/agentworld/agentworld ] && [ ! -f research/agentworld/samples.jsonl ]; then
+              normalize_tmp="$(mktemp -d)"
+              cp -a research/agentworld/agentworld/. "$normalize_tmp/"
+              rm -rf research/agentworld
+              mkdir -p research/agentworld
+              cp -a "$normalize_tmp/." research/agentworld/
+            fi
           fi
 
       - name: Enforce probe policy tests
@@ -82,8 +90,9 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
           fi
 
-          mkdir -p research
-          cp -a "$tmpdir/research/agentworld" research/agentworld
+          rm -rf research/agentworld
+          mkdir -p research/agentworld
+          cp -a "$tmpdir/research/agentworld/." research/agentworld/
           git add research/agentworld
 
           unexpected="$(git ls-files | grep -v '^research/agentworld/' || true)"
