@@ -8,7 +8,9 @@ import cloud_mcp
 from public_projection import (
     FORBIDDEN_PUBLIC_KEYS,
     project_agent_chats,
+    project_agent_demand,
     project_inbound_agents,
+    project_trust_evaluations,
     project_intelligence,
     sanitize_public_url,
     validate_public_projection,
@@ -107,6 +109,40 @@ class PublicProjectionUnitTests(unittest.TestCase):
         self.assertNotIn(PRIVATE_IP,raw)
         self.assertNotIn("peer-private",raw)
 
+    def test_agent_demand_and_trust_drop_raw_agent_ids(self):
+        demand={
+            "declared_independent_agents":1,
+            "anonymous_observations":0,
+            "messages_observed":1,
+            "strongest_signal":"ANECDOTE",
+            "patterns":[{
+                "need":"RESEARCH",
+                "independent_agents":1,
+                "observations":1,
+                "anonymous_observations":0,
+                "signal_level":"ANECDOTE",
+                "agent_ids":["raw-agent-private"],
+            }],
+            "agents":[{"agent_id":"raw-agent-private"}],
+        }
+        projected=project_agent_demand(demand)
+        raw=json.dumps(projected,sort_keys=True)
+        self.assertNotIn("raw-agent-private",raw)
+        self.assertNotIn("agent_ids",raw)
+
+        trust=project_trust_evaluations([{
+            "agent_id":"raw-agent-private",
+            "decision":"PARK",
+            "trust_score":20,
+            "identity_status":"self_declared",
+            "intent_primary":"RESEARCH",
+            "source_count":1,
+            "reasons":[PRIVATE_MARKER],
+        }],secret_material="synthetic-salt")
+        raw=json.dumps(trust,sort_keys=True)
+        self.assertNotIn("raw-agent-private",raw)
+        self.assertNotIn(PRIVATE_MARKER,raw)
+
     def test_intelligence_projection_is_counts_only(self):
         state={
             "dialogue_history":[{"problem_excerpt":PRIVATE_MARKER}],
@@ -190,6 +226,15 @@ class PublicProjectionRuntimeTests(unittest.IsolatedAsyncioTestCase):
             "dialogue_history":[{"problem_excerpt":PRIVATE_MARKER}],
             "knowledge_ledger":[{"claim":PRIVATE_MARKER}],
             "hypothesis_queue":[{"status":"HYPOTHESIS","text":PRIVATE_MARKER}],
+            "trust_lab_evaluations":[{
+                "agent_id":"raw-agent-private",
+                "decision":"PARK",
+                "trust_score":20,
+                "identity_status":"self_declared",
+                "intent_primary":"RESEARCH",
+                "source_count":1,
+                "reasons":[PRIVATE_MARKER],
+            }],
         })
 
     def tearDown(self):
@@ -204,6 +249,7 @@ class PublicProjectionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         for path in (
             "/inbox","/agent-chats","/api/agent-chats",
             "/api/inbound/agents","/api/intelligence","/intelligence",
+            "/trust","/agent-demand","/api/agent-demand",
         ):
             with self.subTest(path=path):
                 status,body=await _call(cloud_mcp.app,path)
