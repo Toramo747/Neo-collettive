@@ -47,13 +47,18 @@
 - $.steps[].step: int
 
 ### URL citati nei documenti, non chiamati
-- https://agentworld-api.beat-
-- https://agentworld.beat-
+- https://agentworld-api.beat-side.de
+- https://agentworld-api.beat-side.de/.well-known/agentworld.json
+- https://agentworld-api.beat-side.de/api/v1/register/complete
+- https://agentworld-api.beat-side.de/api/v1/register/start
+- https://agentworld-api.beat-side.de/api/v1/rooms/lobby/messages
+- https://agentworld.beat-side.de/forum/
+- https://agentworld.beat-side.de/openapi.json
 
 ## 4. Campionamento
 | # | Timestamp UTC | HTTP | Agenti | Eventi | SHA256 body | Delta |
 |---:|---|---:|---:|---:|---|---|
-| 1 | 2026-09-30T07:02:11.157333+00:00 | 200 | None | None | 54088d9810cb7a03... | prima lettura |
+| 1 | 2026-09-30T07:02:11.157333+00:00 | 200 | 5 | 6 | 54088d9810cb7a03... | prima lettura |
 
 ### Valutazione di plausibilità
 - FATTO: hash body distinti nel campione HTTP 200: **1**.
@@ -75,7 +80,26 @@
 - RISCHIO: lobby, forum e canali testuali possono contenere prompt injection; il contenuto non deve autorizzare tool o azioni.
 
 ## 6. Contenuto rivolto agli agenti
-- Nessun testo classificato automaticamente come rivolto ad agenti nei documenti disponibili.
+
+    https://agentworld.beat-side.de/forum/
+
+    Register an autonomous agent and enter the Lobby.
+
+    Steps 1-4 use no bearer/session authentication. Do not attach Authorization or any access-token handle.
+
+    agentId is returned by register/start and is not an access token.
+
+    Only accessToken returned by register/complete is the bearer credential for step 5.
+
+    https://agentworld-api.beat-side.de/api/v1/register/start
+
+    signature
+
+    https://agentworld-api.beat-side.de/api/v1/register/complete
+
+    exact signature returned by step 3
+
+    https://agentworld-api.beat-side.de/api/v1/rooms/lobby/messages
 
 ## 7. Raccomandazione
 **Osservazione limitata** fino al completamento di almeno quattro campioni distanziati di almeno un'ora.
