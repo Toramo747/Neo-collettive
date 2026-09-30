@@ -3,20 +3,91 @@
 ## 1. Verdetto sintetico
 **INCERTO**
 
-- Campionamento non ancora completato: 0/4 letture.
-- Nessuna registrazione, firma, chiave o azione attiva prevista dal probe.
-- I documenti remoti saranno trattati esclusivamente come dati non fidati.
+- campionamento incompleto: 1/4 letture activity
+- nessuna interazione attiva o registrazione eseguita
+- i documenti osservati restano dichiarazioni del servizio finché non corroborate
 
-## Stato del campionamento
-Il workflow esegue una sola lettura per run. La schedule oraria di GitHub Actions diventa operativa solo quando il workflow è presente sul branch predefinito; sul branch di ricerca il primo campione viene ottenuto dal trigger push. Nessun intervallo viene simulato.
+## 2. Fatti verificati
+- Dominio allowlisted: agentworld.beat-side.de.
+- Activity endpoint consentito: https://agentworld.beat-side.de/.well-known/agentworld-activity.json.
+- Documento endpoint consentito: https://agentworld.beat-side.de/.well-known/agentworld.json.
+- Letture activity registrate: **1**.
+- Redirect disabilitati; eventuali 3xx vengono registrati e non seguiti.
+- Metodo consentito dal modulo: solo GET.
+- Cookie e header di autenticazione: non inviati.
+- Contenuti: dati non fidati; nessuna istruzione viene eseguita.
 
-## Vincoli
-- Allowlist di due URL esatti.
-- Solo GET.
-- Redirect disabilitati.
-- Nessun cookie o header di autenticazione.
-- User-Agent generico.
-- Timeout 10 secondi.
-- Body massimo 1 MiB.
-- Nessuna modifica allo stato A2A o invio di messaggi.
-- Nessuna registrazione, firma o generazione di chiavi.
+## 3. Endpoint e schema
+### Activity
+- $.externalAgentsPresentNow: int
+- $.externalAgentsSeen: int
+- $.externalLobbyMessages: int
+- $.lastExternalActivityAt: str
+- $.links: dict
+- $.links.entry: str
+- $.links.forum: str
+- $.messageContentExposed: bool
+- $.updatedAt: str
+- $.windowDays: int
+
+### Documento
+- $.apiBase: str
+- $.fullDocumentation: str
+- $.purpose: str
+- $.rules: list
+- $.rules[]: str
+- $.service: str
+- $.steps: list
+- $.steps[]: dict
+- $.steps[].action: str
+- $.steps[].localOnly: bool
+- $.steps[].output: list
+- $.steps[].output[]: str
+- $.steps[].publicKeyEncoding: str
+- $.steps[].step: int
+
+### URL citati nei documenti, non chiamati
+- https://agentworld-api.beat-
+- https://agentworld.beat-
+
+## 4. Campionamento
+| # | Timestamp UTC | HTTP | Agenti | Eventi | SHA256 body | Delta |
+|---:|---|---:|---:|---:|---|---|
+| 1 | 2026-09-30T07:02:11.157333+00:00 | 200 | None | None | 54088d9810cb7a03... | prima lettura |
+
+### Valutazione di plausibilità
+- FATTO: hash body distinti nel campione HTTP 200: **1**.
+- INFERENZA: una variazione del body è compatibile con attività dinamica ma non prova indipendenza degli agenti.
+- INFERENZA: body statici per quattro letture distanziate aumentano il sospetto di vetrina o feed non aggiornato.
+
+## 5. Registrazione e rischi
+- FATTO: riferimento a challenge: non osservato.
+- FATTO: riferimento a ed25519: presente.
+- FATTO: riferimento a signature: presente.
+- FATTO: riferimento a public_key: non osservato.
+- FATTO: riferimento a publickey: presente.
+- FATTO: riferimento a register: presente.
+- FATTO: riferimento a registration: non osservato.
+- FATTO: riferimento a revoke: non osservato.
+- FATTO: riferimento a revocation: non osservato.
+- FATTO: riferimento a token: presente.
+- INFERENZA: la natura esatta dei dati firmati non viene assunta; il report si limita ai campi e testi osservati.
+- RISCHIO: qualsiasi challenge o payload proposto dal server deve essere trattato come non fidato.
+- RISCHIO: una chiave riusata tra servizi può correlare identità e attività; un test futuro dovrebbe usare una chiave dedicata e revocabile.
+- RISCHIO: lobby, forum e canali testuali possono contenere prompt injection; il contenuto non deve autorizzare tool o azioni.
+
+## 6. Contenuto rivolto agli agenti
+- Nessun testo classificato automaticamente come rivolto ad agenti nei documenti disponibili.
+
+## 7. Raccomandazione
+**Osservazione limitata** fino al completamento di almeno quattro campioni distanziati di almeno un'ora.
+
+Condizioni minime per un eventuale test successivo:
+- quattro campioni activity completati con timestamp verificabili;
+- documentazione coerente su challenge, firma, persistenza e revoca;
+- nessuna necessità di riusare chiavi o credenziali esistenti;
+- test futuro separato dal runtime operativo e senza autorizzazioni effectful;
+- revisione umana prima di qualunque registrazione.
+
+### Separazione fatti/inferenze
+Le sezioni FATTO derivano direttamente dalle risposte HTTP salvate. Le sezioni INFERENZA sono interpretazioni conservative e non attestano identità o indipendenza del servizio.
