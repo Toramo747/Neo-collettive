@@ -143,8 +143,8 @@ jobs:
 
           completed=0
           for i in $(seq 1 45); do
-            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-heartbeat)" --max-time 30 \
-              "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
+            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-heartbeat)" --max-time 30 \
+              "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/status.json; then
               if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
                 completed=1
                 break
