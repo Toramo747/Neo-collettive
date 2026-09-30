@@ -25,6 +25,30 @@ RAW_DIR = OUTPUT_DIR / "raw"
 SAMPLES_PATH = OUTPUT_DIR / "samples.jsonl"
 REPORT_PATH = OUTPUT_DIR / "report.md"
 
+SUBSTANTIVE_ACTIVITY_FIELDS = (
+    "externalAgentsSeen",
+    "externalAgentsPresentNow",
+    "externalLobbyMessages",
+    "lastExternalActivityAt",
+    "windowDays",
+)
+SUBSTANTIVE_LIST_FIELD_NAMES = {
+    "agents",
+    "events",
+    "agentList",
+    "eventList",
+    "externalAgents",
+    "externalEvents",
+}
+SUBSTANTIVE_EXCLUDED_GENERATION_FIELDS = {
+    "updatedAt",
+    "generatedAt",
+    "fetchedAt",
+    "fetched_at",
+    "timestamp",
+    "timestamp_utc",
+}
+
 URL_RE = re.compile(r"https://[^\s\"'<>]+")
 AGENT_DIRECTED_RE = re.compile(
     r"\b(agent|agents|you|your|register|registration|sign|signature|challenge|token|lobby|forum|invite)\b",
@@ -160,14 +184,43 @@ def walk_counts(value: Any) -> tuple[int | None, int | None]:
                 break
     return agents, events
 
+def substantive_activity_view(value: Any) -> dict[str, Any]:
+    """Return only activity-bearing fields; generation timestamps are deliberately excluded."""
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key in SUBSTANTIVE_ACTIVITY_FIELDS:
+        if key in value:
+            out[key] = value[key]
+    for key, item in value.items():
+        if key in SUBSTANTIVE_EXCLUDED_GENERATION_FIELDS:
+            continue
+        if key in SUBSTANTIVE_LIST_FIELD_NAMES and isinstance(item, list):
+            out[key] = item
+    return out
+
+def substantive_hash_for(value: Any) -> str:
+    canonical = json.dumps(
+        substantive_activity_view(value),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
 def append_sample(record: dict[str, Any], raw_path: Path) -> dict[str, Any]:
     agents, events = walk_counts(record.get("_json"))
+    current_substantive_hash = substantive_hash_for(record.get("_json"))
+    previous_rows = normalize_samples(read_samples())
+    previous_hash = str(previous_rows[-1].get("substantive_hash") or "") if previous_rows else ""
     row = {
         "timestamp_utc": record["fetched_at_utc"],
         "status": record["status"],
         "agents": agents,
         "events": events,
         "body_sha256": record["body_sha256"],
+        "substantive_hash": current_substantive_hash,
+        "changed_substantively": bool(previous_rows and previous_hash != current_substantive_hash),
         "body_bytes": record["body_bytes"],
         "raw_path": raw_path.relative_to(ROOT).as_posix(),
         "redirect_location": record.get("redirect_location") or "",
@@ -209,23 +262,39 @@ def read_samples() -> list[dict[str, Any]]:
 def normalize_samples(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     changed = False
     normalized = []
-    for original in rows:
+    previous_substantive_hash = ""
+    for index, original in enumerate(rows):
         row = dict(original)
-        if row.get("agents") is None or row.get("events") is None:
-            raw_rel = str(row.get("raw_path") or "")
-            raw_path = ROOT / raw_rel if raw_rel else None
-            try:
-                raw_record = json.loads(raw_path.read_text(encoding="utf-8")) if raw_path and raw_path.exists() else {}
-                body = json.loads(str(raw_record.get("body_raw") or ""))
-                agents, events = walk_counts(body)
-                if row.get("agents") is None and agents is not None:
-                    row["agents"] = agents
-                    changed = True
-                if row.get("events") is None and events is not None:
-                    row["events"] = events
-                    changed = True
-            except Exception:
-                pass
+        raw_rel = str(row.get("raw_path") or "")
+        raw_path = ROOT / raw_rel if raw_rel else None
+        body = None
+        try:
+            raw_record = json.loads(raw_path.read_text(encoding="utf-8")) if raw_path and raw_path.exists() else {}
+            body = json.loads(str(raw_record.get("body_raw") or ""))
+        except Exception:
+            body = None
+
+        if body is not None:
+            agents, events = walk_counts(body)
+            if row.get("agents") is None and agents is not None:
+                row["agents"] = agents
+                changed = True
+            if row.get("events") is None and events is not None:
+                row["events"] = events
+                changed = True
+
+            computed_substantive_hash = substantive_hash_for(body)
+            expected_changed = bool(index > 0 and previous_substantive_hash != computed_substantive_hash)
+            if row.get("substantive_hash") != computed_substantive_hash:
+                row["substantive_hash"] = computed_substantive_hash
+                changed = True
+            if row.get("changed_substantively") is not expected_changed:
+                row["changed_substantively"] = expected_changed
+                changed = True
+            previous_substantive_hash = computed_substantive_hash
+        else:
+            previous_substantive_hash = str(row.get("substantive_hash") or previous_substantive_hash)
+
         normalized.append(row)
     if changed:
         with SAMPLES_PATH.open("w", encoding="utf-8") as fh:
@@ -346,8 +415,8 @@ def generate_report() -> str:
         ]
 
     table = [
-        "| # | Timestamp UTC | HTTP | Agenti | Eventi | SHA256 body | Delta |",
-        "|---:|---|---:|---:|---:|---|---|",
+        "| # | Timestamp UTC | HTTP | Agenti | Eventi | SHA256 body | Substantive hash | Changed substantively | Delta |",
+        "|---:|---|---:|---:|---:|---|---|---|---|",
     ]
     prev = None
     for idx, row in enumerate(samples, 1):
@@ -363,7 +432,9 @@ def generate_report() -> str:
         table.append(
             f"| {idx} | {row.get('timestamp_utc','')} | {row.get('status','')} | "
             f"{row.get('agents','')} | {row.get('events','')} | "
-            f"{str(row.get('body_sha256',''))[:16]}... | {delta} |"
+            f"{str(row.get('body_sha256',''))[:16]}... | "
+            f"{str(row.get('substantive_hash',''))[:16]}... | "
+            f"{str(bool(row.get('changed_substantively'))).lower()} | {delta} |"
         )
         prev = row
 
