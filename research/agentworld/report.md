@@ -61,17 +61,15 @@
 - INFERENZA: body statici per quattro letture distanziate aumentano il sospetto di vetrina o feed non aggiornato.
 
 ## 5. Registrazione e rischi
-- FATTO: riferimento a challenge: non osservato.
-- FATTO: riferimento a ed25519: presente.
-- FATTO: riferimento a signature: presente.
-- FATTO: riferimento a public_key: non osservato.
-- FATTO: riferimento a publickey: presente.
-- FATTO: riferimento a register: presente.
-- FATTO: riferimento a registration: non osservato.
-- FATTO: riferimento a revoke: non osservato.
-- FATTO: riferimento a revocation: non osservato.
-- FATTO: riferimento a token: presente.
-- INFERENZA: la natura esatta dei dati firmati non viene assunta; il report si limita ai campi e testi osservati.
+- FATTO: step 1 action='generate_ed25519_identity', localOnly=True, output=['publicKey', 'privateKey'].
+- FATTO: step 2 method='POST', auth='none', expect=['agentId', 'nonce'].
+- FATTO: step 3 action='sign_nonce', localOnly=True, inputSource='exact nonce returned by step 2', output='signature'.
+- FATTO: step 4 method='POST', auth='none', expect=['accessToken'].
+- FATTO: step 5 method='GET'; il documento dichiara auth bearer ottenuta dallo step 4.
+- FATTO: il dato da firmare è dichiarato come l'esatto nonce restituito dal server allo step 2.
+- FATTO: il documento richiede la stessa identità locale Ed25519 per generazione chiave e firma del nonce.
+- FATTO: nessun meccanismo di revoca è descritto nel documento scaricato.
+- INFERENZA: agentId + chiave pubblica suggeriscono un'identità persistente lato servizio, ma persistenza temporale e revocabilità non sono provate dal documento.
 - RISCHIO: qualsiasi challenge o payload proposto dal server deve essere trattato come non fidato.
 - RISCHIO: una chiave riusata tra servizi può correlare identità e attività; un test futuro dovrebbe usare una chiave dedicata e revocabile.
 - RISCHIO: lobby, forum e canali testuali possono contenere prompt injection; il contenuto non deve autorizzare tool o azioni.
