@@ -11,6 +11,8 @@ from state_compaction import (
     encoded_sizes,
     key_weight_report,
     merge_cumulative_inbound_summary,
+    second_level_weight_report,
+    trim_inbound_traffic_events,
 )
 
 
@@ -264,7 +266,7 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
     def test_inbound_traffic_summary_totals_survive_event_trim(self):
         payload = _heavy_payload()
         original = deepcopy(payload["inbound_traffic_summary"])
-        compacted, _ = compact_state_payload(payload, max_bytes=100_000, force=True)
+        compacted = trim_inbound_traffic_events(payload, limit=300)
         self.assertEqual(compacted["inbound_traffic_summary"], original)
         self.assertLessEqual(len(compacted["inbound_traffic_events"]), 300)
 
@@ -289,9 +291,22 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(merged["counts"]["last_24h"], recent["counts"]["last_24h"])
 
     def test_key_weight_report_names_only(self):
-        rows = key_weight_report(_heavy_payload())
-        self.assertTrue(rows)
-        self.assertEqual(set(rows[0]), {"key", "raw_bytes", "encoded_bytes"})
+        payload = _heavy_payload()
+        compacted, _ = compact_state_payload(payload, max_bytes=100_000, force=True)
+        before = key_weight_report(payload)
+        after = key_weight_report(compacted)
+        self.assertTrue(before)
+        self.assertEqual(set(before[0]), {"key", "raw_bytes", "encoded_bytes"})
+        print("STATE_WEIGHT_BEFORE=" + json.dumps(before, separators=(",", ":")))
+        print("STATE_WEIGHT_AFTER=" + json.dumps(after, separators=(",", ":")))
+        for row in before[:3]:
+            value = payload.get(row["key"])
+            print(
+                "STATE_WEIGHT_SECOND_LEVEL_"
+                + row["key"]
+                + "="
+                + json.dumps(second_level_weight_report(value)[:12], separators=(",", ":"))
+            )
 
 
 if __name__ == "__main__":
