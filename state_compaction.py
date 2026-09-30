@@ -65,12 +65,15 @@ def key_weight_report(payload: dict) -> list[dict[str, Any]]:
 
 
 def second_level_weight_report(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, dict):
-        return []
     rows = []
-    for key, child in value.items():
-        raw, encoded = encoded_sizes({key: child})
-        rows.append({"key": str(key), "raw_bytes": raw, "encoded_bytes": encoded})
+    if isinstance(value, dict):
+        for key, child in value.items():
+            raw, encoded = encoded_sizes({key: child})
+            rows.append({"key": str(key), "raw_bytes": raw, "encoded_bytes": encoded})
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            raw, encoded = encoded_sizes({"item": child})
+            rows.append({"key": f"item[{index}]", "raw_bytes": raw, "encoded_bytes": encoded})
     rows.sort(key=lambda row: int(row["encoded_bytes"]), reverse=True)
     return rows
 
