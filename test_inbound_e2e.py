@@ -162,6 +162,8 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         ]
         for path,method,query,expected_status in cases:
             with self.subTest(path=path,method=method):
+                if hasattr(cloud_mcp.app,"_failed"):
+                    cloud_mcp.app._failed.clear()
                 with patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
                     status,_response=await asgi_request(
                         cloud_mcp.app,path,method,{"message":OBFUSCATED},query=query
@@ -277,6 +279,8 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
     async def test_runtime_snapshot_webhook_is_guarded_before_handler(self):
+        if hasattr(cloud_mcp.app,"_failed"):
+            cloud_mcp.app._failed.clear()
         with patch.object(cloud_mcp,"api_runtime_snapshot_published",side_effect=AssertionError("webhook handler executed")),              patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
             status,response=await asgi_request(
                 cloud_mcp.app,"/api/runtime/snapshot-published","POST",{"message":OBFUSCATED}
