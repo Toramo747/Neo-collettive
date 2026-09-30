@@ -11759,6 +11759,8 @@ async def api_autonomy_status(request: Request):
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
+        "runtime_profile":dict(RUNTIME_IDENTITY),
+        "latest_result":latest,
         "autopilot":{
             "enabled":AUTOPILOT_STATE.get("enabled"),
             "running":AUTOPILOT_STATE.get("running"),
