@@ -68,6 +68,28 @@ class AgentWorldProbePolicyTests(unittest.TestCase):
         self.assertEqual(record["status"], 200)
         self.assertFalse(record["redirect_followed"])
 
+    def test_activity_counts_support_observed_schema(self):
+        agents, events = probe.walk_counts({
+            "externalAgentsPresentNow": 0,
+            "externalAgentsSeen": 5,
+            "externalLobbyMessages": 6,
+        })
+        self.assertEqual(agents, 5)
+        self.assertEqual(events, 6)
+
+    def test_url_extraction_preserves_hyphenated_hosts(self):
+        value = {"x": "https://agentworld-api.beat-side.de/api/v1/register/start"}
+        self.assertEqual(
+            probe.extract_urls(value),
+            ["https://agentworld-api.beat-side.de/api/v1/register/start"],
+        )
+
+    def test_sampling_guard_requires_one_hour(self):
+        rows = [{"timestamp_utc": "2026-09-30T07:02:11+00:00"}]
+        from datetime import datetime, timezone
+        now = datetime(2026, 9, 30, 7, 32, 11, tzinfo=timezone.utc)
+        self.assertEqual(probe.seconds_since_last_sample(rows, now=now), 1800.0)
+
 
 if __name__ == "__main__":
     unittest.main()
