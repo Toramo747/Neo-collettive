@@ -104,7 +104,7 @@ jobs:
           initial_version=os.environ.get("INITIAL_VERSION","")
           initial_finished=os.environ.get("INITIAL_FINISHED","")
           require_new=os.environ["REQUIRE_NEW"]=="1"
-          latest=ap.get("latest_result")
+          latest=ap.get("latest_result") or d.get("latest_result")
           version=str(d.get("neo_version") or "")
           current_finished=str(ap.get("last_finished_utc") or "")
           version_changed=bool(initial_version and version and version!=initial_version)
