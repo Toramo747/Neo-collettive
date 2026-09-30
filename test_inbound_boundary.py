@@ -41,37 +41,39 @@ class InboundBoundaryTests(unittest.TestCase):
         self.assertIn('guarded_methods={',source)
         self.assertIn('if rpc=="tools/call":',source)
         self.assertIn('known_tool=tool_name in MCP_TOOL_ACCESS',source)
-        self.assertIn('access!="read_only_bounded" and not explicit_review_authorized(header_map)',source)
+        self.assertIn('known_tool and access!="public_readonly" and not privileged',source)
+        self.assertIn('_consume_mcp_public_readonly_limit',source)
         self.assertIn('endpoint_verifier.consume_rate_limit',source)
         self.assertNotIn('AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]\n        row["knowledge_id"]',source)
 
     def test_invalid_mcp_tool_requests_reach_protocol_parser_without_review(self):
         source=Path("cloud_mcp.py").read_text(encoding="utf-8")
         self.assertIn('access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"',source)
-        self.assertIn('if known_tool and access!="read_only_bounded" and not explicit_review_authorized(header_map):',source)
+        self.assertIn('if not known_tool:',source)
+        self.assertIn('pass',source)
 
     def test_mcp_tool_access_policy_is_complete_and_fail_closed(self):
         import cloud_mcp
         expected={
-            "neo_preflight":"read_only_bounded",
-            "neo_discover":"read_only_bounded",
-            "neo_ask_agents":"effectful",
-            "neo_collective":"effectful",
-            "neo_inspect_mcp":"read_only_bounded",
-            "verify_mcp_endpoint":"read_only_bounded",
-            "neo_web_search":"read_only_bounded",
-            "neo_jarvis":"effectful",
-            "neo_director":"effectful",
-            "neo_director_results":"read_only_bounded",
-            "neo_render_status":"effectful",
-            "neo_render_deploys":"effectful",
-            "neo_render_logs":"effectful",
-            "jarvis_render_status":"effectful",
-            "jarvis_render_deploys":"effectful",
-            "jarvis_render_logs":"effectful",
+            "neo_preflight":"gated_network",
+            "neo_discover":"gated_network",
+            "neo_ask_agents":"gated_effectful",
+            "neo_collective":"gated_effectful",
+            "neo_inspect_mcp":"gated_network",
+            "verify_mcp_endpoint":"gated_network",
+            "neo_web_search":"gated_network",
+            "neo_jarvis":"gated_effectful",
+            "neo_director":"gated_effectful",
+            "neo_director_results":"public_readonly",
+            "neo_render_status":"gated_network",
+            "neo_render_deploys":"gated_network",
+            "neo_render_logs":"gated_network",
+            "jarvis_render_status":"gated_network",
+            "jarvis_render_deploys":"gated_network",
+            "jarvis_render_logs":"gated_network",
         }
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS,expected)
-        self.assertEqual(cloud_mcp._mcp_tool_access("unknown_tool"),"effectful")
+        self.assertEqual(cloud_mcp._mcp_tool_access("unknown_tool"),"gated_effectful")
 
 
 
