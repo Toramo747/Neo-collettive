@@ -28,6 +28,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
+from state_compaction import compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -526,7 +527,11 @@ def _merge_state_payload(payload: dict | None) -> bool:
     elif isinstance(payload.get("inbound_messages"), list):
         AUTOPILOT_STATE["inbound_traffic_events"] = retroactive_from_inbound_messages(payload.get("inbound_messages") or [])
     AUTOPILOT_STATE["inbound_traffic_events"] = reclassify_known_self_events(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
-    AUTOPILOT_STATE["inbound_traffic_summary"] = summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
+    recent_inbound_summary = summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
+    AUTOPILOT_STATE["inbound_traffic_summary"] = merge_cumulative_inbound_summary(
+        payload.get("inbound_traffic_summary") if isinstance(payload.get("inbound_traffic_summary"), dict) else {},
+        recent_inbound_summary,
+    )
     if isinstance(payload.get("inbound_security_events"), list):
         AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
     if isinstance(payload.get("inbound_security_stats"), dict):
@@ -914,6 +919,21 @@ def _restore_state() -> str:
             payload.get("inbound_agent_stats") or {},
         )
     payload,boundary_event=sanitize_commercial_state(payload)
+    if isinstance(payload,dict):
+        try:
+            _restore_raw_bytes,_restore_encoded_bytes=encoded_sizes(payload)
+            if _restore_encoded_bytes >= int(STATE_ENV_MAX_BYTES*0.90):
+                payload,restore_compaction=compact_state_payload(
+                    payload,
+                    max_bytes=STATE_ENV_MAX_BYTES,
+                    force=True,
+                )
+                meta["restore_compaction"]=restore_compaction
+        except Exception as exc:
+            meta["restore_compaction"]={
+                "applied":False,
+                "error":type(exc).__name__+":"+str(exc)[:160],
+            }
     meta["runtime_profile"]=dict(RUNTIME_IDENTITY)
     meta["rejected_profile_candidates"]=rejected_profiles
     meta["cycle_floor"]=cycle_floor_meta
@@ -940,10 +960,36 @@ def _save_local_state() -> None:
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return {"ok": False, "reason": "render_api_not_configured"}
+    payload=_state_payload()
+    compaction_meta={"applied":False}
     try:
-        value, raw_bytes, encoded_bytes = _encode_state_env(_state_payload())
+        _raw_before,_encoded_before=encoded_sizes(payload)
+        if _encoded_before >= int(STATE_ENV_MAX_BYTES*0.90):
+            payload,compaction_meta=compact_state_payload(
+                payload,
+                max_bytes=STATE_ENV_MAX_BYTES,
+                force=True,
+            )
+        value, raw_bytes, encoded_bytes = _encode_state_env(payload)
     except Exception as e:
-        return {"ok": False, "reason": type(e).__name__ + ": " + str(e)[:220]}
+        try:
+            failed_payload=payload if isinstance(payload,dict) else {}
+            failed_raw,failed_encoded=encoded_sizes(failed_payload)
+            heavy_key,heavy_bytes=heaviest_key(failed_payload)
+        except Exception:
+            failed_raw,failed_encoded,heavy_key,heavy_bytes=0,0,None,0
+        result={
+            "ok":False,
+            "reason":type(e).__name__+": "+str(e)[:220],
+            "raw_bytes":failed_raw,
+            "stored_bytes":failed_encoded,
+            "limit_bytes":STATE_ENV_MAX_BYTES,
+            "heaviest_key":heavy_key,
+            "heaviest_key_stored_bytes":heavy_bytes,
+            "compaction":compaction_meta,
+        }
+        AUTOPILOT_STATE["last_checkpoint"]=result
+        return result
     headers = {
         "Authorization": f"Bearer {RENDER_API_KEY}",
         "Accept": "application/json",
@@ -956,15 +1002,26 @@ async def _checkpoint_state_to_render() -> dict:
                 headers=headers,
                 json={"value": value},
             )
-            return {
+            result={
                 "ok": r.is_success,
                 "status": r.status_code,
                 "encoding": "zlib64",
                 "raw_bytes": raw_bytes,
                 "stored_bytes": encoded_bytes,
+                "limit_bytes": STATE_ENV_MAX_BYTES,
+                "compaction": compaction_meta,
             }
+            AUTOPILOT_STATE["last_checkpoint"]=result
+            return result
     except Exception as e:
-        return {"ok": False, "reason": type(e).__name__ + ": " + str(e)[:220]}
+        result={
+            "ok":False,
+            "reason":type(e).__name__+": "+str(e)[:220],
+            "limit_bytes":STATE_ENV_MAX_BYTES,
+            "compaction":compaction_meta,
+        }
+        AUTOPILOT_STATE["last_checkpoint"]=result
+        return result
 
 
 AUTOPILOT_STATE["restore_source"] = _restore_state()
