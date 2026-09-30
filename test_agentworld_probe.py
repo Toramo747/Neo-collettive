@@ -104,5 +104,44 @@ class AgentWorldProbePolicyTests(unittest.TestCase):
         self.assertIn("grep -v '^research/agentworld/'", workflow)
         self.assertIn("refs/heads/research/agentworld-data", workflow)
 
+
+    def test_substantive_hash_ignores_generation_timestamps(self):
+        a = {
+            "externalAgentsSeen": 5,
+            "externalAgentsPresentNow": 0,
+            "externalLobbyMessages": 6,
+            "lastExternalActivityAt": "2026-09-27T12:08:32Z",
+            "windowDays": 7,
+            "updatedAt": "2026-09-30T07:02:10Z",
+        }
+        b = dict(a)
+        b["updatedAt"] = "2026-09-30T09:37:35Z"
+        b["generatedAt"] = "2026-09-30T09:37:35Z"
+        self.assertEqual(probe.substantive_hash_for(a), probe.substantive_hash_for(b))
+
+    def test_substantive_hash_changes_when_activity_counter_changes(self):
+        a = {
+            "externalAgentsSeen": 5,
+            "externalAgentsPresentNow": 0,
+            "externalLobbyMessages": 6,
+            "lastExternalActivityAt": "2026-09-27T12:08:32Z",
+            "windowDays": 7,
+        }
+        b = dict(a)
+        b["externalLobbyMessages"] = 7
+        self.assertNotEqual(probe.substantive_hash_for(a), probe.substantive_hash_for(b))
+
+    def test_probe_write_permission_is_job_scoped(self):
+        workflow = Path(".github/workflows/agentworld-passive-probe.yml").read_text(encoding="utf-8")
+        top = workflow.split("jobs:", 1)[0]
+        job = workflow.split("jobs:", 1)[1]
+        self.assertIn("permissions:\n  contents: read", top)
+        self.assertIn("passive-sample:\n    permissions:\n      contents: write", job)
+
+    def test_full_ci_ignores_agentworld_data_paths(self):
+        workflow = Path(".github/workflows/full-python-ci.yml").read_text(encoding="utf-8")
+        self.assertIn('paths-ignore:', workflow)
+        self.assertIn('"research/agentworld/**"', workflow)
+
 if __name__ == "__main__":
     unittest.main()
