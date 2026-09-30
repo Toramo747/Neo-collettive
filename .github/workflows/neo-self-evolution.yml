@@ -19,10 +19,19 @@ jobs:
 
       - name: Ask NEO for bounded policy proposal
         id: proposal
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
-          curl --fail --show-error --silent --retry 2 --max-time 90 \
-            "https://neo-collettive.onrender.com/api/self-improvement/proposal" > /tmp/proposal.json
+          if [ -z "${NEO_ADMIN_TOKEN:-}" ]; then
+            echo "Admin credential unavailable; bounded evolution skipped."
+            echo "0" > /tmp/ready
+            echo '{"proposal":{"ready":false,"changes":{}}}' > /tmp/proposal.json
+          else
+            curl --fail --show-error --silent --retry 2 --max-time 90 \
+              -H "Authorization: Bearer ${NEO_ADMIN_TOKEN}" \
+              "https://neo-collettive.onrender.com/api/self-improvement/proposal" > /tmp/proposal.json
+          fi
           python - <<'PY'
           import json
           p=json.load(open("/tmp/proposal.json",encoding="utf-8")).get("proposal",{})

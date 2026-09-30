@@ -29,6 +29,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
 from state_compaction import compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
+from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -980,6 +981,7 @@ async def _checkpoint_state_to_render() -> dict:
             failed_raw,failed_encoded,heavy_key,heavy_bytes=0,0,None,0
         result={
             "ok":False,
+            "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
             "reason":type(e).__name__+": "+str(e)[:220],
             "raw_bytes":failed_raw,
             "stored_bytes":failed_encoded,
@@ -1004,6 +1006,7 @@ async def _checkpoint_state_to_render() -> dict:
             )
             result={
                 "ok": r.is_success,
+                "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
                 "status": r.status_code,
                 "encoding": "zlib64",
                 "raw_bytes": raw_bytes,
@@ -1016,6 +1019,7 @@ async def _checkpoint_state_to_render() -> dict:
     except Exception as e:
         result={
             "ok":False,
+            "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
             "reason":type(e).__name__+": "+str(e)[:220],
             "limit_bytes":STATE_ENV_MAX_BYTES,
             "compaction":compaction_meta,
@@ -9042,27 +9046,54 @@ async def render_request(path: str, params: dict[str, Any] | None = None) -> Any
 
 
 MCP_TOOL_ACCESS = {
-    "neo_preflight":"read_only_bounded",
-    "neo_discover":"read_only_bounded",
-    "neo_ask_agents":"effectful",
-    "neo_collective":"effectful",
-    "neo_inspect_mcp":"read_only_bounded",
-    "verify_mcp_endpoint":"read_only_bounded",
-    "neo_web_search":"read_only_bounded",
-    "neo_jarvis":"effectful",
-    "neo_director":"effectful",
-    "neo_director_results":"read_only_bounded",
-    "neo_render_status":"effectful",
-    "neo_render_deploys":"effectful",
-    "neo_render_logs":"effectful",
-    "jarvis_render_status":"effectful",
-    "jarvis_render_deploys":"effectful",
-    "jarvis_render_logs":"effectful",
+    "neo_preflight":"gated_network",
+    "neo_discover":"gated_network",
+    "neo_ask_agents":"gated_effectful",
+    "neo_collective":"gated_effectful",
+    "neo_inspect_mcp":"gated_network",
+    "verify_mcp_endpoint":"gated_network",
+    "neo_web_search":"gated_network",
+    "neo_jarvis":"gated_effectful",
+    "neo_director":"gated_effectful",
+    "neo_director_results":"public_readonly",
+    "neo_render_status":"gated_network",
+    "neo_render_deploys":"gated_network",
+    "neo_render_logs":"gated_network",
+    "jarvis_render_status":"gated_network",
+    "jarvis_render_deploys":"gated_network",
+    "jarvis_render_logs":"gated_network",
 }
 
 
 def _mcp_tool_access(name: str) -> str:
-    return MCP_TOOL_ACCESS.get(str(name or "").strip(),"effectful")
+    return MCP_TOOL_ACCESS.get(str(name or "").strip(),"gated_effectful")
+
+
+MCP_PUBLIC_READONLY_PER_ORIGIN_PER_HOUR = 30
+MCP_PUBLIC_READONLY_GLOBAL_PER_DAY = 3000
+_MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN: dict[str, list[float]] = {}
+_MCP_PUBLIC_READONLY_GLOBAL_CALLS: list[float] = []
+
+
+def _consume_mcp_public_readonly_limit(source: str) -> bool:
+    now=time.time()
+    hour_cutoff=now-3600.0
+    day_cutoff=now-86400.0
+    global _MCP_PUBLIC_READONLY_GLOBAL_CALLS
+    _MCP_PUBLIC_READONLY_GLOBAL_CALLS=[
+        ts for ts in _MCP_PUBLIC_READONLY_GLOBAL_CALLS if ts>day_cutoff
+    ]
+    key=endpoint_verifier.caller_bucket(source or "unknown")
+    calls=[ts for ts in _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN.get(key,[]) if ts>hour_cutoff]
+    if len(calls)>=MCP_PUBLIC_READONLY_PER_ORIGIN_PER_HOUR:
+        _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN[key]=calls
+        return False
+    if len(_MCP_PUBLIC_READONLY_GLOBAL_CALLS)>=MCP_PUBLIC_READONLY_GLOBAL_PER_DAY:
+        return False
+    calls.append(now)
+    _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN[key]=calls
+    _MCP_PUBLIC_READONLY_GLOBAL_CALLS.append(now)
+    return True
 
 
 @mcp.tool()
@@ -10138,6 +10169,8 @@ async def api_render_diagnostics(request: Request):
 
 async def api_director_run(request: Request):
     """Run one autonomous, zero-budget Director cycle and return the compact result."""
+    if request.method!="POST":
+        return JSONResponse({"ok":False,"error":"method_not_allowed"},status_code=405,headers={"Allow":"POST"})
     goal=(request.query_params.get("goal") or (
         "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
         "con investimento iniziale minimo. Coordina Jarvis, agenti ed evidence scouts. Privilegia domanda pagante verificabile, "
@@ -10182,10 +10215,7 @@ def _runtime_snapshot_freshness() -> dict:
 
 
 async def api_runtime_snapshot_published(request: Request):
-    proof=verify_self_traffic_proof(
-        HEARTBEAT_TOKEN,request.url.path,request.headers.get("x-mycelix-self-traffic-proof") or ""
-    )
-    if not HEARTBEAT_TOKEN or request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or not proof.get("valid"):
+    if not _ops_request_authorized(request):
         return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
     try:
         payload=await request.json()
@@ -10224,15 +10254,7 @@ async def api_heartbeat(request: Request):
         )
     except endpoint_verifier.VerificationError as exc:
         return JSONResponse({"ok":False,"error":exc.code},status_code=429)
-    proof=verify_self_traffic_proof(
-        HEARTBEAT_TOKEN,
-        request.url.path,
-        request.headers.get("x-mycelix-self-traffic-proof") or "",
-    )
-    legacy_heartbeat_token_rejected=bool(
-        request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token")
-    )
-    if not HEARTBEAT_TOKEN or legacy_heartbeat_token_rejected or not bool(proof.get("valid")):
+    if not _ops_request_authorized(request):
         return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
 
     age = _iso_age_seconds(AUTOPILOT_STATE.get("last_started_utc"))
@@ -10366,6 +10388,19 @@ def _admin_authorized(request: Request) -> bool:
         except Exception:
             return False
     return False
+
+
+def _ops_request_authorized(request: Request) -> bool:
+    if _admin_authorized(request):
+        return True
+    if request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token"):
+        return False
+    proof=verify_self_traffic_proof(
+        HEARTBEAT_TOKEN,
+        request.url.path,
+        request.headers.get("x-mycelix-self-traffic-proof") or "",
+    )
+    return bool(HEARTBEAT_TOKEN and proof.get("valid"))
 
 
 def _admin_auth_failure() -> JSONResponse:
@@ -11331,10 +11366,7 @@ async def _autopilot_loop() -> None:
 
 async def api_run_market_cycles(request: Request):
     """Authenticated bounded validation runner; waits for an active cycle and never bypasses gates."""
-    proof=verify_self_traffic_proof(
-        HEARTBEAT_TOKEN,request.url.path,request.headers.get("x-mycelix-self-traffic-proof") or ""
-    )
-    if not HEARTBEAT_TOKEN or request.headers.get("x-neo-heartbeat-token") or request.query_params.get("token") or not proof.get("valid"):
+    if not _ops_request_authorized(request):
         return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
     try:
         requested=max(1,min(int(request.query_params.get("count") or "1"),3))
@@ -11435,6 +11467,16 @@ async def api_outcomes(request: Request):
         "outcome_control":AUTOPILOT_STATE.get("outcome_control") or {},
         "history":list(AUTOPILOT_STATE.get("outcome_history") or [])[-20:],
         "guardrail":"No outcome agent can bypass commercial evidence, peer trust, spending, payment, contract, outreach or publishing controls.",
+    })
+
+
+async def api_checkpoint_status(request: Request):
+    checkpoint=AUTOPILOT_STATE.get("last_checkpoint") or {}
+    return JSONResponse({
+        "ok":bool(checkpoint.get("ok")),
+        "stored_bytes":checkpoint.get("stored_bytes"),
+        "limit_bytes":checkpoint.get("limit_bytes") or STATE_ENV_MAX_BYTES,
+        "last_checkpoint_utc":checkpoint.get("checkpoint_utc"),
     })
 
 
@@ -11693,6 +11735,7 @@ async def api_memory_status(request: Request):
         "measurement_history":list(AUTOPILOT_STATE.get("measurement_history") or [])[-10:],
         "venture_metrics":AUTOPILOT_STATE.get("venture_metrics") or {},
         "venture_measurements":list(AUTOPILOT_STATE.get("venture_measurements") or [])[-20:],
+        "seti_summary":((AUTOPILOT_STATE.get("seti") or {}).get("last_summary") or {}),
     })
 
 
@@ -11720,12 +11763,16 @@ async def api_autonomy_status(request: Request):
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
+        "runtime_profile":dict(RUNTIME_IDENTITY),
+        "latest_result":latest,
         "autopilot":{
             "enabled":AUTOPILOT_STATE.get("enabled"),
             "running":AUTOPILOT_STATE.get("running"),
             "cycles_completed":AUTOPILOT_STATE.get("cycles_completed"),
             "last_status":AUTOPILOT_STATE.get("last_status"),
             "last_error":AUTOPILOT_STATE.get("last_error"),
+            "last_started_utc":AUTOPILOT_STATE.get("last_started_utc"),
+            "last_finished_utc":AUTOPILOT_STATE.get("last_finished_utc"),
         },
         "lifecycle":(latest or {}).get("lifecycle") or {},
         "coordinator":{
@@ -11813,13 +11860,18 @@ async def mcp_discovery_document(request: Request):
             "tools": {},
         },
         "authentication": {
-            "required": False,
-            "schemes": [],
+            "required": "conditional",
+            "discoveryAnonymous": True,
+            "toolsCall": {
+                "publicReadOnly": ["neo_director_results"],
+                "gated": sorted([name for name, access in MCP_TOOL_ACCESS.items() if access != "public_readonly"]),
+                "schemes": ["admin-basic-or-bearer", "mycelix-hmac"],
+            },
         },
         "tools": "dynamic",
         "instructions": (
-            "Tools are discovered dynamically with tools/list. "
-            "The read-only verify_mcp_endpoint tool checks public MCP endpoints without tools/call."
+            "initialize and tools/list are public. tools/call is public only for bounded no-network read-only tools; "
+            "network, search-budget and state-changing tools require admin credentials or a valid MYCELIX HMAC proof."
         ),
     }
     return JSONResponse(
@@ -12230,26 +12282,11 @@ class _InboundTrafficASGI:
             tool_name=str(params.get("name") or "").strip()
             known_tool=tool_name in MCP_TOOL_ACCESS
             access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"
-            try:
-                endpoint_verifier.consume_rate_limit("mcp-tools:"+endpoint_verifier.caller_bucket(source))
-            except endpoint_verifier.VerificationError as exc:
+            privileged=bool(self_verified or admin_header_authorized(header_map,NEO_ADMIN_TOKEN))
+            if known_tool and access!="public_readonly" and not privileged:
                 response={
                     "jsonrpc":"2.0","id":payload.get("id"),
-                    "error":{"code":-32029,"message":"rate_limited","data":{"error":exc.code}},
-                }
-                raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
-                await send({"type":"http.response.start","status":429,"headers":[
-                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
-                ]})
-                await send({"type":"http.response.body","body":raw})
-                return
-            if known_tool and access!="read_only_bounded" and not explicit_review_authorized(header_map):
-                data=review_required_result("mcp_tools_call")
-                data["tool_name"]=tool_name or None
-                data["tool_access"]=access
-                response={
-                    "jsonrpc":"2.0","id":payload.get("id"),
-                    "error":{"code":-32003,"message":"explicit_review_required","data":data},
+                    "error":{"code":-32003,"message":"unauthorized_tool_call"},
                 }
                 raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
                 await send({"type":"http.response.start","status":403,"headers":[
@@ -12257,9 +12294,36 @@ class _InboundTrafficASGI:
                 ]})
                 await send({"type":"http.response.body","body":raw})
                 return
-            if access=="read_only_bounded":
-                row["tool_access"]="read_only_bounded"
-                row["tool_name"]=tool_name or None
+            if not known_tool:
+                pass
+            elif access=="public_readonly":
+                if not _consume_mcp_public_readonly_limit(source):
+                    response={
+                        "jsonrpc":"2.0","id":payload.get("id"),
+                        "error":{"code":-32029,"message":"rate_limited"},
+                    }
+                    raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                    await send({"type":"http.response.start","status":429,"headers":[
+                        (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                    ]})
+                    await send({"type":"http.response.body","body":raw})
+                    return
+            else:
+                try:
+                    endpoint_verifier.consume_rate_limit("mcp-authorized:"+endpoint_verifier.caller_bucket(source))
+                except endpoint_verifier.VerificationError as exc:
+                    response={
+                        "jsonrpc":"2.0","id":payload.get("id"),
+                        "error":{"code":-32029,"message":"rate_limited","data":{"error":exc.code}},
+                    }
+                    raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                    await send({"type":"http.response.start","status":429,"headers":[
+                        (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                    ]})
+                    await send({"type":"http.response.body","body":raw})
+                    return
+            row["tool_access"]=access
+            row["tool_name"]=tool_name or None
         sent=False
         async def replay_receive():
             nonlocal sent
@@ -12337,9 +12401,10 @@ app = Starlette(
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
-        Route("/api/director/run", api_director_run, methods=["GET"]),
+        Route("/api/director/run", api_director_run, methods=["GET","POST"]),
         Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/render/diagnostics", api_render_diagnostics, methods=["GET"]),
+        Route("/api/checkpoint-status", api_checkpoint_status, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
         Route("/api/outcomes", api_outcomes, methods=["GET"]),
         Route("/council", council_page, methods=["GET"]),
@@ -12384,9 +12449,8 @@ app = Starlette(
 class _ExplicitReviewASGI:
     """Deny externally-triggered network/state effects without server-side review."""
     guarded_methods={
-        "/api/discover":{"GET"},
         "/api/collective":{"GET"},
-        "/api/director/run":{"GET"},
+        "/api/director/run":{"POST"},
         "/api/market/run-cycles":{"POST"},
         "/api/heartbeat":{"GET"},
         "/api/runtime/snapshot-published":{"POST"},
@@ -12409,8 +12473,10 @@ class _ExplicitReviewASGI:
             heartbeat_proof=verify_self_traffic_proof(
                 HEARTBEAT_TOKEN,path,str(headers.get("x-mycelix-self-traffic-proof") or "")
             )
-            heartbeat_ok=(path=="/api/heartbeat")
-            if not heartbeat_ok and not explicit_review_authorized(headers):
+            hmac_ok=bool((heartbeat_proof or {}).get("valid"))
+            admin_ok=admin_header_authorized(headers,NEO_ADMIN_TOKEN)
+            heartbeat_ok=(path=="/api/heartbeat" and hmac_ok)
+            if not admin_ok and not hmac_ok and not heartbeat_ok and not explicit_review_authorized(headers):
                 raw=json.dumps(review_required_result(path+":"+method),separators=(",",":"),ensure_ascii=False).encode("utf-8")
                 await send({"type":"http.response.start","status":403,"headers":[
                     (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
@@ -12421,6 +12487,15 @@ class _ExplicitReviewASGI:
 
 
 app=_ExplicitReviewASGI(app)
+app=RoutePolicyMiddleware(
+    app,
+    RoutePolicyConfig(
+        admin_token=lambda: NEO_ADMIN_TOKEN,
+        hmac_secret=lambda: HEARTBEAT_TOKEN,
+        verify_hmac=verify_self_traffic_proof,
+        projections_public=False,
+    ),
+)
 
 
 if __name__ == "__main__":

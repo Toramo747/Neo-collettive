@@ -63,6 +63,8 @@ async def asgi_request(app, path, method="GET", payload=None, query="", extra_he
 class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.old_state=dict(cloud_mcp.AUTOPILOT_STATE)
+        self.old_admin_token=cloud_mcp.NEO_ADMIN_TOKEN
+        cloud_mcp.NEO_ADMIN_TOKEN="synthetic-admin"
         cloud_mcp.AUTOPILOT_STATE["knowledge_ledger"]=[]
         cloud_mcp.AUTOPILOT_STATE["hypothesis_queue"]=[]
         cloud_mcp.AUTOPILOT_STATE["inbound_review_queue"]=[]
@@ -73,6 +75,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         cloud_mcp.AUTOPILOT_STATE.clear()
         cloud_mcp.AUTOPILOT_STATE.update(self.old_state)
+        cloud_mcp.NEO_ADMIN_TOKEN=self.old_admin_token
 
     async def test_a2a_obfuscated_instruction_is_inert_and_not_promoted(self):
         payload={
@@ -120,16 +123,12 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
              patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
             status,response=await asgi_request(cloud_mcp.app,"/mcp","POST",payload)
         self.assertEqual(status,403)
-        data=((response.get("error") or {}).get("data") or {})
-        self.assertEqual(data.get("tool_access"),"effectful")
-        self.assertFalse(data.get("fetch_allowed"))
-        self.assertFalse(data.get("execution_allowed"))
-        self.assertFalse(data.get("knowledge_ledger_write_allowed"))
-        self.assertFalse(data.get("hypothesis_creation_allowed"))
+        self.assertEqual((response.get("error") or {}).get("code"),-32003)
+        self.assertEqual((response.get("error") or {}).get("message"),"unauthorized_tool_call")
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
-    async def test_read_only_bounded_mcp_tool_passes_review_gate_but_remains_inert(self):
+    async def test_network_capable_mcp_verify_tool_requires_auth(self):
         seen={}
         async def downstream(scope,receive,send):
             seen["called"]=True
@@ -143,35 +142,33 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(cloud_mcp,"_save_local_state",return_value=None), \
              patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
             status,response=await asgi_request(wrapper,"/mcp","POST",payload)
-        self.assertEqual(status,200)
-        self.assertTrue(seen.get("called"))
+        self.assertEqual(status,403)
+        self.assertFalse(seen.get("called",False))
+        self.assertEqual((response.get("error") or {}).get("code"),-32003)
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
-    async def test_public_http_effectful_entries_stop_before_application_code(self):
+    async def test_protected_http_entries_stop_before_application_code(self):
         cases=[
-            ("/api/discover","GET","q="+OBFUSCATED.replace(" ","%20"),403),
-            ("/api/collective","GET","problem="+OBFUSCATED.replace(" ","%20"),403),
-            ("/api/director/run","GET","goal="+OBFUSCATED.replace(" ","%20"),403),
-            ("/api/market/run-cycles","POST","",403),
+            ("/api/collective","GET","problem="+OBFUSCATED.replace(" ","%20"),401),
+            ("/api/director/run","GET","goal="+OBFUSCATED.replace(" ","%20"),405),
+            ("/api/market/run-cycles","POST","",401),
             ("/api/heartbeat","GET","",401),
-            ("/api/trust/evaluate","POST","",403),
-            ("/venture","POST","",403),
-            ("/api/venture/audit","GET","",403),
-            ("/api/venture/audit","POST","",403),
-            ("/api/venture/measurement","POST","",403),
+            ("/api/trust/evaluate","POST","",401),
+            ("/venture","POST","",401),
+            ("/api/venture/audit","GET","",401),
+            ("/api/venture/audit","POST","",401),
+            ("/api/venture/measurement","POST","",401),
         ]
         for path,method,query,expected_status in cases:
             with self.subTest(path=path,method=method):
+                if hasattr(cloud_mcp.app,"_failed"):
+                    cloud_mcp.app._failed.clear()
                 with patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
-                    status,response=await asgi_request(
+                    status,_response=await asgi_request(
                         cloud_mcp.app,path,method,{"message":OBFUSCATED},query=query
                     )
                 self.assertEqual(status,expected_status)
-                self.assertFalse(response.get("fetch_allowed"))
-                self.assertFalse(response.get("execution_allowed"))
-                self.assertFalse(response.get("knowledge_ledger_write_allowed"))
-                self.assertFalse(response.get("hypothesis_creation_allowed"))
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
@@ -213,7 +210,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("runtime_profile",response)
         self.assertIn("runtime_snapshot",response)
 
-    async def test_directory_discovery_surfaces_remain_public_and_heartbeat_auth_is_hmac_only(self):
+    async def test_directory_discovery_surfaces_remain_public_and_heartbeat_accepts_hmac(self):
         for path in ("/.well-known/agent-card.json","/.well-known/agent.json","/.well-known/mcp.json"):
             with self.subTest(path=path):
                 status,response=await asgi_request(cloud_mcp.app,path,"GET")
@@ -239,6 +236,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(hmac_event.get("category"),"self_traffic")
             self.assertFalse(hmac_event.get("legacy_heartbeat_token_rejected"))
 
+            before_rejected=len(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"])
             with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
                  patch.object(cloud_mcp,"_save_local_state",return_value=None):
                 status,response=await asgi_request(
@@ -248,13 +246,14 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
                     },
                 )
             self.assertEqual(status,401)
-            self.assertEqual(response.get("error"),"unauthorized")
-            legacy_event=cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"][-1]
-            self.assertNotEqual(legacy_event.get("category"),"self_traffic")
-            self.assertTrue(legacy_event.get("legacy_heartbeat_token_rejected"))
+            self.assertEqual(response,{})
+            self.assertEqual(
+                len(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"]),
+                before_rejected,
+            )
             self.assertNotIn(
                 "cron-secret-super-sensitive",
-                json.dumps(legacy_event,sort_keys=True),
+                json.dumps(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"],sort_keys=True),
             )
 
             status,response=await asgi_request(
@@ -280,15 +279,13 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
     async def test_runtime_snapshot_webhook_is_guarded_before_handler(self):
+        if hasattr(cloud_mcp.app,"_failed"):
+            cloud_mcp.app._failed.clear()
         with patch.object(cloud_mcp,"api_runtime_snapshot_published",side_effect=AssertionError("webhook handler executed")),              patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
             status,response=await asgi_request(
                 cloud_mcp.app,"/api/runtime/snapshot-published","POST",{"message":OBFUSCATED}
             )
-        self.assertEqual(status,403)
-        self.assertFalse(response.get("fetch_allowed"))
-        self.assertFalse(response.get("execution_allowed"))
-        self.assertFalse(response.get("knowledge_ledger_write_allowed"))
-        self.assertFalse(response.get("hypothesis_creation_allowed"))
+        self.assertEqual(status,401)
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 

@@ -17,6 +17,21 @@ on:
       - ".github/workflows/peer-candidate-probe.yml"
       - ".github/workflows/external-proof-validation.yml"
 
+  push:
+    branches: [fix/route-auth-default-deny, feat/public-projection]
+    paths:
+      - "cloud_mcp.py"
+      - "route_policy.py"
+      - "public_projection.py"
+      - "test_route_policy.py"
+      - "test_route_auth_runtime.py"
+      - "test_mcp_route_auth.py"
+      - "test_inbound_boundary.py"
+      - "test_inbound_e2e.py"
+      - "test_jarvis_auth.py"
+      - "test_public_projection.py"
+      - ".github/workflows/external-proof-validation.yml"
+
 permissions:
   contents: read
 
