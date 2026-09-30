@@ -183,6 +183,7 @@ jobs:
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
           render_ready=1
+          for i in $(seq 1 40); do
             if [ "$render_ready" -eq 1 ] && curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/health' --marker github-actions-deploy)" --max-time 30 \
               "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
               cat /tmp/health.json
