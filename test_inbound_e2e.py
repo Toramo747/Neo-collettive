@@ -243,7 +243,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
                     },
                 )
             self.assertEqual(status,401)
-            self.assertEqual(response.get("error"),"unauthorized")
+            self.assertEqual(response,{})
             legacy_event=cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"][-1]
             self.assertNotEqual(legacy_event.get("category"),"self_traffic")
             self.assertTrue(legacy_event.get("legacy_heartbeat_token_rejected"))
