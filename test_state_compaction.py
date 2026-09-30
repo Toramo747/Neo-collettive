@@ -183,7 +183,7 @@ class _FakeClient:
 
 
 class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
-    def test_heavy_state_compacts_below_target_and_checkpoint_succeeds(self):
+    async def test_heavy_state_compacts_below_target_and_checkpoint_succeeds(self):
         payload = _heavy_payload()
         before_raw, before_encoded = encoded_sizes(payload)
         self.assertGreater(before_encoded, 90_000)
