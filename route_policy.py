@@ -185,6 +185,9 @@ class RoutePolicyMiddleware:
             return await self.app(scope, receive, send)
 
         path = str(scope.get("path") or "/")
+        method = str(scope.get("method") or "GET").upper()
+        if path == "/api/director/run" and method != "POST":
+            return await self.app(scope, receive, send)
         policy = classify_path(path)
         if policy == PUBLIC:
             return await self.app(scope, receive, send)
