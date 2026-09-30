@@ -9066,6 +9066,33 @@ def _mcp_tool_access(name: str) -> str:
     return MCP_TOOL_ACCESS.get(str(name or "").strip(),"gated_effectful")
 
 
+MCP_PUBLIC_READONLY_PER_ORIGIN_PER_HOUR = 30
+MCP_PUBLIC_READONLY_GLOBAL_PER_DAY = 3000
+_MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN: dict[str, list[float]] = {}
+_MCP_PUBLIC_READONLY_GLOBAL_CALLS: list[float] = []
+
+
+def _consume_mcp_public_readonly_limit(source: str) -> bool:
+    now=time.time()
+    hour_cutoff=now-3600.0
+    day_cutoff=now-86400.0
+    global _MCP_PUBLIC_READONLY_GLOBAL_CALLS
+    _MCP_PUBLIC_READONLY_GLOBAL_CALLS=[
+        ts for ts in _MCP_PUBLIC_READONLY_GLOBAL_CALLS if ts>day_cutoff
+    ]
+    key=endpoint_verifier.caller_bucket(source or "unknown")
+    calls=[ts for ts in _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN.get(key,[]) if ts>hour_cutoff]
+    if len(calls)>=MCP_PUBLIC_READONLY_PER_ORIGIN_PER_HOUR:
+        _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN[key]=calls
+        return False
+    if len(_MCP_PUBLIC_READONLY_GLOBAL_CALLS)>=MCP_PUBLIC_READONLY_GLOBAL_PER_DAY:
+        return False
+    calls.append(now)
+    _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN[key]=calls
+    _MCP_PUBLIC_READONLY_GLOBAL_CALLS.append(now)
+    return True
+
+
 @mcp.tool()
 async def neo_preflight() -> dict:
     """Check whether NEO can reach public discovery registries."""
@@ -12261,20 +12288,32 @@ class _InboundTrafficASGI:
                 ]})
                 await send({"type":"http.response.body","body":raw})
                 return
-            try:
-                bucket_prefix="mcp-public-readonly:" if access=="public_readonly" else "mcp-authorized:"
-                endpoint_verifier.consume_rate_limit(bucket_prefix+endpoint_verifier.caller_bucket(source))
-            except endpoint_verifier.VerificationError as exc:
-                response={
-                    "jsonrpc":"2.0","id":payload.get("id"),
-                    "error":{"code":-32029,"message":"rate_limited","data":{"error":exc.code}},
-                }
-                raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
-                await send({"type":"http.response.start","status":429,"headers":[
-                    (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
-                ]})
-                await send({"type":"http.response.body","body":raw})
-                return
+            if access=="public_readonly":
+                if not _consume_mcp_public_readonly_limit(source):
+                    response={
+                        "jsonrpc":"2.0","id":payload.get("id"),
+                        "error":{"code":-32029,"message":"rate_limited"},
+                    }
+                    raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                    await send({"type":"http.response.start","status":429,"headers":[
+                        (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                    ]})
+                    await send({"type":"http.response.body","body":raw})
+                    return
+            else:
+                try:
+                    endpoint_verifier.consume_rate_limit("mcp-authorized:"+endpoint_verifier.caller_bucket(source))
+                except endpoint_verifier.VerificationError as exc:
+                    response={
+                        "jsonrpc":"2.0","id":payload.get("id"),
+                        "error":{"code":-32029,"message":"rate_limited","data":{"error":exc.code}},
+                    }
+                    raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                    await send({"type":"http.response.start","status":429,"headers":[
+                        (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                    ]})
+                    await send({"type":"http.response.body","body":raw})
+                    return
             row["tool_access"]=access
             row["tool_name"]=tool_name or None
         sent=False
