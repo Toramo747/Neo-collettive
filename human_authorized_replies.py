@@ -28,10 +28,21 @@ _CARD_HOSTS = {
     "agentworld.beat-side.de",
     "agentworld-api.beat-side.de",
 }
+_ANONYMOUS_PLACEHOLDERS = {"", "anonymous-agent"}
 
 
 def _norm(value: object) -> str:
     return " ".join(str(value or "").strip().lower().split())
+
+
+def _ascii_host(host: str) -> str:
+    value = str(host or "").strip().rstrip(".")
+    if not value:
+        return ""
+    try:
+        return value.encode("idna").decode("ascii").lower()
+    except UnicodeError:
+        return ""
 
 
 def is_agentworld_identity(sender: dict | None, agent_card_url: str = "") -> bool:
@@ -48,9 +59,47 @@ def is_agentworld_identity(sender: dict | None, agent_card_url: str = "") -> boo
         return True
     if agent_card_url:
         try:
-            host = (urlparse(str(agent_card_url)).hostname or "").lower()
+            parsed = urlparse(str(agent_card_url))
+            host = _ascii_host(parsed.hostname or "")
         except Exception:
             host = ""
+        if parsed.scheme.lower() == "https" and host in _CARD_HOSTS:
+            return True
+    return False
+
+
+def _sender_is_anonymous(sender: dict | None, agent_card_url: str = "") -> bool:
+    sender = sender if isinstance(sender, dict) else {}
+    agent_id = _norm(sender.get("agent_id"))
+    agent = _norm(sender.get("agent"))
+    card = str(agent_card_url or "").strip()
+    return agent_id in _ANONYMOUS_PLACEHOLDERS and agent in _ANONYMOUS_PLACEHOLDERS and not card
+
+
+def _iter_absolute_https_urls(text: str):
+    for token in str(text or "").split():
+        candidate = token.strip("()[]{}<>\"',;")
+        if not candidate:
+            continue
+        try:
+            parsed = urlparse(candidate)
+        except Exception:
+            continue
+        if parsed.scheme.lower() != "https":
+            continue
+        if not parsed.netloc or not parsed.hostname:
+            continue
+        yield candidate, parsed
+
+
+def agentworld_anonymous_host_fallback(text: str, sender: dict | None, agent_card_url: str = "") -> bool:
+    """Anonymous-only fallback based on parsed absolute HTTPS URL host; never performs I/O."""
+    if not _sender_is_anonymous(sender, agent_card_url):
+        return False
+    for _candidate, parsed in _iter_absolute_https_urls(text):
+        if parsed.username is not None or parsed.password is not None:
+            continue
+        host = _ascii_host(parsed.hostname or "")
         if host in _CARD_HOSTS:
             return True
     return False
@@ -69,9 +118,12 @@ def human_authorized_agentworld_reply(
     sender: dict | None,
     agent_card_url: str = "",
     boundary_events: list | None = None,
-) -> str | None:
+    text: str = "",
+) -> tuple[str | None, str | None]:
     if receipt_present(boundary_events):
-        return None
-    if not is_agentworld_identity(sender, agent_card_url):
-        return None
-    return AGENTWORLD_HUMAN_REPLY
+        return None, None
+    if is_agentworld_identity(sender, agent_card_url):
+        return AGENTWORLD_HUMAN_REPLY, "identity"
+    if agentworld_anonymous_host_fallback(text, sender, agent_card_url):
+        return AGENTWORLD_HUMAN_REPLY, "anonymous_host_fallback"
+    return None, None
