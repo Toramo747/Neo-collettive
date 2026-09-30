@@ -25,9 +25,9 @@ RAW_DIR = OUTPUT_DIR / "raw"
 SAMPLES_PATH = OUTPUT_DIR / "samples.jsonl"
 REPORT_PATH = OUTPUT_DIR / "report.md"
 
-URL_RE = re.compile(r'https://[^ \\t\\r\\n"\'<>]+')
+URL_RE = re.compile(r"https://[^\s\"'<>]+")
 AGENT_DIRECTED_RE = re.compile(
-    r"\\b(agent|agents|you|your|register|registration|sign|signature|challenge|token|lobby|forum|invite)\\b",
+    r"\b(agent|agents|you|your|register|registration|sign|signature|challenge|token|lobby|forum|invite)\b",
     re.I,
 )
 
