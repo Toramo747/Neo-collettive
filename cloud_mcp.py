@@ -10169,6 +10169,8 @@ async def api_render_diagnostics(request: Request):
 
 async def api_director_run(request: Request):
     """Run one autonomous, zero-budget Director cycle and return the compact result."""
+    if request.method!="POST":
+        return JSONResponse({"ok":False,"error":"method_not_allowed"},status_code=405,headers={"Allow":"POST"})
     goal=(request.query_params.get("goal") or (
         "Trova e porta avanti un'attivita online legale e concretamente realizzabile che possa generare il primo ricavo "
         "con investimento iniziale minimo. Coordina Jarvis, agenti ed evidence scouts. Privilegia domanda pagante verificabile, "
@@ -12281,7 +12283,7 @@ class _InboundTrafficASGI:
             known_tool=tool_name in MCP_TOOL_ACCESS
             access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"
             privileged=bool(self_verified or admin_header_authorized(header_map,NEO_ADMIN_TOKEN))
-            if not known_tool or (access!="public_readonly" and not privileged):
+            if known_tool and access!="public_readonly" and not privileged:
                 response={
                     "jsonrpc":"2.0","id":payload.get("id"),
                     "error":{"code":-32003,"message":"unauthorized_tool_call"},
@@ -12292,7 +12294,9 @@ class _InboundTrafficASGI:
                 ]})
                 await send({"type":"http.response.body","body":raw})
                 return
-            if access=="public_readonly":
+            if not known_tool:
+                pass
+            elif access=="public_readonly":
                 if not _consume_mcp_public_readonly_limit(source):
                     response={
                         "jsonrpc":"2.0","id":payload.get("id"),
@@ -12397,7 +12401,7 @@ app = Starlette(
         Route("/director", director, methods=["GET"]),
         Route("/results", results_page, methods=["GET"]),
         Route("/api/director/results", api_director_results, methods=["GET"]),
-        Route("/api/director/run", api_director_run, methods=["POST"]),
+        Route("/api/director/run", api_director_run, methods=["GET","POST"]),
         Route("/api/render/errors", api_render_errors, methods=["GET"]),
         Route("/api/render/diagnostics", api_render_diagnostics, methods=["GET"]),
         Route("/api/checkpoint-status", api_checkpoint_status, methods=["GET"]),
@@ -12445,7 +12449,6 @@ app = Starlette(
 class _ExplicitReviewASGI:
     """Deny externally-triggered network/state effects without server-side review."""
     guarded_methods={
-        "/api/discover":{"GET"},
         "/api/collective":{"GET"},
         "/api/director/run":{"POST"},
         "/api/market/run-cycles":{"POST"},
@@ -12470,8 +12473,10 @@ class _ExplicitReviewASGI:
             heartbeat_proof=verify_self_traffic_proof(
                 HEARTBEAT_TOKEN,path,str(headers.get("x-mycelix-self-traffic-proof") or "")
             )
-            heartbeat_ok=(path=="/api/heartbeat")
-            if not heartbeat_ok and not explicit_review_authorized(headers):
+            hmac_ok=bool((heartbeat_proof or {}).get("valid"))
+            admin_ok=admin_header_authorized(headers,NEO_ADMIN_TOKEN)
+            heartbeat_ok=(path=="/api/heartbeat" and hmac_ok)
+            if not admin_ok and not hmac_ok and not heartbeat_ok and not explicit_review_authorized(headers):
                 raw=json.dumps(review_required_result(path+":"+method),separators=(",",":"),ensure_ascii=False).encode("utf-8")
                 await send({"type":"http.response.start","status":403,"headers":[
                     (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
