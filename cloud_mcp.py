@@ -30,6 +30,7 @@ from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
 from state_compaction import compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
 from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
+from public_projection import project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -1997,79 +1998,96 @@ async def api_trust_evaluate(request: Request):
 
 
 async def trust_lab_page(request: Request):
-    rows=list(AUTOPILOT_STATE.get("trust_lab_evaluations") or [])
+    try:
+        data=project_trust_evaluations(
+            list(AUTOPILOT_STATE.get("trust_lab_evaluations") or []),
+            secret_material=_projection_secret_material(),
+        )
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">EXPERIMENTAL</span><h2>MYCELIX Trust Lab</h2>'
-        '<p>Sidecar experiment: conversational intent, identity, capability interview and evidence integrity. '
-        'It does not replace NEO commercial discovery or quality gates.</p>'
+        '<p>Public bounded evaluation metadata. Raw identity, evidence and reasons remain private.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Evaluations</div><h2>'+str(len(rows))+'</h2></article>'
-        '<article><div class="muted">API</div><h3>POST /api/trust/evaluate</h3></article>'
+        '<article><div class="muted">Evaluations</div><h2>'+str(data.get("evaluation_count") or 0)+'</h2></article>'
         '<article><div class="muted">Commercial gate</div><h3>UNCHANGED</h3></article>'
         '</div></section>'
     )
     body+='<section class="card"><h2>Recent bounded decisions</h2><div class="grid">'
-    if not rows:
-        body+='<article><p class="muted">No Trust Lab evaluations recorded yet.</p></article>'
-    for row in reversed(rows[-12:]):
+    for row in reversed(data.get("evaluations") or []):
         body+=(
             '<article><span class="tag">'+html.escape(str(row.get("decision") or "UNKNOWN"))+'</span>'
-            '<h3>'+html.escape(str(row.get("agent_id") or "anonymous"))+'</h3>'
+            '<h3>'+html.escape(str(row.get("agent_ref") or ""))+'</h3>'
             '<p>score '+html.escape(str(row.get("trust_score") or 0))+
             ' · identity '+html.escape(str(row.get("identity_status") or ""))+
             ' · intent '+html.escape(str(row.get("intent_primary") or "UNKNOWN"))+
-            ' · sources '+html.escape(str(row.get("source_count") or 0))+'</p>'
-            '<div class="muted">'+html.escape(", ".join(str(x) for x in (row.get("reasons") or [])[:6]))+'</div></article>'
+            ' · sources '+html.escape(str(row.get("source_count") or 0))+'</p></article>'
         )
     body+='</div></section>'
     return layout("Trust Lab",body)
 
 
-async def api_agent_chats(request: Request):
-    _record_inbound_traffic(request)
+async def _agent_chat_monitor_snapshot() -> tuple[list[dict],dict]:
     events=backfill_inbound_chat_events(
         AUTOPILOT_STATE.get("inbound_messages") or [],
         AUTOPILOT_STATE.get("agent_chat_events") or [],
     )
-    AUTOPILOT_STATE["agent_chat_events"]=events
     monitor=summarize_chat_threads(events,AUTOPILOT_STATE.get("inbound_agent_stats") or {})
-    AUTOPILOT_STATE["agent_chat_monitor"]=monitor
+    return events,monitor
+
+
+def _projection_secret_material() -> str:
+    return str(NEO_ADMIN_TOKEN or HEARTBEAT_TOKEN or "")
+
+
+def _projection_failure() -> JSONResponse:
+    return JSONResponse({"ok":False,"error":"public_projection_unavailable"},status_code=500)
+
+
+async def api_admin_agent_chats(request: Request):
+    events,monitor=await _agent_chat_monitor_snapshot()
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
         "monitor":monitor,
         "recent_events":events[-80:],
-        "push_note":"Peers without a verified callback can only continue when they call MYCELIX again.",
-        "commercial_gate_unchanged":True,
     })
 
 
+async def api_agent_chats(request: Request):
+    try:
+        _events,monitor=await _agent_chat_monitor_snapshot()
+        projected=project_agent_chats(monitor,secret_material=_projection_secret_material())
+    except Exception:
+        return _projection_failure()
+    return JSONResponse({"ok":True,"neo_version":VERSION,"monitor":projected})
+
+
 async def agent_chats_page(request: Request):
-    events=backfill_inbound_chat_events(
-        AUTOPILOT_STATE.get("inbound_messages") or [],
-        AUTOPILOT_STATE.get("agent_chat_events") or [],
-    )
-    monitor=summarize_chat_threads(events,AUTOPILOT_STATE.get("inbound_agent_stats") or {})
+    try:
+        _events,monitor=await _agent_chat_monitor_snapshot()
+        data=project_agent_chats(monitor,secret_material=_projection_secret_material())
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">A2A CHAT</span><h2>Agent Conversations</h2>'
-        '<p>Reciprocal transcript of messages actually received and replies actually returned by MYCELIX. '
-        'No outbound message is invented for peers without a verified callback endpoint.</p>'
+        '<p>Public aggregate view. Message text and raw identifiers are not published.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Threads</div><h2>'+str(monitor.get("thread_count") or 0)+'</h2></article>'
-        '<article><div class="muted">Waiting peer</div><h2>'+str(monitor.get("waiting_peer") or 0)+'</h2></article>'
-        '<article><div class="muted">Reply due</div><h2>'+str(monitor.get("reply_due") or 0)+'</h2></article>'
+        '<article><div class="muted">Threads</div><h2>'+str(data.get("thread_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Waiting peer</div><h2>'+str(data.get("waiting_peer") or 0)+'</h2></article>'
+        '<article><div class="muted">Reply due</div><h2>'+str(data.get("reply_due") or 0)+'</h2></article>'
         '</div></section>'
     )
-    body+='<section class="card"><h2>Threads</h2><div class="grid">'
-    for thread in monitor.get("threads") or []:
+    body+='<section class="card"><h2>Thread metadata</h2><div class="grid">'
+    for thread in data.get("threads") or []:
         body+=(
             '<article><span class="tag">'+html.escape(str(thread.get("engagement_status") or "ACTIVE"))+'</span>'
-            '<h3>'+html.escape(str(thread.get("agent") or thread.get("agent_id") or "anonymous-agent"))+'</h3>'
+            '<h3>'+html.escape(str(thread.get("thread_ref") or ""))+'</h3>'
             '<p>intent '+html.escape(str(thread.get("intent_primary") or "UNKNOWN"))+
-            ' · inbound '+str(int(thread.get("inbound_messages") or 0))+
-            ' · outbound '+str(int(thread.get("outbound_messages") or 0))+'</p>'
-            '<p>'+html.escape(str(thread.get("last_text") or ""))+'</p>'
-            '<div class="muted">'+html.escape(str(thread.get("thread_id") or ""))+'</div></article>'
+            ' · inbound '+str(int(thread.get("inbound_count") or 0))+
+            ' · outbound '+str(int(thread.get("outbound_count") or 0))+'</p>'
+            '<div class="muted">'+html.escape(str(thread.get("admission_status") or ""))+
+            ' · '+html.escape(str(thread.get("dialogue_status") or ""))+'</div></article>'
         )
     body+='</div></section>'
     return layout("Agent Conversations",body)
@@ -2081,10 +2099,14 @@ async def api_agent_demand(request: Request):
         AUTOPILOT_STATE.get("inbound_agent_stats") or {},
     )
     AUTOPILOT_STATE["agent_demand_observatory"]=summary
+    try:
+        public=project_agent_demand(summary)
+    except Exception:
+        return _projection_failure()
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
-        "observatory":summary,
+        "observatory":public,
         "commercial_gate_unchanged":True,
     })
 
@@ -2095,21 +2117,21 @@ async def agent_demand_page(request: Request):
         AUTOPILOT_STATE.get("inbound_agent_stats") or {},
     )
     AUTOPILOT_STATE["agent_demand_observatory"]=summary
+    try:
+        public=project_agent_demand(summary)
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">OBSERVATIONAL</span><h2>Agent Demand Observatory</h2>'
-        '<p>What independent inbound agents appear to be seeking from MYCELIX or the wider agent ecosystem. '
-        'This telemetry never counts as human commercial demand.</p>'
+        '<p>Aggregate ecosystem telemetry only. Raw agent identifiers and inbound text are not published.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Declared independent agents</div><h2>'+str(summary.get("declared_independent_agents") or 0)+'</h2></article>'
-        '<article><div class="muted">Anonymous observations</div><h2>'+str(summary.get("anonymous_observations") or 0)+'</h2></article>'
-        '<article><div class="muted">Strongest signal</div><h3>'+html.escape(str(summary.get("strongest_signal") or "NONE"))+'</h3></article>'
+        '<article><div class="muted">Declared independent agents</div><h2>'+str(public.get("declared_independent_agents") or 0)+'</h2></article>'
+        '<article><div class="muted">Anonymous observations</div><h2>'+str(public.get("anonymous_observations") or 0)+'</h2></article>'
+        '<article><div class="muted">Strongest signal</div><h3>'+html.escape(str(public.get("strongest_signal") or "NONE"))+'</h3></article>'
         '</div></section>'
     )
     body+='<section class="card"><h2>Observed needs</h2><div class="grid">'
-    patterns=summary.get("patterns") or []
-    if not patterns:
-        body+='<article><p class="muted">No agent needs observed yet.</p></article>'
-    for row in patterns:
+    for row in public.get("patterns") or []:
         body+=(
             '<article><span class="tag">'+html.escape(str(row.get("signal_level") or "NONE"))+'</span>'
             '<h3>'+html.escape(str(row.get("need") or ""))+'</h3>'
@@ -2117,76 +2139,63 @@ async def agent_demand_page(request: Request):
             +str(int(row.get("observations") or 0))+' observations · '
             +str(int(row.get("anonymous_observations") or 0))+' anonymous</p></article>'
         )
-    body+='</div><p class="muted">Boundary: agent demand is ecosystem telemetry only; commercial gate influence = NONE.</p></section>'
+    body+='</div></section>'
     return layout("Agent Demand",body)
 
 
-async def api_inbound_agents(request: Request):
-    _record_inbound_traffic(request)
-    stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
-    declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
-    messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
-    security_events=list(AUTOPILOT_STATE.get("inbound_security_events") or [])
-    security_stats=dict(AUTOPILOT_STATE.get("inbound_security_stats") or {})
+async def api_admin_inbound(request: Request):
     return JSONResponse({
         "ok":True,
         "neo_version":VERSION,
-        "public_agent_card":PUBLIC_BASE_URL+"/.well-known/agent-card.json",
-        "a2a_endpoint":PUBLIC_BASE_URL+"/a2a",
-        "inbound_messages":len(messages),
-        "declared_unique_agents":len(declared),
-        "anonymous_messages":sum(1 for x in messages if not ((x.get("sender") or {}).get("declared"))),
-        "security_blocked_total":int(security_stats.get("blocked_total") or 0),
-        "security_crypto_transfer_requests":int(security_stats.get("crypto_transfer_requests") or 0),
-        "security_last_seen_utc":security_stats.get("last_seen_utc"),
-        "admitted_agents":sum(1 for x in declared if str(x.get("status") or "")=="ADMITTED"),
-        "parked_agents":sum(1 for x in declared if str(x.get("status") or "")=="PARKED"),
-        "active_peer_interviews":sum(1 for x in declared if str(x.get("dialogue_status") or "")=="ACTIVE"),
-        "completed_peer_interviews":sum(1 for x in declared if bool(x.get("interview_complete"))),
-        "intent_counts":{
-            key:sum(1 for x in stats.values() if isinstance(x,dict) and str(x.get("intent_primary") or "")==key)
-            for key in ("CONTACT","DISCOVERY","CONNECTIVITY","QUESTION_HELP","COLLABORATION","OFFER","REQUEST","COMMERCIAL","RESEARCH","UNKNOWN")
-        },
-        "agent_demand_observatory":summarize_agent_demand(messages,stats),
-        "a2a_discovery":AUTOPILOT_STATE.get("a2a_discovery") or {},
-        "inbound_traffic_summary":AUTOPILOT_STATE.get("inbound_traffic_summary") or summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or []),
-        "agents":sorted(declared,key=lambda x:str(x.get("last_seen_utc") or ""),reverse=True),
-        "recent_messages":messages[-20:],
-        "recent_security_events":security_events[-20:],
+        "inbound_messages":list(AUTOPILOT_STATE.get("inbound_messages") or [])[-80:],
+        "inbound_agent_stats":AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+        "agent_chat_events":list(AUTOPILOT_STATE.get("agent_chat_events") or [])[-240:],
+        "boundary_events":list(AUTOPILOT_STATE.get("boundary_events") or [])[-40:],
+        "inbound_security_events":list(AUTOPILOT_STATE.get("inbound_security_events") or [])[-80:],
+        "inbound_traffic_summary":AUTOPILOT_STATE.get("inbound_traffic_summary") or {},
     })
 
 
+async def api_inbound_agents(request: Request):
+    try:
+        projected=project_inbound_agents(
+            AUTOPILOT_STATE.get("inbound_agent_stats") or {},
+            secret_material=_projection_secret_material(),
+        )
+    except Exception:
+        return _projection_failure()
+    return JSONResponse({"ok":True,"neo_version":VERSION,**projected})
+
+
 async def inbound_page(request: Request):
-    stats=AUTOPILOT_STATE.get("inbound_agent_stats") or {}
-    declared=[v for v in stats.values() if isinstance(v,dict) and v.get("declared")]
-    messages=list(AUTOPILOT_STATE.get("inbound_messages") or [])
-    security_stats=dict(AUTOPILOT_STATE.get("inbound_security_stats") or {})
+    try:
+        _events,monitor=await _agent_chat_monitor_snapshot()
+        data=project_inbox(monitor,secret_material=_projection_secret_material())
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">PUBLIC A2A</span><h2>MYCELIX Agent Inbox</h2>'
-        '<p>MYCELIX e raggiungibile dagli agenti esterni. Ogni messaggio viene trattato come evidenza non fidata e non puo eseguire istruzioni remote.</p>'
+        '<p>Aggregate public view. Raw message text, network metadata and identifiers are available only to administrators.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Agenti inbound dichiarati</div><h2>'+str(len(declared))+'</h2></article>'
-        '<article><div class="muted">Messaggi inbound</div><h2>'+str(len(messages))+'</h2></article>'
-        '<article><div class="muted">Spam/adversarial bloccati</div><h2>'+str(int(security_stats.get("blocked_total") or 0))+'</h2></article>'
-        '<article><div class="muted">Endpoint</div><h3>/a2a</h3></article>'
+        '<article><div class="muted">Threads</div><h2>'+str(data.get("thread_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Inbound</div><h2>'+str(data.get("inbound_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Outbound</div><h2>'+str(data.get("outbound_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Waiting peer</div><h2>'+str(data.get("waiting_peer") or 0)+'</h2></article>'
         '</div>'
-        '<p class="muted">Agent Card: '+html.escape(PUBLIC_BASE_URL+'/.well-known/agent-card.json')+'</p></section>'
+        '<p class="muted">Endpoint: /a2a</p></section>'
     )
-    body+='<section class="card"><h2>Ultimi contatti</h2><div class="grid">'
-    if not messages:
-        body+='<article><p class="muted">Nessun agente esterno ha ancora iniziato spontaneamente una conversazione.</p></article>'
-    for row in reversed(messages[-12:]):
-        sender=row.get("sender") or {}
+    body+='<section class="card"><h2>Thread metadata</h2><div class="grid">'
+    for row in data.get("threads") or []:
         body+=(
-            '<article><span class="tag">'+html.escape(str(sender.get("agent") or "anonymous-agent"))+'</span>'
-            '<h3>'+html.escape(str(row.get("thread_id") or ""))+'</h3>'
-            '<p>'+html.escape(str(row.get("text") or "")[:700])+'</p>'
-            '<div class="muted">'+html.escape(str(row.get("received_at_utc") or ""))+
-            ' · '+("knowledge" if row.get("knowledge_id") else "message")+
-            ' · '+("hypothesis" if row.get("hypothesis_id") else "no hypothesis")+'</div></article>'
+            '<article><span class="tag">'+html.escape(str(row.get("engagement_status") or "ACTIVE"))+'</span>'
+            '<h3>'+html.escape(str(row.get("thread_ref") or ""))+'</h3>'
+            '<p>inbound '+str(int(row.get("inbound_count") or 0))+
+            ' · outbound '+str(int(row.get("outbound_count") or 0))+'</p></article>'
         )
     body+='</div></section>'
     return layout("Agent Inbox",body)
+
+
 
 
 mcp = MCPServer(
@@ -9493,72 +9502,30 @@ async def api_console(request: Request):
 
 
 async def intelligence_page(request: Request):
-    dialogues=list(AUTOPILOT_STATE.get("dialogue_history") or [])
-    ledger=list(AUTOPILOT_STATE.get("knowledge_ledger") or [])
-    hypotheses=[
-        x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or [])
-        if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}
-    ]
-    hypotheses.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
-
+    try:
+        data=project_intelligence(AUTOPILOT_STATE)
+    except Exception:
+        return HTMLResponse("Public projection unavailable",status_code=500)
     body=(
         '<section class="card"><span class="tag">COLLECTIVE INTELLIGENCE</span>'
-        '<h2>Dialoghi, conoscenza e nuove strade</h2>'
+        '<h2>Public aggregate intelligence</h2>'
+        '<p>Counts only. Dialogue text, hypotheses and raw inbound evidence remain private.</p>'
         '<div class="grid">'
-        '<article><div class="muted">Dialoghi registrati</div><h2>'+str(len(dialogues))+'</h2></article>'
-        '<article><div class="muted">Knowledge ledger</div><h2>'+str(len(ledger))+'</h2></article>'
-        '<article><div class="muted">Ipotesi aperte</div><h2>'+str(len(hypotheses))+'</h2></article>'
+        '<article><div class="muted">Dialogues</div><h2>'+str(data.get("dialogue_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Knowledge items</div><h2>'+str(data.get("knowledge_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Open hypotheses</div><h2>'+str(data.get("open_hypothesis_count") or 0)+'</h2></article>'
+        '<article><div class="muted">Inbound observations</div><h2>'+str(data.get("inbound_count") or 0)+'</h2></article>'
         '</div></section>'
     )
-    body+='<section class="card"><h2>Nuove strade da esplorare</h2><div class="grid">'
-    if not hypotheses:
-        body+='<article><p class="muted">Nessuna ipotesi aperta.</p></article>'
-    for row in hypotheses[:12]:
-        scores=row.get("scores") or {}
-        body+=(
-            '<article><span class="tag">'+html.escape(str(row.get("family") or "other"))+'</span>'
-            '<h3>'+html.escape(str(row.get("status") or "HYPOTHESIS"))+'</h3>'
-            '<p>'+html.escape(str(row.get("text") or ""))+'</p>'
-            '<div class="muted">Priorita '+html.escape(str(row.get("priority") or 0))+
-            ' · novelty '+html.escape(str(scores.get("novelty") or 0))+
-            ' · evidence '+html.escape(str(scores.get("evidence_potential") or 0))+
-            ' · fit '+html.escape(str(scores.get("strategic_fit") or 0))+'</div></article>'
-        )
-    body+='</div></section>'
-
-    body+='<section class="card"><h2>Ultimi dialoghi</h2><div class="grid">'
-    if not dialogues:
-        body+='<article><p class="muted">Nessun dialogo registrato.</p></article>'
-    for dlg in reversed(dialogues[-8:]):
-        names=", ".join(str(x.get("agent") or x.get("agent_id") or "") for x in (dlg.get("participants") or []))
-        body+=(
-            '<article><span class="tag">'+html.escape(str(dlg.get("topic") or "dialogue"))+'</span>'
-            '<h3>'+html.escape(str(dlg.get("dialogue_id") or ""))+'</h3>'
-            '<p>'+html.escape(str(dlg.get("problem_excerpt") or ""))+'</p>'
-            '<div class="muted">Agenti: '+html.escape(names)+
-            ' · round '+str(int(dlg.get("round1_count") or 0))+'+'+str(int(dlg.get("round2_count") or 0))+
-            ' · nuove ipotesi '+str(len(dlg.get("new_hypotheses") or []))+'</div></article>'
-        )
-    body+='</div></section>'
     return layout("Collective Intelligence",body)
 
 
 async def api_intelligence(request: Request):
-    hypotheses=[
-        x for x in (AUTOPILOT_STATE.get("hypothesis_queue") or [])
-        if isinstance(x,dict) and x.get("status") in {"HYPOTHESIS","EXPLORE"}
-    ]
-    hypotheses.sort(key=lambda x:float(x.get("priority") or 0),reverse=True)
-    return JSONResponse({
-        "ok":True,
-        "neo_version":VERSION,
-        "dialogues":list(AUTOPILOT_STATE.get("dialogue_history") or [])[-30:],
-        "knowledge_ledger":list(AUTOPILOT_STATE.get("knowledge_ledger") or [])[-80:],
-        "open_hypotheses":hypotheses[:40],
-        "exploration_history":list(AUTOPILOT_STATE.get("exploration_history") or [])[-40:],
-        "inbound_agent_stats":AUTOPILOT_STATE.get("inbound_agent_stats") or {},
-        "recent_inbound_messages":list(AUTOPILOT_STATE.get("inbound_messages") or [])[-20:],
-    })
+    try:
+        projected=project_intelligence(AUTOPILOT_STATE)
+    except Exception:
+        return _projection_failure()
+    return JSONResponse({"ok":True,"neo_version":VERSION,**projected})
 
 
 def _public_seti_interviews() -> list[dict]:
@@ -12391,6 +12358,8 @@ app = Starlette(
         Route("/api/agent-chats", api_agent_chats, methods=["GET"]),
         Route("/admin/seti-interviews", admin_seti_interviews_page, methods=["GET"]),
         Route("/api/admin/seti-interviews", api_admin_seti_interviews, methods=["GET"]),
+        Route("/api/admin/inbound", api_admin_inbound, methods=["GET"]),
+        Route("/api/admin/agent-chats", api_admin_agent_chats, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/trust", trust_lab_page, methods=["GET"]),
         Route("/api/trust/evaluate", api_trust_evaluate, methods=["GET","POST"]),
@@ -12493,7 +12462,7 @@ app=RoutePolicyMiddleware(
         admin_token=lambda: NEO_ADMIN_TOKEN,
         hmac_secret=lambda: HEARTBEAT_TOKEN,
         verify_hmac=verify_self_traffic_proof,
-        projections_public=False,
+        projections_public=True,
     ),
 )
 
