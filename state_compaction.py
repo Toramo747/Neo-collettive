@@ -171,6 +171,41 @@ def compact_historical_transcripts(payload: dict) -> dict:
     return out
 
 
+def merge_cumulative_inbound_summary(persisted: dict | None, recent: dict | None) -> dict:
+    """Keep cumulative totals/first-last from persistence, refresh recent windows from retained events."""
+    old = deepcopy(persisted) if isinstance(persisted, dict) else {}
+    new = deepcopy(recent) if isinstance(recent, dict) else {}
+    if not old:
+        return new
+    if not new:
+        return old
+
+    out = new
+    old_counts = old.get("counts") if isinstance(old.get("counts"), dict) else {}
+    new_counts = out.get("counts") if isinstance(out.get("counts"), dict) else {}
+    if isinstance(old_counts.get("total"), dict):
+        new_counts["total"] = deepcopy(old_counts.get("total") or {})
+    out["counts"] = new_counts
+
+    for key in (
+        "events_total",
+        "logical_messages_total",
+        "technical_evidence_total",
+        "first_real_contact_utc",
+        "last_real_contact_utc",
+        "official_counting_since_utc",
+        "legacy_rule",
+        "dedup_window_seconds",
+    ):
+        if key in old and old.get(key) is not None:
+            out[key] = deepcopy(old.get(key))
+
+    for key in ("crawler_origins", "real_contact_origins", "self_traffic_origins"):
+        if key in old:
+            out[key] = deepcopy(old.get(key))
+    return out
+
+
 def trim_inbound_traffic_events(payload: dict, limit: int = INBOUND_TRAFFIC_EVENT_LIMIT) -> dict:
     out = deepcopy(payload)
     rows = out.get("inbound_traffic_events")
