@@ -90,6 +90,7 @@ def _count_list(row: dict, *names: str) -> int:
 def _summarize_opportunity(raw: Any) -> dict[str, Any]:
     row = raw if isinstance(raw, dict) else {}
     missing = row.get("missing") if isinstance(row.get("missing"), list) else []
+    existing_counts = row.get("counts") if isinstance(row.get("counts"), dict) else {}
     return {
         "tool_name": row.get("tool_name") or row.get("name") or row.get("product_name"),
         "family": row.get("family"),
@@ -97,12 +98,12 @@ def _summarize_opportunity(raw: Any) -> dict[str, Any]:
         "gate_pass": bool(row.get("gate_pass")),
         "missing": [str(item)[:120] for item in missing[:12]],
         "counts": {
-            "sources": _count_list(row, "sources", "source_urls", "source_count"),
-            "payment_signals": _count_list(
+            "sources": int(existing_counts.get("sources") or _count_list(row, "sources", "source_urls", "source_count")),
+            "payment_signals": int(existing_counts.get("payment_signals") or _count_list(
                 row, "payment_signals", "payment_evidence", "paid_demand_signals",
                 "payment_signal_count",
-            ),
-            "gap": _count_list(row, "gap_signals", "gaps", "gap_evidence", "gap_count"),
+            )),
+            "gap": int(existing_counts.get("gap") or _count_list(row, "gap_signals", "gaps", "gap_evidence", "gap_count")),
         },
     }
 
