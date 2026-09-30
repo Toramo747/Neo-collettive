@@ -121,6 +121,22 @@ class HumanAuthorizedAgentWorldReplyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(reply2)
         self.assertIsNone(path2)
 
+
+    def test_explicitly_declared_anonymous_agent_id_does_not_use_fallback(self):
+        # A peer that explicitly declares agent_id="anonymous-agent" supplied an identity field.
+        # The anonymous-host fallback is therefore intentionally NOT available.
+        declared_placeholder = {
+            "agent_id": "anonymous-agent",
+            "agent": "anonymous-agent",
+            "declared": True,
+        }
+        reply, path = self._reply(
+            declared_placeholder,
+            "https://agentworld.beat-side.de/.well-known/agentworld.json",
+        )
+        self.assertIsNone(reply)
+        self.assertIsNone(path)
+
     def test_non_agentworld_identity_with_allowlisted_url_does_not_fallback(self):
         reply, path = self._reply(
             OTHER,
