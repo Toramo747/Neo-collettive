@@ -162,6 +162,8 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         ]
         for path,method,query,expected_status in cases:
             with self.subTest(path=path,method=method):
+                if hasattr(cloud_mcp.app,"_failed"):
+                    cloud_mcp.app._failed.clear()
                 with patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
                     status,_response=await asgi_request(
                         cloud_mcp.app,path,method,{"message":OBFUSCATED},query=query
@@ -234,6 +236,7 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(hmac_event.get("category"),"self_traffic")
             self.assertFalse(hmac_event.get("legacy_heartbeat_token_rejected"))
 
+            before_rejected=len(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"])
             with patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None), \
                  patch.object(cloud_mcp,"_save_local_state",return_value=None):
                 status,response=await asgi_request(
@@ -244,12 +247,13 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertEqual(status,401)
             self.assertEqual(response,{})
-            legacy_event=cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"][-1]
-            self.assertNotEqual(legacy_event.get("category"),"self_traffic")
-            self.assertTrue(legacy_event.get("legacy_heartbeat_token_rejected"))
+            self.assertEqual(
+                len(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"]),
+                before_rejected,
+            )
             self.assertNotIn(
                 "cron-secret-super-sensitive",
-                json.dumps(legacy_event,sort_keys=True),
+                json.dumps(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"],sort_keys=True),
             )
 
             status,response=await asgi_request(
@@ -275,6 +279,8 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
     async def test_runtime_snapshot_webhook_is_guarded_before_handler(self):
+        if hasattr(cloud_mcp.app,"_failed"):
+            cloud_mcp.app._failed.clear()
         with patch.object(cloud_mcp,"api_runtime_snapshot_published",side_effect=AssertionError("webhook handler executed")),              patch.object(cloud_mcp.httpx,"AsyncClient",side_effect=AssertionError("network fetch attempted")):
             status,response=await asgi_request(
                 cloud_mcp.app,"/api/runtime/snapshot-published","POST",{"message":OBFUSCATED}
