@@ -85,6 +85,41 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(public["agent_chat_monitor"],{"thread_count":2})
         self.assertEqual(public["agent_demand_observatory"],{"messages_observed":4})
 
+    def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
+        raw={
+            "autopilot":{
+                "last_checkpoint":{
+                    "ok":True,
+                    "status":200,
+                    "raw_bytes":123456,
+                    "stored_bytes":54321,
+                    "limit_bytes":100000,
+                    "reason":"PRIVATE FAILURE DETAIL",
+                    "heaviest_key":"PRIVATE_KEY",
+                    "compaction":{
+                        "applied":True,
+                        "before_raw_bytes":234567,
+                        "before_encoded_bytes":120000,
+                        "after_raw_bytes":98765,
+                        "after_encoded_bytes":54321,
+                        "target_bytes":60000,
+                        "trigger_bytes":90000,
+                        "limit_bytes":100000,
+                        "heaviest_key":"PRIVATE_KEY",
+                    },
+                },
+            },
+        }
+        public=sanitize_public_snapshot(raw)
+        cp=public["autopilot"]["last_checkpoint"]
+        self.assertEqual(cp["ok"],True)
+        self.assertEqual(cp["stored_bytes"],54321)
+        self.assertEqual(cp["compaction"]["after_encoded_bytes"],54321)
+        encoded=json.dumps(public,sort_keys=True)
+        self.assertNotIn("PRIVATE FAILURE DETAIL",encoded)
+        self.assertNotIn("PRIVATE_KEY",encoded)
+        validate_public_snapshot(public)
+
     def test_guard_rejects_unknown_key(self):
         public=sanitize_public_snapshot({"neo_version":"0.99.42"})
         public["unexpected"]="x"
