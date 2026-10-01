@@ -156,7 +156,19 @@ jobs:
           done
 
           if [ "$completed" != "1" ]; then
-            if python -c 'import json,sys; d=json.load(open("/tmp/status.json",encoding="utf-8")); ap=d.get("autopilot") or {}; sys.exit(0 if (ap.get("enabled") and ap.get("running") and not ap.get("last_error")) else 1)'; then
+            if python - <<'PY'
+          import json,sys
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          running=bool(ap.get("enabled")) and bool(ap.get("running"))
+          last_error=str(ap.get("last_error") or "")
+          # A newly-running cycle does not erase evidence that the previous cycle
+          # just failed with the global timeout. Require the observed runtime to
+          # be both running and free of a persisted cycle error.
+          healthy=running and not last_error
+          sys.exit(0 if healthy else 1)
+          PY
+            then
               echo "MYCELIX cycle is still running without errors after the observation window; treating as healthy in-progress."
               completed=2
             else
