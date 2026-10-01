@@ -111,6 +111,13 @@ class RoutePolicyAuthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status,200)
 
     async def test_hmac_only_works_on_ops(self):
+        snapshot_proof=make_self_traffic_proof("test-hmac","/api/runtime/snapshot-state")
+        status,_,_=await _call(
+            self.middleware(),"/api/runtime/snapshot-state",
+            headers={"x-mycelix-self-traffic-proof":snapshot_proof},
+        )
+        self.assertEqual(status,200)
+
         proof=make_self_traffic_proof("test-hmac","/api/memory/status")
         status,_,_=await _call(
             self.middleware(),"/api/memory/status",

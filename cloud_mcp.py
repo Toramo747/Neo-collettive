@@ -11454,6 +11454,11 @@ async def api_autopilot_status(request: Request):
     state["runtime_snapshot"] = _runtime_snapshot_freshness()
     return JSONResponse({"ok": True, "neo_version": VERSION, "runtime_profile": dict(RUNTIME_IDENTITY), "policy": _load_policy(), "autopilot": state, "manual_run": dict(MANUAL_RUN_STATE)})
 
+async def api_runtime_snapshot_state(request: Request):
+    """Authenticated OPS view used only to build the sanitized runtime snapshot."""
+    return await api_autopilot_status(request)
+
+
 
 async def _venture_payload(request: Request) -> dict:
     if request.method == "POST":
@@ -12375,6 +12380,7 @@ app = Starlette(
         Route("/api/render/diagnostics", api_render_diagnostics, methods=["GET"]),
         Route("/api/checkpoint-status", api_checkpoint_status, methods=["GET"]),
         Route("/api/autopilot/status", api_autopilot_status, methods=["GET"]),
+        Route("/api/runtime/snapshot-state", api_runtime_snapshot_state, methods=["GET"]),
         Route("/api/outcomes", api_outcomes, methods=["GET"]),
         Route("/council", council_page, methods=["GET"]),
         Route("/api/council", api_council, methods=["GET"]),
