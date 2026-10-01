@@ -90,7 +90,7 @@ jobs:
           initial_cycles="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(int(hb.get("cycles_completed") or 0))')"
           initial_version="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(str(hb.get("neo_version") or ""))')"
           initial_finished="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print(str(hb.get("last_finished_utc") or ""))')"
-          require_new_cycle="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print("1" if (hb.get("started") or hb.get("busy")) else "0")')"
+          require_new_cycle="$(python -c 'import json; hb=json.load(open("/tmp/heartbeat.json",encoding="utf-8")); print("1" if (hb.get("started") or hb.get("busy") or hb.get("last_error")) else "0")')"
 
           cat > /tmp/check_neo_complete.py <<'PY'
           import json
@@ -156,7 +156,25 @@ jobs:
           done
 
           if [ "$completed" != "1" ]; then
-            if python -c 'import json,sys; d=json.load(open("/tmp/status.json",encoding="utf-8")); ap=d.get("autopilot") or {}; sys.exit(0 if (ap.get("enabled") and ap.get("running") and not ap.get("last_error")) else 1)'; then
+            if [ "$require_new_cycle" = "1" ]; then
+              echo "MYCELIX requires a clean completed cycle because the wake observed an active/busy or failed previous cycle." >&2
+              cat /tmp/status-errors.txt >&2 || true
+              cat /tmp/status.json >&2 || true
+              exit 6
+            fi
+            if python - <<'PY'
+          import json,sys
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          running=bool(ap.get("enabled")) and bool(ap.get("running"))
+          last_error=str(ap.get("last_error") or "")
+          # A newly-running cycle does not erase evidence that the previous cycle
+          # just failed with the global timeout. Require the observed runtime to
+          # be both running and free of a persisted cycle error.
+          healthy=running and not last_error
+          sys.exit(0 if healthy else 1)
+          PY
+            then
               echo "MYCELIX cycle is still running without errors after the observation window; treating as healthy in-progress."
               completed=2
             else

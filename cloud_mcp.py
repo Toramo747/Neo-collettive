@@ -142,7 +142,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.42"  # MCP Registry Health report + static status surface
+VERSION = "0.99.43"  # fail-soft autopilot research timeouts + heartbeat recovery truth
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -195,6 +195,9 @@ SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PE
 SEARCH_MIN_INTERVAL_MS = max(0,min(5000,int(os.getenv("NEO_SEARCH_MIN_INTERVAL_MS","1100"))))
 AGENT_PROBE_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_AGENT_PROBE_TIMEOUT_SECONDS","75"))))
 WEB_RESEARCH_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_WEB_RESEARCH_TIMEOUT_SECONDS","75"))))
+EVIDENCE_SCOUT_TIMEOUT_SECONDS = max(20.0,min(120.0,float(os.getenv("NEO_EVIDENCE_SCOUT_TIMEOUT_SECONDS","45"))))
+MONEY_FIRST_TIMEOUT_SECONDS = max(20.0,min(120.0,float(os.getenv("NEO_MONEY_FIRST_TIMEOUT_SECONDS","60"))))
+REVALIDATION_TIMEOUT_SECONDS = max(20.0,min(120.0,float(os.getenv("NEO_REVALIDATION_TIMEOUT_SECONDS","60"))))
 AUTOPILOT_CYCLE_TIMEOUT_SECONDS = max(90.0,min(900.0,float(os.getenv("NEO_AUTOPILOT_CYCLE_TIMEOUT_SECONDS","300"))))
 EXPLORE_STRICT_ENABLED = (os.getenv("NEO_EXPLORE_STRICT", "1").strip().lower() in {"1","true","yes","on"})
 SETI_ENABLED = (os.getenv("NEO_SETI_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
@@ -8536,7 +8539,20 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         for x in (search_strategy.get("query_plan") or [])
         if isinstance(x,dict) and str(x.get("query") or "").strip()
     }
-    demand_evidence = await evidence_scouts(goal, limit=20)
+    try:
+        demand_evidence = await asyncio.wait_for(
+            evidence_scouts(goal, limit=20),
+            timeout=EVIDENCE_SCOUT_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        demand_evidence = []
+        AUTOPILOT_STATE["market_source_diagnostics"] = {
+            **dict(AUTOPILOT_STATE.get("market_source_diagnostics") or {}),
+            "evidence_scouts": {
+                "timeout": True,
+                "timeout_seconds": EVIDENCE_SCOUT_TIMEOUT_SECONDS,
+            },
+        }
 
     # Free web evidence remains supplemental; evidence scouts target problem/demand signals. No paid API key is used.
     # Jarvis can also suggest follow-up evidence queries from its deterministic rule engine.
@@ -8603,11 +8619,27 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             " ".join(str(x.get("query") or "").split()).lower():x
             for x in money_plan if isinstance(x,dict) and str(x.get("query") or "").strip()
         }
-        money_groups=await _free_web_research(
-            [x["query"] for x in money_plan],
-            per_query=6,
-            query_meta=money_meta,
-        )
+        try:
+            money_groups=await asyncio.wait_for(
+                _free_web_research(
+                    [x["query"] for x in money_plan],
+                    per_query=6,
+                    query_meta=money_meta,
+                ),
+                timeout=MONEY_FIRST_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            money_groups=[
+                {
+                    "ok":False,
+                    "query":str(x.get("query") or ""),
+                    "results":[],
+                    "count":0,
+                    "source_counts":{},
+                    "error":"money_first_deadline_exceeded",
+                }
+                for x in money_plan
+            ]
         web_research.extend(money_groups)
         query_meta.update(money_meta)
         search_strategy["money_first_queries"]=money_plan
@@ -8693,19 +8725,22 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     revalidation_stats={"attempted":0,"promoted":0,"failed":0,"unreachable":0}
     if QUARANTINE_REVALIDATION_ENABLED and REVALIDATE_PER_CYCLE>0:
         try:
-            revalidated_memory,revalidation_stats=await revalidate_quarantined_rows(
-                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
-                _revalidation_fetch_url,
-                limit=REVALIDATE_PER_CYCLE,
-                max_fetch_attempts=3,
-                self_contamination_guard=SELF_CONTAMINATION_GUARD_ENABLED,
-                seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
-                vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
-                web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
-                supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
-                query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
-                family_match_guard=ATTRIBUTION_FAMILY_GUARD_ENABLED,
-                strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+            revalidated_memory,revalidation_stats=await asyncio.wait_for(
+                revalidate_quarantined_rows(
+                    AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                    _revalidation_fetch_url,
+                    limit=REVALIDATE_PER_CYCLE,
+                    max_fetch_attempts=3,
+                    self_contamination_guard=SELF_CONTAMINATION_GUARD_ENABLED,
+                    seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
+                    vendor_content_guard=VENDOR_CONTENT_GUARD_ENABLED,
+                    web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
+                    supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
+                    query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
+                    family_match_guard=ATTRIBUTION_FAMILY_GUARD_ENABLED,
+                    strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
+                ),
+                timeout=REVALIDATION_TIMEOUT_SECONDS,
             )
             AUTOPILOT_STATE["commercial_evidence_memory"]=revalidated_memory
         except Exception:

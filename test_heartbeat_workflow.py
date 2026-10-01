@@ -93,6 +93,12 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         w=self.workflow
         self.assertIn('latest=ap.get("latest_result") or d.get("latest_result")',w)
 
+    def test_prior_cycle_error_requires_clean_completion(self):
+        w=self.workflow
+        self.assertIn('hb.get("last_error")',w)
+        self.assertIn('if [ "$require_new_cycle" = "1" ]; then',w)
+        self.assertIn("requires a clean completed cycle",w)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
