@@ -142,6 +142,14 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "reason": None,
                 "count": None,
             }],
+            "search_sources": [{
+                "source": None,
+                "attempts": None,
+                "empty": None,
+                "errors": None,
+                "raw_results": None,
+                "relevance_pass": None,
+            }],
             "search_provider": {
                 "name": None,
                 "calls_cycle": None,
@@ -330,6 +338,29 @@ def _project_reason_counts(value: Any, limit: int = 12) -> list[dict]:
     return rows[:limit]
 
 
+def _project_search_sources(ingestion: dict) -> list[dict]:
+    attempts = ingestion.get("source_attempts") if isinstance(ingestion.get("source_attempts"), dict) else {}
+    empty = ingestion.get("source_empty") if isinstance(ingestion.get("source_empty"), dict) else {}
+    errors = ingestion.get("source_errors") if isinstance(ingestion.get("source_errors"), dict) else {}
+    raw = ingestion.get("raw_results_by_source") if isinstance(ingestion.get("raw_results_by_source"), dict) else {}
+    passed = ingestion.get("query_relevance_pass_by_source") if isinstance(ingestion.get("query_relevance_pass_by_source"), dict) else {}
+    keys = sorted(set(attempts) | set(empty) | set(errors) | set(raw) | set(passed))
+    rows = []
+    for key in keys:
+        source = _safe_code(key, 48)
+        if not source:
+            continue
+        rows.append({
+            "source": source,
+            "attempts": max(0, int(attempts.get(key) or 0)),
+            "empty": max(0, int(empty.get(key) or 0)),
+            "errors": max(0, int(errors.get(key) or 0)),
+            "raw_results": max(0, int(raw.get(key) or 0)),
+            "relevance_pass": max(0, int(passed.get(key) or 0)),
+        })
+    return rows[:16]
+
+
 def _project_select_diagnostics(latest_result: Any) -> dict:
     latest = latest_result if isinstance(latest_result, dict) else {}
     quality = latest.get("evidence_quality") if isinstance(latest.get("evidence_quality"), dict) else {}
@@ -366,6 +397,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "top_monetization_score": max(0, int(top.get("monetization_score") or 0)),
         "top_missing": missing[:12],
         "rejection_reasons": _project_reason_counts(ingestion.get("rejected_by_reason")),
+        "search_sources": _project_search_sources(ingestion),
         "search_provider": {
             "name": _safe_code(provider.get("name"), 48),
             "calls_cycle": max(0, int(provider.get("calls_cycle") or 0)),
