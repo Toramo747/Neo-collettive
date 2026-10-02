@@ -361,6 +361,73 @@ def _project_search_sources(ingestion: dict) -> list[dict]:
     return rows[:16]
 
 
+def _project_error_codes(value: Any, source_limit: int = 16, code_limit: int = 12) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    out={}
+    for source,codes in sorted(value.items()):
+        safe_source=_safe_code(source,48)
+        if not safe_source or not isinstance(codes,dict):
+            continue
+        rows={}
+        for code,count in sorted(codes.items()):
+            safe_code=_safe_code(code,80)
+            if not safe_code:
+                continue
+            try:
+                rows[safe_code]=max(0,int(count or 0))
+            except Exception:
+                rows[safe_code]=0
+            if len(rows)>=code_limit:
+                break
+        if rows:
+            out[safe_source]=rows
+        if len(out)>=source_limit:
+            break
+    return out
+
+
+def _project_funnel(value: Any) -> dict:
+    src=value if isinstance(value,dict) else {}
+    calls=src.get("calls_by_source") if isinstance(src.get("calls_by_source"),dict) else {}
+    return {
+        "queries_planned":max(0,int(src.get("queries_planned") or 0)),
+        "queries_executed":max(0,int(src.get("queries_executed") or 0)),
+        "calls_by_source":{
+            _safe_code(k,48):max(0,int(v or 0))
+            for k,v in sorted(calls.items()) if _safe_code(k,48)
+        },
+        "errors_by_source":_project_error_codes(src.get("errors_by_source")),
+        "raw_received":max(0,int(src.get("raw_received") or 0)),
+        "deduped":max(0,int(src.get("deduped") or 0)),
+        "query_relevant":max(0,int(src.get("query_relevant") or 0)),
+        "family_matched":max(0,int(src.get("family_matched") or 0)),
+        "buyer_voice":max(0,int(src.get("buyer_voice") or 0)),
+        "commercial_signal":max(0,int(src.get("commercial_signal") or 0)),
+        "persisted":max(0,int(src.get("persisted") or 0)),
+        "discarded_by_reason":_project_reason_counts(src.get("discarded_by_reason")),
+        "monotonicity_warnings":[
+            {
+                "upstream":_safe_code(x.get("upstream"),48),
+                "downstream":_safe_code(x.get("downstream"),48),
+            }
+            for x in (src.get("monotonicity_warnings") or [])
+            if isinstance(x,dict)
+        ][:12],
+    }
+
+
+def _project_agent_probes(value: Any) -> dict:
+    src=value if isinstance(value,dict) else {}
+    return {
+        key:max(0,int(src.get(key) or 0))
+        for key in (
+            "probes_attempted","agents_reached","answers_received",
+            "valid_answers","rejected_answers","timeouts",
+        )
+    }
+
+
 def _project_select_diagnostics(latest_result: Any) -> dict:
     latest = latest_result if isinstance(latest_result, dict) else {}
     quality = latest.get("evidence_quality") if isinstance(latest.get("evidence_quality"), dict) else {}
@@ -368,6 +435,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
     tool = latest.get("tool_opportunities") if isinstance(latest.get("tool_opportunities"), dict) else {}
     top5 = [row for row in (tool.get("top5") or []) if isinstance(row, dict)]
     top = top5[0] if top5 else {}
+    candidate_counts = tool.get("candidate_counts") if isinstance(tool.get("candidate_counts"), dict) else {}
     provider = ingestion.get("search_provider") if isinstance(ingestion.get("search_provider"), dict) else {}
     problem_clusters = quality.get("problem_clusters") if isinstance(quality.get("problem_clusters"), dict) else {}
     qualified = quality.get("qualified_problem_keys") if isinstance(quality.get("qualified_problem_keys"), list) else []
@@ -392,7 +460,10 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "new_signal_rows": max(0, int(ingestion.get("new_signal_rows") or 0)),
         "problem_cluster_count": len(problem_clusters),
         "qualified_problem_count": len(qualified),
-        "tool_candidate_count": len(top5),
+        "configured_categories": max(0, int(candidate_counts.get("configured_categories") or len(top5))),
+        "evidenced_candidates": max(0, int(candidate_counts.get("evidenced_candidates") or 0)),
+        "gate_eligible_candidates": max(0, int(candidate_counts.get("gate_eligible_candidates") or 0)),
+        "qualified_candidates": max(0, int(candidate_counts.get("qualified_candidates") or 0)),
         "top_gate_pass": bool(top.get("gate_pass")),
         "top_monetization_score": max(0, int(top.get("monetization_score") or 0)),
         "top_missing": missing[:12],
@@ -400,12 +471,17 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "search_sources": _project_search_sources(ingestion),
         "search_provider": {
             "name": _safe_code(provider.get("name"), 48),
+            "configured_provider": _safe_code(provider.get("configured_provider"), 48),
+            "provider_key_present": bool(provider.get("provider_key_present")),
+            "fallback_used": bool(provider.get("fallback_used")),
             "calls_cycle": max(0, int(provider.get("calls_cycle") or 0)),
             "calls_day": max(0, int(provider.get("calls_day") or 0)),
             "errors": max(0, int(provider.get("errors") or 0)),
             "fallbacks": max(0, int(provider.get("fallbacks") or 0)),
             "fallback_reasons": _project_reason_counts(provider.get("fallback_reasons")),
         },
+        "funnel": _project_funnel(ingestion.get("funnel")),
+        "agent_probes": _project_agent_probes(ingestion.get("agent_probes")),
     }
 
 
