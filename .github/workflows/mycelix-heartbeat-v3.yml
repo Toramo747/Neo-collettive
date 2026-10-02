@@ -386,7 +386,7 @@ jobs:
                   }
               },
               "manual_run": raw.get("manual_run") or {},
-              "latest_result": ap.get("latest_result")
+              "latest_result": raw.get("latest_result") or ap.get("latest_result")
           }
           snapshot=sanitize_public_snapshot(snapshot)
           with open("neo_latest_result.json","w",encoding="utf-8") as f:
