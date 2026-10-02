@@ -65,6 +65,14 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn('return await ask_agents_data(q,question,min(max_agents,2),lightweight=True)',s)
         self.assertIn('probe_queries=list(searches[:8])',s)
 
+    def test_lightweight_probe_bounds_registry_and_transport_latency(self):
+        s=self.source
+        self.assertIn('single_attempt: bool = False',s)
+        self.assertIn('if single_attempt:',s)
+        self.assertIn('single_attempt=lightweight',s)
+        self.assertIn('timeout=15.0',s)
+        self.assertIn('"quality_reason":"lightweight_transport_timeout"',s)
+
     def test_revalidation_is_bounded(self):
         s=self.source
         self.assertIn("REVALIDATION_TIMEOUT_SECONDS",s)
