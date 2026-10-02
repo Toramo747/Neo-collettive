@@ -2592,6 +2592,7 @@ async def _multi_registry_search(
     *,
     include_generalists: bool = True,
     include_mcp: bool = True,
+    single_attempt: bool = False,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     async def search_a2a(q: str):
         attempts=[
@@ -2599,6 +2600,8 @@ async def _multi_registry_search(
             {"search":q,"limit":per_query,"conformance":"standard"},
             {"search":q,"limit":per_query},
         ]
+        if single_attempt:
+            attempts=attempts[:1]
         last_error=None
         for params in attempts:
             try:
@@ -3208,6 +3211,7 @@ async def ask_agents_data(
         per_query=5 if lightweight else 10,
         include_generalists=not lightweight,
         include_mcp=not lightweight,
+        single_attempt=lightweight,
     )
 
     # Historical performers remain eligible even when a registry text search does not rediscover them.
@@ -3267,7 +3271,27 @@ async def ask_agents_data(
 
     async def ask(entry) -> dict:
         score,reasons,agent=entry
-        answer=await _ask_a2a_transport(agent,question)
+        try:
+            if lightweight:
+                answer=await asyncio.wait_for(
+                    _ask_a2a_transport(agent,question),
+                    timeout=15.0,
+                )
+            else:
+                answer=await _ask_a2a_transport(agent,question)
+        except asyncio.TimeoutError:
+            answer={
+                "agent":agent.get("name") or agent.get("id") or "unknown",
+                "agent_id":agent.get("id") or agent.get("agent_id") or "",
+                "ok":False,
+                "quality_ok":False,
+                "quality_reason":"lightweight_transport_timeout",
+                "transport_errors":[{
+                    "error_type":"TimeoutError",
+                    "error":"lightweight_transport_timeout",
+                    "retryable":False,
+                }],
+            }
         answer["relevance_score"]=score
         answer["selection_reasons"]=reasons
         answer["matched_queries"]=agent.get("_matched_queries") or []
