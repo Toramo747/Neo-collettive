@@ -48,7 +48,7 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
     def test_agent_probe_query_list_is_copied_before_money_first_extension(self):
         s=self.source
         self.assertIn('searches = list(search_strategy["queries"])',s)
-        self.assertIn('probe_queries=list(searches[:10])',s)
+        self.assertIn('probe_queries=list(searches[:8])',s)
         self.assertIn('done,pending=await asyncio.wait(tasks,timeout=AGENT_PROBE_TIMEOUT_SECONDS)',s)
 
     def test_paid_market_router_defines_diagnostic_scope_variables(self):
@@ -56,6 +56,14 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn('role=str(meta.get("role") or meta.get("class") or "paid_market")',s)
         self.assertIn('query_intent=str(meta.get("query_intent") or "pain").strip().lower()',s)
         self.assertIn('structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})',s)
+
+    def test_autopilot_agent_probes_use_lightweight_discovery(self):
+        s=self.source
+        self.assertIn('lightweight: bool = False',s)
+        self.assertIn('include_generalists=not lightweight',s)
+        self.assertIn('include_mcp=not lightweight',s)
+        self.assertIn('return await ask_agents_data(q,question,min(max_agents,2),lightweight=True)',s)
+        self.assertIn('probe_queries=list(searches[:8])',s)
 
     def test_revalidation_is_bounded(self):
         s=self.source
