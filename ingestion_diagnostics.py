@@ -6,7 +6,11 @@ selection, relevance decisions, evidence tagging, or the commercial quality gate
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import logging
 from typing import Any, Callable
+
+LOGGER = logging.getLogger("mycelix.ingestion")
+FUNNEL_STAGES = ("raw_received","deduped","query_relevant","family_matched","buyer_voice","commercial_signal","persisted")
 
 TRACKED_SOURCES = ("bing-rss", "hn", "github", "stackexchange")
 _SOURCE_ALIASES = {
@@ -65,6 +69,7 @@ def routed_search_diagnostics(
     attempts = Counter()
     empty = Counter()
     source_errors = Counter()
+    errors_by_source: dict[str, Counter] = defaultdict(Counter)
     batch_sources = list(batch_sources or [])
     qclass = diagnostic_query_class(meta)
     meta = meta if isinstance(meta, dict) else {}
@@ -75,7 +80,12 @@ def routed_search_diagnostics(
             errors += 1
             attempts[source_hint] += 1
             source_errors[source_hint] += 1
+            errors_by_source[source_hint][type(batch).__name__] += 1
             continue
+        if isinstance(batch, dict) and batch.get("error"):
+            code=str(batch.get("error") or "exception")[:80]
+            source_errors[source_hint] += 1
+            errors_by_source[source_hint][code] += 1
         rows = _rows_from_batch(batch)
         if source_hint != "unknown":
             attempts[source_hint] += 1
@@ -109,6 +119,21 @@ def routed_search_diagnostics(
         "source_attempts": dict(attempts),
         "source_empty": dict(empty),
         "source_errors": dict(source_errors),
+        "errors_by_source": {
+            source: dict(sorted(counts.items()))
+            for source,counts in sorted(errors_by_source.items())
+        },
+        "funnel": {
+            "queries_executed": 1,
+            "calls_by_source": dict(attempts),
+            "errors_by_source": {
+                source: dict(sorted(counts.items()))
+                for source,counts in sorted(errors_by_source.items())
+            },
+            "raw_received": sum(raw.values()),
+            "deduped": len(seen),
+            "query_relevant": sum(passed.values()),
+        },
         "diagnostic_errors": errors,
     }
 
@@ -137,6 +162,29 @@ class IngestionDiagnostics:
         self.source_attempts = Counter()
         self.source_empty = Counter()
         self.source_errors = Counter()
+        self.errors_by_source: dict[str, Counter] = defaultdict(Counter)
+        self.funnel = {
+            "queries_planned":0,
+            "queries_executed":0,
+            "calls_by_source":Counter(),
+            "errors_by_source":defaultdict(Counter),
+            "raw_received":0,
+            "deduped":0,
+            "query_relevant":0,
+            "family_matched":0,
+            "buyer_voice":0,
+            "commercial_signal":0,
+            "persisted":0,
+            "discarded_by_reason":Counter(),
+        }
+        self.agent_probes = {
+            "probes_attempted":0,
+            "agents_reached":0,
+            "answers_received":0,
+            "valid_answers":0,
+            "rejected_answers":0,
+            "timeouts":0,
+        }
         self.errors = 0
 
     def merge_web_research(self, groups: list[dict] | None) -> None:
@@ -156,6 +204,17 @@ class IngestionDiagnostics:
             self.source_attempts.update(diag.get("source_attempts") or {})
             self.source_empty.update(diag.get("source_empty") or {})
             self.source_errors.update(diag.get("source_errors") or {})
+            for source,codes in (diag.get("errors_by_source") or {}).items():
+                if isinstance(codes,dict):
+                    self.errors_by_source[canonical_source(source)].update(codes)
+            funnel=diag.get("funnel") if isinstance(diag.get("funnel"),dict) else {}
+            self.funnel["queries_executed"] += max(0,int(funnel.get("queries_executed") or 0))
+            self.funnel["calls_by_source"].update(funnel.get("calls_by_source") or {})
+            for source,codes in (funnel.get("errors_by_source") or {}).items():
+                if isinstance(codes,dict):
+                    self.funnel["errors_by_source"][canonical_source(source)].update(codes)
+            for key in ("raw_received","deduped","query_relevant"):
+                self.funnel[key] += max(0,int(funnel.get(key) or 0))
             self.errors += int(diag.get("diagnostic_errors") or 0)
 
     def add_raw_rows(self, rows: list[dict] | None) -> None:
@@ -176,6 +235,22 @@ class IngestionDiagnostics:
             self.self_contamination_rejected += 1
         self.rejected_by_source[source][reason] += 1
         self.rejected_by_class[qclass][reason] += 1
+        self.funnel["discarded_by_reason"][reason] += 1
+
+    def set_queries_planned(self, count: int) -> None:
+        if self.enabled:
+            self.funnel["queries_planned"]=max(0,int(count or 0))
+
+    def record_funnel_stage(self, stage: str, count: int = 1) -> None:
+        if not self.enabled or stage not in FUNNEL_STAGES:
+            return
+        self.funnel[stage] += max(0,int(count or 0))
+
+    def set_agent_probes(self, payload: dict | None) -> None:
+        if not self.enabled or not isinstance(payload,dict):
+            return
+        for key in self.agent_probes:
+            self.agent_probes[key]=max(0,int(payload.get(key) or 0))
 
     def record_observed_candidate_purge(self, reason: str, count: int = 1) -> None:
         if not self.enabled:
@@ -236,6 +311,9 @@ class IngestionDiagnostics:
             "calls_day":max(0,int(payload.get("calls_day") or 0)),
             "errors":max(0,int(payload.get("errors") or 0)),
             "fallbacks":max(0,int(payload.get("fallbacks") or 0)),
+            "configured_provider":str(payload.get("configured_provider") or payload.get("name") or "bing"),
+            "provider_key_present":bool(payload.get("provider_key_present")),
+            "fallback_used":bool(payload.get("fallback_used") or payload.get("fallbacks")),
             "fallback_reasons":{
                 str(k)[:80]:max(0,int(v or 0))
                 for k,v in (payload.get("fallback_reasons") or {}).items()
@@ -257,6 +335,27 @@ class IngestionDiagnostics:
         for source in TRACKED_SOURCES:
             raw.setdefault(source, 0)
             passed.setdefault(source, 0)
+        funnel_out={
+            "queries_planned":max(0,int(self.funnel["queries_planned"] or 0)),
+            "queries_executed":max(0,int(self.funnel["queries_executed"] or 0)),
+            "calls_by_source":dict(sorted(self.funnel["calls_by_source"].items())),
+            "errors_by_source":{
+                source:dict(sorted(codes.items()))
+                for source,codes in sorted(self.funnel["errors_by_source"].items())
+            },
+            **{key:max(0,int(self.funnel[key] or 0)) for key in FUNNEL_STAGES},
+            "discarded_by_reason":dict(sorted(self.funnel["discarded_by_reason"].items())),
+        }
+        seq=[funnel_out[key] for key in FUNNEL_STAGES]
+        violations=[
+            {"upstream":FUNNEL_STAGES[i],"downstream":FUNNEL_STAGES[i+1]}
+            for i in range(len(FUNNEL_STAGES)-1)
+            if seq[i] < seq[i+1]
+        ]
+        if violations:
+            LOGGER.warning("funnel monotonicity violation: %s", violations)
+        funnel_out["monotonicity_warnings"]=violations
+
         return {
             "enabled": True,
             "raw_results_by_source": dict(sorted(raw.items())),
@@ -288,6 +387,8 @@ class IngestionDiagnostics:
             },
             "intent_review_sample": list(self.intent_review_sample),
             "search_provider": dict(self.search_provider),
+            "funnel": funnel_out,
+            "agent_probes": dict(self.agent_probes),
             "source_attempts": dict(sorted(self.source_attempts.items())),
             "source_empty": dict(sorted(self.source_empty.items())),
             "source_errors": dict(sorted(self.source_errors.items())),
