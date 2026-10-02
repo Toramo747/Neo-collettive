@@ -86,6 +86,11 @@ def routed_search_diagnostics(
             code=str(batch.get("error") or "exception")[:80]
             source_errors[source_hint] += 1
             errors_by_source[source_hint][code] += 1
+        if isinstance(batch,dict) and batch.get("provider_fallback_reason"):
+            code=str(batch.get("provider_fallback_reason") or "")[:80]
+            if code and code not in {"provider_unconfigured_or_bing","empty_primary_result"}:
+                source_errors[source_hint] += 1
+                errors_by_source[source_hint][code] += 1
         rows = _rows_from_batch(batch)
         if source_hint != "unknown":
             attempts[source_hint] += 1
