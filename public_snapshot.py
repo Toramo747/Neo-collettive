@@ -125,6 +125,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
         },
         "select_diagnostics": {
             "status": None,
+            "ingestion_enabled": None,
             "raw_results": None,
             "relevance_pass": None,
             "useful_results": None,
@@ -493,6 +494,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
 
     return {
         "status": _safe_code(latest.get("status"), 48),
+        "ingestion_enabled": bool(ingestion.get("enabled")) if "enabled" in ingestion else None,
         "raw_results": raw_results,
         "relevance_pass": relevance_pass,
         "useful_results": max(0, int(quality.get("current_cycle_useful_results") or 0)),
