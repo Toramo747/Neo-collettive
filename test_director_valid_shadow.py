@@ -40,6 +40,11 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn("EVIDENCE_SCOUT_TIMEOUT_SECONDS",s)
         self.assertIn("evidence_scouts(goal, limit=20)",s)
 
+    def test_bounded_agent_probes_are_executed(self):
+        s=self.source
+        self.assertIn("scout_results = await bounded_agent_probes()",s)
+        self.assertNotIn('scout_results = [{"ok":True,"query":q,"answers":[]',s)
+
     def test_revalidation_is_bounded(self):
         s=self.source
         self.assertIn("REVALIDATION_TIMEOUT_SECONDS",s)
