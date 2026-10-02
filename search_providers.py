@@ -115,6 +115,7 @@ def new_search_state() -> dict[str, Any]:
         "fallback_reasons":{},
         "last_provider":"bing",
         "last_call_monotonic":0.0,
+        "provider_throttled":False,
     }
 
 
@@ -131,6 +132,7 @@ def normalize_search_state(state: dict | None) -> dict[str, Any]:
             out[key]=0
     out["day_utc"]=str(out.get("day_utc") or "")
     out["last_provider"]=str(out.get("last_provider") or "bing")
+    out["provider_throttled"]=bool(out.get("provider_throttled"))
     out["fallback_reasons"]={
         str(k)[:80]:max(0,int(v or 0))
         for k,v in (out.get("fallback_reasons") or {}).items()
@@ -156,6 +158,7 @@ def begin_cycle(state: dict | None, cycle_id: int, now: datetime | None = None) 
         out["errors"]=0
         out["fallbacks"]=0
         out["fallback_reasons"]={}
+        out["provider_throttled"]=False
     return out
 
 
@@ -238,13 +241,31 @@ async def search(
         return [],st,{"provider":provider,"fallback":True,"reason":"empty_query"}
     if provider=="bing":
         return [],st,{"provider":"bing","fallback":True,"reason":"provider_unconfigured_or_bing"}
+    if st.get("provider_throttled"):
+        _record_fallback(st,"provider_throttled")
+        return [],st,{
+            "provider":provider,
+            "fallback":True,
+            "reason":"provider_throttled",
+            "fallback_counted":True,
+        }
     budget_reason=_budget_reason(st,max_calls_cycle,max_calls_day)
     if budget_reason:
         _record_fallback(st,budget_reason)
-        return [],st,{"provider":provider,"fallback":True,"reason":budget_reason}
+        return [],st,{
+            "provider":provider,
+            "fallback":True,
+            "reason":budget_reason,
+            "fallback_counted":True,
+        }
     if http_get is None:
         _record_fallback(st,"transport_unavailable",error=True)
-        return [],st,{"provider":provider,"fallback":True,"reason":"transport_unavailable"}
+        return [],st,{
+            "provider":provider,
+            "fallback":True,
+            "reason":"transport_unavailable",
+            "fallback_counted":True,
+        }
 
     interval=max(0,int(min_interval_ms or 0))/1000.0
     if interval>0:
@@ -261,7 +282,12 @@ async def search(
             key=(os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()
             if not key:
                 _record_fallback(st,"not_configured")
-                return [],st,{"provider":"brave","fallback":True,"reason":"not_configured"}
+                return [],st,{
+                    "provider":"brave",
+                    "fallback":True,
+                    "reason":"not_configured",
+                    "fallback_counted":True,
+                }
             response=await http_get(
                 BRAVE_ENDPOINT,
                 params={"q":q,"count":count},
@@ -294,7 +320,12 @@ async def search(
         cx=(os.getenv("GOOGLE_PSE_CX") or "").strip()
         if not key or not cx:
             _record_fallback(st,"not_configured")
-            return [],st,{"provider":"google","fallback":True,"reason":"not_configured"}
+            return [],st,{
+                "provider":"google",
+                "fallback":True,
+                "reason":"not_configured",
+                "fallback_counted":True,
+            }
         response=await http_get(
             GOOGLE_ENDPOINT,
             params={"key":key,"cx":cx,"q":q,"num":count},
@@ -324,12 +355,24 @@ async def search(
         return rows,st,{"provider":"google","fallback":False,"reason":"ok"}
     except SearchProviderError as exc:
         reason=str(exc)[:80]
+        if reason=="HTTPStatusError:429":
+            st["provider_throttled"]=True
         _record_fallback(st,reason,error=True)
-        return [],st,{"provider":provider,"fallback":True,"reason":reason}
+        return [],st,{
+            "provider":provider,
+            "fallback":True,
+            "reason":reason,
+            "fallback_counted":True,
+        }
     except Exception as exc:
         reason=type(exc).__name__
         _record_fallback(st,reason,error=True)
-        return [],st,{"provider":provider,"fallback":True,"reason":reason}
+        return [],st,{
+            "provider":provider,
+            "fallback":True,
+            "reason":reason,
+            "fallback_counted":True,
+        }
 
 
 async def search_with_fallback(
@@ -377,7 +420,7 @@ async def search_with_fallback(
             "fallback":True,
             "reason":"empty_primary_result",
         }
-    elif meta.get("fallback"):
+    elif meta.get("fallback") and not meta.get("fallback_counted"):
         _record_fallback(new_state,str(meta.get("reason") or "fallback"))
 
     fallback=await bing_search(query,limit)
