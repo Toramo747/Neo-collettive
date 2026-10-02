@@ -57,6 +57,14 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn('query_intent=str(meta.get("query_intent") or "pain").strip().lower()',s)
         self.assertIn('structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})',s)
 
+    def test_autopilot_agent_probes_use_lightweight_discovery(self):
+        s=self.source
+        self.assertIn('lightweight: bool = False',s)
+        self.assertIn('include_generalists=not lightweight',s)
+        self.assertIn('include_mcp=not lightweight',s)
+        self.assertIn('return await ask_agents_data(q,question,min(max_agents,2),lightweight=True)',s)
+        self.assertIn('probe_queries=list(searches[:8])',s)
+
     def test_revalidation_is_bounded(self):
         s=self.source
         self.assertIn("REVALIDATION_TIMEOUT_SECONDS",s)
