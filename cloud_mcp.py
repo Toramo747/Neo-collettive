@@ -6029,12 +6029,27 @@ def _commercial_evidence_quality(
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
     diagnostics.merge_revalidation(revalidation_stats)
-    diagnostics.set_search_provider(
-        provider_diagnostics(
-            AUTOPILOT_STATE.get("search_provider_state") or {},
-            configured_provider(SEARCH_PROVIDER_MODE),
-        )
+    configured_search_provider=configured_provider(SEARCH_PROVIDER_MODE)
+    provider_diag=provider_diagnostics(
+        AUTOPILOT_STATE.get("search_provider_state") or {},
+        configured_search_provider,
     )
+    provider_diag.update({
+        "configured_provider":configured_search_provider,
+        "provider_key_present":bool(
+            (os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()
+            if configured_search_provider=="brave"
+            else (
+                (os.getenv("GOOGLE_PSE_KEY") or "").strip()
+                and (os.getenv("GOOGLE_PSE_CX") or "").strip()
+            ) if configured_search_provider=="google"
+            else False
+        ),
+        "fallback_used":bool(provider_diag.get("fallbacks")),
+    })
+    diagnostics.set_search_provider(provider_diag)
+    diagnostics.set_queries_planned(len(query_meta))
+    diagnostics.set_agent_probes(AUTOPILOT_STATE.get("agent_probe_diagnostics") or {})
     now_epoch=time.time()
     retention_seconds=21*24*3600
     fresh_seconds=7*24*3600
@@ -6079,12 +6094,12 @@ def _commercial_evidence_quality(
         if query and not relevance.get("relevant"):
             reject("query_irrelevant",url,title,query_role,source,query_class)
             return
-
         text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
             reject("no_family",url,title,query_role,source,query_class)
             return
+        diagnostics.record_funnel_stage("family_matched")
         context,title_hits,body_hits=_evidence_context(title,body,family)
         if title_hits<1 and body_hits<2:
             reject("weak_family_relevance",url,title,query_role,source,query_class)
@@ -6102,6 +6117,8 @@ def _commercial_evidence_quality(
             and generic_web_source(source)
             and not generic_web_pain_allowed(title,body,url,source)
         )
+        if not web_buyer_voice_missing:
+            diagnostics.record_funnel_stage("buyer_voice")
         signal_types=integrity_demand_signal_type(
             title,context,query_role,
             strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
@@ -6128,6 +6145,7 @@ def _commercial_evidence_quality(
         if not signal_types:
             reject("no_demand_signal",url,title,query_role,source,query_class)
             return
+        diagnostics.record_funnel_stage("commercial_signal")
 
         observed_problem_key=canonical_problem_key(family,_problem_signature(family,title,context))
         problem_key=thesis_attributed_problem_key(
@@ -6285,6 +6303,7 @@ def _commercial_evidence_quality(
                 merged["gate_eligible"]=False
                 merged["quarantine_reason"]="disconfirm"
             memory[index[key]]=merged
+            diagnostics.record_funnel_stage("persisted")
         else:
             if (
                 row.get("gate_eligible")
@@ -6306,6 +6325,7 @@ def _commercial_evidence_quality(
                 )
             index[key]=len(memory)
             memory.append(row)
+            diagnostics.record_funnel_stage("persisted")
 
     # Per-problem retention: keep recent rows while preventing one noisy problem from
     # evicting the entire memory. 240 is still bounded for Render env persistence.
@@ -8683,12 +8703,23 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     scout_results = await bounded_agent_probes()
     evidence = []
     seen_answers = set()
+    reached_agents = set()
     valid = []
+    probe_answers_received=0
+    probe_rejected_answers=0
+    probe_timeouts=0
     for q, result in zip(searches, scout_results):
         answers = result.get("answers", [])
+        probe_answers_received += len(answers)
+        probe_rejected_answers += len(result.get("rejected_responses") or [])
+        if any(str(x.get("error") or "")=="agent_probe_deadline_exceeded" for x in (result.get("discovery_errors") or []) if isinstance(x,dict)):
+            probe_timeouts += 1
         unique_answers = []
         for answer in answers:
-            key = str(answer.get("agent_id") or answer.get("agent") or "") + "|" + _response_text(answer)[:500]
+            agent_key=str(answer.get("agent_id") or answer.get("agent") or "").strip()
+            if agent_key:
+                reached_agents.add(agent_key)
+            key = agent_key + "|" + _response_text(answer)[:500]
             if key in seen_answers:
                 continue
             seen_answers.add(key)
@@ -8701,6 +8732,14 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "rejected_responses": result.get("rejected_responses", [])[:4],
             "discovery_errors": result.get("discovery_errors", [])[:3],
         })
+    AUTOPILOT_STATE["agent_probe_diagnostics"]={
+        "probes_attempted":len(searches),
+        "agents_reached":len(reached_agents),
+        "answers_received":probe_answers_received,
+        "valid_answers":len(valid),
+        "rejected_answers":probe_rejected_answers,
+        "timeouts":probe_timeouts,
+    }
 
     # Jarvis gets the collected evidence only as untrusted material and produces the final review.
     jarvis_message = (

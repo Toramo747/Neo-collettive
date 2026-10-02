@@ -115,11 +115,43 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
                             "calls_day":149,
                             "errors":1,
                             "fallbacks":2,
+                            "configured_provider":"brave",
+                            "provider_key_present":True,
+                            "fallback_used":True,
                             "fallback_reasons":{"budget_exhausted":2},
+                        },
+                        "funnel":{
+                            "queries_planned":10,
+                            "queries_executed":9,
+                            "calls_by_source":{"web":4,"hn":3,"github":2},
+                            "errors_by_source":{"web":{"ReadTimeout":1}},
+                            "raw_received":25,
+                            "deduped":20,
+                            "query_relevant":9,
+                            "family_matched":6,
+                            "buyer_voice":5,
+                            "commercial_signal":3,
+                            "persisted":2,
+                            "discarded_by_reason":{"vendor_content":2},
+                            "monotonicity_warnings":[],
+                        },
+                        "agent_probes":{
+                            "probes_attempted":5,
+                            "agents_reached":2,
+                            "answers_received":3,
+                            "valid_answers":2,
+                            "rejected_answers":1,
+                            "timeouts":0,
                         },
                     },
                 },
                 "tool_opportunities":{
+                    "candidate_counts":{
+                        "configured_categories":5,
+                        "evidenced_candidates":2,
+                        "gate_eligible_candidates":1,
+                        "qualified_candidates":0,
+                    },
                     "top5":[
                         {
                             "gate_pass":False,
@@ -144,12 +176,25 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(diag["new_signal_rows"],3)
         self.assertEqual(diag["problem_cluster_count"],3)
         self.assertEqual(diag["qualified_problem_count"],1)
-        self.assertEqual(diag["tool_candidate_count"],1)
+        self.assertEqual(diag["configured_categories"],5)
+        self.assertEqual(diag["evidenced_candidates"],2)
+        self.assertEqual(diag["gate_eligible_candidates"],1)
+        self.assertEqual(diag["qualified_candidates"],0)
         self.assertFalse(diag["top_gate_pass"])
         self.assertEqual(diag["top_monetization_score"],72)
         self.assertIn("two_independent_real_price_competitors",diag["top_missing"])
         self.assertIn("documented_gap",diag["top_missing"])
         self.assertEqual(diag["search_provider"]["calls_day"],149)
+        self.assertEqual(diag["search_provider"]["configured_provider"],"brave")
+        self.assertTrue(diag["search_provider"]["provider_key_present"])
+        self.assertTrue(diag["search_provider"]["fallback_used"])
+        self.assertEqual(diag["funnel"]["raw_received"],25)
+        self.assertEqual(diag["funnel"]["persisted"],2)
+        self.assertIn(
+            {"source":"web","error":"ReadTimeout","count":1},
+            diag["funnel"]["errors_by_source"],
+        )
+        self.assertEqual(diag["agent_probes"]["valid_answers"],2)
         sources={row["source"]:row for row in diag["search_sources"]}
         self.assertEqual(sources["web"]["attempts"],4)
         self.assertEqual(sources["github"]["empty"],1)

@@ -339,7 +339,7 @@ async def search_with_fallback(
         sleep_fn=sleep_fn,
         monotonic_fn=monotonic_fn,
     )
-    if not meta.get("fallback"):
+    if not meta.get("fallback") and rows:
         return {
             "ok":True,
             "query":" ".join(str(query or "").split()),
@@ -347,6 +347,17 @@ async def search_with_fallback(
             "count":len(rows),
             "provider":str(meta.get("provider") or "unknown"),
         },new_state
+
+    if not meta.get("fallback") and not rows:
+        _record_fallback(new_state,"empty_primary_result")
+        meta={
+            **dict(meta),
+            "fallback":True,
+            "reason":"empty_primary_result",
+        }
+    elif meta.get("fallback"):
+        _record_fallback(new_state,str(meta.get("reason") or "fallback"))
+
     fallback=await bing_search(query,limit)
     fallback=dict(fallback or {})
     fallback["provider_fallback_from"]=str(meta.get("provider") or "bing")
