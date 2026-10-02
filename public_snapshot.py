@@ -123,6 +123,37 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "last_scan_utc": None,
             "signal_memory_count": None,
         },
+        "select_diagnostics": {
+            "status": None,
+            "raw_results": None,
+            "relevance_pass": None,
+            "useful_results": None,
+            "persistent_evidence_items": None,
+            "quarantined_evidence_items": None,
+            "rejected_current_count": None,
+            "new_signal_rows": None,
+            "problem_cluster_count": None,
+            "qualified_problem_count": None,
+            "tool_candidate_count": None,
+            "top_gate_pass": None,
+            "top_monetization_score": None,
+            "top_missing": [None],
+            "rejection_reasons": [{
+                "reason": None,
+                "count": None,
+            }],
+            "search_provider": {
+                "name": None,
+                "calls_cycle": None,
+                "calls_day": None,
+                "errors": None,
+                "fallbacks": None,
+                "fallback_reasons": [{
+                    "reason": None,
+                    "count": None,
+                }],
+            },
+        },
         "last_checkpoint": {
             "ok": None,
             "status": None,
@@ -258,6 +289,94 @@ def _project_family_performance(value: Any) -> list[dict]:
     return rows[:64]
 
 
+
+_SAFE_CODE_RE = re.compile(r"[^A-Za-z0-9_.:-]+")
+
+
+def _safe_code(value: Any, max_len: int = 80) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    cleaned = _SAFE_CODE_RE.sub("_", raw).strip("_.:-")
+    return cleaned[:max_len]
+
+
+def _counter_total(value: Any) -> int:
+    if not isinstance(value, dict):
+        return 0
+    total = 0
+    for item in value.values():
+        try:
+            total += max(0, int(item or 0))
+        except Exception:
+            continue
+    return total
+
+
+def _project_reason_counts(value: Any, limit: int = 12) -> list[dict]:
+    if not isinstance(value, dict):
+        return []
+    rows = []
+    for reason, count in value.items():
+        code = _safe_code(reason)
+        if not code:
+            continue
+        try:
+            n = max(0, int(count or 0))
+        except Exception:
+            n = 0
+        rows.append({"reason": code, "count": n})
+    rows.sort(key=lambda row: (-int(row["count"]), row["reason"]))
+    return rows[:limit]
+
+
+def _project_select_diagnostics(latest_result: Any) -> dict:
+    latest = latest_result if isinstance(latest_result, dict) else {}
+    quality = latest.get("evidence_quality") if isinstance(latest.get("evidence_quality"), dict) else {}
+    ingestion = quality.get("ingestion_diagnostics") if isinstance(quality.get("ingestion_diagnostics"), dict) else {}
+    tool = latest.get("tool_opportunities") if isinstance(latest.get("tool_opportunities"), dict) else {}
+    top5 = [row for row in (tool.get("top5") or []) if isinstance(row, dict)]
+    top = top5[0] if top5 else {}
+    provider = ingestion.get("search_provider") if isinstance(ingestion.get("search_provider"), dict) else {}
+    problem_clusters = quality.get("problem_clusters") if isinstance(quality.get("problem_clusters"), dict) else {}
+    qualified = quality.get("qualified_problem_keys") if isinstance(quality.get("qualified_problem_keys"), list) else []
+    rejected = quality.get("rejected_current_results") if isinstance(quality.get("rejected_current_results"), list) else []
+
+    raw_results = _counter_total(ingestion.get("raw_results_by_source"))
+    relevance_pass = _counter_total(ingestion.get("query_relevance_pass_by_source"))
+    missing = []
+    for item in top.get("missing") or []:
+        code = _safe_code(item)
+        if code:
+            missing.append(code)
+
+    return {
+        "status": _safe_code(latest.get("status"), 48),
+        "raw_results": raw_results,
+        "relevance_pass": relevance_pass,
+        "useful_results": max(0, int(quality.get("current_cycle_useful_results") or 0)),
+        "persistent_evidence_items": max(0, int(quality.get("persistent_evidence_items") or 0)),
+        "quarantined_evidence_items": max(0, int(quality.get("quarantined_evidence_items") or 0)),
+        "rejected_current_count": len(rejected),
+        "new_signal_rows": max(0, int(ingestion.get("new_signal_rows") or 0)),
+        "problem_cluster_count": len(problem_clusters),
+        "qualified_problem_count": len(qualified),
+        "tool_candidate_count": len(top5),
+        "top_gate_pass": bool(top.get("gate_pass")),
+        "top_monetization_score": max(0, int(top.get("monetization_score") or 0)),
+        "top_missing": missing[:12],
+        "rejection_reasons": _project_reason_counts(ingestion.get("rejected_by_reason")),
+        "search_provider": {
+            "name": _safe_code(provider.get("name"), 48),
+            "calls_cycle": max(0, int(provider.get("calls_cycle") or 0)),
+            "calls_day": max(0, int(provider.get("calls_day") or 0)),
+            "errors": max(0, int(provider.get("errors") or 0)),
+            "fallbacks": max(0, int(provider.get("fallbacks") or 0)),
+            "fallback_reasons": _project_reason_counts(provider.get("fallback_reasons")),
+        },
+    }
+
+
 def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     """Project private runtime state into the explicit public allowlist."""
     src = deepcopy(autopilot) if isinstance(autopilot, dict) else {}
@@ -342,6 +461,7 @@ def sanitize_public_snapshot(snapshot: dict | None) -> dict:
         diagnostics, ("status_endpoint_reached", "source_commit", "runtime_contract_verified")
     )
     out["autopilot"] = sanitize_public_autopilot(src.get("autopilot"))
+    out["autopilot"]["select_diagnostics"] = _project_select_diagnostics(src.get("latest_result"))
     validate_public_snapshot(out)
     return out
 
