@@ -7223,6 +7223,10 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
     """Commercial-demand router. General web is fallback, not the primary source."""
     meta=meta if isinstance(meta,dict) else {}
     seed=natural_search_seed(query,meta) or query
+    role=str(meta.get("role") or meta.get("class") or "paid_market")
+    query_class=str(meta.get("class") or "")
+    query_intent=str(meta.get("query_intent") or "pain").strip().lower()
+    structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
     batches=await asyncio.gather(
         _remotive_paid_search(query,meta,max(2,min(limit,6))),
         _remoteok_paid_search(query,meta,max(2,min(limit,6))),
@@ -7321,8 +7325,19 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
         if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
             tasks.append(_stackexchange_query_search(seed,3,meta))
     batches=await asyncio.gather(*tasks,return_exceptions=True)
+    batch_sources=[]
+    if query_intent=="desire":
+        batch_sources=["web","hn","github","stackexchange"]
+    elif structured_first:
+        batch_sources=["hn","github","stackexchange","web"]
+    else:
+        batch_sources=["web","hn"]
+        if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
+            batch_sources.append("github")
+        if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
+            batch_sources.append("stackexchange")
     ingestion_diagnostics=(
-        routed_search_diagnostics(batches,query,meta,query_relevance)
+        routed_search_diagnostics(batches,query,meta,query_relevance,batch_sources)
         if INGESTION_DIAGNOSTICS_ENABLED else {}
     )
 
@@ -8566,7 +8581,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "planned_query_count":len(market_plan),
         "policy":"rank commercial tool opportunities from URL-grounded market signals; no login scraping; no payment",
     }
-    searches = search_strategy["queries"]
+    searches = list(search_strategy["queries"])
     query_meta={
         " ".join(str(x.get("query") or "").split()).lower(): x
         for x in (search_strategy.get("query_plan") or [])
@@ -8604,23 +8619,36 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         return await ask_agents_data(q,question,max_agents)
 
     async def bounded_agent_probes() -> list[dict]:
-        try:
-            return await asyncio.wait_for(
-                asyncio.gather(*(ask_probe_agents(q) for q in searches)),
-                timeout=AGENT_PROBE_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            return [
-                {
-                    "ok": False,
-                    "query": q,
-                    "answers": [],
-                    "mcp_candidates": [],
-                    "rejected_responses": [],
-                    "discovery_errors": [{"error": "agent_probe_deadline_exceeded"}],
+        probe_queries=list(searches[:10])
+        tasks=[asyncio.create_task(ask_probe_agents(q)) for q in probe_queries]
+        done,pending=await asyncio.wait(tasks,timeout=AGENT_PROBE_TIMEOUT_SECONDS)
+        by_task={task:q for task,q in zip(tasks,probe_queries)}
+        out_by_query={}
+        for task in done:
+            q=by_task[task]
+            try:
+                out_by_query[q]=task.result()
+            except Exception as exc:
+                out_by_query[q]={
+                    "ok":False,
+                    "query":q,
+                    "answers":[],
+                    "mcp_candidates":[],
+                    "rejected_responses":[],
+                    "discovery_errors":[{"error":type(exc).__name__}],
                 }
-                for q in searches
-            ]
+        for task in pending:
+            task.cancel()
+            q=by_task[task]
+            out_by_query[q]={
+                "ok":False,
+                "query":q,
+                "answers":[],
+                "mcp_candidates":[],
+                "rejected_responses":[],
+                "discovery_errors":[{"error":"agent_probe_deadline_exceeded"}],
+            }
+        return [out_by_query[q] for q in probe_queries]
 
     async def bounded_web_research() -> list[dict]:
         try:
@@ -8735,7 +8763,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "discovery_errors": result.get("discovery_errors", [])[:3],
         })
     AUTOPILOT_STATE["agent_probe_diagnostics"]={
-        "probes_attempted":len(searches),
+        "probes_attempted":len(scout_results),
         "agents_reached":len(reached_agents),
         "answers_received":probe_answers_received,
         "valid_answers":len(valid),
