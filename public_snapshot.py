@@ -134,7 +134,10 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "new_signal_rows": None,
             "problem_cluster_count": None,
             "qualified_problem_count": None,
-            "tool_candidate_count": None,
+            "configured_categories": None,
+            "evidenced_candidates": None,
+            "gate_eligible_candidates": None,
+            "qualified_candidates": None,
             "top_gate_pass": None,
             "top_monetization_score": None,
             "top_missing": [None],
@@ -152,6 +155,9 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             }],
             "search_provider": {
                 "name": None,
+                "configured_provider": None,
+                "provider_key_present": None,
+                "fallback_used": None,
                 "calls_cycle": None,
                 "calls_day": None,
                 "errors": None,
@@ -160,6 +166,42 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                     "reason": None,
                     "count": None,
                 }],
+            },
+            "funnel": {
+                "queries_planned": None,
+                "queries_executed": None,
+                "calls_by_source": [{
+                    "source": None,
+                    "count": None,
+                }],
+                "errors_by_source": [{
+                    "source": None,
+                    "error": None,
+                    "count": None,
+                }],
+                "raw_received": None,
+                "deduped": None,
+                "query_relevant": None,
+                "family_matched": None,
+                "buyer_voice": None,
+                "commercial_signal": None,
+                "persisted": None,
+                "discarded_by_reason": [{
+                    "reason": None,
+                    "count": None,
+                }],
+                "monotonicity_warnings": [{
+                    "upstream": None,
+                    "downstream": None,
+                }],
+            },
+            "agent_probes": {
+                "probes_attempted": None,
+                "agents_reached": None,
+                "answers_received": None,
+                "valid_answers": None,
+                "rejected_answers": None,
+                "timeouts": None,
             },
         },
         "last_checkpoint": {
@@ -361,28 +403,28 @@ def _project_search_sources(ingestion: dict) -> list[dict]:
     return rows[:16]
 
 
-def _project_error_codes(value: Any, source_limit: int = 16, code_limit: int = 12) -> dict:
+def _project_error_codes(value: Any, source_limit: int = 16, code_limit: int = 12) -> list[dict]:
     if not isinstance(value, dict):
-        return {}
-    out={}
+        return []
+    out=[]
     for source,codes in sorted(value.items()):
         safe_source=_safe_code(source,48)
         if not safe_source or not isinstance(codes,dict):
             continue
-        rows={}
+        per_source=0
         for code,count in sorted(codes.items()):
-            safe_code=_safe_code(code,80)
-            if not safe_code:
+            safe_error=_safe_code(code,80)
+            if not safe_error:
                 continue
             try:
-                rows[safe_code]=max(0,int(count or 0))
+                n=max(0,int(count or 0))
             except Exception:
-                rows[safe_code]=0
-            if len(rows)>=code_limit:
+                n=0
+            out.append({"source":safe_source,"error":safe_error,"count":n})
+            per_source+=1
+            if per_source>=code_limit:
                 break
-        if rows:
-            out[safe_source]=rows
-        if len(out)>=source_limit:
+        if len({row["source"] for row in out})>=source_limit:
             break
     return out
 
@@ -393,10 +435,10 @@ def _project_funnel(value: Any) -> dict:
     return {
         "queries_planned":max(0,int(src.get("queries_planned") or 0)),
         "queries_executed":max(0,int(src.get("queries_executed") or 0)),
-        "calls_by_source":{
-            _safe_code(k,48):max(0,int(v or 0))
+        "calls_by_source":[
+            {"source":_safe_code(k,48),"count":max(0,int(v or 0))}
             for k,v in sorted(calls.items()) if _safe_code(k,48)
-        },
+        ][:16],
         "errors_by_source":_project_error_codes(src.get("errors_by_source")),
         "raw_received":max(0,int(src.get("raw_received") or 0)),
         "deduped":max(0,int(src.get("deduped") or 0)),
