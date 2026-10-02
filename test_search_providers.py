@@ -176,6 +176,24 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(sleeps),1)
         self.assertAlmostEqual(sleeps[0],1.0,places=3)
 
+    def test_paced_day_allowance_spreads_internal_budget(self):
+        morning=sp._paced_day_allowance(150,datetime(2026,10,2,6,0,tzinfo=timezone.utc),burst=2)
+        noon=sp._paced_day_allowance(150,datetime(2026,10,2,12,0,tzinfo=timezone.utc),burst=2)
+        night=sp._paced_day_allowance(150,datetime(2026,10,2,23,59,tzinfo=timezone.utc),burst=2)
+        self.assertLess(morning,noon)
+        self.assertLess(noon,night)
+        self.assertLessEqual(night,150)
+
+    def test_budget_reason_distinguishes_pacing_from_exhaustion(self):
+        state=sp.new_search_state()
+        state.update({"calls_day":80,"calls_cycle":0})
+        with patch("search_providers.datetime") as dt:
+            dt.now.return_value=datetime(2026,10,2,6,0,tzinfo=timezone.utc)
+            dt.side_effect=lambda *a,**k: datetime(*a,**k)
+            self.assertEqual(sp._budget_reason(state,10,150),"budget_paced")
+        state["calls_day"]=150
+        self.assertEqual(sp._budget_reason(state,10,150),"budget_exhausted")
+
     async def test_secret_never_appears_in_state_metadata_or_exception(self):
         secret="SECRET-API-VALUE-123"
         os.environ["BRAVE_SEARCH_API_KEY"]=secret
