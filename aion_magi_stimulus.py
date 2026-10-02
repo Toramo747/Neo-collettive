@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import httpx
@@ -138,12 +139,13 @@ async def main() -> int:
                 structured_actions.append({"request": data, "error": type(exc).__name__ + ":" + str(exc)[:300]})
             await asyncio.sleep(1)
 
-        # Resolve a currently-live casper-tools MCP endpoint with a read-only initialize.
+        # Optional read-only Casper MCP probes are explicit operator input.
+        # Temporary/public tunnel endpoints must not be baked into the package source.
         casper_candidates = [
-            "https://determines-product-administration-farmer.trycloudflare.com/mcp",
-            "https://determines-product-administration-farmer.trycloudflare.com",
-            "https://virtue-hardly-skills-calling.trycloudflare.com/mcp",
-        ]
+            value.strip()
+            for value in os.getenv("MYCELIX_CASPER_MCP_CANDIDATES", "").split(",")
+            if value.strip().startswith("https://")
+        ][:8]
         casper_resolution = []
         live_casper_endpoint = None
         for candidate_url in casper_candidates:
