@@ -600,12 +600,22 @@ def analyze_tool_opportunities(
     )
     top5=opportunities[:5]
     transcripts=[build_council_transcript(x) for x in top5]
+    candidate_counts={
+        "configured_categories":len(CATEGORY_CONFIGS),
+        "evidenced_candidates":sum(1 for x in opportunities if x.get("sources")),
+        "gate_eligible_candidates":sum(
+            1 for x in opportunities
+            if x.get("sources") and "specific_tool_name_and_target_user" not in (x.get("missing") or [])
+        ),
+        "qualified_candidates":sum(1 for x in opportunities if x.get("gate_pass")),
+    }
     return {
         "schema_v":TOOL_OPPORTUNITY_SCHEMA_VERSION,
         "generated_at_utc":observed_at,
         "mode":"tool_commercial_demand",
         "top5":top5,
         "top_gate_pass":bool(top5 and top5[0].get("gate_pass")),
+        "candidate_counts":candidate_counts,
         "council_transcripts":transcripts,
         "seti_market_catalog":[dict(x) for x in (seti_catalog or [])][:32],
         "source_coverage":coverage,
