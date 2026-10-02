@@ -190,7 +190,10 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertTrue(diag["search_provider"]["fallback_used"])
         self.assertEqual(diag["funnel"]["raw_received"],25)
         self.assertEqual(diag["funnel"]["persisted"],2)
-        self.assertEqual(diag["funnel"]["errors_by_source"]["web"]["ReadTimeout"],1)
+        self.assertIn(
+            {"source":"web","error":"ReadTimeout","count":1},
+            diag["funnel"]["errors_by_source"],
+        )
         self.assertEqual(diag["agent_probes"]["valid_answers"],2)
         sources={row["source"]:row for row in diag["search_sources"]}
         self.assertEqual(sources["web"]["attempts"],4)
