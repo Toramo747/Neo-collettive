@@ -2601,7 +2601,7 @@ async def _multi_registry_search(
             {"search":q,"limit":per_query},
         ]
         if single_attempt:
-            attempts=attempts[:1]
+            attempts=[attempts[-1]]
         last_error=None
         for params in attempts:
             try:
