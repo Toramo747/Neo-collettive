@@ -73,6 +73,10 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn('timeout=15.0',s)
         self.assertIn('"quality_reason":"lightweight_transport_timeout"',s)
 
+    def test_lightweight_registry_uses_broad_single_attempt(self):
+        s=self.source
+        self.assertIn('attempts=[attempts[-1]]',s)
+
     def test_revalidation_is_bounded(self):
         s=self.source
         self.assertIn("REVALIDATION_TIMEOUT_SECONDS",s)
