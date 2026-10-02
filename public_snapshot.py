@@ -474,15 +474,39 @@ def _project_agent_probes(value: Any) -> dict:
 def _project_select_diagnostics(latest_result: Any) -> dict:
     latest = latest_result if isinstance(latest_result, dict) else {}
     quality = latest.get("evidence_quality") if isinstance(latest.get("evidence_quality"), dict) else {}
-    ingestion = quality.get("ingestion_diagnostics") if isinstance(quality.get("ingestion_diagnostics"), dict) else {}
+    ingestion = (
+        quality.get("ingestion_diagnostics")
+        if isinstance(quality.get("ingestion_diagnostics"), dict)
+        else latest.get("ingestion_diagnostics")
+        if isinstance(latest.get("ingestion_diagnostics"), dict)
+        else {}
+    )
     tool = latest.get("tool_opportunities") if isinstance(latest.get("tool_opportunities"), dict) else {}
     top5 = [row for row in (tool.get("top5") or []) if isinstance(row, dict)]
     top = top5[0] if top5 else {}
     candidate_counts = tool.get("candidate_counts") if isinstance(tool.get("candidate_counts"), dict) else {}
     provider = ingestion.get("search_provider") if isinstance(ingestion.get("search_provider"), dict) else {}
-    problem_clusters = quality.get("problem_clusters") if isinstance(quality.get("problem_clusters"), dict) else {}
-    qualified = quality.get("qualified_problem_keys") if isinstance(quality.get("qualified_problem_keys"), list) else []
-    rejected = quality.get("rejected_current_results") if isinstance(quality.get("rejected_current_results"), list) else []
+    problem_clusters = (
+        quality.get("problem_clusters")
+        if isinstance(quality.get("problem_clusters"), dict)
+        else latest.get("problem_clusters")
+        if isinstance(latest.get("problem_clusters"), dict)
+        else {}
+    )
+    qualified = (
+        quality.get("qualified_problem_keys")
+        if isinstance(quality.get("qualified_problem_keys"), list)
+        else latest.get("qualified_problem_keys")
+        if isinstance(latest.get("qualified_problem_keys"), list)
+        else []
+    )
+    rejected = (
+        quality.get("rejected_current_results")
+        if isinstance(quality.get("rejected_current_results"), list)
+        else latest.get("rejected_current_results")
+        if isinstance(latest.get("rejected_current_results"), list)
+        else []
+    )
 
     raw_results = _counter_total(ingestion.get("raw_results_by_source"))
     relevance_pass = _counter_total(ingestion.get("query_relevance_pass_by_source"))
@@ -497,9 +521,21 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "ingestion_enabled": bool(ingestion.get("enabled")) if "enabled" in ingestion else None,
         "raw_results": raw_results,
         "relevance_pass": relevance_pass,
-        "useful_results": max(0, int(quality.get("current_cycle_useful_results") or 0)),
-        "persistent_evidence_items": max(0, int(quality.get("persistent_evidence_items") or 0)),
-        "quarantined_evidence_items": max(0, int(quality.get("quarantined_evidence_items") or 0)),
+        "useful_results": max(0, int(
+            quality.get("current_cycle_useful_results")
+            if quality.get("current_cycle_useful_results") is not None
+            else latest.get("current_cycle_useful_results") or 0
+        )),
+        "persistent_evidence_items": max(0, int(
+            quality.get("persistent_evidence_items")
+            if quality.get("persistent_evidence_items") is not None
+            else latest.get("persistent_evidence_items") or 0
+        )),
+        "quarantined_evidence_items": max(0, int(
+            quality.get("quarantined_evidence_items")
+            if quality.get("quarantined_evidence_items") is not None
+            else latest.get("quarantined_evidence_items") or 0
+        )),
         "rejected_current_count": len(rejected),
         "new_signal_rows": max(0, int(ingestion.get("new_signal_rows") or 0)),
         "problem_cluster_count": len(problem_clusters),

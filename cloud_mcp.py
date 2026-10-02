@@ -8377,6 +8377,8 @@ def _compact_director_result(result: dict) -> dict:
         "qualified_problem_keys": quality.get("qualified_problem_keys") or [],
         "evidence_schema_v": quality.get("evidence_schema_v"),
         "tagger_v": quality.get("tagger_v"),
+        "current_cycle_useful_results": quality.get("current_cycle_useful_results"),
+        "persistent_evidence_items": quality.get("persistent_evidence_items"),
         "quarantined_evidence_items": quality.get("quarantined_evidence_items"),
         "rejected_current_results": quality.get("rejected_current_results") or [],
         "ingestion_diagnostics": quality.get("ingestion_diagnostics") or {},
