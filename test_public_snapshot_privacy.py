@@ -106,6 +106,9 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
                         "query_relevance_pass_by_source":{"bing-rss":7,"github":2},
                         "rejected_by_reason":{"query_irrelevant":6,"vendor content":4},
                         "new_signal_rows":3,
+                        "source_attempts":{"web":4,"hn":3,"github":2,"stackexchange":1},
+                        "source_empty":{"web":1,"github":1},
+                        "source_errors":{"stackexchange":1},
                         "search_provider":{
                             "name":"brave",
                             "calls_cycle":10,
@@ -147,6 +150,10 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertIn("two_independent_real_price_competitors",diag["top_missing"])
         self.assertIn("documented_gap",diag["top_missing"])
         self.assertEqual(diag["search_provider"]["calls_day"],149)
+        sources={row["source"]:row for row in diag["search_sources"]}
+        self.assertEqual(sources["web"]["attempts"],4)
+        self.assertEqual(sources["github"]["empty"],1)
+        self.assertEqual(sources["stackexchange"]["errors"],1)
         encoded=json.dumps(public,sort_keys=True)
         for forbidden in (
             "private-problem-key","secret.example","PRIVATE","PRIVATE2","private.example",
