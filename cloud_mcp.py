@@ -2586,7 +2586,13 @@ def _expand_queries(query: str, problem: str) -> list[str]:
     return base[:10]
 
 
-async def _multi_registry_search(search_queries: list[str], per_query: int = 10) -> tuple[list[dict], list[dict], list[dict]]:
+async def _multi_registry_search(
+    search_queries: list[str],
+    per_query: int = 10,
+    *,
+    include_generalists: bool = True,
+    include_mcp: bool = True,
+) -> tuple[list[dict], list[dict], list[dict]]:
     async def search_a2a(q: str):
         attempts=[
             {"search":q,"limit":per_query,"conformance":"standard","task_verified":"true"},
@@ -2643,8 +2649,11 @@ async def _multi_registry_search(search_queries: list[str], per_query: int = 10)
             return q, [], str(e)[:300]
 
     a2a_results = await asyncio.gather(*(search_a2a(q) for q in search_queries))
-    generalists = await search_a2a_generalists()
-    mcp_results = await asyncio.gather(*(search_mcp(q) for q in search_queries))
+    generalists = await search_a2a_generalists() if include_generalists else []
+    mcp_results = (
+        await asyncio.gather(*(search_mcp(q) for q in search_queries))
+        if include_mcp else []
+    )
 
     agents_by_id = {}
     provenance = {}
@@ -3182,18 +3191,35 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     }
 
 
-async def ask_agents_data(query: str, question: str, max_agents: int = 3, trust_stage: str | None = None) -> dict:
+async def ask_agents_data(
+    query: str,
+    question: str,
+    max_agents: int = 3,
+    trust_stage: str | None = None,
+    *,
+    lightweight: bool = False,
+) -> dict:
     max_agents = max(1, min(max_agents, MAX_AGENTS))
     trust_stage=trust_stage or _infer_trust_stage(query,question)
-    search_queries = _expand_queries(query, question)
-    candidates, mcp_candidates_raw, discovery_errors = await _multi_registry_search(search_queries, per_query=10)
+    normalized_query=" ".join(str(query or "").split())
+    search_queries = [normalized_query] if lightweight and normalized_query else _expand_queries(query, question)
+    candidates, mcp_candidates_raw, discovery_errors = await _multi_registry_search(
+        search_queries,
+        per_query=5 if lightweight else 10,
+        include_generalists=not lightweight,
+        include_mcp=not lightweight,
+    )
 
     # Historical performers remain eligible even when a registry text search does not rediscover them.
     existing_ids={
         str(a.get("id") or a.get("agent_id") or a.get("slug") or "")
         for a in candidates if isinstance(a,dict)
     }
-    trusted_pool=await _trusted_agent_details(limit=max_agents*2,exclude_ids=existing_ids,stage=trust_stage)
+    trusted_pool=(
+        []
+        if lightweight
+        else await _trusted_agent_details(limit=max_agents*2,exclude_ids=existing_ids,stage=trust_stage)
+    )
     candidates.extend(trusted_pool)
     for seti_agent in _seti_admitted_agent_details():
         sid=str(seti_agent.get("id") or "")
@@ -3236,7 +3262,7 @@ async def ask_agents_data(query: str, question: str, max_agents: int = 3, trust_
             })
             continue
         selected.append((score, reasons, agent))
-        if len(selected) >= max_agents * 3:
+        if len(selected) >= max_agents * (1 if lightweight else 3):
             break
 
     async def ask(entry) -> dict:
@@ -8616,10 +8642,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             "Return up to 3 public source URLs with a short explanation. Do not invent sources. "
             "Your answer is only a lead: NEO will independently verify any source before it can affect a gate."
         )
-        return await ask_agents_data(q,question,max_agents)
+        return await ask_agents_data(q,question,min(max_agents,2),lightweight=True)
 
     async def bounded_agent_probes() -> list[dict]:
-        probe_queries=list(searches[:10])
+        probe_queries=list(searches[:8])
         tasks=[asyncio.create_task(ask_probe_agents(q)) for q in probe_queries]
         done,pending=await asyncio.wait(tasks,timeout=AGENT_PROBE_TIMEOUT_SECONDS)
         by_task={task:q for task,q in zip(tasks,probe_queries)}
