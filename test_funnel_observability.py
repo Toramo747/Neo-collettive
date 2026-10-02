@@ -115,7 +115,10 @@ class FunnelObservabilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
         d.set_queries_planned(1)
         d.merge_web_research([{"ingestion_diagnostics":routed}])
         diag=self.projected(d.snapshot())
-        self.assertEqual(diag["funnel"]["errors_by_source"]["web"]["TimeoutError"],1)
+        self.assertIn(
+            {"source":"web","error":"TimeoutError","count":1},
+            diag["funnel"]["errors_by_source"],
+        )
         self.assertGreaterEqual(state["fallbacks"],1)
 
     async def test_empty_primary_provider_invokes_bing_fallback(self):
