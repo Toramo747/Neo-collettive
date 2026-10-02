@@ -6094,8 +6094,6 @@ def _commercial_evidence_quality(
         if query and not relevance.get("relevant"):
             reject("query_irrelevant",url,title,query_role,source,query_class)
             return
-        diagnostics.record_funnel_stage("query_relevant")
-
         text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
