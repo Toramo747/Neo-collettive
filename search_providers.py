@@ -181,11 +181,32 @@ def _record_fallback(state: dict[str, Any], reason: str, error: bool = False) ->
     state["fallback_reasons"]=reasons
 
 
-def _budget_available(state: dict[str, Any], max_cycle: int, max_day: int) -> bool:
-    return (
-        int(state.get("calls_cycle") or 0) < max(0,int(max_cycle))
-        and int(state.get("calls_day") or 0) < max(0,int(max_day))
-    )
+def _paced_day_allowance(max_day: int, now: datetime | None = None, burst: int = 2) -> int:
+    """Spread the internal daily provider budget across the UTC day.
+
+    This is a MYCELIX pacing budget, not the provider account quota. A small
+    burst allowance keeps early-cycle validation responsive while preventing
+    the whole daily budget from being consumed in the first hours.
+    """
+    cap=max(0,int(max_day))
+    if cap<=0:
+        return 0
+    now=now or datetime.now(timezone.utc)
+    elapsed=max(0,min(86400,now.hour*3600+now.minute*60+now.second))
+    paced=int((cap*elapsed)//86400)+max(0,int(burst))
+    return min(cap,max(1,paced))
+
+
+def _budget_reason(state: dict[str, Any], max_cycle: int, max_day: int) -> str:
+    calls_cycle=int(state.get("calls_cycle") or 0)
+    calls_day=int(state.get("calls_day") or 0)
+    cycle_cap=max(0,int(max_cycle))
+    day_cap=max(0,int(max_day))
+    if calls_cycle>=cycle_cap or calls_day>=day_cap:
+        return "budget_exhausted"
+    if calls_day>=_paced_day_allowance(day_cap):
+        return "budget_paced"
+    return ""
 
 
 async def search(
@@ -217,9 +238,10 @@ async def search(
         return [],st,{"provider":provider,"fallback":True,"reason":"empty_query"}
     if provider=="bing":
         return [],st,{"provider":"bing","fallback":True,"reason":"provider_unconfigured_or_bing"}
-    if not _budget_available(st,max_calls_cycle,max_calls_day):
-        _record_fallback(st,"budget_exhausted")
-        return [],st,{"provider":provider,"fallback":True,"reason":"budget_exhausted"}
+    budget_reason=_budget_reason(st,max_calls_cycle,max_calls_day)
+    if budget_reason:
+        _record_fallback(st,budget_reason)
+        return [],st,{"provider":provider,"fallback":True,"reason":budget_reason}
     if http_get is None:
         _record_fallback(st,"transport_unavailable",error=True)
         return [],st,{"provider":provider,"fallback":True,"reason":"transport_unavailable"}
