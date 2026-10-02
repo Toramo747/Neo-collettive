@@ -30,10 +30,16 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         def relevance(_title, snippet, _query, _meta):
             return {"relevant": snippet == "pain"}
 
-        result = routed_search_diagnostics(batches, "q", {"class": "explore"}, relevance)
+        result = routed_search_diagnostics(
+            batches, "q", {"class": "explore"}, relevance,
+            ["web","hn","github","stackexchange"],
+        )
         self.assertEqual(result["raw_by_source"], {"bing-rss": 1, "hn": 1, "github": 1, "stackexchange": 1})
         self.assertEqual(result["query_relevance_pass_by_source"], {"bing-rss": 1, "github": 1, "stackexchange": 1})
         self.assertEqual(result["query_relevance_pass_by_source_and_class"]["github"], {"explore": 1})
+        self.assertEqual(result["source_attempts"], {"web":1,"hn":1,"github":1,"stackexchange":1})
+        self.assertEqual(result["source_empty"], {})
+        self.assertEqual(result["source_errors"], {})
 
     def test_cycle_snapshot_merges_search_scout_and_rejections(self):
         diag = IngestionDiagnostics(True)
@@ -42,6 +48,9 @@ class IngestionDiagnosticsTests(unittest.TestCase):
                 "raw_by_source": {"bing-rss": 2, "github": 1},
                 "query_relevance_pass_by_source": {"bing-rss": 1},
                 "query_relevance_pass_by_source_and_class": {"bing-rss": {"convergence": 1}},
+                "source_attempts":{"web":1,"github":1},
+                "source_empty":{"github":1},
+                "source_errors":{},
                 "diagnostic_errors": 0,
             }
         }])
@@ -52,6 +61,8 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(snap["raw_results_by_source"]["hn"], 1)
         self.assertEqual(snap["rejected_by_source"]["bing-rss"], {"no_family": 1})
         self.assertEqual(snap["rejected_by_query_class"]["explore"], {"no_family": 1})
+        self.assertEqual(snap["source_attempts"], {"github":1,"web":1})
+        self.assertEqual(snap["source_empty"], {"github":1})
 
     def test_self_contamination_counter_is_explicit(self):
         diag=IngestionDiagnostics(True)

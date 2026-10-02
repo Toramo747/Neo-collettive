@@ -55,20 +55,33 @@ def routed_search_diagnostics(
     query: str,
     meta: dict | None,
     relevance_fn: Callable[[str, str, str, dict], dict],
+    batch_sources: list[str] | None = None,
 ) -> dict:
     """Measure raw provider rows and relevance passes without altering routing."""
     raw = Counter()
     passed = Counter()
     errors = 0
     seen = set()
+    attempts = Counter()
+    empty = Counter()
+    source_errors = Counter()
+    batch_sources = list(batch_sources or [])
     qclass = diagnostic_query_class(meta)
     meta = meta if isinstance(meta, dict) else {}
 
-    for batch in batches or []:
+    for index,batch in enumerate(batches or []):
+        source_hint = canonical_source(batch_sources[index] if index < len(batch_sources) else "unknown")
         if isinstance(batch, BaseException):
             errors += 1
+            attempts[source_hint] += 1
+            source_errors[source_hint] += 1
             continue
-        for row in _rows_from_batch(batch):
+        rows = _rows_from_batch(batch)
+        if source_hint != "unknown":
+            attempts[source_hint] += 1
+            if not rows:
+                empty[source_hint] += 1
+        for row in rows:
             source = canonical_source(row.get("source") or "unknown")
             raw[source] += 1
             url = str(row.get("url") or "").strip()
@@ -93,6 +106,9 @@ def routed_search_diagnostics(
         "query_relevance_pass_by_source_and_class": {
             source: {qclass: count} for source, count in passed.items()
         },
+        "source_attempts": dict(attempts),
+        "source_empty": dict(empty),
+        "source_errors": dict(source_errors),
         "diagnostic_errors": errors,
     }
 
@@ -118,6 +134,9 @@ class IngestionDiagnostics:
         self.intent_review_sample: list[dict] = []
         self.search_provider = {"name":"bing","calls_cycle":0,"calls_day":0,"errors":0,"fallbacks":0,"fallback_reasons":{}}
         self.revalidation = {"attempted":0,"promoted":0,"failed":0,"unreachable":0}
+        self.source_attempts = Counter()
+        self.source_empty = Counter()
+        self.source_errors = Counter()
         self.errors = 0
 
     def merge_web_research(self, groups: list[dict] | None) -> None:
@@ -134,6 +153,9 @@ class IngestionDiagnostics:
             for source, classes in (diag.get("query_relevance_pass_by_source_and_class") or {}).items():
                 if isinstance(classes, dict):
                     self.passed_by_class[canonical_source(source)].update(classes)
+            self.source_attempts.update(diag.get("source_attempts") or {})
+            self.source_empty.update(diag.get("source_empty") or {})
+            self.source_errors.update(diag.get("source_errors") or {})
             self.errors += int(diag.get("diagnostic_errors") or 0)
 
     def add_raw_rows(self, rows: list[dict] | None) -> None:
@@ -266,6 +288,9 @@ class IngestionDiagnostics:
             },
             "intent_review_sample": list(self.intent_review_sample),
             "search_provider": dict(self.search_provider),
+            "source_attempts": dict(sorted(self.source_attempts.items())),
+            "source_empty": dict(sorted(self.source_empty.items())),
+            "source_errors": dict(sorted(self.source_errors.items())),
             "revalidation": dict(self.revalidation),
             "diagnostic_errors": self.errors,
         }
