@@ -48,7 +48,7 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
     def test_agent_probe_query_list_is_copied_before_money_first_extension(self):
         s=self.source
         self.assertIn('searches = list(search_strategy["queries"])',s)
-        self.assertIn('probe_queries=list(searches[:10])',s)
+        self.assertIn('probe_queries=list(searches[:8])',s)
         self.assertIn('done,pending=await asyncio.wait(tasks,timeout=AGENT_PROBE_TIMEOUT_SECONDS)',s)
 
     def test_paid_market_router_defines_diagnostic_scope_variables(self):
