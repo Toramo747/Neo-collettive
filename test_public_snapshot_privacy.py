@@ -102,6 +102,7 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
                         {"url":"https://secret.example/y","title":"PRIVATE2"},
                     ],
                     "ingestion_diagnostics":{
+                        "enabled":False,
                         "raw_results_by_source":{"bing-rss":20,"github":5},
                         "query_relevance_pass_by_source":{"bing-rss":7,"github":2},
                         "rejected_by_reason":{"query_irrelevant":6,"vendor content":4},
@@ -167,6 +168,7 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         public=sanitize_public_snapshot(raw)
         diag=public["autopilot"]["select_diagnostics"]
         self.assertEqual(diag["status"],"SELECT")
+        self.assertFalse(diag["ingestion_enabled"])
         self.assertEqual(diag["raw_results"],25)
         self.assertEqual(diag["relevance_pass"],9)
         self.assertEqual(diag["useful_results"],8)
