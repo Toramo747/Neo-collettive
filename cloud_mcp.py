@@ -7209,8 +7209,19 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
         free_web_search(seed,max(2,min(3,limit))),
         return_exceptions=True,
     )
+    batch_sources=[]
+    if query_intent=="desire":
+        batch_sources=["web","hn","github","stackexchange"]
+    elif structured_first:
+        batch_sources=["hn","github","stackexchange","web"]
+    else:
+        batch_sources=["web","hn"]
+        if role in {"buyer","practitioner","paid_market","convergence","discovery","explore","exploit"}:
+            batch_sources.append("github")
+        if role in {"buyer","practitioner","convergence","discovery","explore","exploit"}:
+            batch_sources.append("stackexchange")
     ingestion_diagnostics=(
-        routed_search_diagnostics(batches,query,meta,query_relevance)
+        routed_search_diagnostics(batches,query,meta,query_relevance,batch_sources)
         if INGESTION_DIAGNOSTICS_ENABLED else {}
     )
     results=[]
@@ -8669,7 +8680,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         if source_diagnostics[key]["records_read"]==0 and not source_diagnostics[key]["errors"]:
             source_diagnostics[key]["errors"].append("zero_records:public_search_returned_empty_or_provider_filtered")
     AUTOPILOT_STATE["market_source_diagnostics"]=source_diagnostics
-    scout_results = [{"ok":True,"query":q,"answers":[],"mcp_candidates":[],"rejected_responses":[],"discovery_errors":[]} for q in searches]
+    scout_results = await bounded_agent_probes()
     evidence = []
     seen_answers = set()
     valid = []
