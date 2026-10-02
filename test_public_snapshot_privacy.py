@@ -85,6 +85,75 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(public["agent_chat_monitor"],{"thread_count":2})
         self.assertEqual(public["agent_demand_observatory"],{"messages_observed":4})
 
+    def test_select_diagnostics_are_aggregate_and_safe(self):
+        raw={
+            "snapshot_schema":7,
+            "neo_version":"0.99.43",
+            "latest_result":{
+                "status":"SELECT",
+                "evidence_quality":{
+                    "current_cycle_useful_results":8,
+                    "persistent_evidence_items":35,
+                    "quarantined_evidence_items":12,
+                    "qualified_problem_keys":["private-problem-key"],
+                    "problem_clusters":{"a":{},"b":{},"c":{}},
+                    "rejected_current_results":[
+                        {"url":"https://secret.example/x","title":"PRIVATE"},
+                        {"url":"https://secret.example/y","title":"PRIVATE2"},
+                    ],
+                    "ingestion_diagnostics":{
+                        "raw_results_by_source":{"bing-rss":20,"github":5},
+                        "query_relevance_pass_by_source":{"bing-rss":7,"github":2},
+                        "rejected_by_reason":{"query_irrelevant":6,"vendor content":4},
+                        "new_signal_rows":3,
+                        "search_provider":{
+                            "name":"brave",
+                            "calls_cycle":10,
+                            "calls_day":149,
+                            "errors":1,
+                            "fallbacks":2,
+                            "fallback_reasons":{"budget_exhausted":2},
+                        },
+                    },
+                },
+                "tool_opportunities":{
+                    "top5":[
+                        {
+                            "gate_pass":False,
+                            "monetization_score":72,
+                            "missing":["two_independent_real_price_competitors","documented gap"],
+                            "sources":[{"url":"https://private.example"}],
+                        }
+                    ],
+                },
+            },
+            "autopilot":{"cycles_completed":1402},
+        }
+        public=sanitize_public_snapshot(raw)
+        diag=public["autopilot"]["select_diagnostics"]
+        self.assertEqual(diag["status"],"SELECT")
+        self.assertEqual(diag["raw_results"],25)
+        self.assertEqual(diag["relevance_pass"],9)
+        self.assertEqual(diag["useful_results"],8)
+        self.assertEqual(diag["persistent_evidence_items"],35)
+        self.assertEqual(diag["quarantined_evidence_items"],12)
+        self.assertEqual(diag["rejected_current_count"],2)
+        self.assertEqual(diag["new_signal_rows"],3)
+        self.assertEqual(diag["problem_cluster_count"],3)
+        self.assertEqual(diag["qualified_problem_count"],1)
+        self.assertEqual(diag["tool_candidate_count"],1)
+        self.assertFalse(diag["top_gate_pass"])
+        self.assertEqual(diag["top_monetization_score"],72)
+        self.assertIn("two_independent_real_price_competitors",diag["top_missing"])
+        self.assertIn("documented_gap",diag["top_missing"])
+        self.assertEqual(diag["search_provider"]["calls_day"],149)
+        encoded=json.dumps(public,sort_keys=True)
+        for forbidden in (
+            "private-problem-key","secret.example","PRIVATE","PRIVATE2","private.example",
+        ):
+            self.assertNotIn(forbidden,encoded)
+        validate_public_snapshot(public)
+
     def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
         raw={
             "autopilot":{
