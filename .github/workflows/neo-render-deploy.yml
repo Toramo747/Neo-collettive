@@ -488,17 +488,16 @@ jobs:
           python - <<'PY'
           import json
           import os
-          import subprocess
           import urllib.request
+          from urllib.parse import urlparse
+          from self_traffic_auth import make_self_traffic_proof
 
           url="https://neo-collettive.onrender.com/a2a"
           marker="github-actions-deploy"
-          env=dict(os.environ)
-          proof=subprocess.check_output(
-              ["python","self_traffic_auth.py","sign-url",url,"--marker",marker],
-              env=env,
-              text=True,
-          ).strip()
+          proof=make_self_traffic_proof(
+              os.environ["HEARTBEAT_TOKEN"],
+              urlparse(url).path or "/",
+          )
           payload={
               "jsonrpc":"2.0",
               "id":"musekey-ci-smoke",
