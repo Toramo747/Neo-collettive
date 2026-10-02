@@ -1,0 +1,32 @@
+name: Funnel Phase0 Provider Smoke
+
+on:
+  push:
+    branches:
+      - diag/funnel-phase0-20261002
+    paths:
+      - "scripts/diag_provider_smoke.py"
+      - ".github/workflows/funnel-phase0-provider-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEO_SEARCH_PROVIDER: ${{ vars.NEO_SEARCH_PROVIDER }}
+      BRAVE_SEARCH_API_KEY: ${{ secrets.BRAVE_SEARCH_API_KEY }}
+      GOOGLE_PSE_KEY: ${{ secrets.GOOGLE_PSE_KEY }}
+      GOOGLE_PSE_CX: ${{ secrets.GOOGLE_PSE_CX }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run provider smoke
+        run: python scripts/diag_provider_smoke.py
