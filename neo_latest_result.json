@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-10-02T19:46:11.762206+00:00",
+  "captured_at_utc": "2026-10-02T19:49:44.059450+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.43",
   "runtime_profile": {
@@ -12,63 +12,63 @@
   "heartbeat": {
     "ok": true,
     "started": false,
-    "busy": true,
+    "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 20.606199,
-    "cycles_completed": 1584,
+    "last_started_age_seconds": 320.696773,
+    "cycles_completed": 1585,
     "last_started_utc": "2026-10-02T19:44:21.681125+00:00",
-    "last_finished_utc": "2026-10-02T19:39:20.842526+00:00",
+    "last_finished_utc": "2026-10-02T19:45:48.982846+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-02T19:46:11.655114+00:00",
+    "captured_at_utc": "2026-10-02T19:49:43.951185+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-02T19:44:41.639Z",
+        "timestamp_utc": "2026-10-02T19:49:41.539Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 880.36,
+        "latency_ms": 199.91,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-02T19:44:41.932Z",
+        "timestamp_utc": "2026-10-02T19:49:42.030Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 251.34,
+        "latency_ms": 450.37,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-02T19:46:11.235Z",
+        "timestamp_utc": "2026-10-02T19:49:43.536Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 2246.91,
+        "latency_ms": 440.45,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-02T19:46:11.635Z",
+        "timestamp_utc": "2026-10-02T19:49:43.931Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 358.48,
+        "latency_ms": 354.09,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "c8eca5446d005f7cfaa2a65613fb161335e4a5aa",
+    "source_commit": "1dd9e4484ae70f525917f12f3497e8b8c9464fc1",
     "runtime_contract_verified": true
   },
   "autopilot": {
@@ -123,15 +123,15 @@
     },
     "select_diagnostics": {
       "status": "SELECT",
-      "ingestion_enabled": null,
-      "raw_results": 0,
-      "relevance_pass": 0,
+      "ingestion_enabled": true,
+      "raw_results": 164,
+      "relevance_pass": 112,
       "useful_results": 0,
       "persistent_evidence_items": 0,
-      "quarantined_evidence_items": 0,
-      "rejected_current_count": 0,
+      "quarantined_evidence_items": 11,
+      "rejected_current_count": 40,
       "new_signal_rows": 0,
-      "problem_cluster_count": 0,
+      "problem_cluster_count": 5,
       "qualified_problem_count": 0,
       "configured_categories": 9,
       "evidenced_candidates": 6,
@@ -145,41 +145,143 @@
         "two_existing_paid_tools",
         "monetization_score_60"
       ],
-      "rejection_reasons": [],
-      "search_sources": [],
+      "rejection_reasons": [
+        {
+          "reason": "no_family",
+          "count": 57
+        },
+        {
+          "reason": "noise_domain",
+          "count": 14
+        },
+        {
+          "reason": "no_demand_signal",
+          "count": 12
+        },
+        {
+          "reason": "weak_family_relevance",
+          "count": 12
+        },
+        {
+          "reason": "github_no_buyer_problem_context",
+          "count": 7
+        },
+        {
+          "reason": "github_noise",
+          "count": 4
+        }
+      ],
+      "search_sources": [
+        {
+          "source": "bing-rss",
+          "attempts": 0,
+          "empty": 0,
+          "errors": 0,
+          "raw_results": 96,
+          "relevance_pass": 66
+        },
+        {
+          "source": "github",
+          "attempts": 0,
+          "empty": 0,
+          "errors": 0,
+          "raw_results": 20,
+          "relevance_pass": 0
+        },
+        {
+          "source": "hn",
+          "attempts": 0,
+          "empty": 0,
+          "errors": 0,
+          "raw_results": 48,
+          "relevance_pass": 46
+        },
+        {
+          "source": "stackexchange",
+          "attempts": 0,
+          "empty": 0,
+          "errors": 0,
+          "raw_results": 0,
+          "relevance_pass": 0
+        },
+        {
+          "source": "unknown",
+          "attempts": 0,
+          "empty": 0,
+          "errors": 16,
+          "raw_results": 0,
+          "relevance_pass": 0
+        }
+      ],
       "search_provider": {
-        "name": "",
-        "configured_provider": "",
-        "provider_key_present": false,
-        "fallback_used": false,
+        "name": "brave",
+        "configured_provider": "brave",
+        "provider_key_present": true,
+        "fallback_used": true,
         "calls_cycle": 0,
-        "calls_day": 0,
+        "calls_day": 150,
         "errors": 0,
-        "fallbacks": 0,
-        "fallback_reasons": []
+        "fallbacks": 32,
+        "fallback_reasons": [
+          {
+            "reason": "budget_exhausted",
+            "count": 32
+          }
+        ]
       },
       "funnel": {
-        "queries_planned": 0,
-        "queries_executed": 0,
+        "queries_planned": 16,
+        "queries_executed": 16,
         "calls_by_source": [],
-        "errors_by_source": [],
-        "raw_received": 0,
-        "deduped": 0,
-        "query_relevant": 0,
-        "family_matched": 0,
-        "buyer_voice": 0,
-        "commercial_signal": 0,
-        "persisted": 0,
-        "discarded_by_reason": [],
+        "errors_by_source": [
+          {
+            "source": "unknown",
+            "error": "budget_exhausted",
+            "count": 16
+          }
+        ],
+        "raw_received": 144,
+        "deduped": 142,
+        "query_relevant": 112,
+        "family_matched": 25,
+        "buyer_voice": 7,
+        "commercial_signal": 1,
+        "persisted": 1,
+        "discarded_by_reason": [
+          {
+            "reason": "no_family",
+            "count": 57
+          },
+          {
+            "reason": "noise_domain",
+            "count": 14
+          },
+          {
+            "reason": "no_demand_signal",
+            "count": 12
+          },
+          {
+            "reason": "weak_family_relevance",
+            "count": 12
+          },
+          {
+            "reason": "github_no_buyer_problem_context",
+            "count": 7
+          },
+          {
+            "reason": "github_noise",
+            "count": 4
+          }
+        ],
         "monotonicity_warnings": []
       },
       "agent_probes": {
-        "probes_attempted": 0,
+        "probes_attempted": 16,
         "agents_reached": 0,
         "answers_received": 0,
         "valid_answers": 0,
         "rejected_answers": 0,
-        "timeouts": 0
+        "timeouts": 16
       }
     }
   }
