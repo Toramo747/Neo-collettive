@@ -1,0 +1,45 @@
+import time
+import unittest
+import arena_local_a2a_evolution as arena
+
+class LocalA2AEvolutionTests(unittest.TestCase):
+    def test_stratified_holdout_and_unique_cases(self):
+        cases=arena.cases()
+        self.assertEqual(len({c['id'] for c in cases}),30)
+        for family in {c['family'] for c in cases}:
+            self.assertEqual(sum(c['family']==family and c['split']=='holdout' for c in cases),2)
+            self.assertEqual(sum(c['family']==family and c['split']=='train' for c in cases),3)
+
+    def test_schema_does_not_reward_wrong_decision_or_placeholder(self):
+        case=arena.cases()[0];turn=case['turns'][0]
+        answer={'decision':'propose','problem_id':turn['problem_id'],'evidence_id':'','reason':'This is one concise falsifiable idea copied from the example.'}
+        result=arena.evaluate(answer,turn,'ask')
+        self.assertTrue(result['schema'])
+        self.assertFalse(result['accepted'])
+        self.assertFalse(result['substance'])
+        answer.update(decision='ask',reason='Ask for read-only timing measurements before proposing a retry comparison.')
+        self.assertTrue(arena.evaluate(answer,turn,'ask')['accepted'])
+        answer['problem_id']='different-thread'
+        self.assertFalse(arena.evaluate(answer,turn,'ask')['accepted'])
+
+    def test_three_turns_reuse_actual_output_and_review_is_bounded(self):
+        case=arena.cases()[0];calls=[]
+        def infer(model,prompt,remaining):
+            calls.append(prompt)
+            index=min((len(calls)-1)//3,2)
+            turn=case['turns'][index]
+            return {'decision':case['expected'][index],'problem_id':case['id'],'evidence_id':turn['evidence_id'],'reason':'Measure first attempts separately from retries using a bounded read-only comparison.'}
+        result=arena.run_config('test','critique_once',[case],time.monotonic()+10,call=infer)
+        self.assertEqual(len(calls),9)
+        self.assertTrue(result['results'][0]['dialogue_3_of_3'])
+        self.assertIn('CANDIDATE:',calls[1])
+        self.assertIn('CRITIQUE:',calls[2])
+        self.assertIn('Measure first attempts',calls[3])
+        self.assertNotIn('expected',calls[0])
+
+    def test_deadline_blocks_selection_fitness(self):
+        result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
+        self.assertFalse(result['complete'])
+        self.assertIsNone(result['fitness'])
+
+if __name__=='__main__':unittest.main()
