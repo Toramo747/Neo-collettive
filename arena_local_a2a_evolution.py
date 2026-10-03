@@ -73,6 +73,12 @@ def deterministic_guard(turn):
     if not turn.get('evidence_id') and ('no measurements' in details or 'no failure details' in request):
         return {'decision':'ask','problem_id':turn['problem_id'],'evidence_id':turn['evidence_id'],
                 'reason':'Ask for concrete read-only failure details and measurements before proposing or revising an engineering test.'}
+    if 'reviewer corrects' in details or 'revise the proposed test' in details or 'corrects the observation' in details:
+        return {'decision':'revise','problem_id':turn['problem_id'],'evidence_id':turn['evidence_id'],
+                'reason':'Revise the prior engineering test to incorporate the reviewer correction while preserving a bounded read-only comparison.'}
+    if turn.get('evidence_id') and ('synthetic observation' in details or 'failed' in details or 'measurement' in details):
+        return {'decision':'propose','problem_id':turn['problem_id'],'evidence_id':turn['evidence_id'],
+                'reason':'Propose a bounded falsifiable read-only test using the supplied measurement and preserving the current problem and evidence identifiers.'}
     return None
 
 def _answer(model,policy,variant,turn,history,deadline,call):
