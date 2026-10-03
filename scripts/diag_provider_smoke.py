@@ -98,12 +98,12 @@ def production_smoke() -> int:
         with urllib.request.urlopen(req,timeout=20) as response:
             return json.load(response)
     def counters():
-        d=request('/api/autopilot/status')
-        ap=d.get('autopilot') or {}
-        st=ap.get('search_provider_state') or {}
+        d=request('/api/autonomy/status')
+        latest=d.get('latest_result') or {}
+        st=((latest.get('evidence_quality') or {}).get('ingestion_diagnostics') or {}).get('search_provider') or {}
         return {k:st.get(k) for k in ('calls_cycle','calls_day','errors','fallbacks','last_provider')}
     report={'scope':'render-production','fixed_query':QUERY,'queries_requested':1,
-            'evidence_ingest':False,'uses_render_credentials':True}
+            'evidence_ingest':False,'uses_render_credentials':True,'counter_scope':'last_completed_cycle'}
     try:
         report['before']=counters()
         initialized=request('/mcp',{'jsonrpc':'2.0','id':1,'method':'initialize','params':{
@@ -129,6 +129,7 @@ def production_smoke() -> int:
                            'fallback_used':bool(parsed.get('provider_fallback_from'))})
     except Exception as exc:
         report['error']=type(exc).__name__
+        if hasattr(exc,'code'):report['http_status']=int(exc.code)
         # Deliberately omit exception text, URLs, response rows and auth headers.
     try:report['after']=counters()
     except Exception as exc:report['after_error']=type(exc).__name__
