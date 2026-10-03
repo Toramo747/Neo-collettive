@@ -38,6 +38,69 @@ DEFAULT_SCORE_GENOME={
     "support":20.0,
 }
 GENOME_MUTATION_STEP=5.0
+QUALITY_GUARD_CANDIDATES=(
+    {"name":"baseline","abstention_threshold":99,"require_test_signal":False,"require_falsifier_signal":False},
+    {"name":"abstention-1","abstention_threshold":1,"require_test_signal":False,"require_falsifier_signal":False},
+    {"name":"abstention-2","abstention_threshold":2,"require_test_signal":False,"require_falsifier_signal":False},
+    {"name":"abstention-1-test","abstention_threshold":1,"require_test_signal":True,"require_falsifier_signal":False},
+    {"name":"abstention-1-test-falsifier","abstention_threshold":1,"require_test_signal":True,"require_falsifier_signal":True},
+)
+ABSTENTION_MARKERS=(
+    "no evidence-backed",
+    "no evidence backed",
+    "not performed",
+    "not applicable",
+    "no improvement hypothesis",
+    "no improvement claim",
+    "no supported proposal",
+    "no substantiated",
+    "cannot substantiate",
+    "cannot derive",
+    "cannot validate",
+    "no strategy",
+    "no proposal",
+    "prohibited tool use",
+    "you prohibited tool use",
+    "must ground substantive recommendations",
+)
+TEST_SIGNAL_MARKERS=(
+    "test","compare","measure","evaluate","validate","repeat","run ","trial","sample","benchmark",
+)
+FALSIFIER_SIGNAL_MARKERS=(
+    "reject if","fails if","falsif","disprov","does not improve","no improvement","if the measured",
+)
+QUALITY_GUARD_HOLDOUT=(
+    (True,{
+        "proposal":"Test whether workaround-oriented query families surface more independent buyer pain across public sources.",
+        "method":"Run the bounded query set against the same source mix and compare independent signal counts and precision.",
+        "falsifier":"Reject if independent buyer-pain coverage does not improve without a precision loss.",
+    }),
+    (True,{
+        "proposal":"Route agent work packets by observed task success instead of description keywords alone.",
+        "method":"Compare routing strategies across repeated bounded rounds and measure valid proposal yield per contacted agent.",
+        "falsifier":"Reject if task-success routing does not increase valid proposal yield over the baseline.",
+    }),
+    (True,{
+        "proposal":"Cache stable registry metadata between rounds to reduce duplicate network work.",
+        "method":"Benchmark one uncached and one cached bounded round using the same candidate set and measure requests saved.",
+        "falsifier":"Reject if caching does not reduce requests or causes stale agent selection.",
+    }),
+    (False,{
+        "proposal":"No evidence-backed query-design proposal is available under this session's constraints.",
+        "method":"Not performed. You prohibited tool use, and I must ground substantive recommendations in tool results.",
+        "falsifier":"Not applicable: no improvement hypothesis was evaluated.",
+    }),
+    (False,{
+        "proposal":"No supported proposal is available for this request.",
+        "method":"No strategy can be validated from the available information.",
+        "falsifier":"Not applicable because no proposal is being advanced.",
+    }),
+    (False,{
+        "proposal":"I cannot substantiate an improvement from the available evidence.",
+        "method":"No external actions taken and no strategy evaluated.",
+        "falsifier":"This limitation would change if more records became available.",
+    }),
+)
 DEFAULT_MISSION=(
     "Find falsifiable improvements to MYCELIX commercial-signal discovery, "
     "research quality, and external-agent collaboration without weakening any production gate."
@@ -212,6 +275,43 @@ def normalize_semantic(value: Any) -> str:
     return text.strip()
 
 
+def _quality_guard_accepts(row: dict[str,Any], guard: dict[str,Any]) -> bool:
+    norm=[normalize_semantic(row.get("proposal")),normalize_semantic(row.get("method")),normalize_semantic(row.get("falsifier"))]
+    joined=" ".join(norm)
+    abstentions=sum(1 for marker in ABSTENTION_MARKERS if marker in joined)
+    if abstentions>=int(guard.get("abstention_threshold") or 99):
+        return False
+    if guard.get("require_test_signal") and not any(marker in norm[1] for marker in TEST_SIGNAL_MARKERS):
+        return False
+    if guard.get("require_falsifier_signal") and not any(marker in norm[2] for marker in FALSIFIER_SIGNAL_MARKERS):
+        return False
+    return True
+
+
+def quality_guard_fitness(guard: dict[str,Any]) -> float:
+    tp=tn=fp=fn=0
+    for expected,row in QUALITY_GUARD_HOLDOUT:
+        got=_quality_guard_accepts(row,guard)
+        if expected and got:
+            tp+=1
+        elif expected and not got:
+            fn+=1
+        elif not expected and got:
+            fp+=1
+        else:
+            tn+=1
+    # False positives are the dangerous failure mode: weight them 4x.
+    return round(10*tp+8*tn-40*fp-12*fn,3)
+
+
+def select_quality_guard() -> dict[str,Any]:
+    ranked=[]
+    for index,guard in enumerate(QUALITY_GUARD_CANDIDATES):
+        ranked.append((quality_guard_fitness(guard),-index,guard))
+    ranked.sort(reverse=True,key=lambda x:(x[0],x[1]))
+    return dict(ranked[0][2])
+
+
 def proposal_substantive(row: dict[str,Any] | None) -> bool:
     if not isinstance(row,dict):
         return False
@@ -241,7 +341,7 @@ def proposal_substantive(row: dict[str,Any] | None) -> bool:
     provider_list_markers=("provider(s) for the request","observed prices are null when unobserved")
     if any(marker in " ".join(norm) for marker in provider_list_markers):
         return False
-    return True
+    return _quality_guard_accepts(row,select_quality_guard())
 
 
 def critique_substantive(row: dict[str,Any] | None, proposal_count: int) -> bool:
@@ -933,6 +1033,14 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
             "rejected":sum(1 for x in critiques if not x.get("accepted")),
         },
         "active_score_genome":active_genome,
+        "quality_guard":{
+            "selected":select_quality_guard(),
+            "fitness":quality_guard_fitness(select_quality_guard()),
+            "candidates":[
+                {"name":g["name"],"fitness":quality_guard_fitness(g)}
+                for g in QUALITY_GUARD_CANDIDATES
+            ],
+        },
         "boundary":dict(BOUNDARY),
         "production_promoted":False,
     }
