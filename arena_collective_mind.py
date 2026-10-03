@@ -357,6 +357,98 @@ def compatibility_proposal_prompt(mission: str, packet_code: str, packet_text: s
     )
 
 
+def extract_answer_text(payload: Any) -> str:
+    candidates=[]
+    for raw in recursive_text(payload):
+        text=clean_text(raw,MAX_FIELD_CHARS)
+        if len(text)<8:
+            continue
+        low=text.lower()
+        if low in {"true","false","ok","ready","json"}:
+            continue
+        candidates.append(text)
+    if not candidates:
+        return ""
+    candidates.sort(key=len,reverse=True)
+    return candidates[0]
+
+
+async def proposal_field_fallback(
+    client: httpx.AsyncClient,
+    agent_id: str,
+    mission: str,
+    packet_code: str,
+    packet_text: str,
+) -> dict[str,Any] | None:
+    base=(
+        "MYCELIX bounded collaboration. Analysis only; no external actions. "
+        f"MISSION: {clean_text(mission,700)} TASK [{packet_code}]: {packet_text} "
+    )
+    questions=(
+        base+"State ONE concrete proposal only.",
+        base+"State the method to test or validate the proposal only.",
+        base+"State what observation would falsify or disprove the proposal only.",
+    )
+    results=await asyncio.gather(
+        *(send_chat(client,agent_id,q) for q in questions),
+        return_exceptions=True,
+    )
+    answers=[]
+    for result in results:
+        if isinstance(result,Exception):
+            return None
+        status,payload=result
+        if not (200<=status<300):
+            return None
+        answer=extract_answer_text(payload)
+        if not answer:
+            return None
+        answers.append(answer)
+    return {
+        "proposal":answers[0],
+        "method":answers[1],
+        "falsifier":answers[2],
+        "evidence_urls":[],
+        "confidence":0.0,
+        "estimated_gain_pct":0.0,
+    }
+
+
+async def critique_field_fallback(
+    client: httpx.AsyncClient,
+    agent_id: str,
+    proposals: list[dict[str,Any]],
+) -> dict[str,Any] | None:
+    compact=[{"index":i,"proposal":p["proposal"][:240]} for i,p in enumerate(proposals)]
+    context="PROPOSALS="+json.dumps(compact,ensure_ascii=False,separators=(",",":"))
+    questions=(
+        "MYCELIX bounded review. Analysis only. Which proposal index is strongest? Reply with the integer only. "+context,
+        "MYCELIX bounded review. Analysis only. State the main weakness of the strongest proposal only. "+context,
+        "MYCELIX bounded review. Analysis only. State one concrete verification test only. "+context,
+    )
+    results=await asyncio.gather(
+        *(send_chat(client,agent_id,q) for q in questions),
+        return_exceptions=True,
+    )
+    if len(results)!=3:
+        return None
+    parsed=[]
+    for result in results:
+        if isinstance(result,Exception):
+            return None
+        status,payload=result
+        if not (200<=status<300):
+            return None
+        parsed.append(extract_answer_text(payload))
+    m=re.search(r"\b(\d+)\b",parsed[0] or "")
+    if not m:
+        return None
+    idx=int(m.group(1))
+    if idx<0 or idx>=len(proposals) or not parsed[1] or not parsed[2]:
+        return None
+    return {"best_index":idx,"weakness":parsed[1],"test":parsed[2]}
+
+
 def compatibility_critique_prompt(proposals: list[dict[str,Any]]) -> str:
     compact=[{"index":i,"proposal":p["proposal"][:280]} for i,p in enumerate(proposals)]
     return (
@@ -442,6 +534,11 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                         parsed=parse_proposal(retry_payload)
                 except Exception:
                     pass
+                if not parsed:
+                    try:
+                        parsed=await proposal_field_fallback(client,aid,mission,packet,packet_text)
+                    except Exception:
+                        parsed=None
             contacts.append({
                 "agent_id":aid[:160],"agent":name,"packet":packet,
                 "accepted":bool(parsed),
@@ -480,6 +577,11 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                             parsed=parse_critique(retry_payload)
                     except Exception:
                         pass
+                    if not parsed:
+                        try:
+                            parsed=await critique_field_fallback(client,aid,proposals)
+                        except Exception:
+                            parsed=None
                 critiques.append({
                     "agent_id":aid[:160],"agent":name,"accepted":bool(parsed),
                     "retry_used":retry_used,
