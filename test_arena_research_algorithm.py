@@ -121,8 +121,8 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         other_rows=[{
             "topic":"manual data entry",
             "hits":[
-                {"comment_text":"this workaround is repetitive and I need a better option","story_id":"1"},
-                {"comment_text":"this manual process wastes time every week","story_id":"2"},
+                {"comment_text":"this manual routine is repetitive and I need a better option","story_id":"1"},
+                {"comment_text":"these data records are tedious and waste time every week","story_id":"2"},
             ],
         }]
         family=ara.score_hits(genome,family_rows)
