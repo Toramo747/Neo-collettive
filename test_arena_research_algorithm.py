@@ -20,6 +20,9 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
             self.assertLessEqual(genes["min_relevance_tokens"], 3)
             self.assertIn(genes["suffix_family"], ara.SUFFIX_FAMILIES)
             self.assertIn(genes["topic_shape"], ara.TOPIC_SHAPE_MODES)
+            self.assertIn(genes["query_frame"], ara.QUERY_FRAMES)
+            self.assertIn(genes["term_order"], ara.TERM_ORDERS)
+            self.assertIn(genes["source_scope"], ara.SOURCE_SCOPES)
 
     def test_parse_mutation_accepts_only_bounded_genes(self):
         mutation = ara.parse_mutation({
@@ -30,6 +33,9 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
                 "min_relevance_tokens": 9,
                 "suffix_family": "ops",
                 "topic_shape": "compact",
+                "query_frame": "looking_for",
+                "term_order": "signal_first",
+                "source_scope": "stories",
                 "forbidden": "ignored",
             }
         })
@@ -39,6 +45,9 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertEqual(mutation["min_relevance_tokens"], 3)
         self.assertEqual(mutation["suffix_family"], "ops")
         self.assertEqual(mutation["topic_shape"], "compact")
+        self.assertEqual(mutation["query_frame"], "looking_for")
+        self.assertEqual(mutation["term_order"], "signal_first")
+        self.assertEqual(mutation["source_scope"], "stories")
         self.assertNotIn("forbidden", mutation)
 
     def test_query_genetics_change_query_surface_only(self):
@@ -51,6 +60,33 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertEqual(len(q0),len(q1))
         self.assertNotEqual(q0,q1)
         self.assertEqual({x[0] for x in q0},{x[0] for x in q1})
+
+    def test_new_query_genes_are_backward_compatible(self):
+        legacy=ara.clamp_genome({
+            "query_mode":"workaround","query_count":4,"recency_days":42,
+            "min_relevance_tokens":1,"suffix_family":"core","topic_shape":"compact",
+        })
+        self.assertEqual(legacy["query_frame"],"plain")
+        self.assertEqual(legacy["term_order"],"topic_first")
+        self.assertEqual(legacy["source_scope"],"comments")
+
+    def test_query_frame_and_term_order_change_surface(self):
+        base=ara.clamp_genome({
+            "query_mode":"workaround","query_count":2,"recency_days":42,
+            "min_relevance_tokens":1,"suffix_family":"core","topic_shape":"compact",
+        })
+        plain=ara.build_queries(base)
+        framed=ara.build_queries({**base,"query_frame":"need","term_order":"signal_first"})
+        self.assertEqual(len(plain),len(framed))
+        self.assertNotEqual(plain,framed)
+        self.assertTrue(all(q.startswith("need ") for _,q in framed))
+        self.assertIn("workaround data entry",framed[0][1])
+
+    def test_source_scope_is_wired_to_hn_fetch(self):
+        src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
+        self.assertIn('if source_scope == "comments"',src)
+        self.assertIn('elif source_scope == "stories"',src)
+        self.assertIn('genes["source_scope"]',src)
 
     def test_raw_external_text_is_not_part_of_persisted_contract(self):
         src = Path("arena_research_algorithm.py").read_text(encoding="utf-8")
