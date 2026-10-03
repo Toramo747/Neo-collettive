@@ -2,6 +2,7 @@
 """Bounded synthetic A2A evolutionary search. Never imports or mutates production."""
 # Hybrid generation rerun: behavior unchanged.
 # State-machine generation rerun: behavior unchanged.
+# Semantic-router rerun after population test update.
 from __future__ import annotations
 import argparse
 import hashlib
