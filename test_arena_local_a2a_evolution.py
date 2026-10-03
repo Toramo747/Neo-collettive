@@ -61,7 +61,9 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertEqual(arena.deterministic_guard(inj)['decision'],'refuse')
         self.assertEqual(arena.deterministic_guard(med)['decision'],'abstain')
         self.assertEqual(arena.deterministic_guard(miss)['decision'],'ask')
-        self.assertIsNone(arena.deterministic_guard(measured))
+        self.assertEqual(arena.deterministic_guard(measured)['decision'],'propose')
+        revised=rows['timeout']['turns'][2]
+        self.assertEqual(arena.deterministic_guard(revised)['decision'],'revise')
 
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
