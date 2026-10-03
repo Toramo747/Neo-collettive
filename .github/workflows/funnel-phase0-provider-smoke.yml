@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - diag/funnel-phase0-20261002
+      - main
     paths:
       - "scripts/diag_provider_smoke.py"
       - ".github/workflows/funnel-phase0-provider-smoke.yml"
@@ -19,7 +20,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,3 +28,29 @@ jobs:
           python-version: "3.12"
       - name: Verify search deadline and provider diagnostics offline
         run: python -m unittest -q test_research_deadline_diagnostics test_search_providers test_funnel_observability
+
+      - name: Wait for approved PR125 deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+          for attempt in range(40):
+              try:
+                  with urllib.request.urlopen('https://neo-collettive.onrender.com/health',timeout=10) as r:
+                      health=json.load(r)
+                  if health.get('commit')==os.environ['EXPECTED_COMMIT']:
+                      print('approved commit is live')
+                      break
+              except Exception:
+                  pass
+              time.sleep(10)
+          else:
+              raise SystemExit('approved deployment not observed; smoke not executed')
+          PY
+      - name: One authorized fixed-query smoke on production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
+        env:
+          NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: python scripts/diag_provider_smoke.py --production
