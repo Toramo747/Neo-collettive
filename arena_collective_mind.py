@@ -26,7 +26,7 @@ NAMESPACE="mycelix-arena"
 ARENA_ID="collective-mind"
 A2A_REGISTRY="https://a2aregistry.org"
 MAX_AGENTS=6
-MAX_CANDIDATE_POOL=18
+MAX_CANDIDATE_POOL=30
 MAX_EVIDENCE_URLS=4
 MAX_FIELD_CHARS=700
 ROUND_TIMEOUT=15.0
@@ -160,6 +160,59 @@ def _urls_from_text(text: str) -> list[str]:
     return out
 
 
+UUID_ONLY_RE=re.compile(r"^[0-9a-f]{8}-[0-9a-f-]{27,}$",re.I)
+
+
+def substantive_text(value: Any, minimum: int = 24) -> bool:
+    text=clean_text(value,MAX_FIELD_CHARS)
+    low=text.lower().strip(" .-_")
+    if len(text)<minimum:
+        return False
+    if low in {"...", "n/a", "none", "unknown", "no answer", "not available"}:
+        return False
+    if UUID_ONLY_RE.fullmatch(text):
+        return False
+    tokens=re.findall(r"[a-z0-9]+",low)
+    return len(set(tokens))>=4
+
+
+def normalize_semantic(value: Any) -> str:
+    text=clean_text(value,MAX_FIELD_CHARS).lower()
+    text=re.sub(r"[0-9a-f]{8}-[0-9a-f-]{27,}","<id>",text)
+    text=re.sub(r"\s+"," ",text)
+    return text.strip()
+
+
+def proposal_substantive(row: dict[str,Any] | None) -> bool:
+    if not isinstance(row,dict):
+        return False
+    parts=[row.get("proposal"),row.get("method"),row.get("falsifier")]
+    if not all(substantive_text(x) for x in parts):
+        return False
+    norm=[normalize_semantic(x) for x in parts]
+    if len(set(norm))<3:
+        return False
+    bad=(
+        "send me an agent-card url",
+        "state the capability needed",
+        "no supported mycelix-specific improvement proposal",
+        "no substantiated adversarial-review proposal",
+    )
+    if any(marker in norm[0] for marker in bad):
+        return False
+    return True
+
+
+def critique_substantive(row: dict[str,Any] | None, proposal_count: int) -> bool:
+    if not isinstance(row,dict):
+        return False
+    try:
+        idx=int(row.get("best_index"))
+    except Exception:
+        return False
+    return 0<=idx<proposal_count and substantive_text(row.get("weakness")) and substantive_text(row.get("test"))
+
+
 def parse_proposal(payload: Any) -> dict[str,Any] | None:
     for obj in recursive_objects(payload):
         proposal=clean_text(obj.get("proposal") or obj.get("hypothesis") or obj.get("answer") or "")
@@ -288,7 +341,9 @@ async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) ->
     payload=response.json()
     rows=payload.get("agents") if isinstance(payload,dict) else payload
     agents=[x for x in (rows or []) if isinstance(x,dict)]
-    agents=[x for x in agents if candidate_score(x)>0][:MAX_CANDIDATE_POOL]
+    agents=[x for x in agents if candidate_score(x)>0]
+    agents.sort(key=candidate_score,reverse=True)
+    agents=agents[:MAX_CANDIDATE_POOL]
     probes=[]
     meta=[]
     for agent in agents:
@@ -311,9 +366,15 @@ async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) ->
         handshake_rows.append({"agent_id":aid[:160],"agent":name,"ready":ok,"http_status":status})
         if ok:
             ready.append(agent)
-    ready.sort(key=candidate_score,reverse=True)
-    fallback=[x for x in agents if x not in ready]
-    selected=(ready+fallback)[:max(1,min(limit,MAX_AGENTS))]
+    ready_ids={str(x.get("id") or x.get("agent_id") or "") for x in ready}
+    selected=sorted(
+        agents,
+        key=lambda x:(
+            candidate_score(x)+(12 if str(x.get("id") or x.get("agent_id") or "") in ready_ids else 0),
+            candidate_score(x),
+        ),
+        reverse=True,
+    )[:max(1,min(limit,MAX_AGENTS))]
     return selected,{
         "candidates_considered":len(agents),
         "handshakes_valid":len(ready),
@@ -522,6 +583,8 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                 continue
             status,payload=result
             parsed=parse_proposal(payload) if 200<=status<300 else None
+            if parsed and not proposal_substantive(parsed):
+                parsed=None
             retry_used=False
             if not parsed and 200<=status<300:
                 retry_used=True
@@ -532,11 +595,15 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                     )
                     if 200<=retry_status<300:
                         parsed=parse_proposal(retry_payload)
+                        if parsed and not proposal_substantive(parsed):
+                            parsed=None
                 except Exception:
                     pass
                 if not parsed:
                     try:
                         parsed=await proposal_field_fallback(client,aid,mission,packet,packet_text)
+                        if parsed and not proposal_substantive(parsed):
+                            parsed=None
                     except Exception:
                         parsed=None
             contacts.append({
@@ -566,6 +633,8 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                     continue
                 status,payload=result
                 parsed=parse_critique(payload) if 200<=status<300 else None
+                if parsed and not critique_substantive(parsed,len(proposals)):
+                    parsed=None
                 retry_used=False
                 if not parsed and 200<=status<300:
                     retry_used=True
@@ -575,11 +644,15 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                         )
                         if 200<=retry_status<300:
                             parsed=parse_critique(retry_payload)
+                            if parsed and not critique_substantive(parsed,len(proposals)):
+                                parsed=None
                     except Exception:
                         pass
                     if not parsed:
                         try:
                             parsed=await critique_field_fallback(client,aid,proposals)
+                            if parsed and not critique_substantive(parsed,len(proposals)):
+                                parsed=None
                         except Exception:
                             parsed=None
                 critiques.append({
