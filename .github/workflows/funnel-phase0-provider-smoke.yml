@@ -5,6 +5,7 @@ on:
     branches:
       - diag/funnel-phase0-20261002
       - main
+      - fix/provider-smoke-auth-projection-20261003
     paths:
       - "scripts/diag_provider_smoke.py"
       - ".github/workflows/funnel-phase0-provider-smoke.yml"
@@ -31,9 +32,9 @@ jobs:
 
       - name: Wait for approved PR125 deployment
         if: >-
-          github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
+          github.event_name == 'push' && github.ref == 'refs/heads/fix/provider-smoke-auth-projection-20261003'
         env:
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: 3eb62cce7cfac4fe61e929ded1f253280eadd6f9
         run: |
           python - <<'PY'
           import json, os, time, urllib.request
@@ -52,7 +53,7 @@ jobs:
           PY
       - name: One authorized fixed-query smoke on production
         if: >-
-          github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
+          github.event_name == 'push' && github.ref == 'refs/heads/fix/provider-smoke-auth-projection-20261003'
         env:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: python scripts/diag_provider_smoke.py --production
