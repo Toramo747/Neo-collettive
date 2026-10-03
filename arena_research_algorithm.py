@@ -351,7 +351,12 @@ def candidate_score(agent: dict[str, Any]) -> int:
     return score
 
 
-async def collaborator_mutations(client: httpx.AsyncClient, champion: dict[str, Any], generation: int) -> list[dict[str, Any]]:
+async def collaborator_mutations(
+    client: httpx.AsyncClient,
+    champion: dict[str, Any],
+    generation: int,
+    explicit_candidate_id: str = "",
+) -> list[dict[str, Any]]:
     try:
         response = await client.get(
             A2A_REGISTRY + "/api/agents",
@@ -366,6 +371,30 @@ async def collaborator_mutations(client: httpx.AsyncClient, champion: dict[str, 
 
     agents.sort(key=candidate_score, reverse=True)
     selected = [x for x in agents if candidate_score(x) > 0][:MAX_COLLABORATORS]
+
+    explicit_candidate_id = str(explicit_candidate_id or "").strip()[:200]
+    if explicit_candidate_id:
+        try:
+            detail_response = await client.get(
+                f"{A2A_REGISTRY}/api/agents/{explicit_candidate_id}",
+                timeout=10.0,
+            )
+            detail_response.raise_for_status()
+            explicit_agent = detail_response.json()
+            if isinstance(explicit_agent, dict):
+                task = explicit_agent.get("task_conformance") or {}
+                task_working = isinstance(task, dict) and task.get("category") == "WORKING"
+                task_verified = explicit_agent.get("task_verified") is True
+                if task_working or task_verified:
+                    existing = {
+                        str(x.get("id") or x.get("agent_id") or "")
+                        for x in selected
+                    }
+                    if explicit_candidate_id not in existing:
+                        selected = [explicit_agent] + selected
+        except Exception:
+            pass
+    selected = selected[:MAX_COLLABORATORS]
     out: list[dict[str, Any]] = []
     champion_genes = clamp_genome(champion.get("genes") or {})
     champion_metrics = champion.get("metrics") or {}
@@ -430,7 +459,7 @@ def inject_collaborator_children(
     return out[:POPULATION_SIZE]
 
 
-async def run(data_dir: Path) -> dict[str, Any]:
+async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]:
     state_path = data_dir / "research-algorithm" / "state.json"
     report_path = data_dir / "research-algorithm" / "latest.json"
     state = load_json(state_path, {})
@@ -450,7 +479,10 @@ async def run(data_dir: Path) -> dict[str, Any]:
         measured = successful_queries >= MIN_SUCCESSFUL_QUERIES
         ranked = sorted(evaluated, key=lambda x: float((x.get("metrics") or {}).get("fitness") or 0), reverse=True)
         champion = ranked[0] if ranked else population[0]
-        collaborators = await collaborator_mutations(client, champion, generation + 1) if measured else []
+        collaborators = (
+            await collaborator_mutations(client, champion, generation + 1, explicit_candidate_id)
+            if measured else []
+        )
 
     next_population = list(population)
     next_generation = generation
@@ -540,8 +572,9 @@ async def run(data_dir: Path) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="data/arena")
+    parser.add_argument("--candidate-agent-id", default="")
     args = parser.parse_args()
-    report = asyncio.run(run(Path(args.data_dir)))
+    report = asyncio.run(run(Path(args.data_dir), args.candidate_agent_id))
     print(json.dumps({
         "ok": True,
         "status": report["status"],
