@@ -1,82 +1,82 @@
 {
-  "captured_at_utc": "2026-10-03T05:56:46.510516+00:00",
+  "captured_at_utc": "2026-10-03T09:09:46.433856+00:00",
   "snapshot_schema": 7,
-  "neo_version": "0.99.48",
+  "neo_version": "0.99.49",
   "runtime_profile": {
     "profile_id": "mycelix-prod-main",
     "deployment_role": "production",
     "state_schema": 1,
-    "config_fingerprint": "c52f5e56ed8983f2"
+    "config_fingerprint": "f7ef9e555dfddb9c"
   },
   "policy": {},
   "heartbeat": {
     "ok": true,
     "started": false,
-    "busy": false,
-    "cooldown": true,
+    "busy": true,
+    "cooldown": false,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 47.309501,
-    "cycles_completed": 1694,
-    "last_started_utc": "2026-10-03T05:55:58.134912+00:00",
-    "last_finished_utc": "2026-10-03T05:56:34.021614+00:00",
+    "last_started_age_seconds": 1547.513014,
+    "cycles_completed": 1698,
+    "last_started_utc": "2026-10-03T08:31:46.382549+00:00",
+    "last_finished_utc": "2026-10-03T06:16:00.264134+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-03T05:56:46.415335+00:00",
+    "captured_at_utc": "2026-10-03T09:09:46.330767+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-03T05:56:44.810Z",
+        "timestamp_utc": "2026-10-03T08:57:33.244Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 339.27,
+        "latency_ms": 263.41,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-03T05:56:45.105Z",
+        "timestamp_utc": "2026-10-03T08:57:33.545Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 255.94,
+        "latency_ms": 259.62,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-03T05:56:46.099Z",
+        "timestamp_utc": "2026-10-03T09:09:45.800Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 192.94,
+        "latency_ms": 193.17,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-03T05:56:46.397Z",
+        "timestamp_utc": "2026-10-03T09:09:46.310Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 258.13,
+        "latency_ms": 467.71,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "12a6aa19158330a81aa49e91be289b57db38384d",
+    "source_commit": "9fdca6baca015e0aff18b57251cb720e43836d7c",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 1694,
-    "last_started_utc": "2026-10-03T05:55:58.134912+00:00",
-    "last_finished_utc": "2026-10-03T05:56:34.021614+00:00",
+    "cycles_completed": 1699,
+    "last_started_utc": "2026-10-03T09:07:08.442867+00:00",
+    "last_finished_utc": "2026-10-03T09:09:34.640029+00:00",
     "last_status": "SELECT",
     "recent_sectors": [],
     "family_performance": [],
@@ -124,50 +124,52 @@
     "select_diagnostics": {
       "status": "SELECT",
       "ingestion_enabled": true,
-      "raw_results": 110,
-      "relevance_pass": 88,
-      "useful_results": 4,
+      "raw_results": 20,
+      "relevance_pass": 0,
+      "useful_results": 0,
       "persistent_evidence_items": 4,
       "quarantined_evidence_items": 4,
-      "rejected_current_count": 40,
+      "rejected_current_count": 20,
       "new_signal_rows": 0,
       "problem_cluster_count": 4,
       "qualified_problem_count": 0,
       "configured_categories": 9,
-      "evidenced_candidates": 6,
-      "gate_eligible_candidates": 6,
+      "evidenced_candidates": 4,
+      "gate_eligible_candidates": 4,
       "qualified_candidates": 0,
       "top_gate_pass": false,
-      "top_monetization_score": 45,
+      "top_monetization_score": 5,
       "top_missing": [
         "two_independent_real_price_competitors",
         "two_competitors_with_real_price",
+        "dissatisfaction_signal",
+        "documented_gap",
         "two_existing_paid_tools",
         "monetization_score_60"
       ],
       "rejection_reasons": [
         {
-          "reason": "no_family",
-          "count": 29
-        },
-        {
-          "reason": "no_demand_signal",
-          "count": 21
-        },
-        {
-          "reason": "noise_domain",
-          "count": 12
-        },
-        {
           "reason": "github_no_buyer_problem_context",
-          "count": 7
-        },
-        {
-          "reason": "weak_family_relevance",
-          "count": 6
+          "count": 10
         },
         {
           "reason": "github_noise",
+          "count": 4
+        },
+        {
+          "reason": "query_irrelevant",
+          "count": 2
+        },
+        {
+          "reason": "weak_family_relevance",
+          "count": 2
+        },
+        {
+          "reason": "no_demand_signal",
+          "count": 1
+        },
+        {
+          "reason": "no_family",
           "count": 1
         }
       ],
@@ -177,32 +179,32 @@
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 54,
-          "relevance_pass": 53
-        },
-        {
-          "source": "brave-search",
-          "attempts": 0,
-          "empty": 0,
-          "errors": 0,
-          "raw_results": 6,
-          "relevance_pass": 6
+          "raw_results": 0,
+          "relevance_pass": 0
         },
         {
           "source": "github",
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 20,
+          "raw_results": 19,
           "relevance_pass": 0
         },
         {
           "source": "hn",
-          "attempts": 10,
+          "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 30,
-          "relevance_pass": 29
+          "raw_results": 0,
+          "relevance_pass": 0
+        },
+        {
+          "source": "mcp-registry",
+          "attempts": 0,
+          "empty": 0,
+          "errors": 0,
+          "raw_results": 1,
+          "relevance_pass": 0
         },
         {
           "source": "stackexchange",
@@ -211,101 +213,69 @@
           "errors": 0,
           "raw_results": 0,
           "relevance_pass": 0
-        },
-        {
-          "source": "web",
-          "attempts": 10,
-          "empty": 0,
-          "errors": 9,
-          "raw_results": 0,
-          "relevance_pass": 0
         }
       ],
       "search_provider": {
         "name": "brave",
         "configured_provider": "brave",
         "provider_key_present": true,
-        "fallback_used": true,
-        "calls_cycle": 2,
-        "calls_day": 2,
-        "errors": 1,
-        "fallbacks": 9,
-        "fallback_reasons": [
-          {
-            "reason": "provider_throttled",
-            "count": 8
-          },
-          {
-            "reason": "HTTPStatusError:429",
-            "count": 1
-          }
-        ]
+        "fallback_used": false,
+        "calls_cycle": 0,
+        "calls_day": 6,
+        "errors": 0,
+        "fallbacks": 0,
+        "fallback_reasons": []
       },
       "funnel": {
-        "queries_planned": 10,
-        "queries_executed": 10,
-        "calls_by_source": [
-          {
-            "source": "hn",
-            "count": 10
-          },
-          {
-            "source": "web",
-            "count": 10
-          }
-        ],
-        "errors_by_source": [
-          {
-            "source": "web",
-            "error": "HTTPStatusError:429",
-            "count": 1
-          },
-          {
-            "source": "web",
-            "error": "provider_throttled",
-            "count": 8
-          }
-        ],
-        "raw_received": 90,
-        "deduped": 89,
-        "query_relevant": 88,
-        "family_matched": 31,
-        "buyer_voice": 14,
-        "commercial_signal": 4,
-        "persisted": 4,
+        "queries_planned": 16,
+        "queries_executed": 0,
+        "calls_by_source": [],
+        "errors_by_source": [],
+        "raw_received": 0,
+        "deduped": 0,
+        "query_relevant": 0,
+        "family_matched": 3,
+        "buyer_voice": 1,
+        "commercial_signal": 0,
+        "persisted": 0,
         "discarded_by_reason": [
           {
-            "reason": "no_family",
-            "count": 29
-          },
-          {
-            "reason": "no_demand_signal",
-            "count": 21
-          },
-          {
-            "reason": "noise_domain",
-            "count": 12
-          },
-          {
             "reason": "github_no_buyer_problem_context",
-            "count": 7
-          },
-          {
-            "reason": "weak_family_relevance",
-            "count": 6
+            "count": 10
           },
           {
             "reason": "github_noise",
+            "count": 4
+          },
+          {
+            "reason": "query_irrelevant",
+            "count": 2
+          },
+          {
+            "reason": "weak_family_relevance",
+            "count": 2
+          },
+          {
+            "reason": "no_demand_signal",
+            "count": 1
+          },
+          {
+            "reason": "no_family",
             "count": 1
           }
         ],
-        "monotonicity_warnings": []
+        "monotonicity_warnings": [
+          {
+            "upstream": "query_relevant",
+            "downstream": "family_matched"
+          }
+        ]
       },
       "agent_probes": {
         "probes_attempted": 8,
-        "agents_reached": 2,
-        "answers_received": 7,
-        "valid_answers": 5,
+        "agents_reached": 3,
+        "answers_received": 10,
+        "valid_answers": 8,
         "rejected_answers": 0,
         "timeouts": 0
       }
