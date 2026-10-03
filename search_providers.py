@@ -273,7 +273,9 @@ async def search(
     if interval>0:
         last=float(st.get("last_call_monotonic") or 0.0)
         now=float(monotonic_fn())
-        remaining=interval-(now-last) if last>0 else 0.0
+        # A persisted monotonic timestamp can come from a different host after
+        # a redeploy. Never turn a clock reset into a multi-hour pacing sleep.
+        remaining=interval-max(0.0,now-last) if last>0 else 0.0
         if remaining>0:
             await sleep_fn(remaining)
         st["last_call_monotonic"]=float(monotonic_fn())
