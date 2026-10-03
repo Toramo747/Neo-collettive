@@ -2593,6 +2593,7 @@ async def _multi_registry_search(
     include_generalists: bool = True,
     include_mcp: bool = True,
     single_attempt: bool = False,
+    task_verified_only: bool = False,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     async def search_a2a(q: str):
         attempts=[
@@ -2600,7 +2601,9 @@ async def _multi_registry_search(
             {"search":q,"limit":per_query,"conformance":"standard"},
             {"search":q,"limit":per_query},
         ]
-        if single_attempt:
+        if task_verified_only:
+            attempts=[{"limit":per_query,"task_verified":"true"}]
+        elif single_attempt:
             attempts=[attempts[-1]]
         last_error=None
         for params in attempts:
@@ -2671,7 +2674,9 @@ async def _multi_registry_search(
             if not agent_id:
                 continue
             agents_by_id.setdefault(str(agent_id), agent)
-            provenance.setdefault(str(agent_id), []).append(q)
+            provenance.setdefault(str(agent_id), []).append(
+                "task_verified_pool" if task_verified_only else q
+            )
 
     for agent in generalists:
         agent_id=agent.get("id") or agent.get("agent_id") or agent.get("slug")
@@ -3208,10 +3213,11 @@ async def ask_agents_data(
     search_queries = [normalized_query] if lightweight and normalized_query else _expand_queries(query, question)
     candidates, mcp_candidates_raw, discovery_errors = await _multi_registry_search(
         search_queries,
-        per_query=5 if lightweight else 10,
+        per_query=12 if lightweight else 10,
         include_generalists=not lightweight,
         include_mcp=not lightweight,
         single_attempt=lightweight,
+        task_verified_only=lightweight,
     )
 
     # Historical performers remain eligible even when a registry text search does not rediscover them.
@@ -8783,21 +8789,28 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     scout_results = await bounded_agent_probes()
     evidence = []
     seen_answers = set()
+    contacted_agents = set()
     reached_agents = set()
     valid = []
     probe_answers_received=0
     probe_rejected_answers=0
     probe_timeouts=0
+    probe_candidates_found=0
+    probe_agents_selected=0
     for q, result in zip(searches, scout_results):
         answers = result.get("answers", [])
+        rejected_responses = result.get("rejected_responses") or []
+        probe_candidates_found += int(result.get("candidates_found") or 0)
+        probe_agents_selected += int(result.get("agents_selected") or 0)
         probe_answers_received += len(answers)
-        probe_rejected_answers += len(result.get("rejected_responses") or [])
+        probe_rejected_answers += len(rejected_responses)
         if any(str(x.get("error") or "")=="agent_probe_deadline_exceeded" for x in (result.get("discovery_errors") or []) if isinstance(x,dict)):
             probe_timeouts += 1
         unique_answers = []
         for answer in answers:
             agent_key=str(answer.get("agent_id") or answer.get("agent") or "").strip()
             if agent_key:
+                contacted_agents.add(agent_key)
                 reached_agents.add(agent_key)
             key = agent_key + "|" + _response_text(answer)[:500]
             if key in seen_answers:
@@ -8805,6 +8818,19 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             seen_answers.add(key)
             unique_answers.append(answer)
             valid.append(answer)
+        for rejected in rejected_responses:
+            if not isinstance(rejected,dict):
+                continue
+            agent_key=str(rejected.get("agent_id") or rejected.get("agent") or "").strip()
+            if not agent_key:
+                continue
+            contacted_agents.add(agent_key)
+            transport_errors=rejected.get("transport_errors") or []
+            if any(
+                isinstance(row,dict) and int(row.get("status") or 0) > 0
+                for row in transport_errors
+            ):
+                reached_agents.add(agent_key)
         evidence.append({
             "query": q,
             "answers": unique_answers,
@@ -8814,6 +8840,9 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         })
     AUTOPILOT_STATE["agent_probe_diagnostics"]={
         "probes_attempted":len(scout_results),
+        "candidates_found":probe_candidates_found,
+        "agents_selected":probe_agents_selected,
+        "agents_contacted":len(contacted_agents),
         "agents_reached":len(reached_agents),
         "answers_received":probe_answers_received,
         "valid_answers":len(valid),
