@@ -281,6 +281,21 @@ def normalize_semantic(value: Any) -> str:
     return text.strip()
 
 
+def proposal_abstains(row: dict[str,Any] | None) -> bool:
+    if not isinstance(row,dict):
+        return False
+    proposal=normalize_semantic(row.get("proposal"))
+    method=normalize_semantic(row.get("method"))
+    falsifier=normalize_semantic(row.get("falsifier"))
+    return (
+        any(marker in proposal for marker in ABSTENTION_MARKERS)
+        or bool(re.search(r"\bno\b.{0,100}\b(?:change|changes|adapter|proposal)\b.{0,40}\bproposed\b",proposal))
+        or "no technical hypothesis was evaluated" in falsifier
+        or "no improvement hypothesis was evaluated" in falsifier
+        or ("coverage limitation" in proposal and "cannot supply" in method)
+    )
+
+
 def _quality_guard_accepts(row: dict[str,Any], guard: dict[str,Any]) -> bool:
     norm=[normalize_semantic(row.get("proposal")),normalize_semantic(row.get("method")),normalize_semantic(row.get("falsifier"))]
     joined=" ".join(norm)
@@ -320,6 +335,8 @@ def select_quality_guard() -> dict[str,Any]:
 
 def proposal_substantive(row: dict[str,Any] | None) -> bool:
     if not isinstance(row,dict):
+        return False
+    if proposal_abstains(row):
         return False
     parts=[row.get("proposal"),row.get("method"),row.get("falsifier")]
     if not all(substantive_text(x) for x in parts):
@@ -473,11 +490,15 @@ def load_routing_memory(data_dir: Path) -> dict[str,Any]:
     failed=set()
     succeeded=set()
     http_errors=set()
+    abstaining_ids={str(p.get("agent_id") or "") for p in previous.get("ranked_proposals") or [] if proposal_abstains(p)}
+    abstaining_names={str(p.get("agent") or "") for p in previous.get("ranked_proposals") or [] if proposal_abstains(p)}
     for row in previous.get("contacts") or []:
         if not isinstance(row,dict):
             continue
         aid=str(row.get("agent_id") or "")
         if not aid:
+            continue
+        if row.get("reason")=="honest_abstention" or aid in abstaining_ids or str(row.get("agent") or "") in abstaining_names:
             continue
         if row.get("accepted"):
             succeeded.add(aid)
@@ -490,7 +511,7 @@ def load_routing_memory(data_dir: Path) -> dict[str,Any]:
         "failed_ids":failed,
         "succeeded_ids":succeeded,
         "http_error_ids":http_errors,
-        "previous_valid_proposals":int(previous.get("round1_valid_proposals") or 0),
+        "previous_valid_proposals":max(0,int(previous.get("round1_valid_proposals") or 0)-sum(proposal_abstains(p) for p in previous.get("ranked_proposals") or [])),
         "previous_agents_contacted":int(previous.get("agents_contacted") or 0),
     }
 
@@ -867,7 +888,7 @@ def mutate_score_genomes(base: dict[str,Any] | None) -> list[dict[str,float]]:
 
 
 def genome_fitness(report: dict[str,Any], genome: dict[str,Any]) -> float:
-    proposals=report.get("ranked_proposals") or []
+    proposals=[p for p in report.get("ranked_proposals") or [] if not proposal_abstains(p)]
     if not proposals:
         return 0.0
     rescored=[]
@@ -878,7 +899,7 @@ def genome_fitness(report: dict[str,Any], genome: dict[str,Any]) -> float:
         rescored.append((score,quality,proposal))
     rescored.sort(key=lambda row:(row[0],row[1]),reverse=True)
     top_score,top_quality,_=rescored[0]
-    proposal_rate=min(1.0,float(report.get("round1_valid_proposals") or 0)/max(1,float(report.get("agents_contacted") or 1)))
+    proposal_rate=min(1.0,len(proposals)/max(1,float(report.get("agents_contacted") or 1)))
     critique_rate=min(1.0,float(report.get("round2_valid_critiques") or 0)/max(1,float(report.get("agents_contacted") or 1)))
     return round(0.70*top_quality+0.15*top_score+7.5*proposal_rate+7.5*critique_rate,6)
 
@@ -892,7 +913,7 @@ def evolve_score_genome(report: dict[str,Any], path: Path) -> dict[str,Any]:
         previous={}
     current=normalize_score_genome(previous.get("champion_genome"))
     generation=max(0,int(previous.get("generation") or 0))
-    proposals=report.get("ranked_proposals") or []
+    proposals=[p for p in report.get("ranked_proposals") or [] if not proposal_abstains(p)]
     if len(proposals)<2:
         state={
             "schema_v":1,
@@ -990,10 +1011,11 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                 continue
             status,payload=result
             parsed=parse_proposal(payload) if 200<=status<300 else None
+            abstained=proposal_abstains(parsed)
             if parsed and not proposal_substantive(parsed):
                 parsed=None
             retry_used=False
-            if not parsed and 200<=status<300:
+            if not parsed and not abstained and 200<=status<300:
                 retry_used=True
                 packet_text=next((x[1] for x in WORK_PACKETS if x[0]==packet),"")
                 try:
@@ -1002,13 +1024,15 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                     )
                     if 200<=retry_status<300:
                         parsed=parse_proposal(retry_payload)
+                        abstained=proposal_abstains(parsed)
                         if parsed and not proposal_substantive(parsed):
                             parsed=None
                 except Exception:
                     pass
-                if not parsed:
+                if not parsed and not abstained:
                     try:
                         parsed=await proposal_field_fallback(client,aid,mission,packet,packet_text)
+                        abstained=proposal_abstains(parsed)
                         if parsed and not proposal_substantive(parsed):
                             parsed=None
                     except Exception:
@@ -1017,7 +1041,7 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                 "agent_id":aid[:160],"agent":name,"packet":packet,
                 "accepted":bool(parsed),
                 "retry_used":retry_used,
-                "reason":"structured_proposal_accepted" if parsed else f"no_valid_proposal_http_{status}",
+                "reason":"structured_proposal_accepted" if parsed else ("honest_abstention" if abstained else f"no_valid_proposal_http_{status}"),
             })
             if parsed:
                 parsed["agent_id"]=aid[:160]
@@ -1100,6 +1124,7 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
         "agents_contacted":len(task_meta),
         "handshake":handshake,
         "round1_valid_proposals":len(proposals),
+        "round1_abstentions":sum(x.get("reason")=="honest_abstention" for x in contacts),
         "round2_valid_critiques":sum(1 for x in critiques if x.get("accepted")),
         "contacts":contacts,
         "ranked_proposals":[
