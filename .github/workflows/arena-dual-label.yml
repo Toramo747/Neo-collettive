@@ -1,0 +1,65 @@
+name: Arena dual local labeling
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - mycelix-arena-commercial-signal-phase0-20260929
+    paths:
+      - arena/commercial_signal/blind_review.jsonl
+      - arena/commercial_signal/labeling_rubric.md
+      - arena/commercial_signal/dual_label.py
+      - .github/workflows/arena-dual-label.yml
+
+permissions:
+  contents: read
+
+jobs:
+  dual-label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup local Ollama
+        uses: ai-action/setup-ollama@v2
+
+      - name: Pull independent model families
+        run: |
+          ollama pull qwen2.5:3b-instruct
+          ollama pull llama3.2:3b
+
+      - name: Dual blind labeling
+        run: |
+          python3 arena/commercial_signal/dual_label.py
+
+      - name: Evaluate baseline on concordant cases
+        run: |
+          mkdir -p /tmp/arena-baseline
+          cp arena/commercial_signal/proposals/baseline.json /tmp/arena-baseline/baseline.json
+          python3 -m arena.commercial_signal.evaluate             --dataset arena/commercial_signal/train_real.jsonl             --proposals-dir /tmp/arena-baseline             --out arena/commercial_signal/baseline_concordant.json >/dev/null
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("arena/commercial_signal/dual_label_metrics.json").read_text())
+          b=json.loads(Path("arena/commercial_signal/baseline_concordant.json").read_text())
+          ds=b["datasets"].get("train_real.jsonl",{})
+          base=ds.get("results",{}).get("baseline",{})
+          print("baseline_cases="+str(ds.get("dataset_size",0)))
+          print("baseline_precision_real_demand="+str(base.get("precision_real_demand")))
+          print("baseline_recall_real_demand="+str(base.get("recall_real_demand")))
+          print("baseline_vendor_false_positives="+str(base.get("vendor_false_positives")))
+          print("adequacy_threshold_met="+str(m.get("adequacy_threshold_met")).lower())
+          PY
+
+      - name: Upload anonymized labeling results
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-dual-label-results
+          path: |
+            arena/commercial_signal/train_real.jsonl
+            arena/commercial_signal/label_disagreements.md
+            arena/commercial_signal/dual_label_metrics.json
+            arena/commercial_signal/baseline_concordant.json
+          retention-days: 30
