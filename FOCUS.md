@@ -1,6 +1,6 @@
-# MYCELIX External Proof Focus
+# OSIXBAY External Proof Focus
 
-MYCELIX is in an external-proof phase.
+OSIXBAY is in an external-proof phase.
 
 New work should directly advance at least one of these two binary outcomes:
 
