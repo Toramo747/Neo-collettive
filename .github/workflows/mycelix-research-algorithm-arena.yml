@@ -1,0 +1,113 @@
+name: MYCELIX Research Algorithm Arena
+
+on:
+  schedule:
+    - cron: "47 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      candidate_agent_id:
+        description: "Optional A2A Registry agent ID applying as collaborator"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mycelix-research-algorithm-arena
+  cancel-in-progress: false
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+
+      - name: Validate isolated evolutionary arena
+        run: |
+          set -euo pipefail
+          python -m py_compile arena_research_algorithm.py
+          python -m unittest -v test_arena_research_algorithm.py
+
+      - name: Run one bounded generation
+        env:
+          CANDIDATE_AGENT_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_agent_id || '' }}
+        run: |
+          set -euo pipefail
+          python arena_research_algorithm.py             --data-dir data/arena             --candidate-agent-id "$CANDIDATE_AGENT_ID"             | tee /tmp/research-arena-result.json
+
+      - name: Assert production isolation
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          report=json.load(open("data/arena/research-algorithm/latest.json",encoding="utf-8"))
+          state=json.load(open("data/arena/research-algorithm/state.json",encoding="utf-8"))
+          b=report.get("boundary") or {}
+          expected={
+              "production_state_write":False,
+              "commercial_gate_influence":"NONE",
+              "qualified_hits_influence":"NONE",
+              "commercial_evidence_influence":"NONE",
+              "search_provider_budget_influence":"NONE",
+              "production_variant_promotion":False,
+              "promotion":"MANUAL_REVIEW_ONLY",
+          }
+          for key,value in expected.items():
+              if b.get(key)!=value:
+                  raise SystemExit(f"isolation failure: {key}={b.get(key)!r}")
+          if report.get("namespace")!="mycelix-arena":
+              raise SystemExit("wrong namespace")
+          if (report.get("benchmark") or {}).get("raw_text_persisted") is not False:
+              raise SystemExit("raw benchmark text persistence enabled")
+          if (state.get("promotion_candidate") or {}).get("production_promoted") is not False:
+              raise SystemExit("automatic production promotion detected")
+          print(json.dumps({
+              "status":report.get("status"),
+              "evaluated_generation":report.get("evaluated_generation"),
+              "next_generation":report.get("next_generation"),
+              "collaborators":len(report.get("collaborators") or []),
+              "champion":(report.get("promotion_candidate") or {}).get("genome_id"),
+          },indent=2))
+          PY
+
+      - name: Publish Arena state
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Research Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/arena/research-algorithm
+          if git diff --cached --quiet; then
+            echo "No research arena changes"
+            exit 0
+          fi
+          git commit -m "arena research algorithm generation [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt*3))
+          done
+          exit 1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mycelix-research-algorithm-${{ github.run_id }}
+          path: data/arena/research-algorithm/
+          if-no-files-found: warn
+          retention-days: 30
