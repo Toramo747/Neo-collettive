@@ -1,0 +1,57 @@
+name: MYCELIX A2A Recovery Arena
+
+on:
+  push:
+    paths:
+      - ".github/a2a-recovery-trigger.txt"
+      - ".github/workflows/mycelix-a2a-recovery-arena.yml"
+      - "arena_a2a_recovery.py"
+      - "test_arena_a2a_recovery.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mycelix-a2a-recovery-arena
+  cancel-in-progress: false
+
+jobs:
+  evolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate arena
+        run: |
+          python -m py_compile arena_a2a_recovery.py
+          python -m unittest -v test_arena_a2a_recovery.py
+      - name: Run one generation
+        run: python arena_a2a_recovery.py --data-dir data/arena
+      - name: Assert isolation
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open("data/arena/a2a-recovery/latest.json"))
+          b=r["boundary"]
+          assert b["production_state_write"] is False
+          assert b["external_registry_write"] is False
+          assert b["production_variant_promotion"] is False
+          assert r["promotion_candidate"]["production_promoted"] is False
+          PY
+      - name: Publish arena state
+        run: |
+          git config user.name "MYCELIX A2A Recovery Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/arena/a2a-recovery
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "arena a2a recovery generation [skip render]"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
