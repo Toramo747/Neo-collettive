@@ -2,11 +2,25 @@
   "schema_v": 1,
   "namespace": "mycelix-arena",
   "arena_id": "mycelix-research-algorithm",
-  "generation": 20,
+  "generation": 21,
   "population": [
     {
-      "genome_id": "g20-elite-1",
-      "generation": 20,
+      "genome_id": "g21-elite-1",
+      "generation": 21,
+      "genes": {
+        "query_mode": "workaround",
+        "query_count": 4,
+        "recency_days": 35,
+        "min_relevance_tokens": 1,
+        "suffix_family": "core",
+        "topic_shape": "compact"
+      },
+      "origin": "elite",
+      "parent_id": "g20-6"
+    },
+    {
+      "genome_id": "g21-elite-2",
+      "generation": 21,
       "genes": {
         "query_mode": "workaround",
         "query_count": 4,
@@ -16,105 +30,94 @@
         "topic_shape": "compact"
       },
       "origin": "elite",
-      "parent_id": "g19-7"
+      "parent_id": "g20-elite-1"
     },
     {
-      "genome_id": "g20-elite-2",
-      "generation": 20,
+      "genome_id": "g21-3",
+      "generation": 21,
       "genes": {
-        "query_mode": "workaround",
-        "query_count": 4,
-        "recency_days": 42,
-        "min_relevance_tokens": 1,
-        "suffix_family": "core",
+        "query_mode": "mixed",
+        "query_count": 3,
+        "recency_days": 45,
+        "min_relevance_tokens": 2,
+        "suffix_family": "intent",
         "topic_shape": "exact"
       },
-      "origin": "elite",
-      "parent_id": "g19-elite-1"
-    },
-    {
-      "genome_id": "g20-3",
-      "generation": 20,
-      "genes": {
-        "query_mode": "workaround",
-        "query_count": 2,
-        "recency_days": 19,
-        "min_relevance_tokens": 3,
-        "suffix_family": "intent",
-        "topic_shape": "compact"
-      },
       "origin": "random_immigrant",
       "parent_id": null
     },
     {
-      "genome_id": "g20-4",
-      "generation": 20,
-      "genes": {
-        "query_mode": "buyer",
-        "query_count": 3,
-        "recency_days": 12,
-        "min_relevance_tokens": 3,
-        "suffix_family": "ops",
-        "topic_shape": "compact"
-      },
-      "origin": "random_immigrant",
-      "parent_id": null
-    },
-    {
-      "genome_id": "g20-5",
-      "generation": 20,
-      "genes": {
-        "query_mode": "workaround",
-        "query_count": 4,
-        "recency_days": 35,
-        "min_relevance_tokens": 1,
-        "suffix_family": "intent",
-        "topic_shape": "compact"
-      },
-      "origin": "diversify_mutation",
-      "parent_id": "g19-7"
-    },
-    {
-      "genome_id": "g20-6",
-      "generation": 20,
-      "genes": {
-        "query_mode": "workaround",
-        "query_count": 4,
-        "recency_days": 35,
-        "min_relevance_tokens": 1,
-        "suffix_family": "core",
-        "topic_shape": "compact"
-      },
-      "origin": "diversify_mutation",
-      "parent_id": "g19-elite-1"
-    },
-    {
-      "genome_id": "g20-7",
-      "generation": 20,
+      "genome_id": "g21-4",
+      "generation": 21,
       "genes": {
         "query_mode": "mixed",
         "query_count": 4,
         "recency_days": 42,
-        "min_relevance_tokens": 2,
+        "min_relevance_tokens": 1,
         "suffix_family": "intent",
         "topic_shape": "compact"
       },
-      "origin": "diversify_mutation",
-      "parent_id": "g19-7"
+      "origin": "mutation",
+      "parent_id": "g20-elite-1"
     },
     {
-      "genome_id": "g20-8",
-      "generation": 20,
+      "genome_id": "g21-5",
+      "generation": 21,
       "genes": {
-        "query_mode": "buyer",
+        "query_mode": "workaround",
+        "query_count": 3,
+        "recency_days": 8,
+        "min_relevance_tokens": 3,
+        "suffix_family": "intent",
+        "topic_shape": "compact"
+      },
+      "origin": "random_immigrant",
+      "parent_id": null
+    },
+    {
+      "genome_id": "g21-6",
+      "generation": 21,
+      "genes": {
+        "query_mode": "workaround",
+        "query_count": 4,
+        "recency_days": 42,
+        "min_relevance_tokens": 1,
+        "suffix_family": "ops",
+        "topic_shape": "compact"
+      },
+      "origin": "mutation",
+      "parent_id": "g20-elite-1"
+    },
+    {
+      "genome_id": "g21-7",
+      "generation": 21,
+      "genes": {
+        "query_mode": "workaround",
+        "query_count": 4,
+        "recency_days": 42,
+        "min_relevance_tokens": 1,
+        "suffix_family": "core",
+        "topic_shape": "compact"
+      },
+      "origin": "crossover",
+      "parent_id": [
+        "g20-6",
+        "g20-elite-1"
+      ]
+    },
+    {
+      "genome_id": "g21-8",
+      "generation": 21,
+      "genes": {
+        "query_mode": "workaround",
         "query_count": 4,
         "recency_days": 42,
         "min_relevance_tokens": 1,
         "suffix_family": "intent",
         "topic_shape": "exact"
       },
-      "origin": "diversify_mutation",
-      "parent_id": "g19-elite-1"
+      "origin": "mutation",
+      "parent_id": "g20-elite-1"
     }
   ],
   "history": [
@@ -277,6 +280,14 @@
       "champion_genome_id": "g19-7",
       "champion_fitness": 68.4347,
       "successful_queries": 120
+    },
+    {
+      "generation": 20,
+      "measured_at_utc": "2026-10-03T04:50:28.679789+00:00",
+      "status": "EVOLVED",
+      "champion_genome_id": "g20-6",
+      "champion_fitness": 77.7581,
+      "successful_queries": 116
     }
   ],
   "boundary": {
@@ -294,16 +305,16 @@
     "external_output_trust": "UNTRUSTED_BOUNDED_MUTATION_ONLY"
   },
   "promotion_candidate": {
-    "genome_id": "g19-7",
+    "genome_id": "g20-6",
     "genes": {
       "query_mode": "workaround",
       "query_count": 4,
-      "recency_days": 42,
+      "recency_days": 35,
       "min_relevance_tokens": 1,
-      "suffix_family": "intent",
+      "suffix_family": "core",
       "topic_shape": "compact"
     },
-    "fitness": 68.4347,
+    "fitness": 77.7581,
     "manual_review_required": true,
     "production_promoted": false
   }
