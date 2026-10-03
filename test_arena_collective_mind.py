@@ -33,6 +33,29 @@ class CollectiveMindArenaTests(unittest.TestCase):
         self.assertIsNone(acm.safe_https_url("https://host.local/x"))
         self.assertEqual(acm.safe_https_url("https://example.com/x"),"https://example.com/x")
 
+    def test_labeled_proposal_adapter(self):
+        row=acm.parse_proposal({
+            "text":"PROPOSAL: reduce parser loss\nMETHOD: normalize labeled fields\nFALSIFIER: valid response rate does not improve\nCONFIDENCE: 0.7\nESTIMATED_GAIN_PCT: 25"
+        })
+        self.assertIsNotNone(row)
+        self.assertEqual(row["proposal"],"reduce parser loss")
+        self.assertAlmostEqual(row["confidence"],0.7)
+
+    def test_alias_object_adapter(self):
+        row=acm.parse_proposal({
+            "answer":"improve handshake",
+            "approach":"retry with compatible schema",
+            "disproof":"no increase in accepted responses",
+            "sources":["https://example.com/a"],
+            "gain_pct":20,
+        })
+        self.assertIsNotNone(row)
+        self.assertEqual(row["method"],"retry with compatible schema")
+
+    def test_labeled_critique_adapter(self):
+        row=acm.parse_critique({"text":"BEST_INDEX: 0\nWEAKNESS: tiny sample\nTEST: repeat across three rounds"})
+        self.assertEqual(row["best_index"],0)
+
     def test_score_rewards_evidence_and_cross_agent_support(self):
         low={"evidence_urls":[],"confidence":0.5,"estimated_gain_pct":10}
         high={

@@ -112,15 +112,62 @@ def recursive_objects(value: Any, depth: int = 0) -> list[dict[str,Any]]:
     return out
 
 
+def recursive_text(value: Any, depth: int = 0) -> list[str]:
+    if depth>5:
+        return []
+    out=[]
+    if isinstance(value,str):
+        out.append(value)
+    elif isinstance(value,dict):
+        for v in list(value.values())[:40]:
+            out.extend(recursive_text(v,depth+1))
+    elif isinstance(value,list):
+        for v in value[:40]:
+            out.extend(recursive_text(v,depth+1))
+    return out
+
+
+def _labeled_fields(text: str, labels: tuple[str,...]) -> dict[str,str]:
+    clean="\n".join(str(text or "").replace("\r","\n").splitlines())
+    found={}
+    lowered=clean.lower()
+    positions=[]
+    for label in labels:
+        for marker in (label+":", label+"=", "**"+label+"**:", "**"+label+"** ="):
+            idx=lowered.find(marker.lower())
+            if idx>=0:
+                positions.append((idx,label,len(marker)))
+                break
+    positions.sort()
+    for i,(idx,label,mlen) in enumerate(positions):
+        start=idx+mlen
+        end=positions[i+1][0] if i+1<len(positions) else len(clean)
+        value=clean[start:end].strip(" \n\t-*#")
+        if value:
+            found[label]=clean_text(value)
+    return found
+
+
+def _urls_from_text(text: str) -> list[str]:
+    out=[]
+    for raw in re.findall(r"https://[^\s\]\[\)\(<>\"']+",str(text or "")):
+        url=safe_https_url(raw.rstrip(".,;:"))
+        if url and url not in out:
+            out.append(url)
+        if len(out)>=MAX_EVIDENCE_URLS:
+            break
+    return out
+
+
 def parse_proposal(payload: Any) -> dict[str,Any] | None:
     for obj in recursive_objects(payload):
-        proposal=clean_text(obj.get("proposal") or obj.get("hypothesis") or "")
-        method=clean_text(obj.get("method") or obj.get("test") or "")
-        falsifier=clean_text(obj.get("falsifier") or obj.get("failure_condition") or "")
+        proposal=clean_text(obj.get("proposal") or obj.get("hypothesis") or obj.get("answer") or "")
+        method=clean_text(obj.get("method") or obj.get("test") or obj.get("approach") or "")
+        falsifier=clean_text(obj.get("falsifier") or obj.get("failure_condition") or obj.get("disproof") or "")
         if not proposal or not method or not falsifier:
             continue
         urls=[]
-        for raw in obj.get("evidence_urls") or []:
+        for raw in obj.get("evidence_urls") or obj.get("sources") or []:
             url=safe_https_url(raw)
             if url and url not in urls:
                 urls.append(url)
@@ -131,7 +178,7 @@ def parse_proposal(payload: Any) -> dict[str,Any] | None:
         except Exception:
             confidence=0.0
         try:
-            gain=max(0.0,min(100.0,float(obj.get("estimated_gain_pct") or 0.0)))
+            gain=max(0.0,min(100.0,float(obj.get("estimated_gain_pct") or obj.get("gain_pct") or 0.0)))
         except Exception:
             gain=0.0
         return {
@@ -142,20 +189,53 @@ def parse_proposal(payload: Any) -> dict[str,Any] | None:
             "confidence":round(confidence,3),
             "estimated_gain_pct":round(gain,2),
         }
+    for raw in recursive_text(payload):
+        fields=_labeled_fields(raw,("proposal","method","falsifier","confidence","estimated_gain_pct"))
+        proposal=clean_text(fields.get("proposal") or "")
+        method=clean_text(fields.get("method") or "")
+        falsifier=clean_text(fields.get("falsifier") or "")
+        if not proposal or not method or not falsifier:
+            continue
+        try:
+            confidence=max(0.0,min(1.0,float(re.findall(r"[0-9.]+",fields.get("confidence") or "0")[0])))
+        except Exception:
+            confidence=0.0
+        try:
+            gain=max(0.0,min(100.0,float(re.findall(r"[0-9.]+",fields.get("estimated_gain_pct") or "0")[0])))
+        except Exception:
+            gain=0.0
+        return {
+            "proposal":proposal,
+            "method":method,
+            "falsifier":falsifier,
+            "evidence_urls":_urls_from_text(raw),
+            "confidence":round(confidence,3),
+            "estimated_gain_pct":round(gain,2),
+        }
     return None
 
 
 def parse_critique(payload: Any) -> dict[str,Any] | None:
     for obj in recursive_objects(payload):
         try:
-            best_index=int(obj.get("best_index"))
+            best_index=int(obj.get("best_index") if obj.get("best_index") is not None else obj.get("choice"))
         except Exception:
             continue
-        weakness=clean_text(obj.get("weakness") or "")
-        test=clean_text(obj.get("test") or obj.get("verification") or "")
+        weakness=clean_text(obj.get("weakness") or obj.get("risk") or "")
+        test=clean_text(obj.get("test") or obj.get("verification") or obj.get("check") or "")
         if best_index<0 or not weakness or not test:
             continue
         return {"best_index":best_index,"weakness":weakness,"test":test}
+    for raw in recursive_text(payload):
+        fields=_labeled_fields(raw,("best_index","weakness","test"))
+        try:
+            best_index=int(re.findall(r"\d+",fields.get("best_index") or "")[0])
+        except Exception:
+            continue
+        weakness=clean_text(fields.get("weakness") or "")
+        test=clean_text(fields.get("test") or "")
+        if best_index>=0 and weakness and test:
+            return {"best_index":best_index,"weakness":weakness,"test":test}
     return None
 
 
@@ -211,6 +291,25 @@ def proposal_prompt(mission: str, packet_code: str, packet_text: str) -> str:
         "confidence (0-1), estimated_gain_pct (0-100). "
         f"MISSION: {clean_text(mission,1200)} "
         f"YOUR WORK PACKET [{packet_code}]: {packet_text}"
+    )
+
+
+def compatibility_proposal_prompt(mission: str, packet_code: str, packet_text: str) -> str:
+    return (
+        "MYCELIX bounded collaboration retry. Analysis only; no external actions. "
+        "If JSON is inconvenient, reply using exactly these labels on separate lines: "
+        "PROPOSAL: ... METHOD: ... FALSIFIER: ... CONFIDENCE: 0-1 ESTIMATED_GAIN_PCT: 0-100. "
+        "Public HTTPS evidence links may follow. "
+        f"MISSION: {clean_text(mission,900)} TASK [{packet_code}]: {packet_text}"
+    )
+
+
+def compatibility_critique_prompt(proposals: list[dict[str,Any]]) -> str:
+    compact=[{"index":i,"proposal":p["proposal"][:280]} for i,p in enumerate(proposals)]
+    return (
+        "MYCELIX bounded review retry. Reply JSON or three labeled lines: "
+        "BEST_INDEX: integer WEAKNESS: ... TEST: ... "
+        "Do not execute anything. PROPOSALS="+json.dumps(compact,ensure_ascii=False,separators=(",",":"))
     )
 
 
@@ -277,9 +376,22 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                 continue
             status,payload=result
             parsed=parse_proposal(payload) if 200<=status<300 else None
+            retry_used=False
+            if not parsed and 200<=status<300:
+                retry_used=True
+                packet_text=next((x[1] for x in WORK_PACKETS if x[0]==packet),"")
+                try:
+                    retry_status,retry_payload=await send_chat(
+                        client,aid,compatibility_proposal_prompt(mission,packet,packet_text)
+                    )
+                    if 200<=retry_status<300:
+                        parsed=parse_proposal(retry_payload)
+                except Exception:
+                    pass
             contacts.append({
                 "agent_id":aid[:160],"agent":name,"packet":packet,
                 "accepted":bool(parsed),
+                "retry_used":retry_used,
                 "reason":"structured_proposal_accepted" if parsed else f"no_valid_proposal_http_{status}",
             })
             if parsed:
@@ -303,8 +415,20 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
                     continue
                 status,payload=result
                 parsed=parse_critique(payload) if 200<=status<300 else None
+                retry_used=False
+                if not parsed and 200<=status<300:
+                    retry_used=True
+                    try:
+                        retry_status,retry_payload=await send_chat(
+                            client,aid,compatibility_critique_prompt(proposals)
+                        )
+                        if 200<=retry_status<300:
+                            parsed=parse_critique(retry_payload)
+                    except Exception:
+                        pass
                 critiques.append({
                     "agent_id":aid[:160],"agent":name,"accepted":bool(parsed),
+                    "retry_used":retry_used,
                     "reason":"critique_accepted" if parsed else f"no_valid_critique_http_{status}",
                     "critique":parsed,
                 })
