@@ -116,6 +116,7 @@ def new_search_state() -> dict[str, Any]:
         "last_provider":"bing",
         "last_call_monotonic":0.0,
         "provider_throttled":False,
+        "throttle_streak":0,
     }
 
 
@@ -125,7 +126,7 @@ def normalize_search_state(state: dict | None) -> dict[str, Any]:
         for key in out:
             if key in state:
                 out[key]=state.get(key)
-    for key in ("calls_day","calls_cycle","errors","fallbacks"):
+    for key in ("calls_day","calls_cycle","errors","fallbacks","throttle_streak"):
         try:
             out[key]=max(0,int(out.get(key) or 0))
         except Exception:
@@ -159,6 +160,7 @@ def begin_cycle(state: dict | None, cycle_id: int, now: datetime | None = None) 
         out["fallbacks"]=0
         out["fallback_reasons"]={}
         out["provider_throttled"]=False
+        out["throttle_streak"]=0
     return out
 
 
@@ -314,6 +316,8 @@ async def search(
                     "snippet":str(item.get("description") or "")[:1200],
                     "source":"brave-search",
                 })
+            st["throttle_streak"]=0
+            st["provider_throttled"]=False
             return rows,st,{"provider":"brave","fallback":False,"reason":"ok"}
 
         key=(os.getenv("GOOGLE_PSE_KEY") or "").strip()
@@ -356,7 +360,10 @@ async def search(
     except SearchProviderError as exc:
         reason=str(exc)[:80]
         if reason=="HTTPStatusError:429":
-            st["provider_throttled"]=True
+            st["throttle_streak"]=int(st.get("throttle_streak") or 0)+1
+            st["provider_throttled"]=st["throttle_streak"]>=3
+        else:
+            st["throttle_streak"]=0
         _record_fallback(st,reason,error=True)
         return [],st,{
             "provider":provider,
