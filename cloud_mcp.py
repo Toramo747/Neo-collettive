@@ -50,6 +50,7 @@ from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
     analyze_tool_opportunities,
     market_query_plan,
+    workaround42_query_plan,
     competitor_money_first_plan,
     market_scout_terms,
     opportunity_candidate,
@@ -8629,13 +8630,31 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         },
     )
 
-    market_plan=market_query_plan(int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,10)
+    cycle_no=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1
+    base_market_plan=market_query_plan(cycle_no,10)
+    workaround_plan=[]
+    workaround_fallback=False
+    try:
+        workaround_plan=workaround42_query_plan(cycle_no,4)
+    except Exception:
+        workaround_plan=[]
+    if workaround_plan:
+        pricing_rows=[x for x in base_market_plan if str(x.get("role") or "")=="tool_pricing"][:5]
+        activity_rows=[x for x in base_market_plan if str(x.get("role") or "")!="tool_pricing"]
+        remaining=max(0,10-len(pricing_rows)-len(workaround_plan))
+        market_plan=(pricing_rows+workaround_plan+activity_rows[:remaining])[:10]
+    else:
+        market_plan=base_market_plan
+        workaround_fallback=True
     search_strategy = {
         "mode":"tool_opportunity_market",
+        "strategy_code":"workaround-42d-v1" if workaround_plan else "baseline-market-plan",
+        "workaround_query_count":len(workaround_plan),
+        "workaround_fallback":bool(workaround_fallback),
         "queries":[x["query"] for x in market_plan],
         "query_plan":market_plan,
         "planned_query_count":len(market_plan),
-        "policy":"rank commercial tool opportunities from URL-grounded market signals; no login scraping; no payment",
+        "policy":"rank commercial tool opportunities from URL-grounded market signals; no login scraping; no payment; discovery strategy cannot relax evidence gates",
     }
     searches = list(search_strategy["queries"])
     query_meta={
