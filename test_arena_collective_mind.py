@@ -68,6 +68,31 @@ class CollectiveMindArenaTests(unittest.TestCase):
             "A concrete proposal with enough detail to be useful.",
         )
 
+    def test_substance_guard_rejects_canned_or_duplicate_fields(self):
+        self.assertFalse(acm.proposal_substantive({
+            "proposal":"...",
+            "method":"...",
+            "falsifier":"...",
+        }))
+        self.assertFalse(acm.proposal_substantive({
+            "proposal":"Send me an agent-card URL and I will inspect it.",
+            "method":"Send me an agent-card URL and I will inspect it.",
+            "falsifier":"Send me an agent-card URL and I will inspect it.",
+        }))
+        self.assertTrue(acm.proposal_substantive({
+            "proposal":"Test whether query families with explicit workaround language surface more independent buyer pain.",
+            "method":"Run the bounded query set against the same public sources and compare independent signal counts.",
+            "falsifier":"Reject the idea if independent buyer-pain coverage does not increase without a precision loss.",
+        }))
+
+    def test_critique_substance_guard(self):
+        self.assertFalse(acm.critique_substantive({"best_index":0,"weakness":"bad","test":"try"},1))
+        self.assertTrue(acm.critique_substantive({
+            "best_index":0,
+            "weakness":"The proposal may overfit one source and fail to generalize across independent domains.",
+            "test":"Repeat the comparison across three source families and require the same direction of improvement.",
+        },1))
+
     def test_score_rewards_evidence_and_cross_agent_support(self):
         low={"evidence_urls":[],"confidence":0.5,"estimated_gain_pct":10}
         high={
