@@ -95,6 +95,37 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(meta["reason"],"HTTPStatusError:"+str(status))
             self.assertNotIn(secret,repr((state,meta,rows)))
 
+    async def test_single_429_does_not_disable_provider_for_cycle(self):
+        os.environ["BRAVE_SEARCH_API_KEY"]="secret"
+        calls=[429,200]
+        async def http_get(url,**kwargs):
+            status=calls.pop(0)
+            if status==429:
+                return {"status":429,"json":{}}
+            return {"status":200,"json":{"web":{"results":[{"title":"x","url":"https://example.com","description":"y"}]}}}
+        state=sp.new_search_state()
+        _,state,meta1=await sp.search("one",1,state=state,http_get=http_get)
+        self.assertEqual(meta1["reason"],"HTTPStatusError:429")
+        self.assertFalse(state["provider_throttled"])
+        self.assertEqual(state["throttle_streak"],1)
+        rows,state,meta2=await sp.search("two",1,state=state,http_get=http_get)
+        self.assertFalse(meta2["fallback"])
+        self.assertEqual(len(rows),1)
+        self.assertEqual(state["throttle_streak"],0)
+
+    async def test_three_consecutive_429s_trip_cycle_throttle(self):
+        os.environ["BRAVE_SEARCH_API_KEY"]="secret"
+        async def http_get(url,**kwargs):
+            return {"status":429,"json":{}}
+        state=sp.new_search_state()
+        for query in ("one","two","three"):
+            _,state,_=await sp.search(query,1,state=state,http_get=http_get)
+        self.assertTrue(state["provider_throttled"])
+        self.assertEqual(state["throttle_streak"],3)
+        _,state,meta=await sp.search("four",1,state=state,http_get=http_get)
+        self.assertEqual(meta["reason"],"provider_throttled")
+        self.assertEqual(state["calls_cycle"],3)
+
     async def test_cycle_limit_is_respected(self):
         os.environ["BRAVE_SEARCH_API_KEY"]="secret"
         async def http_get(url,**kwargs):
