@@ -37,6 +37,21 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertIn('Measure first attempts',calls[3])
         self.assertNotIn('expected',calls[0])
 
+    def test_screening_is_train_only_and_stratified(self):
+        train=[c for c in arena.cases() if c['split']=='train']
+        screen=arena.screening_cases(train)
+        self.assertEqual(len(screen),6)
+        self.assertEqual({family for _,family,_,_ in screen},
+                         {'timeout','schema','context','out_of_scope','injection','missing_data'})
+        holdout_ids={c['id'] for c in arena.cases() if c['split']=='holdout'}
+        self.assertFalse(any(case_id in holdout_ids for case_id,_,_,_ in screen))
+
+    def test_gamete_population_expands_without_touching_holdout(self):
+        population=[(m,p,v) for m in arena.MODELS for p in arena.POLICIES for v in arena.PROMPT_VARIANTS]
+        self.assertEqual(len(population),8)
+        self.assertEqual(arena.POLICIES,('direct','self_review'))
+        self.assertEqual(arena.PROMPT_VARIANTS,('base','strict'))
+
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
         self.assertFalse(result['complete'])
