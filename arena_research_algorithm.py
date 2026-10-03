@@ -219,7 +219,7 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
     buyer_component = min(buyer_hits, 5) / 5.0
     pain_component = min(pain_hits, 10) / 10.0
     workaround_component = min(workaround_hits, 8) / 8.0
-    fitness = (
+    base_fitness = (
         precision * 35.0
         + relevance_rate * 15.0
         + independent * 20.0
@@ -227,8 +227,16 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
         + pain_component * 10.0
         + workaround_component * 10.0
     )
+    # Prevent tiny perfect samples from dominating evolution.
+    # Full credit requires at least 4 relevant hits and 3 independent signal threads.
+    support_relevant = min(relevant_hits, 4) / 4.0
+    support_independent = min(len(unique_threads), 3) / 3.0
+    support_factor = 0.5 * support_relevant + 0.5 * support_independent
+    fitness = base_fitness * support_factor
     return {
         "fitness": round(fitness, 4),
+        "base_fitness": round(base_fitness, 4),
+        "support_factor": round(support_factor, 4),
         "total_hits": total_hits,
         "relevant_hits": relevant_hits,
         "signal_hits": signal_hits,
