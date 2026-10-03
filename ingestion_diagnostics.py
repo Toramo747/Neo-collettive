@@ -171,6 +171,7 @@ class IngestionDiagnostics:
         self.funnel = {
             "queries_planned":0,
             "queries_executed":0,
+            "queries_skipped_by_reason":Counter(),
             "calls_by_source":Counter(),
             "errors_by_source":defaultdict(Counter),
             "raw_received":0,
@@ -199,6 +200,22 @@ class IngestionDiagnostics:
             if not isinstance(group, dict):
                 continue
             diag = group.get("ingestion_diagnostics")
+            reason=str(group.get("query_skip_reason") or "")
+            if reason in {"deadline","empty_plan","budget","cooldown","query_limit"}:
+                self.funnel["queries_skipped_by_reason"][reason] += max(0,int(group.get("skipped_query_count",1)))
+            # Deadline/exception groups previously had no diagnostic payload.
+            # Retain the safe code even when no routed search completed.
+            code=str(group.get("error") or "")
+            if not isinstance(diag,dict) and code in {
+                "web_research_deadline_exceeded","money_first_deadline_exceeded",
+                "web_research_exception",
+            }:
+                self.funnel["errors_by_source"]["web"][code] += 1
+                self.source_errors["web"] += 1
+                self.errors_by_source["web"][code] += 1
+                self.errors += 1
+                if not reason:
+                    self.funnel["queries_skipped_by_reason"]["deadline" if "deadline" in code else "exception"] += 1
             if not isinstance(diag, dict):
                 continue
             self.raw.update(diag.get("raw_by_source") or {})
@@ -228,6 +245,18 @@ class IngestionDiagnostics:
         for row in rows or []:
             if isinstance(row, dict):
                 self.raw[canonical_source(row.get("source") or "unknown")] += 1
+                self.funnel["raw_received"] += 1
+
+    def record_scout_deduped(self, row: dict) -> None:
+        if self.enabled and str(row.get("url") or "").strip():
+            self.funnel["deduped"] += 1
+
+    def record_scout_relevance(self, source: str, query_class: str) -> None:
+        if self.enabled:
+            source=canonical_source(source)
+            self.funnel["query_relevant"] += 1
+            self.passed[source] += 1
+            self.passed_by_class[source][query_class] += 1
 
     def record_rejection(self, reason: str, source: str, query_class: str) -> None:
         if not self.enabled:
@@ -343,6 +372,7 @@ class IngestionDiagnostics:
         funnel_out={
             "queries_planned":max(0,int(self.funnel["queries_planned"] or 0)),
             "queries_executed":max(0,int(self.funnel["queries_executed"] or 0)),
+            "queries_skipped_by_reason":dict(sorted(self.funnel["queries_skipped_by_reason"].items())),
             "calls_by_source":dict(sorted(self.funnel["calls_by_source"].items())),
             "errors_by_source":{
                 source:dict(sorted(codes.items()))
