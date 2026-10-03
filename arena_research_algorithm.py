@@ -24,6 +24,8 @@ from typing import Any
 
 import httpx
 
+from evidence_integrity import commercial_family
+
 NAMESPACE = "mycelix-arena"
 ARENA_ID = "mycelix-research-algorithm"
 HN_ENDPOINT = "https://hn.algolia.com/api/v1/search_by_date"
@@ -251,6 +253,7 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
     pain_hits = 0
     buyer_hits = 0
     workaround_hits = 0
+    family_hits = 0
     unique_threads: set[str] = set()
 
     for row in query_rows:
@@ -268,9 +271,11 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
             pain = bool(tokens & PAIN_MARKERS)
             buyer = bool(tokens & BUYER_MARKERS)
             workaround = bool(tokens & WORKAROUND_MARKERS)
+            family = commercial_family(text)
             pain_hits += int(pain)
             buyer_hits += int(buyer)
             workaround_hits += int(workaround)
+            family_hits += int(family != "other")
             if pain or buyer or workaround:
                 signal_hits += 1
                 sid = str(hit.get("story_id") or hit.get("objectID") or "")
@@ -283,13 +288,15 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
     buyer_component = min(buyer_hits, 5) / 5.0
     pain_component = min(pain_hits, 10) / 10.0
     workaround_component = min(workaround_hits, 8) / 8.0
+    family_match_rate = family_hits / max(1, relevant_hits)
     base_fitness = (
-        precision * 35.0
-        + relevance_rate * 15.0
+        precision * 30.0
+        + relevance_rate * 10.0
         + independent * 20.0
         + buyer_component * 10.0
         + pain_component * 10.0
         + workaround_component * 10.0
+        + family_match_rate * 10.0
     )
     # Prevent tiny perfect samples from dominating evolution.
     # Full credit requires at least 4 relevant hits and 3 independent signal threads.
@@ -308,6 +315,8 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
         "pain_hits": pain_hits,
         "buyer_hits": buyer_hits,
         "workaround_hits": workaround_hits,
+        "family_hits": family_hits,
+        "family_match_rate": round(family_match_rate, 4),
         "precision": round(precision, 4),
         "relevance_rate": round(relevance_rate, 4),
     }
