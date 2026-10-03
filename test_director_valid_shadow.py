@@ -73,9 +73,20 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn('timeout=15.0',s)
         self.assertIn('"quality_reason":"lightweight_transport_timeout"',s)
 
-    def test_lightweight_registry_uses_broad_single_attempt(self):
+    def test_lightweight_registry_uses_task_verified_pool(self):
         s=self.source
-        self.assertIn('attempts=[attempts[-1]]',s)
+        self.assertIn('task_verified_only: bool = False',s)
+        self.assertIn('attempts=[{"limit":per_query,"task_verified":"true"}]',s)
+        self.assertIn('task_verified_only=lightweight',s)
+        self.assertIn('per_query=12 if lightweight else 10',s)
+
+    def test_agent_probe_diagnostics_separate_contact_from_quality(self):
+        s=self.source
+        self.assertIn('"candidates_found":probe_candidates_found',s)
+        self.assertIn('"agents_selected":probe_agents_selected',s)
+        self.assertIn('"agents_contacted":len(contacted_agents)',s)
+        self.assertIn('"agents_reached":len(reached_agents)',s)
+        self.assertIn('"valid_answers":len(valid)',s)
 
     def test_revalidation_is_bounded(self):
         s=self.source
