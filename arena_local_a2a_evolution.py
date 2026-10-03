@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BUSL-1.1
 """Bounded synthetic A2A evolutionary search. Never imports or mutates production."""
+# Hybrid generation rerun: behavior unchanged.
 from __future__ import annotations
 import argparse
 import hashlib
