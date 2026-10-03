@@ -330,7 +330,20 @@ def parse_mutation(value: Any) -> dict[str, Any] | None:
             continue
         allowed = {k: raw[k] for k in ("query_mode", "query_count", "recency_days", "min_relevance_tokens") if k in raw}
         if allowed:
-            return clamp_genome(allowed)
+            bounded = {}
+            if "query_mode" in allowed:
+                mode = str(allowed["query_mode"])
+                if mode in QUERY_MODES:
+                    bounded["query_mode"] = mode
+            for key in ("query_count", "recency_days", "min_relevance_tokens"):
+                if key not in allowed:
+                    continue
+                lo, hi = GENE_BOUNDS[key]
+                try:
+                    bounded[key] = max(lo, min(hi, int(allowed[key])))
+                except Exception:
+                    continue
+            return bounded or None
     return None
 
 
