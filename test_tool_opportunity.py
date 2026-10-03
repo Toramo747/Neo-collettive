@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Andrea Gava
 import unittest
 
-from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog, workaround42_query_plan
+from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog, workaround42_query_plan, workaround_compact42_query_plan
 
 
 class ToolOpportunityTests(unittest.TestCase):
@@ -303,6 +303,29 @@ class ToolOpportunityTests(unittest.TestCase):
         self.assertTrue(all(x["min_relevance_tokens"]==1 for x in rows))
         suffixes={x["query"].split()[-1] for x in rows}
         self.assertEqual(suffixes,{"workaround","manual","script","spreadsheet"})
+
+    def test_workaround_compact42_plan_is_discovery_only_v2(self):
+        rows=workaround_compact42_query_plan(7,4)
+        self.assertEqual(len(rows),4)
+        self.assertTrue(all(x["strategy_code"]=="workaround-compact-42d-v2" for x in rows))
+        self.assertTrue(all(x["role"]=="workaround_research" for x in rows))
+        self.assertTrue(all(x["query_intent"]=="workaround" for x in rows))
+        self.assertTrue(all(x["recency_days"]==42 for x in rows))
+        self.assertTrue(all(x["min_relevance_tokens"]==1 for x in rows))
+        self.assertTrue(all(x["topic_shape"]=="compact" for x in rows))
+        self.assertTrue(all(x["suffix_family"]=="core" for x in rows))
+        suffixes={x["query"].split()[-1] for x in rows}
+        self.assertEqual(suffixes,{"workaround","manual","script","spreadsheet"})
+
+    def test_workaround_compact42_uses_shortest_configured_alias(self):
+        rows=workaround_compact42_query_plan(0,4)
+        prefixes={x["query"].rsplit(" ",1)[0] for x in rows}
+        self.assertEqual(len(prefixes),1)
+        alias=next(iter(prefixes))
+        from tool_opportunity import CATEGORY_CONFIGS
+        aliases=CATEGORY_CONFIGS[rows[0]["family"]]["aliases"]
+        expected=min(aliases,key=lambda x:(len(x.split()),len(x),x.lower()))
+        self.assertEqual(alias,expected)
 
     def test_money_first_plan_targets_only_missing_competitors(self):
         rows=competitor_money_first_plan([
