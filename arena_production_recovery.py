@@ -22,6 +22,10 @@ def cycle_source(source):
  node=next(n for n in ast.parse(source).body if isinstance(n,ast.AsyncFunctionDef) and n.name=='_autopilot_cycle')
  return '\n'.join(source.splitlines()[node.lineno-1:node.end_lineno])+'\n'
 
+def baseline_source(source):
+ for old,new in PATCHES.values():source=source.replace(new,old)
+ return source
+
 def mutate(source,genes):
  for gene in genes:
   old,new=PATCHES[gene]
@@ -87,22 +91,23 @@ def public_sample():
   with urllib.request.urlopen(request,timeout=20) as response:data=json.load(response)
   ap=data.get('autopilot') or {}
   age=lambda value:max(0,(datetime.now(timezone.utc)-datetime.fromisoformat(value.replace('Z','+00:00'))).total_seconds()) if value else None
-  return {'version':data.get('neo_version'),'running':bool(ap.get('running')),'cycles_completed':int(ap.get('cycles_completed') or 0),'start_age_seconds':age(ap.get('last_started_utc')),'finish_age_seconds':age(ap.get('last_finished_utc')),'has_cycle_error':bool(ap.get('last_error')),'has_latest_result':bool(ap.get('latest_result'))}
+  return {'version':data.get('neo_version'),'running':bool(ap.get('running')),'cycles_completed':int(ap.get('cycles_completed') or 0),'start_age_seconds':age(ap.get('last_started_utc')),'finish_age_seconds':age(ap.get('last_finished_utc')),'has_cycle_error':bool(ap.get('last_error')),'has_latest_result':bool(ap.get('latest_result') or data.get('latest_result'))}
  except Exception as exc:return {'error_code':type(exc).__name__}
 
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('--live-read-only',action='store_true');parser.add_argument('--out',default='artifacts/production-recovery');args=parser.parse_args()
  root=Path(args.out);root.mkdir(parents=True,exist_ok=True)
  source=Path('cloud_mcp.py').read_text();cycle=cycle_source(source)
- ranked=asyncio.run(evaluate(cycle));winner=ranked[0]
+ ranked=asyncio.run(evaluate(baseline_source(cycle)));winner=ranked[0]
  samples=[]
  if args.live_read_only:
   for index in range(3):
    if index:time.sleep(10)
    samples.append(public_sample())
  status='PATCH_CANDIDATE' if winner['passed']==5 else 'HOLD_NO_VALID_PATCH'
- patched=source.replace(cycle,mutate(cycle,winner['genes']))
- patch=''.join(difflib.unified_diff(source.splitlines(True),patched.splitlines(True),fromfile='a/cloud_mcp.py',tofile='b/cloud_mcp.py'))
+ baseline_full=source.replace(cycle,baseline_source(cycle))
+ patched=source.replace(cycle,mutate(baseline_source(cycle),winner['genes']))
+ patch=''.join(difflib.unified_diff(baseline_full.splitlines(True),patched.splitlines(True),fromfile='a/cloud_mcp.py',tofile='b/cloud_mcp.py'))
  (root/'candidate.patch').write_text(patch)
  report={'namespace':'mycelix-arena','status':status,'fault_injection_is_synthetic':True,'production_root_cause':'UNLOCALIZED_STALL','production_state_write':False,'production_promoted':False,'commercial_gate_influence':'NONE','heartbeat_completion_checks_changed':False,'candidate':winner,'ranked_candidates':ranked,'live_read_only_samples':samples,'limits':['Fault injection proves timeout coverage only; it does not prove which operation is stuck in production.','No timeout is converted into commercial success or a fresh snapshot.','Cancellation-resistant dependencies and synchronous blocking require separate diagnosis.']}
  (root/'report.json').write_text(json.dumps(report,indent=2)+'\n')

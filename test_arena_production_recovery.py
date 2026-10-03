@@ -6,7 +6,7 @@ import arena_production_recovery as arena
 class ProductionRecoveryTests(unittest.TestCase):
     def test_real_cycle_fault_injection_selects_bounds_without_gate_changes(self):
         source=Path('cloud_mcp.py').read_text()
-        cycle=arena.cycle_source(source)
+        cycle=arena.baseline_source(arena.cycle_source(source))
         ranked=asyncio.run(arena.evaluate(cycle))
         winner=ranked[0]
         baseline=next(row for row in ranked if not row['genes'])
@@ -23,7 +23,7 @@ class ProductionRecoveryTests(unittest.TestCase):
         self.assertNotIn('api_heartbeat',patched)
 
     def test_mutation_is_confined_to_selected_awaits(self):
-        source=arena.cycle_source(Path('cloud_mcp.py').read_text())
+        source=arena.baseline_source(arena.cycle_source(Path('cloud_mcp.py').read_text()))
         changed=arena.mutate(source,('seti',))
         self.assertEqual(changed.count('timeout=min(AUTOPILOT_CYCLE_TIMEOUT_SECONDS,120.0)'),1)
         self.assertIn('await _checkpoint_state_to_render()',changed)
