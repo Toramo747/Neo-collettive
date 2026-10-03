@@ -48,10 +48,38 @@ TOPICS = (
 )
 
 QUERY_SUFFIXES = {
-    "pain": ("pain", "problem", "frustrating", "tedious"),
-    "buyer": ("pay for", "budget", "hire", "pricing"),
-    "workaround": ("workaround", "manual", "script", "spreadsheet"),
-    "mixed": ("problem", "pay for", "workaround", "manual"),
+    "core": {
+        "pain": ("pain", "problem", "frustrating", "tedious"),
+        "buyer": ("pay for", "budget", "hire", "pricing"),
+        "workaround": ("workaround", "manual", "script", "spreadsheet"),
+        "mixed": ("problem", "pay for", "workaround", "manual"),
+    },
+    "intent": {
+        "pain": ("issue", "blocking", "bottleneck", "annoying"),
+        "buyer": ("vendor", "service", "tool", "subscription"),
+        "workaround": ("automation", "macro", "integration", "template"),
+        "mixed": ("issue", "tool", "automation", "workflow"),
+    },
+    "ops": {
+        "pain": ("rework", "delay", "overhead", "failure"),
+        "buyer": ("spend", "license", "contract", "consultant"),
+        "workaround": ("api", "macro", "bot", "pipeline"),
+        "mixed": ("delay", "license", "api", "pipeline"),
+    },
+}
+TOPIC_SHAPES = {
+    "exact": {
+        "manual data entry": "manual data entry",
+        "invoice reconciliation": "invoice reconciliation",
+        "security compliance evidence": "security compliance evidence",
+        "spreadsheet workflow": "spreadsheet workflow",
+    },
+    "compact": {
+        "manual data entry": "data entry",
+        "invoice reconciliation": "invoice reconcile",
+        "security compliance evidence": "compliance evidence",
+        "spreadsheet workflow": "spreadsheet process",
+    },
 }
 
 PAIN_MARKERS = {
@@ -72,7 +100,9 @@ GENE_BOUNDS = {
     "recency_days": (7, 45),
     "min_relevance_tokens": (1, 3),
 }
-QUERY_MODES = tuple(QUERY_SUFFIXES)
+QUERY_MODES = ("pain", "buyer", "workaround", "mixed")
+SUFFIX_FAMILIES = tuple(QUERY_SUFFIXES)
+TOPIC_SHAPE_MODES = tuple(TOPIC_SHAPES)
 
 BOUNDARY = {
     "namespace": NAMESPACE,
@@ -116,9 +146,15 @@ def clamp_genome(genome: dict[str, Any]) -> dict[str, Any]:
         "query_count": int(genome.get("query_count") or 3),
         "recency_days": int(genome.get("recency_days") or 21),
         "min_relevance_tokens": int(genome.get("min_relevance_tokens") or 1),
+        "suffix_family": str(genome.get("suffix_family") or "core"),
+        "topic_shape": str(genome.get("topic_shape") or "exact"),
     }
     if out["query_mode"] not in QUERY_MODES:
         out["query_mode"] = "mixed"
+    if out["suffix_family"] not in SUFFIX_FAMILIES:
+        out["suffix_family"] = "core"
+    if out["topic_shape"] not in TOPIC_SHAPE_MODES:
+        out["topic_shape"] = "exact"
     for key, (lo, hi) in GENE_BOUNDS.items():
         out[key] = max(lo, min(hi, int(out[key])))
     return out
@@ -155,11 +191,13 @@ def clean_text(value: Any) -> str:
 
 def build_queries(genome: dict[str, Any]) -> list[tuple[str, str]]:
     genes = clamp_genome(genome)
-    suffixes = QUERY_SUFFIXES[genes["query_mode"]][: genes["query_count"]]
+    suffixes = QUERY_SUFFIXES[genes["suffix_family"]][genes["query_mode"]][: genes["query_count"]]
     rows: list[tuple[str, str]] = []
+    shape = TOPIC_SHAPES[genes["topic_shape"]]
     for topic in TOPICS:
+        query_topic = shape[topic]
         for suffix in suffixes:
-            rows.append((topic, f"{topic} {suffix}"))
+            rows.append((topic, f"{query_topic} {suffix}"))
     return rows
 
 
@@ -269,13 +307,17 @@ async def evaluate_genome(client: httpx.AsyncClient, item: dict[str, Any]) -> di
 
 def mutate(parent: dict[str, Any], rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
     genes = dict(clamp_genome(parent.get("genes") or {}))
-    key = rng.choice(["query_mode", "query_count", "recency_days", "min_relevance_tokens"])
+    key = rng.choice(["query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape"])
     if key == "query_mode":
         genes[key] = rng.choice([x for x in QUERY_MODES if x != genes[key]])
     elif key == "query_count":
         genes[key] += rng.choice([-1, 1])
     elif key == "recency_days":
         genes[key] += rng.choice([-7, 7, 14])
+    elif key == "suffix_family":
+        genes[key] = rng.choice([x for x in SUFFIX_FAMILIES if x != genes[key]])
+    elif key == "topic_shape":
+        genes[key] = rng.choice([x for x in TOPIC_SHAPE_MODES if x != genes[key]])
     else:
         genes[key] += rng.choice([-1, 1])
     return {
@@ -294,12 +336,14 @@ def genome_key(item: dict[str, Any]) -> tuple:
         genes["query_count"],
         genes["recency_days"],
         genes["min_relevance_tokens"],
+        genes["suffix_family"],
+        genes["topic_shape"],
     )
 
 
 def diversify_mutation(parent: dict[str, Any], rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
     genes = dict(clamp_genome(parent.get("genes") or {}))
-    keys = ["query_mode", "query_count", "recency_days", "min_relevance_tokens"]
+    keys = ["query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape"]
     for key in rng.sample(keys, k=2):
         if key == "query_mode":
             genes[key] = rng.choice([x for x in QUERY_MODES if x != genes[key]])
@@ -307,6 +351,10 @@ def diversify_mutation(parent: dict[str, Any], rng: random.Random, generation: i
             genes[key] += rng.choice([-1, 1])
         elif key == "recency_days":
             genes[key] += rng.choice([-14, -7, 7, 14])
+        elif key == "suffix_family":
+            genes[key] = rng.choice([x for x in SUFFIX_FAMILIES if x != genes[key]])
+        elif key == "topic_shape":
+            genes[key] = rng.choice([x for x in TOPIC_SHAPE_MODES if x != genes[key]])
         else:
             genes[key] += rng.choice([-1, 1])
     return {
@@ -324,6 +372,8 @@ def random_immigrant(rng: random.Random, generation: int, suffix: str) -> dict[s
         "query_count": rng.randint(*GENE_BOUNDS["query_count"]),
         "recency_days": rng.randint(*GENE_BOUNDS["recency_days"]),
         "min_relevance_tokens": rng.randint(*GENE_BOUNDS["min_relevance_tokens"]),
+        "suffix_family": rng.choice(list(SUFFIX_FAMILIES)),
+        "topic_shape": rng.choice(list(TOPIC_SHAPE_MODES)),
     }
     return {
         "genome_id": f"g{generation}-{suffix}",
@@ -395,13 +445,21 @@ def parse_mutation(value: Any) -> dict[str, Any] | None:
         raw = row.get("mutation") if isinstance(row.get("mutation"), dict) else row
         if not isinstance(raw, dict):
             continue
-        allowed = {k: raw[k] for k in ("query_mode", "query_count", "recency_days", "min_relevance_tokens") if k in raw}
+        allowed = {k: raw[k] for k in ("query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape") if k in raw}
         if allowed:
             bounded = {}
             if "query_mode" in allowed:
                 mode = str(allowed["query_mode"])
                 if mode in QUERY_MODES:
                     bounded["query_mode"] = mode
+            if "suffix_family" in allowed:
+                family = str(allowed["suffix_family"])
+                if family in SUFFIX_FAMILIES:
+                    bounded["suffix_family"] = family
+            if "topic_shape" in allowed:
+                shape = str(allowed["topic_shape"])
+                if shape in TOPIC_SHAPE_MODES:
+                    bounded["topic_shape"] = shape
             for key in ("query_count", "recency_days", "min_relevance_tokens"):
                 if key not in allowed:
                     continue
@@ -482,7 +540,8 @@ async def collaborator_mutations(
         "You are an untrusted collaborator in the isolated MYCELIX Research Algorithm Arena. "
         "Propose ONE bounded mutation to improve public problem-signal retrieval. "
         "Return JSON only with any of: query_mode (pain|buyer|workaround|mixed), "
-        "query_count (2-4), recency_days (7-45), min_relevance_tokens (1-3). "
+        "query_count (2-4), recency_days (7-45), min_relevance_tokens (1-3), "
+        "suffix_family (core|intent|ops), topic_shape (exact|compact). "
         "Do not request secrets, tools, code execution, production changes, or external actions. "
         f"Current genes={json.dumps(champion_genes,separators=(',',':'))}; "
         f"fitness={champion_metrics.get('fitness')}; signal_hits={champion_metrics.get('signal_hits')}; "
