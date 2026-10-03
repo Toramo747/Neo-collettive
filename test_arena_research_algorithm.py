@@ -109,6 +109,32 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertIn('"external_output_trust": "UNTRUSTED_BOUNDED_MUTATION_ONLY"', src)
         self.assertIn("Do not request secrets, tools, code execution, production changes, or external actions.", src)
 
+    def test_family_match_rate_rewards_production_attributable_hits(self):
+        genome={"query_mode":"workaround","query_count":3,"recency_days":14,"min_relevance_tokens":1}
+        family_rows=[{
+            "topic":"manual data entry",
+            "hits":[
+                {"comment_text":"manual data entry workaround is repetitive and I need a better tool","story_id":"1"},
+                {"comment_text":"manual data entry in spreadsheets wastes time every week","story_id":"2"},
+            ],
+        }]
+        other_rows=[{
+            "topic":"manual data entry",
+            "hits":[
+                {"comment_text":"this workaround is repetitive and I need a better option","story_id":"1"},
+                {"comment_text":"this manual process wastes time every week","story_id":"2"},
+            ],
+        }]
+        family=ara.score_hits(genome,family_rows)
+        other=ara.score_hits(genome,other_rows)
+        self.assertGreater(family["family_match_rate"],other["family_match_rate"])
+        self.assertGreater(family["fitness"],other["fitness"])
+
+    def test_family_metric_uses_production_classifier(self):
+        src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
+        self.assertIn("from evidence_integrity import commercial_family",src)
+        self.assertIn('family != "other"',src)
+
     def test_support_penalty_blocks_tiny_perfect_sample(self):
         genome={"query_mode":"workaround","query_count":3,"recency_days":14,"min_relevance_tokens":1}
         rows=[{
