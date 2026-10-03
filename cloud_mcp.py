@@ -6532,24 +6532,32 @@ def safe_problem_tail(value: str, max_len: int = 72) -> str:
     return (raw.strip("_") or "observed_problem")[:max_len]
 
 
-async def _hn_query_search(query: str, limit: int = 4) -> list[dict]:
-    seed=natural_search_seed(query,{})
+async def _hn_query_search(query: str, limit: int = 4, meta: dict | None = None) -> list[dict]:
+    meta=meta if isinstance(meta,dict) else {}
+    seed=natural_search_seed(query,meta)
     if not seed:
         return []
     try:
-        data=await get_json(
-            "https://hn.algolia.com/api/v1/search_by_date",
-            {"query":seed,"tags":"story","hitsPerPage":max(1,min(limit,8))},
-        )
+        params={
+            "query":seed,
+            "tags":"comment" if str(meta.get("role") or "")=="workaround_research" else "story",
+            "hitsPerPage":max(1,min(limit,8)),
+        }
+        recency_days=max(0,int(meta.get("recency_days") or 0))
+        if recency_days:
+            cutoff=int(time.time())-recency_days*86400
+            params["numericFilters"]=f"created_at_i>{cutoff}"
+        data=await get_json("https://hn.algolia.com/api/v1/search_by_date",params)
         out=[]
         for x in (data.get("hits") or [])[:limit]:
             if not isinstance(x,dict):
                 continue
-            url=x.get("url") or ("https://news.ycombinator.com/item?id="+str(x.get("objectID") or ""))
+            story_id=x.get("story_id") or x.get("objectID") or ""
+            url=x.get("url") or ("https://news.ycombinator.com/item?id="+str(story_id))
             out.append({
-                "title":x.get("title") or "",
+                "title":x.get("title") or x.get("story_title") or "",
                 "url":url,
-                "snippet":x.get("story_text") or x.get("title") or "",
+                "snippet":x.get("comment_text") or x.get("story_text") or x.get("title") or "",
                 "source":"hn-algolia-routed",
             })
         return out
@@ -6557,16 +6565,22 @@ async def _hn_query_search(query: str, limit: int = 4) -> list[dict]:
         return []
 
 
-async def _github_issue_query_search(query: str, limit: int = 4) -> list[dict]:
-    seed=natural_search_seed(query,{})
+async def _github_issue_query_search(query: str, limit: int = 4, meta: dict | None = None) -> list[dict]:
+    meta=meta if isinstance(meta,dict) else {}
+    seed=natural_search_seed(query,meta)
     if not seed:
         return []
     try:
+        qualifiers=" is:issue"
+        recency_days=max(0,int(meta.get("recency_days") or 0))
+        if recency_days:
+            cutoff=(datetime.now(timezone.utc)-timedelta(days=recency_days)).date().isoformat()
+            qualifiers+=f" updated:>={cutoff}"
         headers={"Accept":"application/vnd.github+json","User-Agent":"MYCELIX/"+VERSION}
         async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False,headers=headers) as client:
             r=await client.get(
                 "https://api.github.com/search/issues",
-                params={"q":seed+" is:issue","sort":"updated","order":"desc","per_page":max(1,min(limit,8))},
+                params={"q":seed+qualifiers,"sort":"updated","order":"desc","per_page":max(1,min(limit,8))},
             )
             if not r.is_success:
                 return []
@@ -6608,6 +6622,9 @@ async def _stackexchange_query_search(query: str, limit: int = 4, meta: dict | N
             "site":"stackoverflow","pagesize":max(1,min(limit,8)),
             "filter":"withbody",
         }
+        recency_days=max(0,int(meta.get("recency_days") or 0))
+        if recency_days:
+            params["fromdate"]=int(time.time())-recency_days*86400
         if explore_strict and tags:
             params["tagged"]=tags
         async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=True) as client:
@@ -7364,8 +7381,8 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     if query_intent=="desire":
         tasks=[
             free_web_search(query,max(2,min(limit,6))),
-            _hn_query_search(seed,3),
-            _github_issue_query_search(seed,3),
+            _hn_query_search(seed,3,meta),
+            _github_issue_query_search(seed,3,meta),
             _stackexchange_query_search(seed,3,meta),
         ]
     elif structured_first:
