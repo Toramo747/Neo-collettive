@@ -1,6 +1,9 @@
 name: NEO Arena Local LLM Probe
 
 on:
+  push:
+    paths:
+      - ".github/local-a2a-llm-trigger.txt"
   workflow_dispatch:
 
 permissions:
@@ -62,7 +65,7 @@ jobs:
             PULL_END=$(date +%s)
             export PULL_SECONDS=$((PULL_END-PULL_START))
             if [ "$PULL_RC" -eq 0 ]; then
-              timeout 300 python arena_local_llm_probe.py --model "$MODEL" --out "$REPORT"
+              timeout 300 python arena_local_llm_probe.py --model "$MODEL" --out "$REPORT" --topic "Design a bounded local LLM gateway for A2A three-round dialogue: schema validation, minimal untrusted context, timeout and token caps, failure isolation, no effectful tools. Propose a falsifiable arena-only experiment."
               INFER_RC=$?
             fi
           fi
