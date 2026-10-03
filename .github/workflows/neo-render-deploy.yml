@@ -568,7 +568,8 @@ jobs:
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
           expect_engine_retry=0
-          if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA^" "$GITHUB_SHA" | grep -qx 'seti_radar.py'; then
+          git fetch --no-tags --depth=2 origin main >/dev/null 2>&1 || true
+          if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA^" "$GITHUB_SHA" 2>/dev/null | grep -qx 'seti_radar.py'; then
             expect_engine_retry=1
           fi
           echo "expect_seti_engine_retry=$expect_engine_retry"
@@ -619,27 +620,12 @@ jobs:
             fi
             sleep 10
           done
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/seti/interviews' --marker github-actions-deploy)" --max-time 30 \
-            "https://neo-collettive.onrender.com/api/seti/interviews" > /tmp/seti-interviews.json
-          python - <<'PY'
-          import json
-          d=json.load(open("/tmp/seti-interviews.json",encoding="utf-8"))
-          rows=d.get("interviews") or []
-          print(json.dumps({
-              "neo_version":d.get("neo_version"),
-              "interviews":[{
-                  "candidate":x.get("candidate"),
-                  "status":x.get("status"),
-                  "attempts":x.get("attempts"),
-                  "http_status":x.get("http_status"),
-                  "peer_state":x.get("peer_state"),
-                  "reason":x.get("reason"),
-                  "quality_reason":x.get("quality_reason"),
-                  "followup_state":x.get("followup_state"),
-                  "admitted":x.get("admitted"),
-              } for x in rows[-8:]]
-          },ensure_ascii=False,indent=2))
-          PY
+          seti_interviews_status="$(curl --output /dev/null --write-out '%{http_code}' --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/seti/interviews' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/api/seti/interviews")"
+          if [ "$seti_interviews_status" != "401" ]; then
+            echo "Expected admin-only /api/seti/interviews to reject HMAC-only access with 401; got $seti_interviews_status" >&2
+            exit 1
+          fi
+          echo "SETI readiness public telemetry healthy; private interviews remain admin-only"
 
       - name: Run three market validation cycles
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
