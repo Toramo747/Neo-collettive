@@ -38,6 +38,12 @@ DEFAULT_SCORE_GENOME={
     "support":20.0,
 }
 GENOME_MUTATION_STEP=5.0
+ROUTING_GENOMES=(
+    {"name":"baseline","ready_bonus":8,"novelty_bonus":0,"prior_failure_penalty":0,"http_error_penalty":0},
+    {"name":"ready-first","ready_bonus":18,"novelty_bonus":2,"prior_failure_penalty":4,"http_error_penalty":10},
+    {"name":"explore-after-failure","ready_bonus":10,"novelty_bonus":16,"prior_failure_penalty":22,"http_error_penalty":18},
+    {"name":"balanced-explore","ready_bonus":14,"novelty_bonus":10,"prior_failure_penalty":14,"http_error_penalty":14},
+)
 QUALITY_GUARD_CANDIDATES=(
     {"name":"baseline","abstention_threshold":99,"require_test_signal":False,"require_falsifier_signal":False},
     {"name":"abstention-1","abstention_threshold":1,"require_test_signal":False,"require_falsifier_signal":False},
@@ -456,7 +462,71 @@ def handshake_prompt() -> str:
     )
 
 
-def packet_score(agent: dict[str,Any], packet_code: str, ready_ids: set[str] | None = None) -> int:
+def load_routing_memory(data_dir: Path) -> dict[str,Any]:
+    path=data_dir/"collective-mind"/"latest.json"
+    try:
+        previous=json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(previous,dict):
+            return {}
+    except Exception:
+        return {}
+    failed=set()
+    succeeded=set()
+    http_errors=set()
+    for row in previous.get("contacts") or []:
+        if not isinstance(row,dict):
+            continue
+        aid=str(row.get("agent_id") or "")
+        if not aid:
+            continue
+        if row.get("accepted"):
+            succeeded.add(aid)
+        else:
+            failed.add(aid)
+        reason=str(row.get("reason") or "")
+        if "http_502" in reason or "http_503" in reason or "http_0" in reason:
+            http_errors.add(aid)
+    return {
+        "failed_ids":failed,
+        "succeeded_ids":succeeded,
+        "http_error_ids":http_errors,
+        "previous_valid_proposals":int(previous.get("round1_valid_proposals") or 0),
+        "previous_agents_contacted":int(previous.get("agents_contacted") or 0),
+    }
+
+
+def routing_genome_fitness(genome: dict[str,Any], memory: dict[str,Any]) -> float:
+    valid=max(0,int(memory.get("previous_valid_proposals") or 0))
+    contacted=max(1,int(memory.get("previous_agents_contacted") or 1))
+    yield_rate=valid/contacted
+    zero_yield=1.0 if valid==0 else 0.0
+    failure_pressure=min(1.0,len(memory.get("failed_ids") or set())/contacted)
+    error_pressure=min(1.0,len(memory.get("http_error_ids") or set())/contacted)
+    return round(
+        100*yield_rate
+        + zero_yield*(float(genome.get("novelty_bonus") or 0)*2.0 + float(genome.get("prior_failure_penalty") or 0)*1.5)
+        + failure_pressure*float(genome.get("prior_failure_penalty") or 0)
+        + error_pressure*float(genome.get("http_error_penalty") or 0)
+        + 0.25*float(genome.get("ready_bonus") or 0),
+        3,
+    )
+
+
+def select_routing_genome(memory: dict[str,Any]) -> dict[str,Any]:
+    ranked=[]
+    for index,genome in enumerate(ROUTING_GENOMES):
+        ranked.append((routing_genome_fitness(genome,memory),-index,genome))
+    ranked.sort(reverse=True,key=lambda x:(x[0],x[1]))
+    return dict(ranked[0][2])
+
+
+def packet_score(
+    agent: dict[str,Any],
+    packet_code: str,
+    ready_ids: set[str] | None = None,
+    routing_memory: dict[str,Any] | None = None,
+    routing_genome: dict[str,Any] | None = None,
+) -> int:
     text=" ".join([
         str(agent.get("name") or ""),
         str(agent.get("description") or ""),
@@ -467,8 +537,21 @@ def packet_score(agent: dict[str,Any], packet_code: str, ready_ids: set[str] | N
         if marker in text:
             score+=5
     aid=str(agent.get("id") or agent.get("agent_id") or "")
+    genome=routing_genome or ROUTING_GENOMES[0]
+    memory=routing_memory or {}
     if ready_ids and aid in ready_ids:
-        score+=8
+        score+=int(genome.get("ready_bonus") or 0)
+    failed=memory.get("failed_ids") or set()
+    succeeded=memory.get("succeeded_ids") or set()
+    http_errors=memory.get("http_error_ids") or set()
+    if aid in succeeded:
+        score+=24
+    elif aid in failed:
+        score-=int(genome.get("prior_failure_penalty") or 0)
+    else:
+        score+=int(genome.get("novelty_bonus") or 0)
+    if aid in http_errors:
+        score-=int(genome.get("http_error_penalty") or 0)
     return score
 
 
@@ -476,13 +559,18 @@ def assign_agents_to_packets(
     agents: list[dict[str,Any]],
     ready_ids: set[str] | None = None,
     limit: int = MAX_AGENTS,
+    routing_memory: dict[str,Any] | None = None,
+    routing_genome: dict[str,Any] | None = None,
 ) -> list[tuple[dict[str,Any],tuple[str,str]]]:
     pool=list(agents)
     assignments=[]
     for packet in WORK_PACKETS:
         if not pool or len(assignments)>=max(1,min(limit,MAX_AGENTS)):
             break
-        chosen=max(pool,key=lambda a:packet_score(a,packet[0],ready_ids))
+        chosen=max(
+            pool,
+            key=lambda a:packet_score(a,packet[0],ready_ids,routing_memory,routing_genome),
+        )
         assignments.append((chosen,packet))
         pool.remove(chosen)
     return assignments
@@ -508,7 +596,7 @@ def candidate_score(agent: dict[str,Any]) -> int:
     return score
 
 
-async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) -> tuple[list[dict[str,Any]],dict[str,Any]]:
+async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS, routing_memory: dict[str,Any] | None = None, routing_genome: dict[str,Any] | None = None) -> tuple[list[dict[str,Any]],dict[str,Any]]:
     response=await client.get(A2A_REGISTRY+"/api/agents",params={"task_verified":"true","limit":MAX_CANDIDATE_POOL})
     response.raise_for_status()
     payload=response.json()
@@ -540,7 +628,7 @@ async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) ->
         if ok:
             ready.append(agent)
     ready_ids={str(x.get("id") or x.get("agent_id") or "") for x in ready}
-    assignments=assign_agents_to_packets(agents,ready_ids,limit)
+    assignments=assign_agents_to_packets(agents,ready_ids,limit,routing_memory,routing_genome)
     selected=[agent for agent,_ in assignments]
     return selected,{
         "candidates_considered":len(agents),
@@ -860,6 +948,8 @@ def evolve_score_genome(report: dict[str,Any], path: Path) -> dict[str,Any]:
 
 async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dict[str,Any]:
     active_genome=load_score_genome(data_dir)
+    routing_memory=load_routing_memory(data_dir)
+    routing_genome=select_routing_genome(routing_memory)
     async with httpx.AsyncClient(
         timeout=ROUND_TIMEOUT,
         follow_redirects=False,
@@ -867,7 +957,7 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
         headers={"User-Agent":"MYCELIX-Collective-Mind/1.0"},
     ) as client:
         try:
-            agents,handshake=await discover_agents(client,max_agents)
+            agents,handshake=await discover_agents(client,max_agents,routing_memory,routing_genome)
         except Exception as exc:
             agents=[]
             handshake={"candidates_considered":0,"handshakes_valid":0,"selected_ready":0,"rows":[]}
@@ -882,7 +972,7 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
             for x in (handshake.get("rows") or [])
             if isinstance(x,dict) and x.get("ready")
         }
-        assigned=assign_agents_to_packets(agents,ready_ids,max_agents)
+        assigned=assign_agents_to_packets(agents,ready_ids,max_agents,routing_memory,routing_genome)
         for agent,packet in assigned:
             aid=str(agent.get("id") or agent.get("agent_id") or "").strip()
             if not aid:
@@ -1033,6 +1123,18 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
             "rejected":sum(1 for x in critiques if not x.get("accepted")),
         },
         "active_score_genome":active_genome,
+        "routing":{
+            "selected_genome":routing_genome,
+            "fitness":routing_genome_fitness(routing_genome,routing_memory),
+            "previous_valid_proposals":routing_memory.get("previous_valid_proposals",0),
+            "previous_agents_contacted":routing_memory.get("previous_agents_contacted",0),
+            "previous_failed_agents":len(routing_memory.get("failed_ids") or set()),
+            "previous_http_error_agents":len(routing_memory.get("http_error_ids") or set()),
+            "candidates":[
+                {"name":g["name"],"fitness":routing_genome_fitness(g,routing_memory)}
+                for g in ROUTING_GENOMES
+            ],
+        },
         "quality_guard":{
             "selected":select_quality_guard(),
             "fitness":quality_guard_fitness(select_quality_guard()),
