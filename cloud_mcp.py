@@ -2256,6 +2256,13 @@ async def discover_data(query: str, limit: int = 10) -> dict:
     }
 
 
+def _listing_has_own_endpoint(text: str, base_url: str) -> bool:
+    """Match complete public endpoints; display names never prove identity."""
+    expected={base_url.rstrip("/")+path for path in ("/a2a","/.well-known/agent-card.json","/.well-known/agent.json")}
+    urls=re.findall(r'https?://[^\s<>"\x27]+',text.replace("\\/","/"))
+    return any(url.rstrip("/.,;)") in expected for url in urls)
+
+
 async def _advertise_public_agent() -> dict:
     policy=_load_policy()
     enabled=bool(policy.get("a2a_public_registry_enabled"))
@@ -2322,10 +2329,7 @@ async def _advertise_public_agent() -> dict:
             search_text=(search.text or "").lower()[:30000]
             already_listed=(
                 search.is_success
-                and (
-                    "neo-collettive.onrender.com" in search_text
-                    or '"name":"mycelix"' in search_text.replace(" ","")
-                )
+                and _listing_has_own_endpoint(search_text,PUBLIC_BASE_URL)
             )
             if already_listed:
                 community={
@@ -2366,10 +2370,7 @@ async def _advertise_public_agent() -> dict:
             existing_text=(search.text or "").lower()[:20000]
             already_listed=(
                 search.is_success
-                and (
-                    "neo-collettive.onrender.com" in existing_text
-                    or ('"name":"mycelix"' in existing_text.replace(" ",""))
-                )
+                and _listing_has_own_endpoint(existing_text,PUBLIC_BASE_URL)
             )
             if already_listed:
                 allagents={
