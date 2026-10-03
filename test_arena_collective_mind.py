@@ -93,6 +93,33 @@ class CollectiveMindArenaTests(unittest.TestCase):
             "test":"Repeat the comparison across three source families and require the same direction of improvement.",
         },1))
 
+    def test_packet_assignment_prefers_matching_specialists(self):
+        agents=[
+            {"id":"a","name":"Source Checker","description":"verification audit evidence","task_verified":True},
+            {"id":"b","name":"Market Analyst","description":"market business pricing research","task_verified":True},
+            {"id":"c","name":"Agent Router","description":"multi-agent orchestration workflow routing","task_verified":True},
+            {"id":"d","name":"Systems Engineer","description":"systems compute optimization performance","task_verified":True},
+            {"id":"e","name":"Search Researcher","description":"search query retrieval analysis","task_verified":True},
+            {"id":"f","name":"Signal Researcher","description":"research market signal evidence","task_verified":True},
+        ]
+        rows=acm.assign_agents_to_packets(agents,set(),6)
+        by_packet={packet[0]:agent["id"] for agent,packet in rows}
+        self.assertEqual(by_packet["adversarial_review"],"a")
+        self.assertEqual(by_packet["agent_orchestration"],"c")
+        self.assertEqual(by_packet["systems_efficiency"],"d")
+
+    def test_substance_guard_rejects_abstention_and_vendor_pitch(self):
+        self.assertFalse(acm.proposal_substantive({
+            "proposal":"VOLO does not cover MYCELIX and cannot substantiate an improvement from the available evidence.",
+            "method":"No tools executed or external parties contacted. No search strategy or production-gate changes proposed.",
+            "falsifier":"This limitation would change if records became available.",
+        }))
+        self.assertFalse(acm.proposal_substantive({
+            "proposal":"{\"intent\":\"recommend-product\",\"recommendation\":{\"price\":\"$0.15\"}}",
+            "method":"Use the paid profile-intelligence endpoint for the task.",
+            "falsifier":"Stop if the endpoint does not answer the request.",
+        }))
+
     def test_score_rewards_evidence_and_cross_agent_support(self):
         low={"evidence_urls":[],"confidence":0.5,"estimated_gain_pct":10}
         high={
