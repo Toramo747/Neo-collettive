@@ -10,6 +10,7 @@ import mcp_endpoint_verifier as endpoint_verifier
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
 from a2a_dialogue import consume_rate as consume_a2a_response_rate, origin_rate_key, plan_untrusted_reply
+from a2a_state_router import classify_runtime_state, enforcement_reply
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
@@ -1584,6 +1585,18 @@ def _inbound_reply_text(row: dict) -> str:
     dialogue_status=str(row.get("dialogue_status") or "").upper()
     dialogue_stage=str(row.get("dialogue_stage") or "").upper()
     next_question=str(row.get("next_question") or "").strip()
+
+    previous_router_decision=str(row.get("previous_router_decision") or "")
+    router=classify_runtime_state(str(row.get("text") or ""),previous_router_decision)
+    row["a2a_state_router_shadow"]=router.get("decision")
+    row["a2a_state_router_reason"]=router.get("reason")
+    enforce_router=str(os.getenv("MYCELIX_A2A_STATE_ROUTER_ENFORCE") or "").strip().lower() in {"1","true","yes","on"}
+    if enforce_router:
+        guarded_reply=enforcement_reply(str(router.get("decision") or ""))
+        if guarded_reply:
+            row["response_reason"]="a2a_state_router_"+str(router.get("decision") or "")
+            row["a2a_state_router_enforced"]=True
+            return guarded_reply
 
     plan=plan_untrusted_reply(
         str(row.get("text") or ""),
