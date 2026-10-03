@@ -45,11 +45,11 @@ jobs:
     timeout-minutes: 12
     env:
       ARENA_NAMESPACE: mycelix-arena
-      ARENA_TOPIC: ${{ github.event_name == 'workflow_dispatch' && inputs.topic || 'MYCELIX autonomous arena: find falsifiable improvements without production mutation' }}
-      ARENA_PARTICIPANTS: ${{ github.event_name == 'workflow_dispatch' && inputs.participants || 'Scout,Analyst,Critic,Builder-planner,Guest' }}
-      ARENA_GUEST: ${{ github.event_name == 'workflow_dispatch' && inputs.guest_personality || 'scettico' }}
-      ARENA_MAX_TURNS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_turns || '20' }}
-      ARENA_ANDREA_MESSAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.andrea_message || '' }}
+      ARENA_TOPIC: "${{ github.event_name == 'workflow_dispatch' && inputs.topic || 'MYCELIX autonomous arena: find falsifiable improvements without production mutation' }}"
+      ARENA_PARTICIPANTS: "${{ github.event_name == 'workflow_dispatch' && inputs.participants || 'Scout,Analyst,Critic,Builder-planner,Guest' }}"
+      ARENA_GUEST: "${{ github.event_name == 'workflow_dispatch' && inputs.guest_personality || 'scettico' }}"
+      ARENA_MAX_TURNS: "${{ github.event_name == 'workflow_dispatch' && inputs.max_turns || '20' }}"
+      ARENA_ANDREA_MESSAGE: "${{ github.event_name == 'workflow_dispatch' && inputs.andrea_message || '' }}"
     steps:
       - uses: actions/checkout@v4
         with:
