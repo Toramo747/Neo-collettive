@@ -119,6 +119,24 @@ def project_inbox(monitor: dict | None, *, secret_material: str = "") -> dict:
     return out
 
 
+def project_a2a_discovery(state: dict | None) -> dict:
+    src=state if isinstance(state,dict) else {}
+    status=src.get("last_registration_status")
+    out={
+        "registry_enabled":bool(src.get("registry_enabled")),
+        "last_registration_ok":(
+            bool(src.get("last_registration_ok"))
+            if isinstance(src.get("last_registration_ok"),bool)
+            else None
+        ),
+        "last_registration_status":(
+            int(status) if isinstance(status,int) else None
+        ),
+    }
+    validate_public_projection(out)
+    return out
+
+
 def project_inbound_agents(stats: dict | None, *, secret_material: str = "") -> dict:
     src=stats if isinstance(stats,dict) else {}
     salt=projection_salt(secret_material)
