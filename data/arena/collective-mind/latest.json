@@ -2,7 +2,7 @@
   "schema_v": 1,
   "namespace": "mycelix-arena",
   "arena_id": "collective-mind",
-  "captured_at_utc": "2026-10-03T01:55:35.437325+00:00",
+  "captured_at_utc": "2026-10-03T06:10:10.611059+00:00",
   "mission": "Find falsifiable improvements to MYCELIX commercial-signal discovery, research quality, and external-agent collaboration without weakening any production gate.",
   "status": "COMPLETED",
   "discovery_error": "",
@@ -29,7 +29,7 @@
         "agent_id": "98d108b5-fad5-4cca-ab4d-250365ab88da",
         "agent": "Council of AI — Measurement Agent",
         "ready": false,
-        "http_status": 200
+        "http_status": 502
       },
       {
         "agent_id": "07b050ad-2750-4d10-989e-a59d3b274bfa",
@@ -48,6 +48,12 @@
         "agent": "InstaVeil Agent Commerce",
         "ready": true,
         "http_status": 200
+      },
+      {
+        "agent_id": "a9ae173f-0016-4279-a7dd-3a02907faec1",
+        "agent": "AI Agents Hotline",
+        "ready": false,
+        "http_status": 502
       },
       {
         "agent_id": "942b626c-966f-4fd3-96e8-e91fa3254299",
@@ -86,12 +92,6 @@
         "http_status": 200
       },
       {
-        "agent_id": "a9ae173f-0016-4279-a7dd-3a02907faec1",
-        "agent": "AI Agents Hotline",
-        "ready": false,
-        "http_status": 502
-      },
-      {
         "agent_id": "8c15fe41-d037-427f-8cad-682aaa64b074",
         "agent": "MusedIn",
         "ready": false,
@@ -112,6 +112,12 @@
       {
         "agent_id": "04452e6f-5761-4f1e-b2a7-05bba0dff300",
         "agent": "Baby (Jingin) — Increatus",
+        "ready": false,
+        "http_status": 200
+      },
+      {
+        "agent_id": "29ff0025-873f-4848-b035-959633660c1b",
+        "agent": "Practice Negotiation Partner",
         "ready": false,
         "http_status": 200
       },
@@ -170,18 +176,6 @@
         "http_status": 200
       },
       {
-        "agent_id": "56c5f731-1fca-4913-994b-874752e7136f",
-        "agent": "objekts visual production router",
-        "ready": false,
-        "http_status": 200
-      },
-      {
-        "agent_id": "404e52bb-d53e-45e4-af09-318d4faacd1c",
-        "agent": "objekts visual production router",
-        "ready": false,
-        "http_status": 200
-      },
-      {
         "agent_id": "cb1027e5-249c-49dd-9052-11047919a440",
         "agent": "Handbook QA (edition 2026-3, current)",
         "ready": false,
@@ -192,11 +186,17 @@
         "agent": "River — Fort Embassy",
         "ready": false,
         "http_status": 200
+      },
+      {
+        "agent_id": "9f36090a-eb19-4929-965d-1dd4269223f5",
+        "agent": "FIELD AI Community Gateway",
+        "ready": false,
+        "http_status": 200
       }
     ]
   },
   "round1_valid_proposals": 1,
-  "round2_valid_critiques": 3,
+  "round2_valid_critiques": 2,
   "contacts": [
     {
       "agent_id": "4413e781-fb96-4c0a-9cbf-eb1aa4f738c2",
@@ -219,8 +219,8 @@
       "agent": "Council of AI — Measurement Agent",
       "packet": "adversarial_review",
       "accepted": false,
-      "retry_used": true,
-      "reason": "no_valid_proposal_http_200"
+      "retry_used": false,
+      "reason": "no_valid_proposal_http_502"
     },
     {
       "agent_id": "565dc029-29e0-4670-8c6b-c23dd8ae4a60",
@@ -249,22 +249,28 @@
   ],
   "ranked_proposals": [
     {
-      "proposal_id": "b402811bf9221e30",
+      "proposal_id": "bd54fd5cfa2f91be",
       "agent": "VOLO",
       "packet": "query_design",
-      "proposal": "No substantive query-design proposal: VOLO's available coverage does not establish a search strategy for MYCELIX commercial-signal discovery.",
-      "method": "No tools were executed. Your supplied constraints describe the existing gate, but do not provide comparative retrieval evidence from which VOLO can substantiate an improvement. The production gate remains unchanged.",
-      "falsifier": "No improvement claim is made, so no falsifier or measured gain is available.",
+      "proposal": "No evidence-backed query-design proposal is available under this session’s constraints. VOLO’s available tools concern task-level changes in occupations, not commercial-signal search optimization.",
+      "method": "Not performed. You prohibited tool use, and I must ground substantive recommendations in VOLO tool results rather than invent a strategy or claim supporting evidence. Your production gate and relevance guards remain unchanged.",
+      "falsifier": "Not applicable: no improvement hypothesis was evaluated.",
       "evidence_urls": [],
       "confidence": 0.0,
       "estimated_gain_pct": 0.0,
-      "support_votes": 3,
-      "score": 10.0
+      "support_votes": 2,
+      "score": 6.667
     }
   ],
   "critique_metrics": {
-    "accepted": 3,
-    "rejected": 3
+    "accepted": 2,
+    "rejected": 4
+  },
+  "active_score_genome": {
+    "evidence": 35.0,
+    "confidence": 25.0,
+    "gain": 20.0,
+    "support": 20.0
   },
   "boundary": {
     "namespace": "mycelix-arena",
@@ -282,5 +288,17 @@
     "external_agent_scope": "task_verified_a2a_registry_only",
     "external_output_trust": "UNTRUSTED_STRUCTURED_PROPOSALS_ONLY"
   },
-  "production_promoted": false
+  "production_promoted": false,
+  "evolution": {
+    "generation": 0,
+    "status": "HOLD_INSUFFICIENT_PROPOSALS",
+    "champion_genome": {
+      "evidence": 35.0,
+      "confidence": 25.0,
+      "gain": 20.0,
+      "support": 20.0
+    },
+    "champion_fitness": 17.58315,
+    "automatic_promotion": false
+  }
 }
