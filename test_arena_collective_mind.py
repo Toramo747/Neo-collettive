@@ -142,6 +142,69 @@ class CollectiveMindArenaTests(unittest.TestCase):
         }
         self.assertGreater(acm.proposal_score(high,3),acm.proposal_score(low,0))
 
+    def test_score_genome_normalizes_to_100(self):
+        g=acm.normalize_score_genome({"evidence":70,"confidence":10,"gain":10,"support":10})
+        self.assertAlmostEqual(sum(g.values()),100.0,places=5)
+        self.assertGreater(g["evidence"],g["support"])
+
+    def test_score_genome_mutations_are_bounded_and_unique(self):
+        rows=acm.mutate_score_genomes(acm.DEFAULT_SCORE_GENOME)
+        self.assertGreater(len(rows),1)
+        seen=set()
+        for row in rows:
+            self.assertAlmostEqual(sum(row.values()),100.0,places=5)
+            self.assertTrue(all(0.0<=v<=100.0 for v in row.values()))
+            key=tuple(row[k] for k in acm.SCORE_GENES)
+            self.assertNotIn(key,seen)
+            seen.add(key)
+
+    def test_custom_genome_changes_ranking_pressure(self):
+        proposal={
+            "evidence_urls":["https://a.example","https://b.example","https://c.example","https://d.example"],
+            "confidence":0.1,
+            "estimated_gain_pct":5,
+        }
+        evidence_heavy={"evidence":80,"confidence":5,"gain":5,"support":10}
+        support_heavy={"evidence":5,"confidence":5,"gain":5,"support":85}
+        self.assertGreater(
+            acm.proposal_score(proposal,0,evidence_heavy),
+            acm.proposal_score(proposal,0,support_heavy),
+        )
+
+    def test_evolution_never_auto_promotes(self):
+        report={
+            "captured_at_utc":"2026-10-03T00:00:00+00:00",
+            "agents_contacted":2,
+            "round1_valid_proposals":2,
+            "round2_valid_critiques":2,
+            "ranked_proposals":[
+                {
+                    "proposal":"A sufficiently detailed proposal for testing independent evidence quality.",
+                    "method":"Compare results across independent public sources with bounded repeated trials.",
+                    "falsifier":"Reject if the measured quality gain disappears across the repeated trials.",
+                    "evidence_urls":["https://a.example"],
+                    "confidence":0.8,
+                    "estimated_gain_pct":20,
+                    "support_votes":1,
+                },
+                {
+                    "proposal":"A second sufficiently detailed proposal for cross-agent verification quality.",
+                    "method":"Use a separate reviewer and compare agreement against a held-out verification set.",
+                    "falsifier":"Reject if reviewer agreement fails to predict held-out verification outcomes.",
+                    "evidence_urls":["https://b.example"],
+                    "confidence":0.7,
+                    "estimated_gain_pct":15,
+                    "support_votes":1,
+                },
+            ],
+        }
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            state=acm.evolve_score_genome(report,Path(td)/"evolution.json")
+        self.assertFalse(state["automatic_promotion"])
+        self.assertFalse(state["production_promoted"])
+
     def test_prompts_are_bounded(self):
         p=acm.proposal_prompt("mission","signal_discovery","task")
         self.assertIn("analysis only",p)
