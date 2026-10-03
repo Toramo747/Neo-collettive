@@ -114,6 +114,37 @@ class CollectiveMindArenaTests(unittest.TestCase):
             "test":"Repeat the comparison across three source families and require the same direction of improvement.",
         },1))
 
+    def test_routing_genome_prefers_exploration_after_zero_yield(self):
+        memory={
+            "failed_ids":{"old-a","old-b","old-c","old-d","old-e","old-f"},
+            "succeeded_ids":set(),
+            "http_error_ids":{"old-c"},
+            "previous_valid_proposals":0,
+            "previous_agents_contacted":6,
+        }
+        genome=acm.select_routing_genome(memory)
+        self.assertEqual(genome["name"],"explore-after-failure")
+        self.assertGreater(
+            acm.routing_genome_fitness(genome,memory),
+            acm.routing_genome_fitness(acm.ROUTING_GENOMES[0],memory),
+        )
+
+    def test_routing_penalizes_prior_failures_and_rewards_novel_agents(self):
+        memory={
+            "failed_ids":{"old"},
+            "succeeded_ids":set(),
+            "http_error_ids":set(),
+            "previous_valid_proposals":0,
+            "previous_agents_contacted":1,
+        }
+        genome=acm.select_routing_genome(memory)
+        old={"id":"old","name":"Research Analyst","description":"research analysis market evidence","task_verified":True}
+        new={"id":"new","name":"Research Analyst","description":"research analysis market evidence","task_verified":True}
+        self.assertGreater(
+            acm.packet_score(new,"signal_discovery",set(),memory,genome),
+            acm.packet_score(old,"signal_discovery",set(),memory,genome),
+        )
+
     def test_packet_assignment_prefers_matching_specialists(self):
         agents=[
             {"id":"a","name":"Source Checker","description":"verification audit evidence","task_verified":True},
