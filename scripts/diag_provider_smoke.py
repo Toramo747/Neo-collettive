@@ -98,7 +98,7 @@ def production_smoke() -> int:
         with urllib.request.urlopen(req,timeout=20) as response:
             return json.load(response)
     def counters():
-        d=request('/api/autonomy/status')
+        d=request('/api/autopilot/status')
         ap=d.get('autopilot') or {}
         st=ap.get('search_provider_state') or {}
         return {k:st.get(k) for k in ('calls_cycle','calls_day','errors','fallbacks','last_provider')}
