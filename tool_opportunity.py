@@ -242,6 +242,39 @@ def workaround42_query_plan(cycle: int, count: int = 4) -> list[dict]:
     return rows
 
 
+def workaround_compact42_query_plan(cycle: int, count: int = 4) -> list[dict]:
+    """Production-safe projection of Arena champion workaround-compact-42d-v2.
+
+    Only the discovery query surface changes: the shortest configured alias is
+    used with the same core workaround suffixes and 42-day discovery window.
+    Evidence classification, qualified_hits, monetization scoring and gates
+    remain unchanged.
+    """
+    keys=list(CATEGORY_CONFIGS)
+    if not keys:
+        return []
+    family=keys[max(0,int(cycle or 0)) % len(keys)]
+    cfg=CATEGORY_CONFIGS[family]
+    aliases=[str(x).strip() for x in (cfg.get("aliases") or []) if str(x).strip()]
+    alias=min(aliases,key=lambda x:(len(x.split()),len(x),x.lower())) if aliases else str(cfg.get("title") or family)
+    suffixes=("workaround","manual","script","spreadsheet")
+    rows=[]
+    for suffix in suffixes[:max(1,min(int(count or 4),4))]:
+        rows.append({
+            "query":" ".join((alias+" "+suffix).split()),
+            "class":"tool_market",
+            "role":"workaround_research",
+            "family":family,
+            "query_intent":"workaround",
+            "strategy_code":"workaround-compact-42d-v2",
+            "recency_days":42,
+            "min_relevance_tokens":1,
+            "topic_shape":"compact",
+            "suffix_family":"core",
+        })
+    return rows
+
+
 def competitor_money_first_plan(opportunities: list[dict] | None, count: int = 6) -> list[dict]:
     """Target only theses still missing independent real-price competitors.
 
