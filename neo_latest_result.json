@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-10-02T22:51:33.457647+00:00",
+  "captured_at_utc": "2026-10-03T00:46:02.883126+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.43",
   "runtime_profile": {
@@ -12,72 +12,72 @@
   "heartbeat": {
     "ok": true,
     "started": false,
-    "busy": true,
+    "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 5.898859,
-    "cycles_completed": 1614,
-    "last_started_utc": "2026-10-02T22:50:24.796398+00:00",
-    "last_finished_utc": "2026-10-02T22:45:21.842909+00:00",
+    "last_started_age_seconds": 180.222026,
+    "cycles_completed": 1636,
+    "last_started_utc": "2026-10-03T00:42:59.374512+00:00",
+    "last_finished_utc": "2026-10-03T00:43:13.689772+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-02T22:51:33.375321+00:00",
+    "captured_at_utc": "2026-10-03T00:46:02.783665+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-02T22:50:29.364Z",
+        "timestamp_utc": "2026-10-03T00:45:58.066Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 858.85,
+        "latency_ms": 728.27,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-02T22:50:29.946Z",
+        "timestamp_utc": "2026-10-03T00:45:58.765Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 546.92,
+        "latency_ms": 657.35,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-02T22:51:32.647Z",
+        "timestamp_utc": "2026-10-03T00:46:01.284Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 733.05,
+        "latency_ms": 1016.11,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-02T22:51:33.359Z",
+        "timestamp_utc": "2026-10-03T00:46:02.764Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 676.32,
+        "latency_ms": 1437.3,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "c2d656aeb2b619c80fd7beca4bdab93dfb57c663",
+    "source_commit": "ed301d06b239c6a8bd7e000284e610b15065ded0",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 1615,
-    "last_started_utc": "2026-10-02T22:50:24.796398+00:00",
-    "last_finished_utc": "2026-10-02T22:51:16.987282+00:00",
-    "last_status": "MEASURE_READY",
+    "cycles_completed": 1636,
+    "last_started_utc": "2026-10-03T00:42:59.374512+00:00",
+    "last_finished_utc": "2026-10-03T00:43:13.689772+00:00",
+    "last_status": "SELECT",
     "recent_sectors": [],
     "family_performance": [],
     "inbound_traffic_summary": {
@@ -122,48 +122,57 @@
       "compaction": {}
     },
     "select_diagnostics": {
-      "status": "MEASURE_READY",
+      "status": "SELECT",
       "ingestion_enabled": true,
-      "raw_results": 164,
-      "relevance_pass": 111,
+      "raw_results": 163,
+      "relevance_pass": 108,
       "useful_results": 0,
-      "persistent_evidence_items": 4,
-      "quarantined_evidence_items": 4,
+      "persistent_evidence_items": 5,
+      "quarantined_evidence_items": 5,
       "rejected_current_count": 40,
       "new_signal_rows": 0,
       "problem_cluster_count": 4,
-      "qualified_problem_count": 1,
+      "qualified_problem_count": 0,
       "configured_categories": 9,
-      "evidenced_candidates": 8,
-      "gate_eligible_candidates": 8,
-      "qualified_candidates": 1,
-      "top_gate_pass": true,
-      "top_monetization_score": 90,
-      "top_missing": [],
+      "evidenced_candidates": 6,
+      "gate_eligible_candidates": 6,
+      "qualified_candidates": 0,
+      "top_gate_pass": false,
+      "top_monetization_score": 40,
+      "top_missing": [
+        "two_independent_real_price_competitors",
+        "two_competitors_with_real_price",
+        "two_existing_paid_tools",
+        "monetization_score_60"
+      ],
       "rejection_reasons": [
         {
           "reason": "no_family",
-          "count": 62
+          "count": 53
         },
         {
-          "reason": "weak_family_relevance",
-          "count": 13
+          "reason": "no_demand_signal",
+          "count": 11
+        },
+        {
+          "reason": "noise_domain",
+          "count": 11
         },
         {
           "reason": "github_no_buyer_problem_context",
           "count": 10
         },
         {
-          "reason": "noise_domain",
-          "count": 9
+          "reason": "weak_family_relevance",
+          "count": 10
+        },
+        {
+          "reason": "query_irrelevant",
+          "count": 4
         },
         {
           "reason": "github_noise",
-          "count": 5
-        },
-        {
-          "reason": "no_demand_signal",
-          "count": 5
+          "count": 1
         }
       ],
       "search_sources": [
@@ -173,7 +182,7 @@
           "empty": 0,
           "errors": 0,
           "raw_results": 90,
-          "relevance_pass": 59
+          "relevance_pass": 55
         },
         {
           "source": "brave-search",
@@ -196,8 +205,8 @@
           "attempts": 16,
           "empty": 0,
           "errors": 0,
-          "raw_results": 48,
-          "relevance_pass": 46
+          "raw_results": 47,
+          "relevance_pass": 47
         },
         {
           "source": "mcp-registry",
@@ -229,18 +238,14 @@
         "configured_provider": "brave",
         "provider_key_present": true,
         "fallback_used": true,
-        "calls_cycle": 2,
-        "calls_day": 52,
-        "errors": 1,
+        "calls_cycle": 1,
+        "calls_day": 6,
+        "errors": 0,
         "fallbacks": 15,
         "fallback_reasons": [
           {
-            "reason": "provider_throttled",
-            "count": 14
-          },
-          {
-            "reason": "HTTPStatusError:429",
-            "count": 1
+            "reason": "budget_paced",
+            "count": 15
           }
         ]
       },
@@ -260,46 +265,45 @@
         "errors_by_source": [
           {
             "source": "web",
-            "error": "HTTPStatusError:429",
-            "count": 1
-          },
-          {
-            "source": "web",
-            "error": "provider_throttled",
-            "count": 14
+            "error": "budget_paced",
+            "count": 15
           }
         ],
-        "raw_received": 144,
-        "deduped": 142,
-        "query_relevant": 111,
-        "family_matched": 18,
-        "buyer_voice": 2,
+        "raw_received": 143,
+        "deduped": 143,
+        "query_relevant": 108,
+        "family_matched": 21,
+        "buyer_voice": 5,
         "commercial_signal": 0,
         "persisted": 0,
         "discarded_by_reason": [
           {
             "reason": "no_family",
-            "count": 62
+            "count": 53
           },
           {
-            "reason": "weak_family_relevance",
-            "count": 13
+            "reason": "no_demand_signal",
+            "count": 11
+          },
+          {
+            "reason": "noise_domain",
+            "count": 11
           },
           {
             "reason": "github_no_buyer_problem_context",
             "count": 10
           },
           {
-            "reason": "noise_domain",
-            "count": 9
+            "reason": "weak_family_relevance",
+            "count": 10
+          },
+          {
+            "reason": "query_irrelevant",
+            "count": 4
           },
           {
             "reason": "github_noise",
-            "count": 5
-          },
-          {
-            "reason": "no_demand_signal",
-            "count": 5
+            "count": 1
           }
         ],
         "monotonicity_warnings": []
