@@ -30,6 +30,14 @@ MAX_CANDIDATE_POOL=30
 MAX_EVIDENCE_URLS=4
 MAX_FIELD_CHARS=700
 ROUND_TIMEOUT=15.0
+SCORE_GENES=("evidence","confidence","gain","support")
+DEFAULT_SCORE_GENOME={
+    "evidence":35.0,
+    "confidence":25.0,
+    "gain":20.0,
+    "support":20.0,
+}
+GENOME_MUTATION_STEP=5.0
 DEFAULT_MISSION=(
     "Find falsifiable improvements to MYCELIX commercial-signal discovery, "
     "research quality, and external-agent collaboration without weakening any production gate."
@@ -601,15 +609,157 @@ def critique_prompt(proposals: list[dict[str,Any]]) -> str:
     )
 
 
-def proposal_score(proposal: dict[str,Any], support_votes: int) -> float:
+def normalize_score_genome(genome: dict[str,Any] | None) -> dict[str,float]:
+    raw=genome if isinstance(genome,dict) else DEFAULT_SCORE_GENOME
+    values={}
+    for gene in SCORE_GENES:
+        try:
+            values[gene]=max(0.0,min(100.0,float(raw.get(gene,DEFAULT_SCORE_GENOME[gene]))))
+        except Exception:
+            values[gene]=DEFAULT_SCORE_GENOME[gene]
+    total=sum(values.values())
+    if total<=0:
+        return dict(DEFAULT_SCORE_GENOME)
+    return {gene:round(values[gene]*100.0/total,6) for gene in SCORE_GENES}
+
+
+def load_score_genome(data_dir: Path) -> dict[str,float]:
+    path=data_dir/"collective-mind"/"evolution.json"
+    try:
+        state=json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return dict(DEFAULT_SCORE_GENOME)
+    return normalize_score_genome((state or {}).get("champion_genome"))
+
+
+def proposal_score(
+    proposal: dict[str,Any],
+    support_votes: int,
+    genome: dict[str,Any] | None = None,
+) -> float:
+    weights=normalize_score_genome(genome)
     evidence=min(len(proposal.get("evidence_urls") or []),MAX_EVIDENCE_URLS)/MAX_EVIDENCE_URLS
-    confidence=float(proposal.get("confidence") or 0.0)
-    gain=float(proposal.get("estimated_gain_pct") or 0.0)/100.0
+    confidence=max(0.0,min(1.0,float(proposal.get("confidence") or 0.0)))
+    gain=max(0.0,min(1.0,float(proposal.get("estimated_gain_pct") or 0.0)/100.0))
     support=min(max(0,support_votes),MAX_AGENTS)/MAX_AGENTS
-    return round(35*evidence+25*confidence+20*gain+20*support,3)
+    return round(
+        weights["evidence"]*evidence+
+        weights["confidence"]*confidence+
+        weights["gain"]*gain+
+        weights["support"]*support,
+        3,
+    )
+
+
+def intrinsic_proposal_quality(proposal: dict[str,Any], support_votes: int) -> float:
+    evidence=min(len(proposal.get("evidence_urls") or []),MAX_EVIDENCE_URLS)/MAX_EVIDENCE_URLS
+    confidence=max(0.0,min(1.0,float(proposal.get("confidence") or 0.0)))
+    gain=max(0.0,min(1.0,float(proposal.get("estimated_gain_pct") or 0.0)/100.0))
+    support=min(max(0,support_votes),MAX_AGENTS)/MAX_AGENTS
+    falsifiable=1.0 if (
+        substantive_text(proposal.get("method")) and substantive_text(proposal.get("falsifier"))
+    ) else 0.0
+    return round(40*evidence+25*support+15*confidence+10*gain+10*falsifiable,3)
+
+
+def mutate_score_genomes(base: dict[str,Any] | None) -> list[dict[str,float]]:
+    champion=normalize_score_genome(base)
+    candidates=[champion]
+    for donor in SCORE_GENES:
+        for receiver in SCORE_GENES:
+            if donor==receiver or champion[donor]<GENOME_MUTATION_STEP:
+                continue
+            row=dict(champion)
+            row[donor]-=GENOME_MUTATION_STEP
+            row[receiver]+=GENOME_MUTATION_STEP
+            row=normalize_score_genome(row)
+            if row not in candidates:
+                candidates.append(row)
+    return candidates
+
+
+def genome_fitness(report: dict[str,Any], genome: dict[str,Any]) -> float:
+    proposals=report.get("ranked_proposals") or []
+    if not proposals:
+        return 0.0
+    rescored=[]
+    for proposal in proposals:
+        support=int(proposal.get("support_votes") or 0)
+        score=proposal_score(proposal,support,genome)
+        quality=intrinsic_proposal_quality(proposal,support)
+        rescored.append((score,quality,proposal))
+    rescored.sort(key=lambda row:(row[0],row[1]),reverse=True)
+    top_score,top_quality,_=rescored[0]
+    proposal_rate=min(1.0,float(report.get("round1_valid_proposals") or 0)/max(1,float(report.get("agents_contacted") or 1)))
+    critique_rate=min(1.0,float(report.get("round2_valid_critiques") or 0)/max(1,float(report.get("agents_contacted") or 1)))
+    return round(0.70*top_quality+0.15*top_score+7.5*proposal_rate+7.5*critique_rate,6)
+
+
+def evolve_score_genome(report: dict[str,Any], path: Path) -> dict[str,Any]:
+    try:
+        previous=json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(previous,dict):
+            previous={}
+    except Exception:
+        previous={}
+    current=normalize_score_genome(previous.get("champion_genome"))
+    generation=max(0,int(previous.get("generation") or 0))
+    proposals=report.get("ranked_proposals") or []
+    if len(proposals)<2:
+        state={
+            "schema_v":1,
+            "arena_id":ARENA_ID,
+            "generation":generation,
+            "champion_genome":current,
+            "champion_fitness":genome_fitness(report,current),
+            "status":"HOLD_INSUFFICIENT_PROPOSALS",
+            "automatic_promotion":False,
+            "production_promoted":False,
+            "updated_at_utc":now_utc(),
+            "history":list(previous.get("history") or [])[-49:],
+        }
+        path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_text(json.dumps(state,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+        return state
+
+    evaluated=[]
+    for genome in mutate_score_genomes(current):
+        evaluated.append({"genome":genome,"fitness":genome_fitness(report,genome)})
+    evaluated.sort(key=lambda row:row["fitness"],reverse=True)
+    winner=evaluated[0]
+    changed=winner["genome"]!=current
+    if changed:
+        generation+=1
+    history=list(previous.get("history") or [])
+    history.append({
+        "generation":generation,
+        "captured_at_utc":report.get("captured_at_utc"),
+        "previous_genome":current,
+        "winner_genome":winner["genome"],
+        "fitness":winner["fitness"],
+        "candidate_count":len(evaluated),
+        "changed":changed,
+    })
+    state={
+        "schema_v":1,
+        "arena_id":ARENA_ID,
+        "generation":generation,
+        "champion_genome":winner["genome"],
+        "champion_fitness":winner["fitness"],
+        "status":"EVOLVED" if changed else "STABLE",
+        "automatic_promotion":False,
+        "production_promoted":False,
+        "updated_at_utc":now_utc(),
+        "candidate_count":len(evaluated),
+        "history":history[-50:],
+    }
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(json.dumps(state,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return state
 
 
 async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dict[str,Any]:
+    active_genome=load_score_genome(data_dir)
     async with httpx.AsyncClient(
         timeout=ROUND_TIMEOUT,
         follow_redirects=False,
@@ -741,7 +891,7 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
     for idx,p in enumerate(proposals):
         item=dict(p)
         item["support_votes"]=support[idx]
-        item["score"]=proposal_score(item,support[idx])
+        item["score"]=proposal_score(item,support[idx],active_genome)
         item["proposal_id"]=hashlib.sha256(
             (item["proposal"]+"|"+item["method"]+"|"+item["falsifier"]).encode()
         ).hexdigest()[:16]
@@ -782,11 +932,20 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
             "accepted":sum(1 for x in critiques if x.get("accepted")),
             "rejected":sum(1 for x in critiques if not x.get("accepted")),
         },
+        "active_score_genome":active_genome,
         "boundary":dict(BOUNDARY),
         "production_promoted":False,
     }
     root=data_dir/"collective-mind"
     root.mkdir(parents=True,exist_ok=True)
+    evolution=evolve_score_genome(report,root/"evolution.json")
+    report["evolution"]={
+        "generation":evolution.get("generation"),
+        "status":evolution.get("status"),
+        "champion_genome":evolution.get("champion_genome"),
+        "champion_fitness":evolution.get("champion_fitness"),
+        "automatic_promotion":False,
+    }
     (root/"latest.json").write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     return report
 
