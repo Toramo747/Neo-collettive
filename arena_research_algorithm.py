@@ -132,6 +132,8 @@ def initial_population() -> list[dict[str, Any]]:
         {"query_mode": "mixed", "query_count": 4, "recency_days": 14, "min_relevance_tokens": 1},
         {"query_mode": "mixed", "query_count": 3, "recency_days": 30, "min_relevance_tokens": 2},
         {"query_mode": "pain", "query_count": 2, "recency_days": 45, "min_relevance_tokens": 2},
+        {"query_mode": "buyer", "query_count": 4, "recency_days": 14, "min_relevance_tokens": 2},
+        {"query_mode": "workaround", "query_count": 2, "recency_days": 21, "min_relevance_tokens": 3},
     ]
     return [
         {"genome_id": f"g0-{i+1}", "generation": 0, "genes": clamp_genome(g), "origin": "seed"}
