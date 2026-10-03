@@ -1,6 +1,8 @@
 name: NEO Arena
 
 on:
+  schedule:
+    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       topic:
@@ -43,6 +45,11 @@ jobs:
     timeout-minutes: 12
     env:
       ARENA_NAMESPACE: mycelix-arena
+      ARENA_TOPIC: ${{ github.event_name == 'workflow_dispatch' && inputs.topic || 'MYCELIX autonomous arena: find falsifiable improvements without production mutation' }}
+      ARENA_PARTICIPANTS: ${{ github.event_name == 'workflow_dispatch' && inputs.participants || 'Scout,Analyst,Critic,Builder-planner,Guest' }}
+      ARENA_GUEST: ${{ github.event_name == 'workflow_dispatch' && inputs.guest_personality || 'scettico' }}
+      ARENA_MAX_TURNS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_turns || '20' }}
+      ARENA_ANDREA_MESSAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.andrea_message || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,25 +66,17 @@ jobs:
           python -m py_compile arena_core.py arena_micelio.py arena_evolution.py arena_registry_world.py neo_dialect.py
           python -m unittest -v test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py test_neo_dialect.py test_neo_dialect_security.py
       - name: Validate input bounds
-        env:
-          MAX_TURNS: ${{ inputs.max_turns }}
         run: |
           python - <<'PY'
           import os
-          n=int(os.environ["MAX_TURNS"])
+          n=int(os.environ["ARENA_MAX_TURNS"])
           if n < 4 or n > 50:
               raise SystemExit("max_turns must be between 4 and 50")
           PY
       - name: Run isolated deterministic Arena session
-        env:
-          TOPIC: ${{ inputs.topic }}
-          PARTICIPANTS: ${{ inputs.participants }}
-          GUEST: ${{ inputs.guest_personality }}
-          MAX_TURNS: ${{ inputs.max_turns }}
-          ANDREA_MESSAGE: ${{ inputs.andrea_message }}
         run: |
           set -euo pipefail
-          python arena_core.py             --topic "$TOPIC"             --participants "$PARTICIPANTS"             --guest-personality "$GUEST"             --max-turns "$MAX_TURNS"             --andrea-message "$ANDREA_MESSAGE" | tee /tmp/arena-result.json
+          python arena_core.py             --topic "$ARENA_TOPIC"             --participants "$ARENA_PARTICIPANTS"             --guest-personality "$ARENA_GUEST"             --max-turns "$ARENA_MAX_TURNS"             --andrea-message "$ARENA_ANDREA_MESSAGE"             | tee /tmp/arena-result.json
       - name: Sync and reverify isolated micelio
         run: |
           set -euo pipefail
@@ -141,7 +140,7 @@ jobs:
           git config user.name "MYCELIX Arena"
           git config user.email "actions@users.noreply.github.com"
           git add data/arena
-          git commit -m "arena session: ${{ inputs.topic }} [skip render]"
+          git commit -m "arena session: $ARENA_TOPIC [skip render]"
           for attempt in 1 2 3; do
             git fetch origin main
             if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
