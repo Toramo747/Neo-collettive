@@ -78,6 +78,28 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         metrics=ara.score_hits(genome,[{"topic":"manual data entry","hits":hits}])
         self.assertEqual(metrics["support_factor"],1.0)
 
+    def test_diversity_helpers_are_bounded_and_distinct(self):
+        import random
+        parent={"genome_id":"p","genes":{"query_mode":"workaround","query_count":4,"recency_days":42,"min_relevance_tokens":1}}
+        rng=random.Random(7)
+        child=ara.diversify_mutation(parent,rng,8,"x")
+        self.assertIn(child["genes"]["query_mode"],ara.QUERY_MODES)
+        self.assertGreaterEqual(child["genes"]["recency_days"],7)
+        self.assertLessEqual(child["genes"]["recency_days"],45)
+        immigrant=ara.random_immigrant(random.Random(8),8,"i")
+        self.assertIn(immigrant["genes"]["query_mode"],ara.QUERY_MODES)
+        self.assertEqual(immigrant["origin"],"random_immigrant")
+
+    def test_stagnation_detection(self):
+        history=[
+            {"champion_fitness":64.381},
+            {"champion_fitness":64.381},
+            {"champion_fitness":64.381},
+        ]
+        self.assertTrue(ara.stagnating(history))
+        history[-1]["champion_fitness"]=65.0
+        self.assertFalse(ara.stagnating(history))
+
     def test_genome_fitness_has_no_consensus_component(self):
         src = Path("arena_research_algorithm.py").read_text(encoding="utf-8")
         self.assertNotIn("agree_count", src.lower())

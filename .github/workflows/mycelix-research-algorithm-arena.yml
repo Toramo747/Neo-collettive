@@ -1,6 +1,12 @@
 name: MYCELIX Research Algorithm Arena
 
 on:
+  push:
+    paths:
+      - ".github/research-arena-trigger.txt"
+      - ".github/workflows/mycelix-research-algorithm-arena.yml"
+      - "arena_research_algorithm.py"
+      - "test_arena_research_algorithm.py"
   schedule:
     - cron: "47 */6 * * *"
   workflow_dispatch:

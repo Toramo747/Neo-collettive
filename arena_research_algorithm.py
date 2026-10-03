@@ -31,12 +31,14 @@ A2A_REGISTRY = "https://a2aregistry.org"
 STATE_PATH = "data/arena/research-algorithm/state.json"
 REPORT_PATH = "data/arena/research-algorithm/latest.json"
 
-POPULATION_SIZE = 6
+POPULATION_SIZE = 8
 ELITE_COUNT = 2
 MAX_QUERIES_PER_GENOME = 4
 MAX_HITS_PER_QUERY = 30
 MAX_COLLABORATORS = 2
 MIN_SUCCESSFUL_QUERIES = 6
+STAGNATION_WINDOW = 3
+IMMIGRANT_COUNT = 2
 
 TOPICS = (
     "manual data entry",
@@ -130,6 +132,8 @@ def initial_population() -> list[dict[str, Any]]:
         {"query_mode": "mixed", "query_count": 4, "recency_days": 14, "min_relevance_tokens": 1},
         {"query_mode": "mixed", "query_count": 3, "recency_days": 30, "min_relevance_tokens": 2},
         {"query_mode": "pain", "query_count": 2, "recency_days": 45, "min_relevance_tokens": 2},
+        {"query_mode": "buyer", "query_count": 4, "recency_days": 14, "min_relevance_tokens": 2},
+        {"query_mode": "workaround", "query_count": 2, "recency_days": 21, "min_relevance_tokens": 3},
     ]
     return [
         {"genome_id": f"g0-{i+1}", "generation": 0, "genes": clamp_genome(g), "origin": "seed"}
@@ -281,6 +285,61 @@ def mutate(parent: dict[str, Any], rng: random.Random, generation: int, suffix: 
         "origin": "mutation",
         "parent_id": parent.get("genome_id"),
     }
+
+
+def genome_key(item: dict[str, Any]) -> tuple:
+    genes = clamp_genome(item.get("genes") or {})
+    return (
+        genes["query_mode"],
+        genes["query_count"],
+        genes["recency_days"],
+        genes["min_relevance_tokens"],
+    )
+
+
+def diversify_mutation(parent: dict[str, Any], rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
+    genes = dict(clamp_genome(parent.get("genes") or {}))
+    keys = ["query_mode", "query_count", "recency_days", "min_relevance_tokens"]
+    for key in rng.sample(keys, k=2):
+        if key == "query_mode":
+            genes[key] = rng.choice([x for x in QUERY_MODES if x != genes[key]])
+        elif key == "query_count":
+            genes[key] += rng.choice([-1, 1])
+        elif key == "recency_days":
+            genes[key] += rng.choice([-14, -7, 7, 14])
+        else:
+            genes[key] += rng.choice([-1, 1])
+    return {
+        "genome_id": f"g{generation}-{suffix}",
+        "generation": generation,
+        "genes": clamp_genome(genes),
+        "origin": "diversify_mutation",
+        "parent_id": parent.get("genome_id"),
+    }
+
+
+def random_immigrant(rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
+    genes = {
+        "query_mode": rng.choice(list(QUERY_MODES)),
+        "query_count": rng.randint(*GENE_BOUNDS["query_count"]),
+        "recency_days": rng.randint(*GENE_BOUNDS["recency_days"]),
+        "min_relevance_tokens": rng.randint(*GENE_BOUNDS["min_relevance_tokens"]),
+    }
+    return {
+        "genome_id": f"g{generation}-{suffix}",
+        "generation": generation,
+        "genes": clamp_genome(genes),
+        "origin": "random_immigrant",
+        "parent_id": None,
+    }
+
+
+def stagnating(history: list[dict[str, Any]]) -> bool:
+    rows=[x for x in history[-STAGNATION_WINDOW:] if isinstance(x,dict)]
+    if len(rows) < STAGNATION_WINDOW:
+        return False
+    vals=[float(x.get("champion_fitness") or 0.0) for x in rows]
+    return max(vals)-min(vals) < 0.001
 
 
 def crossover(a: dict[str, Any], b: dict[str, Any], rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
@@ -522,13 +581,43 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
             for i, x in enumerate(ranked[:ELITE_COUNT])
         ]
         children = list(elites)
-        while len(children) < POPULATION_SIZE:
-            if len(ranked) >= 2 and len(children) % 2 == 0:
-                children.append(crossover(ranked[0], ranked[1], rng, next_generation, str(len(children)+1)))
+        history_so_far = list(state.get("history") or [])
+        force_diversity = stagnating(history_so_far)
+        seen = {genome_key(x) for x in children}
+        attempts = 0
+        while len(children) < POPULATION_SIZE and attempts < 64:
+            attempts += 1
+            suffix=str(len(children)+1)
+            if force_diversity and len(children) < ELITE_COUNT + IMMIGRANT_COUNT:
+                child = random_immigrant(rng, next_generation, suffix)
+            elif force_diversity:
+                child = diversify_mutation(
+                    ranked[len(children) % min(ELITE_COUNT, len(ranked))],
+                    rng,
+                    next_generation,
+                    suffix,
+                )
+            elif len(ranked) >= 2 and len(children) % 2 == 0:
+                child = crossover(ranked[0], ranked[1], rng, next_generation, suffix)
             else:
-                children.append(mutate(ranked[len(children) % min(ELITE_COUNT, len(ranked))], rng, next_generation, str(len(children)+1)))
+                child = mutate(
+                    ranked[len(children) % min(ELITE_COUNT, len(ranked))],
+                    rng,
+                    next_generation,
+                    suffix,
+                )
+            key = genome_key(child)
+            if key in seen:
+                child = random_immigrant(rng, next_generation, suffix)
+                key = genome_key(child)
+            if key in seen:
+                continue
+            seen.add(key)
+            children.append(child)
+        while len(children) < POPULATION_SIZE:
+            children.append(random_immigrant(rng, next_generation, str(len(children)+1)))
         next_population = inject_collaborator_children(children[:POPULATION_SIZE], collaborators, champion, next_generation)
-        evolution_status = "EVOLVED"
+        evolution_status = "EVOLVED_DIVERSITY" if force_diversity else "EVOLVED"
 
     history = list(state.get("history") or [])
     history.append({
@@ -571,6 +660,9 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
             "successful_queries": successful_queries,
             "minimum_successful_queries": MIN_SUCCESSFUL_QUERIES,
             "raw_text_persisted": False,
+            "population_size": POPULATION_SIZE,
+            "stagnation_window": STAGNATION_WINDOW,
+            "diversity_boost_enabled": True,
         },
         "ranked": [
             {
