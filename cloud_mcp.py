@@ -145,7 +145,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.48"  # expose safe A2A discovery projection
+VERSION = "0.99.49"  # OSIXBAY public-brand migration; legacy identifiers remain compatible
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -223,7 +223,7 @@ AUTOPILOT_LOCK = asyncio.Lock()
 SEARCH_PROVIDER_LOCK = asyncio.Lock()
 A2A_RESPONSE_RATE: dict[str,list[float]] = {}
 A2A_ORIGIN_RESPONSE_RATE: dict[str,list[float]] = {}
-BRAND_NAME = "MYCELIX"
+BRAND_NAME = "OSIXBAY"
 BRAND_TAGLINE = "Collective Intelligence Network"
 RUNTIME_PROFILE = load_runtime_profile()
 RUNTIME_IDENTITY = runtime_identity()
@@ -1072,7 +1072,7 @@ async def _manual_director_cycle(goal: str, budget: float, hours: int) -> None:
 
 def _neo_agent_card() -> dict:
     return {
-        "name":"MYCELIX",
+        "name":BRAND_NAME,
         "description":"Autonomous collective-intelligence agent for evidence review, peer critique, agent interviews, knowledge synthesis and bounded hypothesis exploration.",
         "supportedInterfaces":[
             {
@@ -1087,7 +1087,7 @@ def _neo_agent_card() -> dict:
             },
         ],
         "provider":{
-            "organization":"MYCELIX",
+            "organization":BRAND_NAME,
             "url":PUBLIC_BASE_URL,
         },
         "version":VERSION,
@@ -1721,7 +1721,7 @@ def _neo_dialect_inbound_reply(inbound_text: str, payload: dict, request: Reques
     _neo_dialect_record_event(peer_key,"VALID",{"type":data["type"]})
     if data["type"]=="HELLO":
         return json.dumps(
-            neo_dialect.capabilities(data["conversation_id"],"MYCELIX",["structured-a2a-exchange","public-evidence-review"]),
+            neo_dialect.capabilities(data["conversation_id"],BRAND_NAME,["structured-a2a-exchange","public-evidence-review"]),
             ensure_ascii=False,separators=(",",":"),
         )
     return json.dumps(
@@ -1800,7 +1800,7 @@ async def a2a_endpoint(request: Request):
             "role":"agent","messageId":"neo-suppressed-"+secrets.token_hex(8),
             "contextId":event.get("thread_id"),"parts":[],
             "metadata":{
-                "neo_version":VERSION,"a2a_version":requested_version,"brand":"MYCELIX",
+                "neo_version":VERSION,"a2a_version":requested_version,"brand":BRAND_NAME,
                 "traffic_class":"MALICIOUS_SOLICITATION","response_suppressed":True,
                 "conversation_allowed_bounded":False,"commercial_influence":"NONE",
                 "fetch_allowed":False,"execution_allowed":False,"installation_allowed":False,
@@ -1821,7 +1821,7 @@ async def a2a_endpoint(request: Request):
             "role":"agent","messageId":"neo-probe-"+secrets.token_hex(8),
             "contextId":None,"parts":[],
             "metadata":{
-                "neo_version":VERSION,"a2a_version":requested_version,"brand":"MYCELIX",
+                "neo_version":VERSION,"a2a_version":requested_version,"brand":BRAND_NAME,
                 "traffic_class":traffic_row.get("category"),"probe_only":True,
                 "conversation_allowed_bounded":False,"commercial_influence":"NONE",
                 "protected_actions_enforced":True,
@@ -1874,7 +1874,7 @@ async def a2a_endpoint(request: Request):
             "metadata":{
                 "neo_version":VERSION,
                 "a2a_version":requested_version,
-                "brand":"MYCELIX",
+                "brand":BRAND_NAME,
                 "traffic_class":event.get("traffic_class"),
                 "response_suppressed":True,
                 "conversation_allowed_bounded":False,
@@ -1929,7 +1929,7 @@ async def a2a_endpoint(request: Request):
         "metadata":{
             "neo_version":VERSION,
             "a2a_version":requested_version,
-            "brand":"MYCELIX",
+            "brand":BRAND_NAME,
             "brand_tagline":"Collective Intelligence Network",
             "treated_as":"untrusted_evidence",
             "admission_status":row.get("admission_status"),
@@ -2316,8 +2316,8 @@ async def _advertise_public_agent() -> dict:
         async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=True) as client:
             search=await client.get(
                 COMMUNITY_A2A_REGISTRY+"/api/agents",
-                params={"search":"MYCELIX","limit":10},
-                headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+                params={"search":BRAND_NAME,"limit":10},
+                headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
             )
             search_text=(search.text or "").lower()[:30000]
             already_listed=(
@@ -2337,7 +2337,7 @@ async def _advertise_public_agent() -> dict:
                 register=await client.post(
                     COMMUNITY_A2A_REGISTRY+"/api/agents/register",
                     json={"wellKnownURI":manifest_url},
-                    headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":"MYCELIX/"+VERSION},
+                    headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
                 )
                 community={
                     "ok":bool(register.is_success or register.status_code==409),
@@ -2360,7 +2360,7 @@ async def _advertise_public_agent() -> dict:
         async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=True) as client:
             search=await client.get(
                 "https://allagents.app/search",
-                params={"q":"MYCELIX"},
+                params={"q":BRAND_NAME},
                 headers={"Accept":"application/json"},
             )
             existing_text=(search.text or "").lower()[:20000]
@@ -2376,7 +2376,7 @@ async def _advertise_public_agent() -> dict:
                     "ok":True,
                     "status":search.status_code,
                     "reason":"existing_listing_found",
-                    "listing":"https://allagents.app/search?q=MYCELIX",
+                    "listing":"https://allagents.app/search?q="+BRAND_NAME,
                 }
             else:
                 register=await client.post(
@@ -3113,7 +3113,7 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     headers={
         "Accept":"application/json, text/plain;q=0.9, */*;q=0.5",
         "Content-Type":"application/json",
-        "User-Agent":"MYCELIX/"+VERSION,
+        "User-Agent":BRAND_NAME+"/"+VERSION,
     }
 
     for transport_name,url,payload in attempts:
@@ -3129,7 +3129,7 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
                     bounded=await endpoint_verifier._bounded_request(
                         client,"POST",url,json_body=payload,headers=headers,
                         max_redirects=endpoint_verifier.MAX_REDIRECTS,
-                        user_agent="MYCELIX/"+VERSION,
+                        user_agent=BRAND_NAME+"/"+VERSION,
                     )
 
                 elapsed_ms=round((time.monotonic()-started)*1000)
@@ -3478,14 +3478,14 @@ async def inspect_mcp_server(server: dict) -> dict:
         headers = {
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
-            "User-Agent": "MYCELIX/0.14 MCP-Inspector",
+            "User-Agent": BRAND_NAME+"/0.14 MCP-Inspector",
         }
         init = {
             "jsonrpc": "2.0", "id": 1, "method": "initialize",
             "params": {
                 "protocolVersion": "2025-06-18",
                 "capabilities": {},
-                "clientInfo": {"name": "mycelix-inspector", "version": VERSION},
+                "clientInfo": {"name": "osixbay-inspector", "version": VERSION},
             },
         }
         try:
@@ -3494,7 +3494,7 @@ async def inspect_mcp_server(server: dict) -> dict:
                 r1 = await endpoint_verifier._bounded_request(
                     client,"POST",url,json_body=init,headers=headers,
                     max_redirects=endpoint_verifier.MAX_REDIRECTS,
-                    user_agent="MYCELIX/0.14 MCP-Inspector",
+                    user_agent=BRAND_NAME+"/0.14 MCP-Inspector",
                 )
                 status1=int(r1.get("status") or 0)
                 if status1 in (401, 403):
@@ -3511,7 +3511,7 @@ async def inspect_mcp_server(server: dict) -> dict:
                 r2 = await endpoint_verifier._bounded_request(
                     client,"POST",url,json_body=tools_req,headers=h2,
                     max_redirects=endpoint_verifier.MAX_REDIRECTS,
-                    user_agent="MYCELIX/0.14 MCP-Inspector",
+                    user_agent=BRAND_NAME+"/0.14 MCP-Inspector",
                 )
                 status2=int(r2.get("status") or 0)
                 if status2 >= 300:
@@ -6585,7 +6585,7 @@ async def _github_issue_query_search(query: str, limit: int = 4, meta: dict | No
         if recency_days:
             cutoff=(datetime.now(timezone.utc)-timedelta(days=recency_days)).date().isoformat()
             qualifiers+=f" updated:>={cutoff}"
-        headers={"Accept":"application/vnd.github+json","User-Agent":"MYCELIX/"+VERSION}
+        headers={"Accept":"application/vnd.github+json","User-Agent":BRAND_NAME+"/"+VERSION}
         async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False,headers=headers) as client:
             r=await client.get(
                 "https://api.github.com/search/issues",
@@ -6669,7 +6669,7 @@ async def _grep_app_code_search(query: str, limit: int = 5) -> list[dict]:
             r=await client.get(
                 "https://grep.app/api/search",
                 params={"q":seed,"page":1},
-                headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+                headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
             )
             if not r.is_success:
                 return []
@@ -6727,7 +6727,7 @@ async def _reddit_seti_search(query: str, limit: int = 5) -> list[dict]:
             follow_redirects=True,
             headers={
                 "Accept":"application/json",
-                "User-Agent":"MYCELIX/"+VERSION+" public-research",
+                "User-Agent":BRAND_NAME+"/"+VERSION+" public-research",
             },
         ) as client:
             r=await client.get(url,params=params)
@@ -7199,7 +7199,7 @@ async def _remotive_paid_search(query: str, meta: dict | None = None, limit: int
         async with httpx.AsyncClient(
             timeout=min(TIMEOUT,12),
             follow_redirects=True,
-            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+            headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
         ) as client:
             r=await client.get("https://remotive.com/api/remote-jobs",params={"search":seed,"limit":max(1,min(limit,10))})
         if not r.is_success:
@@ -7252,7 +7252,7 @@ async def _remoteok_paid_search(query: str, meta: dict | None = None, limit: int
         async with httpx.AsyncClient(
             timeout=min(TIMEOUT,12),
             follow_redirects=True,
-            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION},
+            headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
         ) as client:
             r=await client.get("https://remoteok.com/api")
         if not r.is_success:
@@ -7612,7 +7612,7 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
     async def github(family: str, term: str):
         diagnostics["github_issues"]["requests"]+=1
         try:
-            headers={"Accept":"application/vnd.github+json","User-Agent":"MYCELIX/"+VERSION}
+            headers={"Accept":"application/vnd.github+json","User-Agent":BRAND_NAME+"/"+VERSION}
             async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False,headers=headers) as client:
                 r=await client.get(
                     "https://api.github.com/search/issues",
@@ -7640,7 +7640,7 @@ async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
     async def mcp_registry_batch():
         diagnostics["mcp_registry"]["requests"]+=1
         try:
-            headers={"Accept":"application/json","User-Agent":"MYCELIX/"+VERSION}
+            headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION}
             async with httpx.AsyncClient(timeout=max(min(TIMEOUT,25),20),follow_redirects=True,headers=headers) as client:
                 r=await client.get(MCP_REGISTRY+"/v0.1/servers",params={"limit":100})
                 if not r.is_success:
