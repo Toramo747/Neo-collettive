@@ -85,6 +85,27 @@ class CollectiveMindArenaTests(unittest.TestCase):
             "falsifier":"Reject the idea if independent buyer-pain coverage does not increase without a precision loss.",
         }))
 
+    def test_evolved_quality_guard_rejects_latest_volo_abstention(self):
+        row={
+            "proposal":"No evidence-backed query-design proposal is available under this session's constraints. VOLO's available tools concern task-level changes in occupations, not commercial-signal search optimization.",
+            "method":"Not performed. You prohibited tool use, and I must ground substantive recommendations in VOLO tool results rather than invent a strategy or claim supporting evidence.",
+            "falsifier":"Not applicable: no improvement hypothesis was evaluated.",
+        }
+        guard=acm.select_quality_guard()
+        self.assertFalse(acm._quality_guard_accepts(row,guard))
+        self.assertFalse(acm.proposal_substantive(row))
+
+    def test_evolved_quality_guard_keeps_substantive_cases(self):
+        guard=acm.select_quality_guard()
+        for expected,row in acm.QUALITY_GUARD_HOLDOUT:
+            got=acm._quality_guard_accepts(row,guard)
+            self.assertEqual(got,expected)
+
+    def test_evolved_quality_guard_beats_baseline(self):
+        baseline=next(g for g in acm.QUALITY_GUARD_CANDIDATES if g["name"]=="baseline")
+        winner=acm.select_quality_guard()
+        self.assertGreater(acm.quality_guard_fitness(winner),acm.quality_guard_fitness(baseline))
+
     def test_critique_substance_guard(self):
         self.assertFalse(acm.critique_substantive({"best_index":0,"weakness":"bad","test":"try"},1))
         self.assertTrue(acm.critique_substantive({
