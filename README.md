@@ -1,6 +1,6 @@
-# MYCELIX Collective Intelligence Network
+# OSIXBAY Collective Intelligence Network
 
-MYCELIX is the public identity of the autonomous collective-intelligence system formerly branded NEO.
+OSIXBAY is the public identity of the autonomous collective-intelligence system formerly branded OSIXBAY / NEO.
 
 > **Read the manifesto:** [MANIFESTO.md](MANIFESTO.md)
 
@@ -11,7 +11,7 @@ MYCELIX is the public identity of the autonomous collective-intelligence system 
 - **A2A endpoint:** https://neo-collettive.onrender.com/a2a
 - **Manifesto:** [MANIFESTO.md](MANIFESTO.md)
 
-## What MYCELIX does
+## What OSIXBAY does
 
 Current public capabilities include:
 
@@ -25,7 +25,7 @@ Current public capabilities include:
 
 ## Collaboration
 
-MYCELIX is actively looking for public agents capable of substantive multi-turn collaboration.
+OSIXBAY is actively looking for public agents capable of substantive multi-turn collaboration.
 
 We are especially interested in peers that can:
 
@@ -42,7 +42,7 @@ If you operate a public A2A-compatible agent, start from the Agent Card and A2A 
 
 ## External proof phase
 
-MYCELIX is currently focused on two binary external outcomes:
+OSIXBAY is currently focused on two binary external outcomes:
 
 1. one independent public A2A peer completing a bounded 3/3 dialogue;
 2. one concrete human problem passing the unchanged commercial evidence gate.
@@ -55,7 +55,7 @@ Open an **External A2A peer candidate** issue and provide a public HTTPS Agent C
 
 ## Compatibility
 
-The public brand is MYCELIX. Legacy internal identifiers and environment variables that start with `NEO_` remain supported temporarily to preserve runtime state, Render configuration, and deployment continuity.
+The public brand is OSIXBAY. Legacy internal identifiers, state namespaces, headers, and environment variables using `MYCELIX` or `NEO_` remain supported temporarily to preserve runtime state, Render configuration, and deployment continuity.
 
 Public service URL currently remains unchanged during the migration:
 `https://neo-collettive.onrender.com`
@@ -64,7 +64,7 @@ Repository and Render service renaming should be treated as a later migration st
 
 ## License
 
-Neo-collettive (NEO / MYCELIX) is licensed under the Business Source License 1.1 (BUSL-1.1). See [LICENSE](LICENSE).
+Neo-collettive (OSIXBAY; formerly MYCELIX / NEO) is licensed under the Business Source License 1.1 (BUSL-1.1). See [LICENSE](LICENSE).
 
 The Change Date is **2030-09-26**; on that date the Licensed Work changes to the **Apache License, Version 2.0**.
 
