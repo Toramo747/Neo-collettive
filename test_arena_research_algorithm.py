@@ -56,6 +56,28 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertIn('"external_output_trust": "UNTRUSTED_BOUNDED_MUTATION_ONLY"', src)
         self.assertIn("Do not request secrets, tools, code execution, production changes, or external actions.", src)
 
+    def test_support_penalty_blocks_tiny_perfect_sample(self):
+        genome={"query_mode":"workaround","query_count":3,"recency_days":14,"min_relevance_tokens":1}
+        rows=[{
+            "topic":"manual data entry",
+            "hits":[{"comment_text":"manual data entry workaround pay for tool","story_id":"1"}],
+        }]
+        metrics=ara.score_hits(genome,rows)
+        self.assertEqual(metrics["precision"],1.0)
+        self.assertLess(metrics["support_factor"],1.0)
+        self.assertLess(metrics["fitness"],metrics["base_fitness"])
+
+    def test_support_factor_reaches_full_credit_with_broader_support(self):
+        genome={"query_mode":"workaround","query_count":3,"recency_days":14,"min_relevance_tokens":1}
+        hits=[
+            {"comment_text":"manual data entry workaround pay","story_id":"1"},
+            {"comment_text":"manual data entry spreadsheet pay","story_id":"2"},
+            {"comment_text":"manual data entry script cost","story_id":"3"},
+            {"comment_text":"manual data entry csv workaround","story_id":"4"},
+        ]
+        metrics=ara.score_hits(genome,[{"topic":"manual data entry","hits":hits}])
+        self.assertEqual(metrics["support_factor"],1.0)
+
     def test_genome_fitness_has_no_consensus_component(self):
         src = Path("arena_research_algorithm.py").read_text(encoding="utf-8")
         self.assertNotIn("agree_count", src.lower())
