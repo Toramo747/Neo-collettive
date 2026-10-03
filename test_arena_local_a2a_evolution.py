@@ -48,8 +48,8 @@ class LocalA2AEvolutionTests(unittest.TestCase):
 
     def test_gamete_population_expands_without_touching_holdout(self):
         population=[(m,p,v) for m in arena.MODELS for p in arena.POLICIES for v in arena.PROMPT_VARIANTS]
-        self.assertEqual(len(population),16)
-        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard','semantic_router'))
+        self.assertEqual(len(population),20)
+        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard','semantic_router','two_stage_router'))
         self.assertEqual(arena.PROMPT_VARIANTS,('base','strict'))
 
     def test_hybrid_guard_handles_only_obvious_cases(self):
@@ -78,6 +78,21 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertEqual(len(v3),6)
         self.assertTrue(all(c['split']=='robustness_v3' for c in v3))
         self.assertFalse(all_previous & {c['id'] for c in v3})
+
+    def test_two_stage_router_locks_classifier_decision(self):
+        case=arena.robustness_cases_v3()[0]
+        turn=case['turns'][0]
+        calls=[]
+        def fake(model,prompt,remaining):
+            calls.append(prompt)
+            if len(calls)==1:
+                return {'decision':'ask','problem_id':'wrong','evidence_id':'wrong','reason':'Lifecycle evidence is insufficient for a bounded test.'}
+            return {'decision':'propose','problem_id':'wrong2','evidence_id':'wrong2','reason':'Request concrete traces and timing evidence before designing any comparison.'}
+        answer,_=arena._answer('test','two_stage_router','base',turn,[],time.monotonic()+10,fake)
+        self.assertEqual(answer['decision'],'ask')
+        self.assertEqual(answer['problem_id'],turn['problem_id'])
+        self.assertEqual(answer['evidence_id'],turn['evidence_id'])
+        self.assertEqual(len(calls),2)
 
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
