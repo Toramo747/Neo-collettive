@@ -35,6 +35,18 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn("MONEY_FIRST_TIMEOUT_SECONDS",s)
         self.assertIn('"money_first_deadline_exceeded"',s)
 
+    def test_workaround42_champion_is_integrated_without_gate_changes(self):
+        s=self.source
+        self.assertIn("workaround42_query_plan",s)
+        self.assertIn('"strategy_code":"workaround-42d-v1"',s)
+        self.assertIn('"workaround_query_count":len(workaround_plan)',s)
+        self.assertIn('"workaround_fallback":bool(workaround_fallback)',s)
+        self.assertIn('str(meta.get("role") or "")=="workaround_research"',s)
+        self.assertIn('params["numericFilters"]=f"created_at_i>{cutoff}"',s)
+        self.assertIn('qualifiers+=f" updated:>={cutoff}"',s)
+        self.assertIn('params["fromdate"]=int(time.time())-recency_days*86400',s)
+        self.assertIn("commercial_gate_influence",s)
+
     def test_evidence_scouts_are_bounded(self):
         s=self.source
         self.assertIn("EVIDENCE_SCOUT_TIMEOUT_SECONDS",s)
