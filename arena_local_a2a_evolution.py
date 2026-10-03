@@ -5,6 +5,7 @@
 # Semantic-router rerun after population test update.
 # Two-stage rerun after decision-lock test update.
 # Temporal-classifier rerun.
+# State-router rerun after v4 tests.
 from __future__ import annotations
 import argparse
 import hashlib
