@@ -66,7 +66,7 @@ class SearchProviderFallbackTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["provider_fallback_reason"],"HTTPStatusError:"+str(status))
             self.assertEqual(calls,[("x",2)])
 
-    async def test_429_opens_cycle_circuit_breaker_and_avoids_second_http_call(self):
+    async def test_429_opens_cycle_circuit_breaker_after_three_consecutive_errors(self):
         os.environ["BRAVE_SEARCH_API_KEY"]="secret"
         http_calls=[]
         bing_calls=[]
@@ -77,19 +77,19 @@ class SearchProviderFallbackTests(unittest.IsolatedAsyncioTestCase):
             bing_calls.append((query,limit))
             return {"ok":True,"query":query,"results":[],"count":0,"provider":"bing"}
         state=sp.begin_cycle(sp.new_search_state(),123)
-        first,state=await sp.search_with_fallback(
-            "one",2,bing_search=bing,state=state,http_get=http_get
-        )
-        second,state=await sp.search_with_fallback(
-            "two",2,bing_search=bing,state=state,http_get=http_get
-        )
-        self.assertEqual(len(http_calls),1)
+        results=[]
+        for query in ("one","two","three","four"):
+            result,state=await sp.search_with_fallback(
+                query,2,bing_search=bing,state=state,http_get=http_get
+            )
+            results.append(result)
+        self.assertEqual(len(http_calls),3)
         self.assertTrue(state["provider_throttled"])
-        self.assertEqual(first["provider_fallback_reason"],"HTTPStatusError:429")
-        self.assertEqual(second["provider_fallback_reason"],"provider_throttled")
-        self.assertEqual(state["fallback_reasons"]["HTTPStatusError:429"],1)
+        self.assertEqual([x["provider_fallback_reason"] for x in results[:3]],["HTTPStatusError:429"]*3)
+        self.assertEqual(results[3]["provider_fallback_reason"],"provider_throttled")
+        self.assertEqual(state["fallback_reasons"]["HTTPStatusError:429"],3)
         self.assertEqual(state["fallback_reasons"]["provider_throttled"],1)
-        self.assertEqual(len(bing_calls),2)
+        self.assertEqual(len(bing_calls),4)
 
     async def test_budget_exhaustion_falls_back_to_bing_without_http_call(self):
         os.environ["BRAVE_SEARCH_API_KEY"]="secret"
