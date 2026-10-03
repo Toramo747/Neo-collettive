@@ -30,9 +30,9 @@ def cases():
     return rows
 
 def infer(model,prompt,remaining):
-    body={'model':model,'prompt':prompt,'format':SCHEMA,'stream':False,'think':False,'keep_alive':'5m','options':{'temperature':0,'num_predict':180,'num_ctx':2048,'seed':42}}
+    body={'model':model,'prompt':prompt,'format':SCHEMA,'stream':False,'think':False,'keep_alive':'5m','options':{'temperature':0,'num_predict':120,'num_ctx':1536,'seed':42}}
     request=urllib.request.Request('http://127.0.0.1:11434/api/generate',data=json.dumps(body).encode(),headers={'Content-Type':'application/json'},method='POST')
-    with urllib.request.urlopen(request,timeout=max(1,min(60,remaining))) as response:
+    with urllib.request.urlopen(request,timeout=max(1,min(40,remaining))) as response:
         result=json.load(response)
     raw=str(result.get('response') or '')
     if len(raw)>3200: raise ValueError('response_size_limit')
@@ -91,10 +91,17 @@ def run(models,out,budget):
     report={'namespace':'mycelix-arena','synthetic':True,'external_peer_proof':False,'production_influence':'NONE','promotion':'NONE','paid_api_calls':0,'train_cases':len(train),'holdout_cases':len(holdout),'evaluation_limit':'Deterministic behavioral and substance proxies; not a validated semantic judge or proof of reasoning quality.','training':[],'holdout':None,'status':'RUNNING','dataset_sha256':hashlib.sha256(json.dumps(dataset,sort_keys=True).encode()).hexdigest()}
     target=Path(out);target.parent.mkdir(parents=True,exist_ok=True)
     save=lambda:target.write_text(json.dumps(report,indent=2)+'\n')
-    save();start=time.monotonic();training_deadline=start+budget*.65
+    save();start=time.monotonic();training_deadline=start+budget*.78
     configs=[(m,p) for m in models for p in POLICIES]
+    # Critique policy performs roughly 3x the inference calls of direct.
+    # Allocate wall-clock proportionally so a slower policy is not rejected merely
+    # because equal time slices underfund it. Dataset, candidates and judge stay fixed.
+    weights={cfg:(3.0 if cfg[1]=='critique_once' else 1.3) for cfg in configs}
     for index,(model,policy) in enumerate(configs):
-        remaining=max(0,training_deadline-time.monotonic());share=remaining/max(1,len(configs)-index)
+        remaining=max(0,training_deadline-time.monotonic())
+        remaining_cfgs=configs[index:]
+        remaining_weight=sum(weights[cfg] for cfg in remaining_cfgs)
+        share=remaining*(weights[(model,policy)]/max(0.001,remaining_weight))
         row=run_config(model,policy,train,time.monotonic()+share)
         report['training'].append(row);save()
     complete=[r for r in report['training'] if r['complete'] and r['cases']==len(train)]
