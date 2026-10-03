@@ -120,6 +120,19 @@ class CollectiveMindArenaTests(unittest.TestCase):
             "falsifier":"Stop if the endpoint does not answer the request.",
         }))
 
+
+    def test_substance_guard_rejects_coverage_gap_and_provider_catalog(self):
+        self.assertFalse(acm.proposal_substantive({
+            "proposal":"No supported proposal. VOLO does not cover commercial-signal search-query design; that is a coverage gap here.",
+            "method":"No external actions taken. I cannot derive or validate a bounded query strategy from available evidence.",
+            "falsifier":"Not applicable: no strategy or improvement claim is being advanced.",
+        }))
+        self.assertFalse(acm.proposal_substantive({
+            "proposal":"20 provider(s) for the request; ids: a, b, c. Observed prices are null when unobserved.",
+            "method":"20 provider(s) for the request; ids: d, e, f. Observed prices are null when unobserved.",
+            "falsifier":"20 provider(s) for the request; ids: g, h, i. Observed prices are null when unobserved.",
+        }))
+
     def test_score_rewards_evidence_and_cross_agent_support(self):
         low={"evidence_urls":[],"confidence":0.5,"estimated_gain_pct":10}
         high={
