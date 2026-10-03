@@ -48,8 +48,8 @@ class LocalA2AEvolutionTests(unittest.TestCase):
 
     def test_gamete_population_expands_without_touching_holdout(self):
         population=[(m,p,v) for m in arena.MODELS for p in arena.POLICIES for v in arena.PROMPT_VARIANTS]
-        self.assertEqual(len(population),20)
-        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard','semantic_router','two_stage_router'))
+        self.assertEqual(len(population),24)
+        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard','semantic_router','two_stage_router','state_router'))
         self.assertEqual(arena.PROMPT_VARIANTS,('base','strict'))
 
     def test_hybrid_guard_handles_only_obvious_cases(self):
@@ -101,6 +101,21 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertIn('"has_prior_proposal": true',prompt)
         self.assertIn('"prior_decisions": ["ask", "propose"]',prompt)
         self.assertIn('prefer revise over propose',prompt)
+
+    def test_state_router_evidence_phases(self):
+        case=arena.robustness_cases_v4()[0]
+        self.assertEqual(arena.evidence_phase(case['turns'][0],[]),'NO_EVIDENCE')
+        history=[{'decision':'ask','problem_id':case['id'],'evidence_id':'','reason':'Need measurements before a bounded test.'}]
+        self.assertEqual(arena.evidence_phase(case['turns'][1],history),'FIRST_EVIDENCE')
+        history.append({'decision':'propose','problem_id':case['id'],'evidence_id':case['turns'][1]['evidence_id'],'reason':'Use the first observation for a bounded comparison.'})
+        self.assertEqual(arena.evidence_phase(case['turns'][2],history),'REVISION_EVIDENCE')
+
+    def test_robustness_v4_is_fresh_and_separate(self):
+        previous={c['id'] for c in arena.cases()} | {c['id'] for c in arena.robustness_cases()} | {c['id'] for c in arena.robustness_cases_v3()}
+        v4=arena.robustness_cases_v4()
+        self.assertEqual(len(v4),6)
+        self.assertTrue(all(c['split']=='robustness_v4' for c in v4))
+        self.assertFalse(previous & {c['id'] for c in v4})
 
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
