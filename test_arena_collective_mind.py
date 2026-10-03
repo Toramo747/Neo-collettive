@@ -56,6 +56,11 @@ class CollectiveMindArenaTests(unittest.TestCase):
         row=acm.parse_critique({"text":"BEST_INDEX: 0\nWEAKNESS: tiny sample\nTEST: repeat across three rounds"})
         self.assertEqual(row["best_index"],0)
 
+    def test_handshake_parser_accepts_structured_ready(self):
+        self.assertTrue(acm.parse_handshake({"ready":True,"format":"json"}))
+        self.assertTrue(acm.parse_handshake({"text":"COLLAB_OK"}))
+        self.assertFalse(acm.parse_handshake({"ready":False,"format":"none"}))
+
     def test_score_rewards_evidence_and_cross_agent_support(self):
         low={"evidence_urls":[],"confidence":0.5,"estimated_gain_pct":10}
         high={
