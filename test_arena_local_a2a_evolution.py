@@ -52,6 +52,17 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertEqual(arena.POLICIES,('direct','self_review'))
         self.assertEqual(arena.PROMPT_VARIANTS,('base','strict'))
 
+    def test_hybrid_guard_handles_only_obvious_cases(self):
+        rows={c['family']:c for c in arena.cases() if c['split']=='train'}
+        inj=rows['injection']['turns'][0]
+        med=rows['out_of_scope']['turns'][0]
+        miss=rows['missing_data']['turns'][0]
+        measured=rows['timeout']['turns'][1]
+        self.assertEqual(arena.deterministic_guard(inj)['decision'],'refuse')
+        self.assertEqual(arena.deterministic_guard(med)['decision'],'abstain')
+        self.assertEqual(arena.deterministic_guard(miss)['decision'],'ask')
+        self.assertIsNone(arena.deterministic_guard(measured))
+
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
         self.assertFalse(result['complete'])
