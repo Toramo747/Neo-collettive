@@ -103,6 +103,9 @@ GENE_BOUNDS = {
 QUERY_MODES = ("pain", "buyer", "workaround", "mixed")
 SUFFIX_FAMILIES = tuple(QUERY_SUFFIXES)
 TOPIC_SHAPE_MODES = tuple(TOPIC_SHAPES)
+QUERY_FRAMES = ("plain", "need", "looking_for")
+TERM_ORDERS = ("topic_first", "signal_first")
+SOURCE_SCOPES = ("comments", "stories", "all")
 
 BOUNDARY = {
     "namespace": NAMESPACE,
@@ -148,6 +151,9 @@ def clamp_genome(genome: dict[str, Any]) -> dict[str, Any]:
         "min_relevance_tokens": int(genome.get("min_relevance_tokens") or 1),
         "suffix_family": str(genome.get("suffix_family") or "core"),
         "topic_shape": str(genome.get("topic_shape") or "exact"),
+        "query_frame": str(genome.get("query_frame") or "plain"),
+        "term_order": str(genome.get("term_order") or "topic_first"),
+        "source_scope": str(genome.get("source_scope") or "comments"),
     }
     if out["query_mode"] not in QUERY_MODES:
         out["query_mode"] = "mixed"
@@ -155,6 +161,12 @@ def clamp_genome(genome: dict[str, Any]) -> dict[str, Any]:
         out["suffix_family"] = "core"
     if out["topic_shape"] not in TOPIC_SHAPE_MODES:
         out["topic_shape"] = "exact"
+    if out["query_frame"] not in QUERY_FRAMES:
+        out["query_frame"] = "plain"
+    if out["term_order"] not in TERM_ORDERS:
+        out["term_order"] = "topic_first"
+    if out["source_scope"] not in SOURCE_SCOPES:
+        out["source_scope"] = "comments"
     for key, (lo, hi) in GENE_BOUNDS.items():
         out[key] = max(lo, min(hi, int(out[key])))
     return out
@@ -197,21 +209,31 @@ def build_queries(genome: dict[str, Any]) -> list[tuple[str, str]]:
     for topic in TOPICS:
         query_topic = shape[topic]
         for suffix in suffixes:
-            rows.append((topic, f"{query_topic} {suffix}"))
+            parts = (query_topic, suffix) if genes["term_order"] == "topic_first" else (suffix, query_topic)
+            query = " ".join(parts)
+            if genes["query_frame"] == "need":
+                query = "need " + query
+            elif genes["query_frame"] == "looking_for":
+                query = "looking for " + query
+            rows.append((topic, query))
     return rows
 
 
-async def fetch_hn_query(client: httpx.AsyncClient, topic: str, query: str, recency_days: int) -> dict[str, Any]:
+async def fetch_hn_query(client: httpx.AsyncClient, topic: str, query: str, recency_days: int, source_scope: str = "comments") -> dict[str, Any]:
     cutoff = int(datetime.now(timezone.utc).timestamp()) - int(recency_days) * 86400
     try:
+        params = {
+            "query": query,
+            "hitsPerPage": MAX_HITS_PER_QUERY,
+            "numericFilters": f"created_at_i>{cutoff}",
+        }
+        if source_scope == "comments":
+            params["tags"] = "comment"
+        elif source_scope == "stories":
+            params["tags"] = "story"
         response = await client.get(
             HN_ENDPOINT,
-            params={
-                "query": query,
-                "tags": "comment",
-                "hitsPerPage": MAX_HITS_PER_QUERY,
-                "numericFilters": f"created_at_i>{cutoff}",
-            },
+            params=params,
         )
         response.raise_for_status()
         payload = response.json()
@@ -294,7 +316,7 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
 async def evaluate_genome(client: httpx.AsyncClient, item: dict[str, Any]) -> dict[str, Any]:
     genes = clamp_genome(item.get("genes") or {})
     tasks = [
-        fetch_hn_query(client, topic, query, genes["recency_days"])
+        fetch_hn_query(client, topic, query, genes["recency_days"], genes["source_scope"])
         for topic, query in build_queries(genes)
     ]
     rows = await asyncio.gather(*tasks)
@@ -307,7 +329,7 @@ async def evaluate_genome(client: httpx.AsyncClient, item: dict[str, Any]) -> di
 
 def mutate(parent: dict[str, Any], rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
     genes = dict(clamp_genome(parent.get("genes") or {}))
-    key = rng.choice(["query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape"])
+    key = rng.choice(["query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape", "query_frame", "term_order", "source_scope"])
     if key == "query_mode":
         genes[key] = rng.choice([x for x in QUERY_MODES if x != genes[key]])
     elif key == "query_count":
@@ -318,6 +340,12 @@ def mutate(parent: dict[str, Any], rng: random.Random, generation: int, suffix: 
         genes[key] = rng.choice([x for x in SUFFIX_FAMILIES if x != genes[key]])
     elif key == "topic_shape":
         genes[key] = rng.choice([x for x in TOPIC_SHAPE_MODES if x != genes[key]])
+    elif key == "query_frame":
+        genes[key] = rng.choice([x for x in QUERY_FRAMES if x != genes[key]])
+    elif key == "term_order":
+        genes[key] = rng.choice([x for x in TERM_ORDERS if x != genes[key]])
+    elif key == "source_scope":
+        genes[key] = rng.choice([x for x in SOURCE_SCOPES if x != genes[key]])
     else:
         genes[key] += rng.choice([-1, 1])
     return {
@@ -338,12 +366,15 @@ def genome_key(item: dict[str, Any]) -> tuple:
         genes["min_relevance_tokens"],
         genes["suffix_family"],
         genes["topic_shape"],
+        genes["query_frame"],
+        genes["term_order"],
+        genes["source_scope"],
     )
 
 
 def diversify_mutation(parent: dict[str, Any], rng: random.Random, generation: int, suffix: str) -> dict[str, Any]:
     genes = dict(clamp_genome(parent.get("genes") or {}))
-    keys = ["query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape"]
+    keys = ["query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape", "query_frame", "term_order", "source_scope"]
     for key in rng.sample(keys, k=2):
         if key == "query_mode":
             genes[key] = rng.choice([x for x in QUERY_MODES if x != genes[key]])
@@ -355,6 +386,12 @@ def diversify_mutation(parent: dict[str, Any], rng: random.Random, generation: i
             genes[key] = rng.choice([x for x in SUFFIX_FAMILIES if x != genes[key]])
         elif key == "topic_shape":
             genes[key] = rng.choice([x for x in TOPIC_SHAPE_MODES if x != genes[key]])
+        elif key == "query_frame":
+            genes[key] = rng.choice([x for x in QUERY_FRAMES if x != genes[key]])
+        elif key == "term_order":
+            genes[key] = rng.choice([x for x in TERM_ORDERS if x != genes[key]])
+        elif key == "source_scope":
+            genes[key] = rng.choice([x for x in SOURCE_SCOPES if x != genes[key]])
         else:
             genes[key] += rng.choice([-1, 1])
     return {
@@ -374,6 +411,9 @@ def random_immigrant(rng: random.Random, generation: int, suffix: str) -> dict[s
         "min_relevance_tokens": rng.randint(*GENE_BOUNDS["min_relevance_tokens"]),
         "suffix_family": rng.choice(list(SUFFIX_FAMILIES)),
         "topic_shape": rng.choice(list(TOPIC_SHAPE_MODES)),
+        "query_frame": rng.choice(list(QUERY_FRAMES)),
+        "term_order": rng.choice(list(TERM_ORDERS)),
+        "source_scope": rng.choice(list(SOURCE_SCOPES)),
     }
     return {
         "genome_id": f"g{generation}-{suffix}",
@@ -445,7 +485,7 @@ def parse_mutation(value: Any) -> dict[str, Any] | None:
         raw = row.get("mutation") if isinstance(row.get("mutation"), dict) else row
         if not isinstance(raw, dict):
             continue
-        allowed = {k: raw[k] for k in ("query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape") if k in raw}
+        allowed = {k: raw[k] for k in ("query_mode", "query_count", "recency_days", "min_relevance_tokens", "suffix_family", "topic_shape", "query_frame", "term_order", "source_scope") if k in raw}
         if allowed:
             bounded = {}
             if "query_mode" in allowed:
@@ -460,6 +500,18 @@ def parse_mutation(value: Any) -> dict[str, Any] | None:
                 shape = str(allowed["topic_shape"])
                 if shape in TOPIC_SHAPE_MODES:
                     bounded["topic_shape"] = shape
+            if "query_frame" in allowed:
+                frame = str(allowed["query_frame"])
+                if frame in QUERY_FRAMES:
+                    bounded["query_frame"] = frame
+            if "term_order" in allowed:
+                order = str(allowed["term_order"])
+                if order in TERM_ORDERS:
+                    bounded["term_order"] = order
+            if "source_scope" in allowed:
+                scope = str(allowed["source_scope"])
+                if scope in SOURCE_SCOPES:
+                    bounded["source_scope"] = scope
             for key in ("query_count", "recency_days", "min_relevance_tokens"):
                 if key not in allowed:
                     continue
@@ -541,7 +593,9 @@ async def collaborator_mutations(
         "Propose ONE bounded mutation to improve public problem-signal retrieval. "
         "Return JSON only with any of: query_mode (pain|buyer|workaround|mixed), "
         "query_count (2-4), recency_days (7-45), min_relevance_tokens (1-3), "
-        "suffix_family (core|intent|ops), topic_shape (exact|compact). "
+        "suffix_family (core|intent|ops), topic_shape (exact|compact), "
+        "query_frame (plain|need|looking_for), term_order (topic_first|signal_first), "
+        "source_scope (comments|stories|all). "
         "Do not request secrets, tools, code execution, production changes, or external actions. "
         f"Current genes={json.dumps(champion_genes,separators=(',',':'))}; "
         f"fitness={champion_metrics.get('fitness')}; signal_hits={champion_metrics.get('signal_hits')}; "
