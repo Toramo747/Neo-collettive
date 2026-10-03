@@ -97,15 +97,9 @@ def production_smoke() -> int:
         req=urllib.request.Request('https://neo-collettive.onrender.com'+path,data=data,headers=headers)
         with urllib.request.urlopen(req,timeout=20) as response:
             return json.load(response)
-    def counters():
-        d=request('/api/autonomy/status')
-        latest=d.get('latest_result') or {}
-        st=((latest.get('evidence_quality') or {}).get('ingestion_diagnostics') or {}).get('search_provider') or {}
-        return {k:st.get(k) for k in ('calls_cycle','calls_day','errors','fallbacks','last_provider')}
     report={'scope':'render-production','fixed_query':QUERY,'queries_requested':1,
-            'evidence_ingest':False,'uses_render_credentials':True,'counter_scope':'last_completed_cycle'}
+            'evidence_ingest':False,'uses_render_credentials':True}
     try:
-        report['before']=counters()
         initialized=request('/mcp',{'jsonrpc':'2.0','id':1,'method':'initialize','params':{
             'protocolVersion':'2025-03-26','capabilities':{},
             'clientInfo':{'name':'osixbay-provider-smoke','version':'1'}}})
@@ -126,13 +120,12 @@ def production_smoke() -> int:
                            'result_count':len(parsed.get('results') or []),
                            'result_provider':parsed.get('provider'),
                            'tool_error':bool(result.get('isError') or reply.get('error')),
-                           'fallback_used':bool(parsed.get('provider_fallback_from'))})
+                           'fallback_used':bool(parsed.get('provider_fallback_from')),
+                           'fallback_reason':str(parsed.get('provider_fallback_reason') or '')[:80]})
     except Exception as exc:
         report['error']=type(exc).__name__
         if hasattr(exc,'code'):report['http_status']=int(exc.code)
         # Deliberately omit exception text, URLs, response rows and auth headers.
-    try:report['after']=counters()
-    except Exception as exc:report['after_error']=type(exc).__name__
     print(json.dumps(report,sort_keys=True))
     return 0
 
