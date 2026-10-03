@@ -213,6 +213,35 @@ def market_query_plan(cycle: int, count: int = 10) -> list[dict]:
     return rows[:max(4,min(int(count or 10),10))]
 
 
+def workaround42_query_plan(cycle: int, count: int = 4) -> list[dict]:
+    """Production-safe projection of the Arena champion workaround-42d-v1.
+
+    This planner only changes discovery probes. It does not alter evidence
+    classification, qualified_hits, monetization scoring, or commercial gates.
+    """
+    keys=list(CATEGORY_CONFIGS)
+    if not keys:
+        return []
+    family=keys[max(0,int(cycle or 0)) % len(keys)]
+    cfg=CATEGORY_CONFIGS[family]
+    aliases=list(cfg.get("aliases") or [])
+    alias=str(aliases[max(0,int(cycle or 0)) % len(aliases)] if aliases else cfg.get("title") or family)
+    suffixes=("workaround","manual","script","spreadsheet")
+    rows=[]
+    for suffix in suffixes[:max(1,min(int(count or 4),4))]:
+        rows.append({
+            "query":" ".join((alias+" "+suffix).split()),
+            "class":"tool_market",
+            "role":"workaround_research",
+            "family":family,
+            "query_intent":"workaround",
+            "strategy_code":"workaround-42d-v1",
+            "recency_days":42,
+            "min_relevance_tokens":1,
+        })
+    return rows
+
+
 def competitor_money_first_plan(opportunities: list[dict] | None, count: int = 6) -> list[dict]:
     """Target only theses still missing independent real-price competitors.
 

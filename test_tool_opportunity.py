@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Andrea Gava
 import unittest
 
-from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog
+from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog, workaround42_query_plan
 
 
 class ToolOpportunityTests(unittest.TestCase):
@@ -292,6 +292,17 @@ class ToolOpportunityTests(unittest.TestCase):
             self.assertTrue(thesis["target_user"])
             self.assertGreaterEqual(thesis["feasibility"]["estimated_build_days"],1)
             self.assertNotIn(thesis["title"],{"AI / agent utility","Developer workflow tool","API / integration tool"})
+
+    def test_workaround42_plan_matches_arena_champion_shape(self):
+        rows=workaround42_query_plan(7,4)
+        self.assertEqual(len(rows),4)
+        self.assertTrue(all(x["strategy_code"]=="workaround-42d-v1" for x in rows))
+        self.assertTrue(all(x["role"]=="workaround_research" for x in rows))
+        self.assertTrue(all(x["query_intent"]=="workaround" for x in rows))
+        self.assertTrue(all(x["recency_days"]==42 for x in rows))
+        self.assertTrue(all(x["min_relevance_tokens"]==1 for x in rows))
+        suffixes={x["query"].split()[-1] for x in rows}
+        self.assertEqual(suffixes,{"workaround","manual","script","spreadsheet"})
 
     def test_money_first_plan_targets_only_missing_competitors(self):
         rows=competitor_money_first_plan([
