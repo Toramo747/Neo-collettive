@@ -2264,7 +2264,13 @@ async def _advertise_public_agent() -> dict:
         "registry_enabled":enabled,
         "manifest_url":manifest_url,
         "registries":{},
+        "last_registration_reason":"registration_in_progress" if enabled else "disabled_by_policy",
     })
+    # Publish policy-derived discovery availability before any external registry I/O.
+    # The deploy smoke checks whether public registry advertisement is enabled,
+    # not whether a remote directory has already accepted the listing.
+    AUTOPILOT_STATE["a2a_discovery"]=dict(state)
+    _save_local_state()
     if not enabled:
         state.update({
             "last_registration_ok":False,
