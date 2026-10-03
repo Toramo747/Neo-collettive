@@ -7,6 +7,7 @@ from copy import deepcopy
 import cloud_mcp
 from public_projection import (
     FORBIDDEN_PUBLIC_KEYS,
+    project_a2a_discovery,
     project_agent_chats,
     project_agent_demand,
     project_inbound_agents,
@@ -89,6 +90,21 @@ class PublicProjectionUnitTests(unittest.TestCase):
         self.assertTrue(out["threads"][0]["agent_ref"].startswith("agent_"))
         for key in _walk_keys(out):
             self.assertNotIn(key,FORBIDDEN_PUBLIC_KEYS)
+
+    def test_a2a_discovery_projection_is_status_only(self):
+        out=project_a2a_discovery({
+            "registry_enabled":True,
+            "last_registration_ok":False,
+            "last_registration_status":503,
+            "last_registration_reason":PRIVATE_MARKER,
+            "registries":{"private":{"reason":PRIVATE_MARKER}},
+        })
+        self.assertEqual(out,{
+            "registry_enabled":True,
+            "last_registration_ok":False,
+            "last_registration_status":503,
+        })
+        self.assertNotIn(PRIVATE_MARKER,json.dumps(out,sort_keys=True))
 
     def test_agent_projection_drops_network_and_free_text(self):
         stats={
@@ -226,6 +242,13 @@ class PublicProjectionRuntimeTests(unittest.IsolatedAsyncioTestCase):
             "dialogue_history":[{"problem_excerpt":PRIVATE_MARKER}],
             "knowledge_ledger":[{"claim":PRIVATE_MARKER}],
             "hypothesis_queue":[{"status":"HYPOTHESIS","text":PRIVATE_MARKER}],
+            "a2a_discovery":{
+                "registry_enabled":True,
+                "last_registration_ok":False,
+                "last_registration_status":503,
+                "last_registration_reason":PRIVATE_MARKER,
+                "registries":{"private":{"reason":PRIVATE_MARKER}},
+            },
             "trust_lab_evaluations":[{
                 "agent_id":"raw-agent-private",
                 "decision":"PARK",
@@ -261,6 +284,17 @@ class PublicProjectionRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn("raw-agent-private",text)
                 self.assertNotIn("invite=",text)
                 self.assertNotIn("synthetic-value",text)
+
+    async def test_inbound_agents_exposes_safe_a2a_discovery_status(self):
+        status,body=await _call(cloud_mcp.app,"/api/inbound/agents")
+        self.assertEqual(status,200)
+        payload=json.loads(body.decode("utf-8"))
+        self.assertEqual(payload.get("a2a_discovery"),{
+            "registry_enabled":True,
+            "last_registration_ok":False,
+            "last_registration_status":503,
+        })
+        self.assertNotIn(PRIVATE_MARKER,body.decode("utf-8","replace"))
 
     async def test_raw_data_is_available_only_on_admin_routes(self):
         for path in ("/api/admin/inbound","/api/admin/agent-chats"):

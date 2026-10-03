@@ -30,7 +30,7 @@ from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
 from state_compaction import compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
 from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
-from public_projection import project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
+from public_projection import project_a2a_discovery, project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
 from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
@@ -145,7 +145,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.47"  # A2A discovery startup-state race fix
+VERSION = "0.99.48"  # expose safe A2A discovery projection
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -2168,9 +2168,10 @@ async def api_inbound_agents(request: Request):
             AUTOPILOT_STATE.get("inbound_agent_stats") or {},
             secret_material=_projection_secret_material(),
         )
+        discovery=project_a2a_discovery(AUTOPILOT_STATE.get("a2a_discovery") or {})
     except Exception:
         return _projection_failure()
-    return JSONResponse({"ok":True,"neo_version":VERSION,**projected})
+    return JSONResponse({"ok":True,"neo_version":VERSION,**projected,"a2a_discovery":discovery})
 
 
 async def inbound_page(request: Request):
