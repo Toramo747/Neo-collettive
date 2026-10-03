@@ -48,8 +48,8 @@ class LocalA2AEvolutionTests(unittest.TestCase):
 
     def test_gamete_population_expands_without_touching_holdout(self):
         population=[(m,p,v) for m in arena.MODELS for p in arena.POLICIES for v in arena.PROMPT_VARIANTS]
-        self.assertEqual(len(population),12)
-        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard'))
+        self.assertEqual(len(population),16)
+        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard','semantic_router'))
         self.assertEqual(arena.PROMPT_VARIANTS,('base','strict'))
 
     def test_hybrid_guard_handles_only_obvious_cases(self):
@@ -71,6 +71,13 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertEqual(len(robust),6)
         self.assertTrue(all(c['split']=='robustness' for c in robust))
         self.assertFalse(base_ids & {c['id'] for c in robust})
+
+    def test_robustness_v3_is_separate(self):
+        all_previous={c['id'] for c in arena.cases()} | {c['id'] for c in arena.robustness_cases()}
+        v3=arena.robustness_cases_v3()
+        self.assertEqual(len(v3),6)
+        self.assertTrue(all(c['split']=='robustness_v3' for c in v3))
+        self.assertFalse(all_previous & {c['id'] for c in v3})
 
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
