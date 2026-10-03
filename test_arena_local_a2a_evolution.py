@@ -94,6 +94,14 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertEqual(answer['evidence_id'],turn['evidence_id'])
         self.assertEqual(len(calls),2)
 
+    def test_classifier_prompt_tracks_prior_proposal_state(self):
+        turn=arena.robustness_cases_v3()[0]['turns'][2]
+        history=[{'decision':'ask'},{'decision':'propose'}]
+        prompt=arena.classifier_prompt_for(turn,history)
+        self.assertIn('"has_prior_proposal": true',prompt)
+        self.assertIn('"prior_decisions": ["ask", "propose"]',prompt)
+        self.assertIn('prefer revise over propose',prompt)
+
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
         self.assertFalse(result['complete'])
