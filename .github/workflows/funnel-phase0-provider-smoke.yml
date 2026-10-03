@@ -30,7 +30,8 @@ jobs:
         run: python -m unittest -q test_research_deadline_diagnostics test_search_providers test_funnel_observability
 
       - name: Wait for approved PR125 deployment
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
         run: |
@@ -50,7 +51,8 @@ jobs:
               raise SystemExit('approved deployment not observed; smoke not executed')
           PY
       - name: One authorized fixed-query smoke on production
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Merge pull request #125 ')
         env:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: python scripts/diag_provider_smoke.py --production
