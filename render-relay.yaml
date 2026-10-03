@@ -1,0 +1,30 @@
+# OPTIONAL PAID PILOT. Do not Apply without approval of the new service and disk cost.
+# Use this in a NEW Blueprint; never replace/sync the existing production Blueprint.
+# autoDeployTrigger=off does NOT prevent the first paid deployment when Apply is clicked.
+previews:
+  generation: "off"
+services:
+  - type: web
+    name: mycelix-relay-pilot
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    branch: feat/relay-isolated-pilot
+    dockerfilePath: ./Dockerfile.relay-render
+    dockerContext: .
+    autoDeployTrigger: "off"
+    numInstances: 1
+    healthCheckPath: /health
+    disk:
+      name: mycelix-relay-private
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: MYCELIX_RELAY_ENABLED
+        value: "0"
+      - key: MYCELIX_RELAY_STORAGE_CONFIRMED
+        value: "0"
+      - key: MYCELIX_RELAY_DISK_PATH
+        value: /var/data
+      - key: MYCELIX_RELAY_INVITE
+        generateValue: true
