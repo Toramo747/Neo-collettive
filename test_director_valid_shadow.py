@@ -35,10 +35,12 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
         self.assertIn("MONEY_FIRST_TIMEOUT_SECONDS",s)
         self.assertIn('"money_first_deadline_exceeded"',s)
 
-    def test_workaround_compact42_v2_is_integrated_with_v1_fallback_without_gate_changes(self):
+    def test_pain_compact45_v3_is_integrated_with_v2_v1_fallback_without_gate_changes(self):
         s=self.source
+        self.assertIn("pain_compact45_query_plan",s)
         self.assertIn("workaround_compact42_query_plan",s)
         self.assertIn("workaround42_query_plan",s)
+        self.assertIn('strategy_code="pain-compact-45d-v3"',s)
         self.assertIn('strategy_code="workaround-compact-42d-v2"',s)
         self.assertIn('strategy_code="workaround-42d-v1"',s)
         self.assertIn('"strategy_code":strategy_code',s)
