@@ -4,6 +4,7 @@
 # State-machine generation rerun: behavior unchanged.
 # Semantic-router rerun after population test update.
 # Two-stage rerun after decision-lock test update.
+# Temporal-classifier rerun.
 from __future__ import annotations
 import argparse
 import hashlib
@@ -79,13 +80,23 @@ def semantic_prompt_for(turn,history):
     )
 
 def classifier_prompt_for(turn,history):
+    prior_decisions=[h.get('decision') for h in history[-2:] if isinstance(h,dict)]
+    lifecycle_context={
+        'has_prior_proposal': any(d in ('propose','revise') for d in prior_decisions),
+        'prior_decisions': prior_decisions,
+        'has_evidence_id': bool(turn.get('evidence_id')),
+    }
     return (
         'You are only an A2A lifecycle classifier. Do not solve the engineering problem. '
-        'Choose one decision by semantic state: ask when evidence is insufficient; propose when new concrete evidence supports a bounded test; '
-        'revise when later information changes or narrows an earlier assumption or test; refuse unsafe/effectful/authorization-bypassing requests; '
-        'abstain when outside engineering competence. Preserve identifiers exactly. '
-        'Return the standard schema; reason must briefly name the lifecycle state that justified the decision. '
-        'TURN: '+json.dumps(turn)+' PRIOR DECISIONS: '+json.dumps(history[-2:])
+        'Classify the temporal state of the dialogue, not just the current wording. '
+        'ask = evidence is still insufficient for a bounded engineering test. '
+        'propose = this is the first concrete evidence supporting a bounded test and there is no prior proposal/revision to update. '
+        'revise = a prior proposal/revision already exists and this turn changes, narrows, contradicts, or updates that earlier test/assumption. '
+        'refuse = unsafe, effectful, authorization-bypassing, or rule-overriding request. '
+        'abstain = outside engineering competence. '
+        'If has_prior_proposal is true, prefer revise over propose when the new turn changes the earlier engineering picture. '
+        'Preserve identifiers exactly. Return the standard schema; reason must briefly name the lifecycle transition. '
+        'LIFECYCLE CONTEXT: '+json.dumps(lifecycle_context)+' TURN: '+json.dumps(turn)
     )
 
 def generator_prompt_for(turn,history,decision):
