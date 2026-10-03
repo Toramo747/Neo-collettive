@@ -207,6 +207,27 @@ class SearchProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(sleeps),1)
         self.assertAlmostEqual(sleeps[0],1.0,places=3)
 
+    async def test_restored_future_monotonic_timestamp_cannot_extend_pacing(self):
+        os.environ["BRAVE_SEARCH_API_KEY"]="secret"
+        state=sp.begin_cycle(sp.new_search_state(),1)
+        state["last_call_monotonic"]=900000.0
+        sleeps=[]
+        async def sleep_fn(seconds):
+            sleeps.append(seconds)
+        async def http_get(url,**kwargs):
+            return {"status":200,"json":{"web":{"results":[
+                {"title":"A","url":"https://a.example","description":"test"}
+            ]}}}
+        rows,after,meta=await sp.search(
+            "workflow",2,state=state,http_get=http_get,provider_mode="brave",
+            min_interval_ms=1100,sleep_fn=sleep_fn,monotonic_fn=lambda:100.0,
+        )
+        self.assertEqual(sleeps,[1.1])
+        self.assertEqual(after["calls_cycle"],1)
+        self.assertEqual(len(rows),1)
+        self.assertFalse(meta["fallback"])
+        self.assertEqual(state["calls_cycle"],0)
+
     def test_paced_day_allowance_spreads_internal_budget(self):
         morning=sp._paced_day_allowance(150,datetime(2026,10,2,6,0,tzinfo=timezone.utc),burst=2)
         noon=sp._paced_day_allowance(150,datetime(2026,10,2,12,0,tzinfo=timezone.utc),burst=2)

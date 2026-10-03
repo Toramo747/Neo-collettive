@@ -171,6 +171,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "funnel": {
                 "queries_planned": None,
                 "queries_executed": None,
+                "queries_skipped_by_reason": [{"reason": None,"count": None}],
                 "calls_by_source": [{
                     "source": None,
                     "count": None,
@@ -436,6 +437,7 @@ def _project_funnel(value: Any) -> dict:
     return {
         "queries_planned":max(0,int(src.get("queries_planned") or 0)),
         "queries_executed":max(0,int(src.get("queries_executed") or 0)),
+        "queries_skipped_by_reason":_project_reason_counts(src.get("queries_skipped_by_reason")),
         "calls_by_source":[
             {"source":_safe_code(k,48),"count":max(0,int(v or 0))}
             for k,v in sorted(calls.items()) if _safe_code(k,48)

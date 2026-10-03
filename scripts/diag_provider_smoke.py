@@ -12,7 +12,6 @@ ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
 
-import cloud_mcp
 from search_providers import begin_cycle as begin_search_provider_cycle
 from search_providers import configured_provider, provider_diagnostics
 from search_providers import search_with_fallback as provider_search_with_fallback
@@ -28,6 +27,7 @@ def safe_state(value):
 
 
 async def main() -> int:
+    import cloud_mcp
     env_presence={
         "NEO_SEARCH_PROVIDER": bool((os.getenv("NEO_SEARCH_PROVIDER") or "").strip()),
         "BRAVE_SEARCH_API_KEY": bool((os.getenv("BRAVE_SEARCH_API_KEY") or "").strip()),
@@ -73,8 +73,6 @@ async def main() -> int:
     except Exception as exc:
         report.update({
             "exception_type":type(exc).__name__,
-            "exception_message":str(exc)[:500],
-            "traceback":traceback.format_exc(limit=3),
             "state_after_call":safe_state(cloud_mcp.AUTOPILOT_STATE.get("search_provider_state") or {}),
         })
 
@@ -82,5 +80,61 @@ async def main() -> int:
     return 0
 
 
+def production_smoke() -> int:
+    """One fixed-query smoke on the running service; counters only, no evidence ingest."""
+    import urllib.request
+    from self_traffic_auth import make_self_traffic_proof
+    token=os.getenv('NEO_HEARTBEAT_TOKEN','')
+    if not token:
+        print(json.dumps({'scope':'render-production','error':'heartbeat_secret_missing'}))
+        return 1
+    def request(path,payload=None):
+        headers={'X-MYCELIX-Self-Traffic':'github-actions-heartbeat',
+                 'X-MYCELIX-Self-Traffic-Proof':make_self_traffic_proof(token,path),
+                 'Accept':'application/json, text/event-stream',
+                 'Content-Type':'application/json','MCP-Protocol-Version':'2025-03-26'}
+        data=json.dumps(payload).encode() if payload is not None else None
+        req=urllib.request.Request('https://neo-collettive.onrender.com'+path,data=data,headers=headers)
+        with urllib.request.urlopen(req,timeout=20) as response:
+            return json.load(response)
+    def counters():
+        d=request('/api/autopilot/status')
+        ap=d.get('autopilot') or {}
+        st=ap.get('search_provider_state') or {}
+        return {k:st.get(k) for k in ('calls_cycle','calls_day','errors','fallbacks','last_provider')}
+    report={'scope':'render-production','fixed_query':QUERY,'queries_requested':1,
+            'evidence_ingest':False,'uses_render_credentials':True}
+    try:
+        report['before']=counters()
+        initialized=request('/mcp',{'jsonrpc':'2.0','id':1,'method':'initialize','params':{
+            'protocolVersion':'2025-03-26','capabilities':{},
+            'clientInfo':{'name':'osixbay-provider-smoke','version':'1'}}})
+        if initialized.get('error'):
+            report['error']='initialize_rejected'
+        else:
+            reply=request('/mcp',{'jsonrpc':'2.0','id':2,'method':'tools/call','params':{
+                'name':'neo_web_search','arguments':{'query':QUERY,'limit':3}}})
+            result=reply.get('result') or {}
+            parsed={}
+            for item in result.get('content') or []:
+                if item.get('type')=='text':
+                    try:
+                        candidate=json.loads(item.get('text') or '')
+                        if isinstance(candidate,dict):parsed=candidate
+                    except (ValueError,TypeError):pass
+            report.update({'result_ok':bool(parsed.get('ok')),
+                           'result_count':len(parsed.get('results') or []),
+                           'result_provider':parsed.get('provider'),
+                           'tool_error':bool(result.get('isError') or reply.get('error')),
+                           'fallback_used':bool(parsed.get('provider_fallback_from'))})
+    except Exception as exc:
+        report['error']=type(exc).__name__
+        # Deliberately omit exception text, URLs, response rows and auth headers.
+    try:report['after']=counters()
+    except Exception as exc:report['after_error']=type(exc).__name__
+    print(json.dumps(report,sort_keys=True))
+    return 0
+
+
 if __name__=="__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(production_smoke() if '--production' in sys.argv else asyncio.run(main()))

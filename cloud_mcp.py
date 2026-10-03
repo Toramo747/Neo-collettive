@@ -6126,7 +6126,7 @@ def _commercial_evidence_quality(
         if len(rejected)<40:
             rejected.append({"reason":reason,"url":(url or "")[:500],"title":(title or "")[:180],"query_role":role})
 
-    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = ""):
+    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False):
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
         query_intent=str(meta.get("query_intent") or "pain").strip().lower()
@@ -6161,6 +6161,8 @@ def _commercial_evidence_quality(
         if query and not relevance.get("relevant"):
             reject("query_irrelevant",url,title,query_role,source,query_class)
             return
+        if scout:
+            diagnostics.record_scout_relevance(source,query_class)
         text=(title_low+" "+body_low)
         family=_commercial_family(text)
         if family=="other":
@@ -6308,9 +6310,10 @@ def _commercial_evidence_quality(
 
     for item in scouts or []:
         if isinstance(item,dict):
+            diagnostics.record_scout_deduped(item)
             ingest(
                 item.get("url") or "",item.get("title") or "",item.get("text") or "",
-                item.get("source") or "scout",str(item.get("query") or ""),"scout"
+                item.get("source") or "scout",str(item.get("query") or ""),"scout",scout=True
             )
 
     # Migrate legacy rows idempotently. v1 rows remain discovery-visible but are
@@ -7577,6 +7580,8 @@ async def _free_web_research(
     queries: list[str],
     per_query: int = 5,
     query_meta: dict[str,dict] | None = None,
+    timeout_seconds: float | None = None,
+    deadline_code: str = "web_research_deadline_exceeded",
 ) -> list[dict]:
     clean = []
     query_meta=query_meta or {}
@@ -7585,15 +7590,32 @@ async def _free_web_research(
         if q and q.lower() not in {x.lower() for x in clean}:
             clean.append(q)
     if not clean:
-        return []
-    return await asyncio.gather(*(
-        routed_public_search(
-            q,
-            query_meta.get(q.lower()) or {},
-            per_query,
-        )
-        for q in clean[:10]
-    ))
+        return [{"ok":False,"results":[],"query_skip_reason":"empty_plan",
+                 "skipped_query_count":len(query_meta)}]
+    selected=clean[:10]
+    tasks=[asyncio.create_task(routed_public_search(q,query_meta.get(q.lower()) or {},per_query))
+           for q in selected]
+    try:
+        done,pending=await asyncio.wait(tasks,timeout=timeout_seconds)
+        out=[]
+        for q,task in zip(selected,tasks):
+            if task in pending:
+                out.append({"ok":False,"query":q,"results":[],"count":0,
+                            "error":deadline_code,"query_skip_reason":"deadline"})
+            else:
+                try:
+                    out.append(task.result())
+                except Exception:
+                    out.append({"ok":False,"query":q,"results":[],"count":0,
+                                "error":"web_research_exception"})
+        out.extend({"ok":False,"query":q,"results":[],"count":0,
+                    "query_skip_reason":"query_limit"} for q in clean[10:])
+        return out
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks,return_exceptions=True)
 
 
 async def evidence_scouts(goal: str, limit: int = 20) -> list[dict]:
@@ -8775,26 +8797,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             }
         return [out_by_query[q] for q in probe_queries]
 
-    async def bounded_web_research() -> list[dict]:
-        try:
-            return await asyncio.wait_for(
-                _free_web_research(web_queries, per_query=6, query_meta=query_meta),
-                timeout=WEB_RESEARCH_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            return [
-                {
-                    "ok": False,
-                    "query": q,
-                    "results": [],
-                    "count": 0,
-                    "source_counts": {},
-                    "error": "web_research_deadline_exceeded",
-                }
-                for q in web_queries
-            ]
-
-    web_research = await bounded_web_research()
+    web_research = await _free_web_research(
+        web_queries, per_query=6, query_meta=query_meta,
+        timeout_seconds=WEB_RESEARCH_TIMEOUT_SECONDS,
+    )
 
     # v0.99.28 money-first second pass: use the remaining public-search budget
     # only on theses still missing two independent real-price competitors.
@@ -8805,27 +8811,12 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             " ".join(str(x.get("query") or "").split()).lower():x
             for x in money_plan if isinstance(x,dict) and str(x.get("query") or "").strip()
         }
-        try:
-            money_groups=await asyncio.wait_for(
-                _free_web_research(
-                    [x["query"] for x in money_plan],
-                    per_query=6,
-                    query_meta=money_meta,
-                ),
-                timeout=MONEY_FIRST_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            money_groups=[
-                {
-                    "ok":False,
-                    "query":str(x.get("query") or ""),
-                    "results":[],
-                    "count":0,
-                    "source_counts":{},
-                    "error":"money_first_deadline_exceeded",
-                }
-                for x in money_plan
-            ]
+        money_groups=await _free_web_research(
+            [x["query"] for x in money_plan],
+            per_query=6, query_meta=money_meta,
+            timeout_seconds=MONEY_FIRST_TIMEOUT_SECONDS,
+            deadline_code="money_first_deadline_exceeded",
+        )
         web_research.extend(money_groups)
         query_meta.update(money_meta)
         search_strategy["money_first_queries"]=money_plan
