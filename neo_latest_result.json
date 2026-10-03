@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-10-03T17:31:48.274185+00:00",
+  "captured_at_utc": "2026-10-03T19:26:28.395223+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.49",
   "runtime_profile": {
@@ -15,68 +15,68 @@
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 275.568985,
-    "cycles_completed": 1785,
-    "last_started_utc": "2026-10-03T17:27:09.923437+00:00",
-    "last_finished_utc": "2026-10-03T17:27:27.884678+00:00",
+    "last_started_age_seconds": 312.715547,
+    "cycles_completed": 1806,
+    "last_started_utc": "2026-10-03T19:21:13.479761+00:00",
+    "last_finished_utc": "2026-10-03T19:22:06.971129+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-03T17:31:48.165923+00:00",
+    "captured_at_utc": "2026-10-03T19:26:28.281926+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-03T17:31:44.050Z",
+        "timestamp_utc": "2026-10-03T19:26:24.259Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 672.39,
+        "latency_ms": 658.59,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-03T17:31:44.845Z",
+        "timestamp_utc": "2026-10-03T19:26:24.967Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 753.58,
+        "latency_ms": 663.55,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-03T17:31:46.543Z",
+        "timestamp_utc": "2026-10-03T19:26:27.463Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 588.84,
+        "latency_ms": 681.8,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-03T17:31:48.146Z",
+        "timestamp_utc": "2026-10-03T19:26:28.261Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 1561.09,
+        "latency_ms": 752.15,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "6a83416e753df8d2756aa639436b9013c5f4b1df",
+    "source_commit": "eec4fa4f6532adf6fc711ef839d160077e64a382",
     "runtime_contract_verified": true
   },
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 1785,
-    "last_started_utc": "2026-10-03T17:27:09.923437+00:00",
-    "last_finished_utc": "2026-10-03T17:27:27.884678+00:00",
+    "cycles_completed": 1806,
+    "last_started_utc": "2026-10-03T19:21:13.479761+00:00",
+    "last_finished_utc": "2026-10-03T19:22:06.971129+00:00",
     "last_status": "SELECT",
     "recent_sectors": [],
     "family_performance": [],
@@ -124,21 +124,21 @@
     "select_diagnostics": {
       "status": "SELECT",
       "ingestion_enabled": true,
-      "raw_results": 164,
-      "relevance_pass": 122,
+      "raw_results": 161,
+      "relevance_pass": 103,
       "useful_results": 0,
-      "persistent_evidence_items": 11,
-      "quarantined_evidence_items": 10,
+      "persistent_evidence_items": 13,
+      "quarantined_evidence_items": 12,
       "rejected_current_count": 40,
       "new_signal_rows": 0,
       "problem_cluster_count": 8,
       "qualified_problem_count": 0,
       "configured_categories": 9,
-      "evidenced_candidates": 8,
-      "gate_eligible_candidates": 8,
+      "evidenced_candidates": 5,
+      "gate_eligible_candidates": 5,
       "qualified_candidates": 0,
       "top_gate_pass": false,
-      "top_monetization_score": 35,
+      "top_monetization_score": 40,
       "top_missing": [
         "two_independent_real_price_competitors",
         "two_competitors_with_real_price",
@@ -148,26 +148,30 @@
       "rejection_reasons": [
         {
           "reason": "no_family",
-          "count": 68
-        },
-        {
-          "reason": "weak_family_relevance",
-          "count": 14
+          "count": 53
         },
         {
           "reason": "noise_domain",
-          "count": 9
+          "count": 12
         },
         {
-          "reason": "github_noise",
-          "count": 8
+          "reason": "weak_family_relevance",
+          "count": 12
         },
         {
           "reason": "github_no_buyer_problem_context",
+          "count": 8
+        },
+        {
+          "reason": "github_noise",
           "count": 4
         },
         {
           "reason": "no_demand_signal",
+          "count": 3
+        },
+        {
+          "reason": "query_irrelevant",
           "count": 1
         }
       ],
@@ -177,40 +181,32 @@
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 90,
-          "relevance_pass": 63
-        },
-        {
-          "source": "brave-search",
-          "attempts": 0,
-          "empty": 0,
-          "errors": 0,
-          "raw_results": 6,
-          "relevance_pass": 6
+          "raw_results": 96,
+          "relevance_pass": 49
         },
         {
           "source": "github",
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 19,
-          "relevance_pass": 9
+          "raw_results": 18,
+          "relevance_pass": 8
         },
         {
           "source": "hn",
           "attempts": 16,
-          "empty": 0,
+          "empty": 1,
           "errors": 0,
-          "raw_results": 48,
-          "relevance_pass": 44
+          "raw_results": 45,
+          "relevance_pass": 45
         },
         {
           "source": "mcp-registry",
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 1,
-          "relevance_pass": 0
+          "raw_results": 2,
+          "relevance_pass": 1
         },
         {
           "source": "stackexchange",
@@ -224,7 +220,7 @@
           "source": "web",
           "attempts": 16,
           "empty": 0,
-          "errors": 15,
+          "errors": 16,
           "raw_results": 0,
           "relevance_pass": 0
         }
@@ -234,14 +230,14 @@
         "configured_provider": "brave",
         "provider_key_present": true,
         "fallback_used": true,
-        "calls_cycle": 1,
-        "calls_day": 111,
+        "calls_cycle": 0,
+        "calls_day": 122,
         "errors": 0,
-        "fallbacks": 15,
+        "fallbacks": 16,
         "fallback_reasons": [
           {
             "reason": "budget_paced",
-            "count": 15
+            "count": 16
           }
         ]
       },
@@ -263,39 +259,43 @@
           {
             "source": "web",
             "error": "budget_paced",
-            "count": 15
+            "count": 16
           }
         ],
-        "raw_received": 164,
-        "deduped": 162,
-        "query_relevant": 122,
+        "raw_received": 161,
+        "deduped": 161,
+        "query_relevant": 103,
         "family_matched": 15,
-        "buyer_voice": 1,
+        "buyer_voice": 2,
         "commercial_signal": 0,
         "persisted": 0,
         "discarded_by_reason": [
           {
             "reason": "no_family",
-            "count": 68
-          },
-          {
-            "reason": "weak_family_relevance",
-            "count": 14
+            "count": 53
           },
           {
             "reason": "noise_domain",
-            "count": 9
+            "count": 12
           },
           {
-            "reason": "github_noise",
-            "count": 8
+            "reason": "weak_family_relevance",
+            "count": 12
           },
           {
             "reason": "github_no_buyer_problem_context",
+            "count": 8
+          },
+          {
+            "reason": "github_noise",
             "count": 4
           },
           {
             "reason": "no_demand_signal",
+            "count": 3
+          },
+          {
+            "reason": "query_irrelevant",
             "count": 1
           }
         ],
@@ -303,9 +303,9 @@
       },
       "agent_probes": {
         "probes_attempted": 8,
-        "agents_reached": 3,
+        "agents_reached": 2,
         "answers_received": 11,
-        "valid_answers": 7,
+        "valid_answers": 9,
         "rejected_answers": 0,
         "timeouts": 0
       }
