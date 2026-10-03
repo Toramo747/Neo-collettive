@@ -18,6 +18,8 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
             self.assertLessEqual(genes["recency_days"], 45)
             self.assertGreaterEqual(genes["min_relevance_tokens"], 1)
             self.assertLessEqual(genes["min_relevance_tokens"], 3)
+            self.assertIn(genes["suffix_family"], ara.SUFFIX_FAMILIES)
+            self.assertIn(genes["topic_shape"], ara.TOPIC_SHAPE_MODES)
 
     def test_parse_mutation_accepts_only_bounded_genes(self):
         mutation = ara.parse_mutation({
@@ -26,6 +28,8 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
                 "query_count": 99,
                 "recency_days": 1,
                 "min_relevance_tokens": 9,
+                "suffix_family": "ops",
+                "topic_shape": "compact",
                 "forbidden": "ignored",
             }
         })
@@ -33,7 +37,20 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertEqual(mutation["query_count"], 4)
         self.assertEqual(mutation["recency_days"], 7)
         self.assertEqual(mutation["min_relevance_tokens"], 3)
+        self.assertEqual(mutation["suffix_family"], "ops")
+        self.assertEqual(mutation["topic_shape"], "compact")
         self.assertNotIn("forbidden", mutation)
+
+    def test_query_genetics_change_query_surface_only(self):
+        base={"query_mode":"workaround","query_count":4,"recency_days":42,"min_relevance_tokens":1}
+        legacy=ara.clamp_genome(base)
+        self.assertEqual(legacy["suffix_family"],"core")
+        self.assertEqual(legacy["topic_shape"],"exact")
+        q0=ara.build_queries(legacy)
+        q1=ara.build_queries({**legacy,"suffix_family":"intent","topic_shape":"compact"})
+        self.assertEqual(len(q0),len(q1))
+        self.assertNotEqual(q0,q1)
+        self.assertEqual({x[0] for x in q0},{x[0] for x in q1})
 
     def test_raw_external_text_is_not_part_of_persisted_contract(self):
         src = Path("arena_research_algorithm.py").read_text(encoding="utf-8")
