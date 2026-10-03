@@ -2,11 +2,28 @@
   "schema_v": 1,
   "namespace": "mycelix-arena",
   "arena_id": "mycelix-research-algorithm",
-  "generation": 40,
+  "generation": 41,
   "population": [
     {
-      "genome_id": "g40-elite-1",
-      "generation": 40,
+      "genome_id": "g41-elite-1",
+      "generation": 41,
+      "genes": {
+        "query_mode": "mixed",
+        "query_count": 3,
+        "recency_days": 45,
+        "min_relevance_tokens": 1,
+        "suffix_family": "core",
+        "topic_shape": "compact",
+        "query_frame": "plain",
+        "term_order": "topic_first",
+        "source_scope": "all"
+      },
+      "origin": "elite",
+      "parent_id": "g40-4"
+    },
+    {
+      "genome_id": "g41-elite-2",
+      "generation": 41,
       "genes": {
         "query_mode": "pain",
         "query_count": 3,
@@ -19,69 +36,18 @@
         "source_scope": "all"
       },
       "origin": "elite",
-      "parent_id": "g39-elite-1"
+      "parent_id": "g40-elite-1"
     },
     {
-      "genome_id": "g40-elite-2",
-      "generation": 40,
-      "genes": {
-        "query_mode": "pain",
-        "query_count": 3,
-        "recency_days": 45,
-        "min_relevance_tokens": 1,
-        "suffix_family": "core",
-        "topic_shape": "compact",
-        "query_frame": "plain",
-        "term_order": "topic_first",
-        "source_scope": "all"
-      },
-      "origin": "elite",
-      "parent_id": "g39-elite-2"
-    },
-    {
-      "genome_id": "g40-3",
-      "generation": 40,
-      "genes": {
-        "query_mode": "pain",
-        "query_count": 3,
-        "recency_days": 34,
-        "min_relevance_tokens": 1,
-        "suffix_family": "ops",
-        "topic_shape": "compact",
-        "query_frame": "plain",
-        "term_order": "topic_first",
-        "source_scope": "stories"
-      },
-      "origin": "random_immigrant",
-      "parent_id": null
-    },
-    {
-      "genome_id": "g40-4",
-      "generation": 40,
-      "genes": {
-        "query_mode": "mixed",
-        "query_count": 3,
-        "recency_days": 45,
-        "min_relevance_tokens": 1,
-        "suffix_family": "core",
-        "topic_shape": "compact",
-        "query_frame": "plain",
-        "term_order": "topic_first",
-        "source_scope": "all"
-      },
-      "origin": "mutation",
-      "parent_id": "g39-elite-2"
-    },
-    {
-      "genome_id": "g40-5",
-      "generation": 40,
+      "genome_id": "g41-3",
+      "generation": 41,
       "genes": {
         "query_mode": "workaround",
-        "query_count": 2,
-        "recency_days": 32,
-        "min_relevance_tokens": 3,
-        "suffix_family": "core",
-        "topic_shape": "exact",
+        "query_count": 4,
+        "recency_days": 45,
+        "min_relevance_tokens": 2,
+        "suffix_family": "ops",
+        "topic_shape": "compact",
         "query_frame": "looking_for",
         "term_order": "signal_first",
         "source_scope": "comments"
@@ -90,8 +56,25 @@
       "parent_id": null
     },
     {
-      "genome_id": "g40-6",
-      "generation": 40,
+      "genome_id": "g41-4",
+      "generation": 41,
+      "genes": {
+        "query_mode": "pain",
+        "query_count": 3,
+        "recency_days": 38,
+        "min_relevance_tokens": 1,
+        "suffix_family": "core",
+        "topic_shape": "compact",
+        "query_frame": "need",
+        "term_order": "topic_first",
+        "source_scope": "all"
+      },
+      "origin": "mutation",
+      "parent_id": "g40-elite-1"
+    },
+    {
+      "genome_id": "g41-5",
+      "generation": 41,
       "genes": {
         "query_mode": "pain",
         "query_count": 3,
@@ -101,44 +84,64 @@
         "topic_shape": "compact",
         "query_frame": "plain",
         "term_order": "topic_first",
-        "source_scope": "stories"
+        "source_scope": "all"
       },
-      "origin": "mutation",
-      "parent_id": "g39-elite-2"
+      "origin": "crossover",
+      "parent_id": [
+        "g40-4",
+        "g40-elite-1"
+      ]
     },
     {
-      "genome_id": "g40-7",
-      "generation": 40,
+      "genome_id": "g41-6",
+      "generation": 41,
       "genes": {
-        "query_mode": "mixed",
-        "query_count": 3,
-        "recency_days": 21,
-        "min_relevance_tokens": 2,
-        "suffix_family": "ops",
-        "topic_shape": "exact",
-        "query_frame": "need",
-        "term_order": "topic_first",
-        "source_scope": "comments"
-      },
-      "origin": "random_immigrant",
-      "parent_id": null
-    },
-    {
-      "genome_id": "g40-8",
-      "generation": 40,
-      "genes": {
-        "query_mode": "buyer",
-        "query_count": 3,
-        "recency_days": 39,
+        "query_mode": "pain",
+        "query_count": 2,
+        "recency_days": 45,
         "min_relevance_tokens": 1,
-        "suffix_family": "ops",
+        "suffix_family": "core",
         "topic_shape": "compact",
         "query_frame": "need",
         "term_order": "topic_first",
         "source_scope": "all"
       },
+      "origin": "mutation",
+      "parent_id": "g40-elite-1"
+    },
+    {
+      "genome_id": "g41-7",
+      "generation": 41,
+      "genes": {
+        "query_mode": "pain",
+        "query_count": 3,
+        "recency_days": 35,
+        "min_relevance_tokens": 2,
+        "suffix_family": "core",
+        "topic_shape": "compact",
+        "query_frame": "need",
+        "term_order": "signal_first",
+        "source_scope": "stories"
+      },
       "origin": "random_immigrant",
       "parent_id": null
+    },
+    {
+      "genome_id": "g41-8",
+      "generation": 41,
+      "genes": {
+        "query_mode": "pain",
+        "query_count": 3,
+        "recency_days": 45,
+        "min_relevance_tokens": 1,
+        "suffix_family": "core",
+        "topic_shape": "compact",
+        "query_frame": "need",
+        "term_order": "signal_first",
+        "source_scope": "all"
+      },
+      "origin": "mutation",
+      "parent_id": "g40-elite-1"
     }
   ],
   "history": [
@@ -461,6 +464,14 @@
       "champion_genome_id": "g39-elite-1",
       "champion_fitness": 91.5312,
       "successful_queries": 100
+    },
+    {
+      "generation": 40,
+      "measured_at_utc": "2026-10-03T06:29:44.628101+00:00",
+      "status": "EVOLVED",
+      "champion_genome_id": "g40-4",
+      "champion_fitness": 92.6957,
+      "successful_queries": 92
     }
   ],
   "boundary": {
@@ -478,19 +489,19 @@
     "external_output_trust": "UNTRUSTED_BOUNDED_MUTATION_ONLY"
   },
   "promotion_candidate": {
-    "genome_id": "g39-elite-1",
+    "genome_id": "g40-4",
     "genes": {
-      "query_mode": "pain",
+      "query_mode": "mixed",
       "query_count": 3,
       "recency_days": 45,
       "min_relevance_tokens": 1,
       "suffix_family": "core",
       "topic_shape": "compact",
-      "query_frame": "need",
+      "query_frame": "plain",
       "term_order": "topic_first",
       "source_scope": "all"
     },
-    "fitness": 91.5312,
+    "fitness": 92.6957,
     "manual_review_required": true,
     "production_promoted": false
   }
