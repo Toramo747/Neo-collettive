@@ -48,8 +48,8 @@ class LocalA2AEvolutionTests(unittest.TestCase):
 
     def test_gamete_population_expands_without_touching_holdout(self):
         population=[(m,p,v) for m in arena.MODELS for p in arena.POLICIES for v in arena.PROMPT_VARIANTS]
-        self.assertEqual(len(population),8)
-        self.assertEqual(arena.POLICIES,('direct','self_review'))
+        self.assertEqual(len(population),12)
+        self.assertEqual(arena.POLICIES,('direct','self_review','hybrid_guard'))
         self.assertEqual(arena.PROMPT_VARIANTS,('base','strict'))
 
     def test_hybrid_guard_handles_only_obvious_cases(self):
