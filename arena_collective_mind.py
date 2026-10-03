@@ -26,6 +26,7 @@ NAMESPACE="mycelix-arena"
 ARENA_ID="collective-mind"
 A2A_REGISTRY="https://a2aregistry.org"
 MAX_AGENTS=6
+MAX_CANDIDATE_POOL=18
 MAX_EVIDENCE_URLS=4
 MAX_FIELD_CHARS=700
 ROUND_TIMEOUT=15.0
@@ -239,6 +240,28 @@ def parse_critique(payload: Any) -> dict[str,Any] | None:
     return None
 
 
+def parse_handshake(payload: Any) -> bool:
+    for obj in recursive_objects(payload):
+        if obj.get("ready") is True or obj.get("ok") is True or obj.get("can_collaborate") is True:
+            return True
+        fmt=clean_text(obj.get("format") or obj.get("response_format") or "").lower()
+        if fmt in {"json","structured","labels","labeled"}:
+            return True
+    for raw in recursive_text(payload):
+        low=raw.lower()
+        if "collab_ok" in low or "ready: true" in low or '"ready": true' in low:
+            return True
+    return False
+
+
+def handshake_prompt() -> str:
+    return (
+        "MYCELIX capability handshake. Analysis only. "
+        "Reply with JSON {\"ready\":true,\"format\":\"json\"} if you can answer bounded research tasks "
+        "with structured text. Do not execute anything."
+    )
+
+
 def candidate_score(agent: dict[str,Any]) -> int:
     text=" ".join([
         str(agent.get("name") or ""),
@@ -259,14 +282,44 @@ def candidate_score(agent: dict[str,Any]) -> int:
     return score
 
 
-async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) -> list[dict[str,Any]]:
-    response=await client.get(A2A_REGISTRY+"/api/agents",params={"task_verified":"true","limit":30})
+async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) -> tuple[list[dict[str,Any]],dict[str,Any]]:
+    response=await client.get(A2A_REGISTRY+"/api/agents",params={"task_verified":"true","limit":MAX_CANDIDATE_POOL})
     response.raise_for_status()
     payload=response.json()
     rows=payload.get("agents") if isinstance(payload,dict) else payload
     agents=[x for x in (rows or []) if isinstance(x,dict)]
-    agents.sort(key=candidate_score,reverse=True)
-    return [x for x in agents if candidate_score(x)>0][:max(1,min(limit,MAX_AGENTS))]
+    agents=[x for x in agents if candidate_score(x)>0][:MAX_CANDIDATE_POOL]
+    probes=[]
+    meta=[]
+    for agent in agents:
+        aid=str(agent.get("id") or agent.get("agent_id") or "").strip()
+        if not aid:
+            continue
+        probes.append(asyncio.create_task(send_chat(client,aid,handshake_prompt())))
+        meta.append(agent)
+    results=await asyncio.gather(*probes,return_exceptions=True) if probes else []
+    ready=[]
+    handshake_rows=[]
+    for agent,result in zip(meta,results):
+        aid=str(agent.get("id") or agent.get("agent_id") or "")
+        name=str(agent.get("name") or aid)[:120]
+        ok=False
+        status=0
+        if not isinstance(result,Exception):
+            status,payload=result
+            ok=bool(200<=status<300 and parse_handshake(payload))
+        handshake_rows.append({"agent_id":aid[:160],"agent":name,"ready":ok,"http_status":status})
+        if ok:
+            ready.append(agent)
+    ready.sort(key=candidate_score,reverse=True)
+    fallback=[x for x in agents if x not in ready]
+    selected=(ready+fallback)[:max(1,min(limit,MAX_AGENTS))]
+    return selected,{
+        "candidates_considered":len(agents),
+        "handshakes_valid":len(ready),
+        "selected_ready":sum(1 for x in selected if x in ready),
+        "rows":handshake_rows,
+    }
 
 
 async def send_chat(client: httpx.AsyncClient, agent_id: str, message: str) -> tuple[int,Any]:
@@ -349,9 +402,10 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
         headers={"User-Agent":"MYCELIX-Collective-Mind/1.0"},
     ) as client:
         try:
-            agents=await discover_agents(client,max_agents)
+            agents,handshake=await discover_agents(client,max_agents)
         except Exception as exc:
             agents=[]
+            handshake={"candidates_considered":0,"handshakes_valid":0,"selected_ready":0,"rows":[]}
             discovery_error=type(exc).__name__
         else:
             discovery_error=""
@@ -462,6 +516,7 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
         "discovery_error":discovery_error,
         "agents_discovered":len(agents),
         "agents_contacted":len(task_meta),
+        "handshake":handshake,
         "round1_valid_proposals":len(proposals),
         "round2_valid_critiques":sum(1 for x in critiques if x.get("accepted")),
         "contacts":contacts,
