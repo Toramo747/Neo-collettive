@@ -11474,7 +11474,7 @@ async def _autopilot_cycle() -> None:
                         _seti_interview_one_candidate(max_interviews=max_interviews),
                         timeout=120,
                     )
-                    private_checkpoint=await _checkpoint_seti_private_to_render()
+                    private_checkpoint=await asyncio.wait_for(_checkpoint_seti_private_to_render(),timeout=30.0)
                     seti_state=dict(AUTOPILOT_STATE.get("seti") or {})
                     summary=dict(seti_state.get("last_summary") or {})
                     retry_attempted_keys={
@@ -11552,7 +11552,7 @@ async def _autopilot_cycle() -> None:
                 AUTOPILOT_STATE["active_thesis"]=None
 
             if not seti_pre_run:
-                await _seti_cycle_if_due()
+                await asyncio.wait_for(_seti_cycle_if_due(),timeout=min(AUTOPILOT_CYCLE_TIMEOUT_SECONDS,120.0))
             council=outcome_council(
                 result=result,
                 seti=AUTOPILOT_STATE.get("seti") or {},
@@ -11576,7 +11576,7 @@ async def _autopilot_cycle() -> None:
             AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
             completed=True
             _save_local_state()
-            AUTOPILOT_STATE["last_checkpoint"] = await _checkpoint_state_to_render()
+            AUTOPILOT_STATE["last_checkpoint"] = await asyncio.wait_for(_checkpoint_state_to_render(),timeout=30.0)
         except Exception as e:
             tb=traceback.extract_tb(e.__traceback__)
             where=(str(tb[-1].filename)+":"+str(tb[-1].lineno)) if tb else ""
