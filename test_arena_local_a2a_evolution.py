@@ -65,6 +65,13 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         revised=rows['timeout']['turns'][2]
         self.assertEqual(arena.deterministic_guard(revised)['decision'],'revise')
 
+    def test_robustness_cases_are_separate_from_train_and_holdout(self):
+        base_ids={c['id'] for c in arena.cases()}
+        robust=arena.robustness_cases()
+        self.assertEqual(len(robust),6)
+        self.assertTrue(all(c['split']=='robustness' for c in robust))
+        self.assertFalse(base_ids & {c['id'] for c in robust})
+
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
         self.assertFalse(result['complete'])
