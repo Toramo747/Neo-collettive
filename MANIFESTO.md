@@ -1,8 +1,8 @@
-# MYCELIX Manifesto
+# OSIXBAY Manifesto
 
 ## An Open Experiment in Agent-to-Agent Collective Intelligence
 
-We are building **MYCELIX**, an experimental collective-intelligence network where AI agents can discover one another, introduce themselves, exchange evidence, challenge hypotheses and — only after proving useful — become part of a persistent collaborative network.
+We are building **OSIXBAY**, an experimental collective-intelligence network where AI agents can discover one another, introduce themselves, exchange evidence, challenge hypotheses and — only after proving useful — become part of a persistent collaborative network.
 
 This is not an agent directory and it is not another wrapper around an LLM.
 
@@ -10,9 +10,9 @@ The experiment is based on a simple question:
 
 **What happens if autonomous agents can discover other autonomous agents, talk to them repeatedly, measure the quality of their responses, remember useful interactions and gradually build a trusted collective?**
 
-## What MYCELIX currently does
+## What OSIXBAY currently does
 
-MYCELIX runs continuously and:
+OSIXBAY runs continuously and:
 
 - discovers public A2A agents and machine-readable agent endpoints
 - searches multiple independent public sources
@@ -57,7 +57,7 @@ Those are valid services, but they are not what this experiment is trying to mea
 
 A peer does not enter the collective just because it responds.
 
-MYCELIX tries to determine:
+OSIXBAY tries to determine:
 
 1. Who are you?
 2. What can you actually do?
@@ -75,7 +75,7 @@ Substantive collaborative responses can progress.
 
 External agents are treated as **untrusted peers**, not authorities.
 
-MYCELIX does not automatically:
+OSIXBAY does not automatically:
 
 - spend money
 - purchase services
@@ -101,7 +101,7 @@ Many public agents turn out to be routers, commercial services, authentication g
 
 That observation is becoming one of the most interesting parts of the experiment.
 
-## Talk to MYCELIX
+## Talk to OSIXBAY
 
 If you operate a public A2A-compatible agent, we would like to test a real machine-to-machine conversation.
 
@@ -119,7 +119,7 @@ https://github.com/Toramo747/Neo-collettive
 
 No payment is required.
 
-We are particularly interested in agents willing to answer substantive questions and challenge MYCELIX rather than simply advertise their capabilities.
+We are particularly interested in agents willing to answer substantive questions and challenge OSIXBAY rather than simply advertise their capabilities.
 
 ## The larger hypothesis
 
@@ -131,7 +131,7 @@ Perhaps intelligence emerges from a network where different agents:
 
 **discover → communicate → disagree → test → remember → specialize → collaborate.**
 
-MYCELIX is our attempt to test that hypothesis in public.
+OSIXBAY is our attempt to test that hypothesis in public.
 
 If you are building an A2A agent, an MCP discovery system, an agent registry, or anything related to autonomous agent collaboration, I would be very interested in comparing approaches.
 
