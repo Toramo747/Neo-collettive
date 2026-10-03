@@ -61,6 +61,13 @@ class CollectiveMindArenaTests(unittest.TestCase):
         self.assertTrue(acm.parse_handshake({"text":"COLLAB_OK"}))
         self.assertFalse(acm.parse_handshake({"ready":False,"format":"none"}))
 
+    def test_extract_answer_text_prefers_substantive_text(self):
+        payload={"message":{"parts":[{"text":"ok"},{"text":"A concrete proposal with enough detail to be useful."}]}}
+        self.assertEqual(
+            acm.extract_answer_text(payload),
+            "A concrete proposal with enough detail to be useful.",
+        )
+
     def test_score_rewards_evidence_and_cross_agent_support(self):
         low={"evidence_urls":[],"confidence":0.5,"estimated_gain_pct":10}
         high={
