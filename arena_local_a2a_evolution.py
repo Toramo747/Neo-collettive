@@ -3,6 +3,7 @@
 # Hybrid generation rerun: behavior unchanged.
 # State-machine generation rerun: behavior unchanged.
 # Semantic-router rerun after population test update.
+# Two-stage rerun after decision-lock test update.
 from __future__ import annotations
 import argparse
 import hashlib
