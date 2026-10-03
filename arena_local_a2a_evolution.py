@@ -7,6 +7,7 @@
 # Temporal-classifier rerun.
 # State-router rerun after v4 tests.
 # Enum-only state-router rerun.
+# Enum-only rerun after tests.
 from __future__ import annotations
 import argparse
 import hashlib
