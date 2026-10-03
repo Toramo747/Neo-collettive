@@ -217,14 +217,21 @@ def proposal_substantive(row: dict[str,Any] | None) -> bool:
         "send me an agent-card url",
         "state the capability needed",
         "no supported mycelix-specific improvement proposal",
+        "no supported proposal",
         "no substantiated adversarial-review proposal",
         "does not cover mycelix",
+        "does not cover commercial-signal",
+        "coverage gap",
         "cannot substantiate an improvement",
+        "cannot derive or validate",
         "no search strategy or production-gate changes proposed",
         "\"intent\":\"recommend-product\"",
         "recommendation\":{",
     )
-    if any(marker in norm[0] for marker in bad):
+    if any(marker in norm[0] or marker in norm[1] or marker in norm[2] for marker in bad):
+        return False
+    provider_list_markers=("provider(s) for the request","observed prices are null when unobserved")
+    if any(marker in " ".join(norm) for marker in provider_list_markers):
         return False
     return True
 
