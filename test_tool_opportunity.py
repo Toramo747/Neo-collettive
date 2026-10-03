@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Andrea Gava
 import unittest
 
-from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog, workaround42_query_plan, workaround_compact42_query_plan
+from tool_opportunity import analyze_tool_opportunities, competitor_money_first_plan, seti_market_catalog, workaround42_query_plan, workaround_compact42_query_plan, pain_compact45_query_plan
 
 
 class ToolOpportunityTests(unittest.TestCase):
@@ -326,6 +326,22 @@ class ToolOpportunityTests(unittest.TestCase):
         aliases=CATEGORY_CONFIGS[rows[0]["family"]]["aliases"]
         expected=min(aliases,key=lambda x:(len(x.split()),len(x),x.lower()))
         self.assertEqual(alias,expected)
+
+    def test_pain_compact45_plan_matches_arena_champion_v3(self):
+        rows=pain_compact45_query_plan(7,3)
+        self.assertEqual(len(rows),3)
+        self.assertTrue(all(x["strategy_code"]=="pain-compact-45d-v3" for x in rows))
+        self.assertTrue(all(x["role"]=="pain_research" for x in rows))
+        self.assertTrue(all(x["query_intent"]=="pain" for x in rows))
+        self.assertTrue(all(x["recency_days"]==45 for x in rows))
+        self.assertTrue(all(x["min_relevance_tokens"]==1 for x in rows))
+        self.assertTrue(all(x["topic_shape"]=="compact" for x in rows))
+        self.assertTrue(all(x["suffix_family"]=="core" for x in rows))
+        self.assertTrue(all(x["query_frame"]=="plain" for x in rows))
+        self.assertTrue(all(x["term_order"]=="topic_first" for x in rows))
+        self.assertTrue(all(x["source_scope"]=="all" for x in rows))
+        suffixes={x["query"].split()[-1] for x in rows}
+        self.assertEqual(suffixes,{"pain","problem","frustrating"})
 
     def test_money_first_plan_targets_only_missing_competitors(self):
         rows=competitor_money_first_plan([

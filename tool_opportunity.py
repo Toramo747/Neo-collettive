@@ -275,6 +275,41 @@ def workaround_compact42_query_plan(cycle: int, count: int = 4) -> list[dict]:
     return rows
 
 
+def pain_compact45_query_plan(cycle: int, count: int = 3) -> list[dict]:
+    """Production-safe projection of Arena champion pain-compact-45d-v3.
+
+    Discovery-only change: compact topic alias, core pain terms, topic-first
+    ordering, 45-day window, and broad source scope metadata. Evidence
+    classification, qualified_hits, monetization scoring, and gates are unchanged.
+    """
+    keys=list(CATEGORY_CONFIGS)
+    if not keys:
+        return []
+    family=keys[max(0,int(cycle or 0)) % len(keys)]
+    cfg=CATEGORY_CONFIGS[family]
+    aliases=[str(x).strip() for x in (cfg.get("aliases") or []) if str(x).strip()]
+    alias=min(aliases,key=lambda x:(len(x.split()),len(x),x.lower())) if aliases else str(cfg.get("title") or family)
+    suffixes=("pain","problem","frustrating")
+    rows=[]
+    for suffix in suffixes[:max(1,min(int(count or 3),3))]:
+        rows.append({
+            "query":" ".join((alias+" "+suffix).split()),
+            "class":"tool_market",
+            "role":"pain_research",
+            "family":family,
+            "query_intent":"pain",
+            "strategy_code":"pain-compact-45d-v3",
+            "recency_days":45,
+            "min_relevance_tokens":1,
+            "topic_shape":"compact",
+            "suffix_family":"core",
+            "query_frame":"plain",
+            "term_order":"topic_first",
+            "source_scope":"all",
+        })
+    return rows
+
+
 def competitor_money_first_plan(opportunities: list[dict] | None, count: int = 6) -> list[dict]:
     """Target only theses still missing independent real-price competitors.
 
