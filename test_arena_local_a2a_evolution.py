@@ -117,6 +117,23 @@ class LocalA2AEvolutionTests(unittest.TestCase):
         self.assertTrue(all(c['split']=='robustness_v4' for c in v4))
         self.assertFalse(previous & {c['id'] for c in v4})
 
+    def test_state_router_uses_minimal_classifier_and_generator_shapes(self):
+        case=arena.robustness_cases_v4()[0]
+        turn=case['turns'][0]
+        calls=[]
+        def fake(model,prompt,remaining):
+            calls.append(prompt)
+            if prompt.startswith('[DECISION_ONLY]'):
+                return {'decision':'ask'}
+            if prompt.startswith('[REASON_ONLY]'):
+                return {'reason':'Request concrete timing evidence before proposing a bounded read-only comparison.'}
+            self.fail('unexpected prompt shape')
+        answer,_=arena._answer('test','state_router','base',turn,[],time.monotonic()+10,fake)
+        self.assertEqual(answer['decision'],'ask')
+        self.assertEqual(answer['problem_id'],turn['problem_id'])
+        self.assertEqual(answer['evidence_id'],turn['evidence_id'])
+        self.assertEqual(len(calls),2)
+
     def test_deadline_blocks_selection_fitness(self):
         result=arena.run_config('test','direct',arena.cases(),time.monotonic()-1)
         self.assertFalse(result['complete'])
