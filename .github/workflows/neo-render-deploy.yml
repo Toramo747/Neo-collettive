@@ -314,19 +314,21 @@ jobs:
           curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/neo-dialect/1.0' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
           grep -q "neo-dialect/1.0" /tmp/neo-dialect.md
           curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
-          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/council' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/api/council" > /tmp/council.json
+          council_status="$(curl --output /dev/null --write-out '%{http_code}' --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/council' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/api/council")"
+          if [ "$council_status" != "401" ]; then
+            echo "Expected admin-only /api/council to reject HMAC-only access with 401; got $council_status" >&2
+            exit 1
+          fi
           curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/council/neo-dialect/example' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/council/neo-dialect/example" > /tmp/dialect-example.json
           python - <<'PY'
           import json
           card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
-          council=json.load(open("/tmp/council.json",encoding="utf-8"))
           example=json.load(open("/tmp/dialect-example.json",encoding="utf-8"))
           extensions=((card.get("capabilities") or {}).get("extensions") or [])
           if not any(str(x.get("params",{}).get("dialect_version") or "")=="neo-dialect/1.0" for x in extensions if isinstance(x,dict)):
               raise SystemExit("neo-dialect extension missing from Agent Card")
-          d=council.get("neo_dialect") or {}
-          if str(d.get("dialect_version") or "")!="neo-dialect/1.0":
-              raise SystemExit("neo-dialect council report missing")
+          if str(example.get("dialect_version") or "")!="neo-dialect/1.0":
+              raise SystemExit("neo-dialect example version missing")
           types=[x.get("message",{}).get("type") for x in (example.get("transcript") or [])]
           if types != ["HELLO","CAPABILITIES","PROPOSE","COUNTER","AGREE","RESULT","BYE"]:
               raise SystemExit("neo-dialect example transcript incomplete")
