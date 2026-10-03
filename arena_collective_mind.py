@@ -52,6 +52,27 @@ BOUNDARY={
     "external_output_trust":"UNTRUSTED_STRUCTURED_PROPOSALS_ONLY",
 }
 
+SYSTEM_CONTEXT=(
+    "MYCELIX currently discovers commercial signals from public sources. "
+    "The production gate is fixed and must not be weakened: the same concrete problem needs "
+    "at least 3 independent domains within 21 days, at least 2 fresh observations within 7 days, "
+    "at least 1 strong source, and PAID_DEMAND plus BUY_INTENT or PAIN. "
+    "Existing guards reject vendor content, supply offers, query echo, weak observed-family matches, "
+    "missing buyer voice, and self-contamination. Current research strategy uses workaround-oriented "
+    "queries with 4 formulations and a 42-day discovery window. "
+    "Your job is to improve discovery, validation, orchestration, or computational efficiency while "
+    "preserving those boundaries."
+)
+
+PACKET_MARKERS={
+    "signal_discovery":("research","search","market","business","evidence","sales","signal"),
+    "query_design":("search","query","research","analysis","data","retrieval"),
+    "adversarial_review":("audit","verify","verification","source","check","review","security","measurement"),
+    "market_validation":("market","business","commerce","sales","pricing","evidence","measurement"),
+    "agent_orchestration":("agent","multi-agent","orchestration","workflow","coordination","routing"),
+    "systems_efficiency":("engineering","optimization","systems","compute","data","performance","infrastructure"),
+}
+
 WORK_PACKETS=(
     ("signal_discovery","Find better public signals of concrete buyer pain and existing workarounds."),
     ("query_design","Design a bounded search-query strategy that improves recall without weakening relevance guards."),
@@ -197,6 +218,11 @@ def proposal_substantive(row: dict[str,Any] | None) -> bool:
         "state the capability needed",
         "no supported mycelix-specific improvement proposal",
         "no substantiated adversarial-review proposal",
+        "does not cover mycelix",
+        "cannot substantiate an improvement",
+        "no search strategy or production-gate changes proposed",
+        "\"intent\":\"recommend-product\"",
+        "recommendation\":{",
     )
     if any(marker in norm[0] for marker in bad):
         return False
@@ -315,6 +341,38 @@ def handshake_prompt() -> str:
     )
 
 
+def packet_score(agent: dict[str,Any], packet_code: str, ready_ids: set[str] | None = None) -> int:
+    text=" ".join([
+        str(agent.get("name") or ""),
+        str(agent.get("description") or ""),
+        json.dumps(agent.get("skills") or [],ensure_ascii=False),
+    ]).lower()
+    score=candidate_score(agent)
+    for marker in PACKET_MARKERS.get(packet_code,()):
+        if marker in text:
+            score+=5
+    aid=str(agent.get("id") or agent.get("agent_id") or "")
+    if ready_ids and aid in ready_ids:
+        score+=8
+    return score
+
+
+def assign_agents_to_packets(
+    agents: list[dict[str,Any]],
+    ready_ids: set[str] | None = None,
+    limit: int = MAX_AGENTS,
+) -> list[tuple[dict[str,Any],tuple[str,str]]]:
+    pool=list(agents)
+    assignments=[]
+    for packet in WORK_PACKETS:
+        if not pool or len(assignments)>=max(1,min(limit,MAX_AGENTS)):
+            break
+        chosen=max(pool,key=lambda a:packet_score(a,packet[0],ready_ids))
+        assignments.append((chosen,packet))
+        pool.remove(chosen)
+    return assignments
+
+
 def candidate_score(agent: dict[str,Any]) -> int:
     text=" ".join([
         str(agent.get("name") or ""),
@@ -367,14 +425,8 @@ async def discover_agents(client: httpx.AsyncClient, limit: int = MAX_AGENTS) ->
         if ok:
             ready.append(agent)
     ready_ids={str(x.get("id") or x.get("agent_id") or "") for x in ready}
-    selected=sorted(
-        agents,
-        key=lambda x:(
-            candidate_score(x)+(12 if str(x.get("id") or x.get("agent_id") or "") in ready_ids else 0),
-            candidate_score(x),
-        ),
-        reverse=True,
-    )[:max(1,min(limit,MAX_AGENTS))]
+    assignments=assign_agents_to_packets(agents,ready_ids,limit)
+    selected=[agent for agent,_ in assignments]
     return selected,{
         "candidates_considered":len(agents),
         "handshakes_valid":len(ready),
@@ -403,6 +455,7 @@ def proposal_prompt(mission: str, packet_code: str, packet_text: str) -> str:
         "production access, code execution, or state changes. "
         "Return JSON only with: proposal, method, falsifier, evidence_urls (0-4 public HTTPS URLs), "
         "confidence (0-1), estimated_gain_pct (0-100). "
+        f"SYSTEM CONTEXT: {SYSTEM_CONTEXT} "
         f"MISSION: {clean_text(mission,1200)} "
         f"YOUR WORK PACKET [{packet_code}]: {packet_text}"
     )
@@ -414,6 +467,7 @@ def compatibility_proposal_prompt(mission: str, packet_code: str, packet_text: s
         "If JSON is inconvenient, reply using exactly these labels on separate lines: "
         "PROPOSAL: ... METHOD: ... FALSIFIER: ... CONFIDENCE: 0-1 ESTIMATED_GAIN_PCT: 0-100. "
         "Public HTTPS evidence links may follow. "
+        f"SYSTEM CONTEXT: {SYSTEM_CONTEXT} "
         f"MISSION: {clean_text(mission,900)} TASK [{packet_code}]: {packet_text}"
     )
 
@@ -443,6 +497,7 @@ async def proposal_field_fallback(
 ) -> dict[str,Any] | None:
     base=(
         "MYCELIX bounded collaboration. Analysis only; no external actions. "
+        f"SYSTEM CONTEXT: {SYSTEM_CONTEXT} "
         f"MISSION: {clean_text(mission,700)} TASK [{packet_code}]: {packet_text} "
     )
     questions=(
@@ -565,11 +620,16 @@ async def run(mission: str, data_dir: Path, max_agents: int = MAX_AGENTS) -> dic
 
         tasks=[]
         task_meta=[]
-        for idx,agent in enumerate(agents):
+        ready_ids={
+            str(x.get("agent_id") or "")
+            for x in (handshake.get("rows") or [])
+            if isinstance(x,dict) and x.get("ready")
+        }
+        assigned=assign_agents_to_packets(agents,ready_ids,max_agents)
+        for agent,packet in assigned:
             aid=str(agent.get("id") or agent.get("agent_id") or "").strip()
             if not aid:
                 continue
-            packet=WORK_PACKETS[idx % len(WORK_PACKETS)]
             tasks.append(asyncio.create_task(send_chat(client,aid,proposal_prompt(mission,*packet))))
             task_meta.append((aid,str(agent.get("name") or aid)[:120],packet[0]))
 
