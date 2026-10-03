@@ -52,6 +52,7 @@ from tool_opportunity import (
     market_query_plan,
     workaround42_query_plan,
     workaround_compact42_query_plan,
+    pain_compact45_query_plan,
     competitor_money_first_plan,
     market_scout_terms,
     opportunity_candidate,
@@ -144,7 +145,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.45"  # production workaround-compact-42d-v2 discovery strategy
+VERSION = "0.99.46"  # production pain-compact-45d-v3 discovery strategy
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -8655,22 +8656,30 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
     workaround_fallback_code=""
     strategy_code="baseline-market-plan"
     try:
-        workaround_plan=workaround_compact42_query_plan(cycle_no,4)
+        workaround_plan=pain_compact45_query_plan(cycle_no,3)
     except Exception:
         workaround_plan=[]
     if workaround_plan:
-        strategy_code="workaround-compact-42d-v2"
+        strategy_code="pain-compact-45d-v3"
     else:
         workaround_fallback=True
-        workaround_fallback_code="v2_to_v1"
+        workaround_fallback_code="v3_to_v2"
         try:
-            workaround_plan=workaround42_query_plan(cycle_no,4)
+            workaround_plan=workaround_compact42_query_plan(cycle_no,4)
         except Exception:
             workaround_plan=[]
         if workaround_plan:
-            strategy_code="workaround-42d-v1"
+            strategy_code="workaround-compact-42d-v2"
         else:
-            workaround_fallback_code="v2_to_v1_to_baseline"
+            workaround_fallback_code="v3_to_v2_to_v1"
+            try:
+                workaround_plan=workaround42_query_plan(cycle_no,4)
+            except Exception:
+                workaround_plan=[]
+            if workaround_plan:
+                strategy_code="workaround-42d-v1"
+            else:
+                workaround_fallback_code="v3_to_v2_to_v1_to_baseline"
     if workaround_plan:
         pricing_rows=[x for x in base_market_plan if str(x.get("role") or "")=="tool_pricing"][:5]
         activity_rows=[x for x in base_market_plan if str(x.get("role") or "")!="tool_pricing"]
