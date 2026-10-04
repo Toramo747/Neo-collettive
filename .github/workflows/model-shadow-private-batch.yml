@@ -129,7 +129,7 @@ jobs:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -euo pipefail
-          if ! python tools/model_shadow_batch.py --private-dir private-labels --output-dir runtime/model-shadow --review-sample > /tmp/model-shadow-metrics.json 2>/tmp/model-shadow-private-errors; then
+          if ! python tools/model_shadow_resumable.py --private-dir private-labels --output-dir runtime/model-shadow --max-judge-cases 50 --review-sample > /tmp/model-shadow-metrics.json 2>/tmp/model-shadow-private-errors; then
             cat /tmp/model-shadow-metrics.json
             exit 1
           fi
@@ -154,7 +154,7 @@ jobs:
           set -euo pipefail
           git config user.name "NEO Private Label Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl
+          git add train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl model_shadow_state.json
           if git diff --cached --quiet; then
             echo '{"private_archive_update":"unchanged"}'
           else
