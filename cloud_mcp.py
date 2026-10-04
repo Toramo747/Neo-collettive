@@ -47,6 +47,8 @@ from human_authorized_replies import AGENTWORLD_REPLY_KEY, human_authorized_agen
 from peer_quality import classify_peer_response, classify_stored_interviews, collaborative_round_count
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
+from gate_stability import apply_gate_hysteresis
+from hidden_control_gate import evaluate_hidden_control
 from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
     analyze_tool_opportunities,
@@ -347,6 +349,8 @@ AUTOPILOT_STATE: dict[str, Any] = {
         "council_transcripts": [],
     },
     "council_history": [],
+    "gate_stability": {"schema_v":1,"families":{},"flips":[]},
+    "hidden_control": {"required":False,"cases":0,"correct":0,"ok":True},
     "problem_performance": {},
     "problem_cooldowns": {},
     "query_execution": {
@@ -449,6 +453,8 @@ def _state_payload() -> dict:
         "thesis_history": list(AUTOPILOT_STATE.get("thesis_history") or [])[-30:],
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
         "council_history": list(AUTOPILOT_STATE.get("council_history") or [])[-20:],
+        "gate_stability": AUTOPILOT_STATE.get("gate_stability") or {},
+        "hidden_control": AUTOPILOT_STATE.get("hidden_control") or {},
         "problem_performance": AUTOPILOT_STATE.get("problem_performance") or {},
         "problem_cooldowns": AUTOPILOT_STATE.get("problem_cooldowns") or {},
         "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
@@ -621,6 +627,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["active_thesis"] = payload.get("active_thesis")
     if isinstance(payload.get("thesis_history"), list):
         AUTOPILOT_STATE["thesis_history"] = payload.get("thesis_history")[-30:]
+    if isinstance(payload.get("gate_stability"), dict):
+        AUTOPILOT_STATE["gate_stability"] = payload.get("gate_stability") or {"schema_v":1,"families":{},"flips":[]}
+    if isinstance(payload.get("hidden_control"), dict):
+        AUTOPILOT_STATE["hidden_control"] = payload.get("hidden_control") or {}
     if not migration_changed and isinstance(payload.get("problem_performance"), dict):
         AUTOPILOT_STATE["problem_performance"] = payload.get("problem_performance") or {}
     if not migration_changed and isinstance(payload.get("problem_cooldowns"), dict):
@@ -9043,6 +9053,22 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         source_diagnostics=source_diagnostics,
         usage_evidence=endpoint_verifier.usage_metrics_snapshot(),
     )
+    gate_state,stable_rows=apply_gate_hysteresis(
+        AUTOPILOT_STATE.get("gate_stability") or {},
+        list(market_analysis.get("top5") or []),
+        version=VERSION,
+        commit=DEPLOY_COMMIT,
+        observed_at_utc=market_analysis.get("generated_at_utc"),
+    )
+    AUTOPILOT_STATE["gate_stability"]=gate_state
+    if stable_rows:
+        market_analysis["top5"]=stable_rows
+        market_analysis["top_gate_pass"]=bool(stable_rows[0].get("stable_gate_pass"))
+        for row in stable_rows:
+            row["gate_pass"]=bool(row.get("stable_gate_pass"))
+        counts=dict(market_analysis.get("candidate_counts") or {})
+        counts["qualified_candidates"]=sum(1 for row in stable_rows if row.get("stable_gate_pass"))
+        market_analysis["candidate_counts"]=counts
     AUTOPILOT_STATE["tool_opportunities"]=market_analysis
     council_rows=list(market_analysis.get("council_transcripts") or [])
     council_history=list(AUTOPILOT_STATE.get("council_history") or [])
@@ -11698,6 +11724,7 @@ async def api_checkpoint_status(request: Request):
 
 
 async def api_autopilot_status(request: Request):
+    _hidden_control_telemetry()
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
@@ -12176,12 +12203,33 @@ async def readyz(request: Request):
     )
 
 
+def _hidden_control_telemetry() -> dict:
+    try:
+        result=evaluate_hidden_control()
+        summary={
+            "required":bool(result.get("required")),
+            "cases":max(0,int(result.get("cases") or 0)),
+            "correct":max(0,int(result.get("correct") or 0)),
+            "ok":bool(result.get("ok")),
+        }
+    except Exception:
+        summary={
+            "required":str(os.getenv("NEO_REQUIRE_HIDDEN_CONTROL") or "").strip().lower() in {"1","true","yes","on"},
+            "cases":0,
+            "correct":0,
+            "ok":False,
+        }
+    AUTOPILOT_STATE["hidden_control"]=summary
+    return summary
+
+
 async def health(request: Request):
     limited=_probe_rate_limit(request,"health")
     if limited is not None:
         return limited
     _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
+    hidden_control=_hidden_control_telemetry()
     return JSONResponse({
         "status":"ok",
         "service":"neo-collective",
@@ -12189,6 +12237,7 @@ async def health(request: Request):
         "commit":DEPLOY_COMMIT,
         "runtime_profile":dict(RUNTIME_IDENTITY),
         "runtime_snapshot":snapshot,
+        "hidden_control":hidden_control,
     })
 
 

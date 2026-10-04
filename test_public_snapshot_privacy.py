@@ -89,6 +89,12 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         raw={
             "snapshot_schema":7,
             "neo_version":"0.99.43",
+            "diagnostics":{
+                "status_endpoint_reached":True,
+                "source_commit":"abc123",
+                "runtime_contract_verified":True,
+                "hidden_control":{"required":True,"cases":10,"correct":9,"ok":False},
+            },
             "latest_result":{
                 "status":"SELECT",
                 "evidence_quality":{
@@ -167,6 +173,9 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
             "autopilot":{"cycles_completed":1402},
         }
         public=sanitize_public_snapshot(raw)
+        self.assertEqual(public["diagnostics"]["hidden_control"],{
+            "required":True,"cases":10,"correct":9,"ok":False,
+        })
         diag=public["autopilot"]["select_diagnostics"]
         self.assertEqual(diag["status"],"SELECT")
         self.assertFalse(diag["ingestion_enabled"])

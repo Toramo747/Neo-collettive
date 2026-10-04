@@ -62,6 +62,12 @@ PUBLIC_SNAPSHOT_SCHEMA = {
         "status_endpoint_reached": None,
         "source_commit": None,
         "runtime_contract_verified": None,
+        "hidden_control": {
+            "required": None,
+            "cases": None,
+            "correct": None,
+            "ok": None,
+        },
     },
     "autopilot": {
         "enabled": None,
@@ -672,6 +678,13 @@ def sanitize_public_snapshot(snapshot: dict | None) -> dict:
     out["diagnostics"] = _copy_keys(
         diagnostics, ("status_endpoint_reached", "source_commit", "runtime_contract_verified")
     )
+    hidden=diagnostics.get("hidden_control") if isinstance(diagnostics.get("hidden_control"),dict) else {}
+    out["diagnostics"]["hidden_control"]={
+        "required":bool(hidden.get("required")),
+        "cases":max(0,int(hidden.get("cases") or 0)),
+        "correct":max(0,int(hidden.get("correct") or 0)),
+        "ok":bool(hidden.get("ok")),
+    }
     out["autopilot"] = sanitize_public_autopilot(src.get("autopilot"))
     out["autopilot"]["select_diagnostics"] = _project_select_diagnostics(src.get("latest_result"))
     validate_public_snapshot(out)

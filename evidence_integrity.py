@@ -402,7 +402,15 @@ def structured_paid_source(source: str, query_role: str = "") -> bool:
 
 
 def _term_regex(term: str) -> re.Pattern[str]:
-    value = re.escape((term or "").strip().lower())
+    raw=(term or "").strip().lower()
+    controlled={
+        "manual":r"manual(?:ly)?",
+        "spend":r"spend(?:s|ing|t)?",
+        "waste time":r"wast(?:e|es|ed|ing)(?:\s+\w+){0,4}\s+(?:time|day|hours?)",
+    }
+    if raw in controlled:
+        return re.compile(r"(?<!\w)(?:"+controlled[raw]+r")(?!\w)",re.IGNORECASE)
+    value = re.escape(raw)
     return re.compile(r"(?<!\w)" + value + r"(?!\w)", re.IGNORECASE)
 
 

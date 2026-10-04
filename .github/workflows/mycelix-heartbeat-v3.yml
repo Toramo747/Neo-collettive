@@ -327,7 +327,8 @@ jobs:
                   "github_run_id": os.getenv("GITHUB_RUN_ID"),
                   "github_run_attempt": os.getenv("GITHUB_RUN_ATTEMPT"),
                   "source_commit": os.getenv("GITHUB_SHA"),
-                  "runtime_contract_verified": True
+                  "runtime_contract_verified": True,
+                  "hidden_control": ap_private.get("hidden_control") or raw.get("hidden_control") or {}
               },
               "autopilot": {
                   "enabled": ap.get("enabled"),
