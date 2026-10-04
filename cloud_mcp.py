@@ -49,7 +49,18 @@ from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from gate_stability import apply_gate_hysteresis
 from candidate_observability import build_candidate_telemetry
+from challenge_track import (
+    CHALLENGE_TAGGER_VERSION,
+    apply_challenge_hysteresis,
+    build_challenge_telemetry,
+    challenge_config,
+    challenge_funnel,
+    evaluate_challenges,
+    merge_challenge_memory,
+    route_challenge_evidence,
+)
 from hidden_control_gate import evaluate_hidden_control
+from hidden_challenge_control_gate import evaluate_hidden_challenge_control
 from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
     analyze_tool_opportunities,
@@ -150,7 +161,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.50"  # privacy-safe commercial candidate observability
+VERSION = "0.99.51"  # independent commercial and shadow challenge tracks
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -333,6 +344,13 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "challenge_track": {
+        "mode":"shadow",
+        "memory":[],
+        "gate_state":{"schema_v":1,"candidates":{},"flips":[]},
+        "latest":{"status":"CHALLENGE_SELECT","funnel":{},"candidates":[]},
+    },
+    "hidden_challenge_control":{"required":False,"cases":0,"correct":0,"ok":True},
     "search_provider_state": {},
     "evidence_integrity": {
         "schema_v": EVIDENCE_SCHEMA_VERSION,
@@ -450,6 +468,8 @@ def _state_payload() -> dict:
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
+        "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
+        "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "search_provider_state": AUTOPILOT_STATE.get("search_provider_state") or {},
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
         "active_thesis": AUTOPILOT_STATE.get("active_thesis"),
@@ -632,6 +652,20 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["thesis_history"] = payload.get("thesis_history")[-30:]
     if isinstance(payload.get("gate_stability"), dict):
         AUTOPILOT_STATE["gate_stability"] = payload.get("gate_stability") or {"schema_v":1,"families":{},"flips":[]}
+    if isinstance(payload.get("challenge_track"), dict):
+        restored_challenge=dict(payload.get("challenge_track") or {})
+        restored_challenge["mode"]="shadow"
+        restored_challenge["memory"]=[
+            x for x in (restored_challenge.get("memory") or [])[-300:]
+            if isinstance(x,dict) and str(x.get("track") or "")=="challenge"
+        ]
+        if not isinstance(restored_challenge.get("gate_state"),dict):
+            restored_challenge["gate_state"]={"schema_v":1,"candidates":{},"flips":[]}
+        if not isinstance(restored_challenge.get("latest"),dict):
+            restored_challenge["latest"]={"status":"CHALLENGE_SELECT","funnel":{},"candidates":[]}
+        AUTOPILOT_STATE["challenge_track"]=restored_challenge
+    if isinstance(payload.get("hidden_challenge_control"), dict):
+        AUTOPILOT_STATE["hidden_challenge_control"]=payload.get("hidden_challenge_control") or {}
     if isinstance(payload.get("hidden_control"), dict):
         AUTOPILOT_STATE["hidden_control"] = payload.get("hidden_control") or {}
     if not migration_changed and isinstance(payload.get("problem_performance"), dict):
@@ -6082,6 +6116,7 @@ def _commercial_evidence_quality(
     scouts: list[dict] | None = None,
     query_meta: dict[str, dict] | None = None,
     revalidation_stats: dict[str, int] | None = None,
+    challenge_shadow_rows: list[dict] | None = None,
 ) -> dict:
     """Evidence Integrity v2: accumulate only attributable, gate-eligible commercial evidence."""
     noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
@@ -6094,6 +6129,9 @@ def _commercial_evidence_quality(
     query_meta=query_meta or {}
     current_rows=[]
     rejected=[]
+    challenge_current=[]
+    challenge_seen=set()
+    challenge_collected=0
     diagnostics=IngestionDiagnostics(INGESTION_DIAGNOSTICS_ENABLED)
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
@@ -6128,7 +6166,34 @@ def _commercial_evidence_quality(
         if len(rejected)<40:
             rejected.append({"reason":reason,"url":(url or "")[:500],"title":(title or "")[:180],"query_role":role})
 
-    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False):
+    def observe_challenge(
+        url: str,
+        title: str,
+        body: str,
+        source: str,
+        metadata: dict | None = None,
+        commercial_rejection_reason: str = "",
+    ) -> None:
+        row=route_challenge_evidence(
+            url=url,
+            title=title,
+            body=body,
+            source=source,
+            metadata=metadata or {},
+            commercial_rejection_reason=commercial_rejection_reason,
+            now_epoch=now_epoch,
+        )
+        if not isinstance(row,dict):
+            return
+        fp=str(row.get("fingerprint") or "")
+        if fp and fp in challenge_seen:
+            return
+        if fp:
+            challenge_seen.add(fp)
+        challenge_current.append(row)
+
+    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False, metadata: dict | None = None):
+        nonlocal challenge_collected
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
         query_intent=str(meta.get("query_intent") or "pain").strip().lower()
@@ -6140,6 +6205,8 @@ def _commercial_evidence_quality(
         if not host or any(host==n or host.endswith("."+n) for n in noise):
             reject("noise_domain",url,title,query_role,source,query_class)
             return
+        challenge_collected+=1
+        observe_challenge(url,title,body,source,metadata)
         title_low=(title or "").lower()
         body_low=(body or "").lower()
         if host == "github.com":
@@ -6156,6 +6223,10 @@ def _commercial_evidence_quality(
                 "repetitive","problem","pain","customer","client","freelance","contractor",
             )
             if not any(contains_term(title_low+" "+body_low,x) for x in github_demand):
+                observe_challenge(
+                    url,title,body,source,metadata,
+                    commercial_rejection_reason="github_no_buyer_problem_context",
+                )
                 reject("github_no_buyer_problem_context",url,title,query_role,source,query_class)
                 return
 
@@ -6255,6 +6326,7 @@ def _commercial_evidence_quality(
             and positive
         )
         row={
+            "track":"commercial",
             "schema_v":EVIDENCE_SCHEMA_VERSION,
             "tagger_v":TAGGER_VERSION,
             "migration_v":EVIDENCE_SCHEMA_VERSION,
@@ -6294,6 +6366,22 @@ def _commercial_evidence_quality(
         }
         current_rows.append(row)
 
+    for item in challenge_shadow_rows or []:
+        if not isinstance(item,dict):
+            continue
+        url=str(item.get("url") or "")
+        title=str(item.get("title") or "")
+        body=str(item.get("snippet") or item.get("text") or "")
+        source=str(item.get("source") or "challenge-shadow")
+        if SELF_CONTAMINATION_GUARD_ENABLED and is_self_contamination(url,source,title+" "+body):
+            continue
+        raw_host=(urlparse(url or "").hostname or "").lower()
+        host=canonical_domain(raw_host)
+        if not host or any(host==n or host.endswith("."+n) for n in noise):
+            continue
+        challenge_collected+=1
+        observe_challenge(url,title,body,source,item)
+
     for group in web_research:
         if not isinstance(group,dict):
             continue
@@ -6309,6 +6397,7 @@ def _commercial_evidence_quality(
                     item.get("source") or "web",
                     q,
                     role,
+                    metadata=item,
                 )
 
     for item in scouts or []:
@@ -6316,7 +6405,7 @@ def _commercial_evidence_quality(
             diagnostics.record_scout_deduped(item)
             ingest(
                 item.get("url") or "",item.get("title") or "",item.get("text") or "",
-                item.get("source") or "scout",str(item.get("query") or ""),"scout",scout=True
+                item.get("source") or "scout",str(item.get("query") or ""),"scout",scout=True,metadata=item
             )
 
     # Migrate legacy rows idempotently. v1 rows remain discovery-visible but are
@@ -6335,6 +6424,10 @@ def _commercial_evidence_quality(
         supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
         query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
     )
+
+    for row in memory:
+        if isinstance(row,dict):
+            row["track"]="commercial"
 
     index={}
     for i,row in enumerate(memory):
@@ -6415,6 +6508,64 @@ def _commercial_evidence_quality(
             break
     memory=bounded
     AUTOPILOT_STATE["commercial_evidence_memory"]=memory
+
+    previous_challenge=AUTOPILOT_STATE.get("challenge_track") if isinstance(AUTOPILOT_STATE.get("challenge_track"),dict) else {}
+    previous_challenge=previous_challenge or {}
+    previous_gate_state=previous_challenge.get("gate_state") if isinstance(previous_challenge.get("gate_state"),dict) else {}
+    first_challenge_cycle_after_deploy=bool(
+        DEPLOY_COMMIT
+        and str(previous_gate_state.get("last_observed_commit") or "") != DEPLOY_COMMIT
+    )
+    challenge_memory=merge_challenge_memory(
+        previous_challenge.get("memory") if isinstance(previous_challenge.get("memory"),list) else [],
+        challenge_current,
+        now_epoch=now_epoch,
+    )
+    challenge_candidates=evaluate_challenges(
+        challenge_memory,
+        config=challenge_config(),
+        now_epoch=now_epoch,
+    )
+    challenge_gate_state,challenge_stable_rows=apply_challenge_hysteresis(
+        previous_gate_state,
+        challenge_candidates,
+        commit=DEPLOY_COMMIT,
+        observed_at_utc=datetime.now(timezone.utc).isoformat(),
+    )
+    challenge_telemetry=build_challenge_telemetry(
+        challenge_stable_rows,
+        challenge_gate_state,
+        secret=CANDIDATE_TELEMETRY_HMAC_KEY,
+        id_key_version=CANDIDATE_TELEMETRY_ID_KEY_VERSION,
+        cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
+        commit=DEPLOY_COMMIT,
+        first_cycle_after_deploy=first_challenge_cycle_after_deploy,
+        observed_at_utc=datetime.now(timezone.utc).isoformat(),
+    )
+    challenge_latest={
+        "mode":"shadow",
+        "status":"CHALLENGE_READY" if any(bool(x.get("stable_gate_pass")) for x in challenge_stable_rows) else "CHALLENGE_SELECT",
+        "tagger_version":CHALLENGE_TAGGER_VERSION,
+        "manual_confirmation_required":True,
+        "thresholds":{
+            "min_requesters":int(challenge_config().get("min_requesters") or 3),
+            "min_domains":int(challenge_config().get("min_domains") or 2),
+            "min_age_days":int(challenge_config().get("min_age_days") or 60),
+        },
+        "funnel":challenge_funnel(challenge_collected,challenge_current,challenge_stable_rows),
+        "candidate_counts":{
+            "observed":len(challenge_candidates),
+            "ready":sum(1 for x in challenge_stable_rows if bool(x.get("stable_gate_pass"))),
+        },
+        "candidates":challenge_telemetry,
+    }
+    AUTOPILOT_STATE["challenge_track"]={
+        "mode":"shadow",
+        "memory":challenge_memory,
+        "gate_state":challenge_gate_state,
+        "latest":challenge_latest,
+    }
+
     migration.update({
         "rows":len(memory),
         "quarantined":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
@@ -6539,6 +6690,7 @@ def _commercial_evidence_quality(
         "memory_retention_days":21,
         "freshness_window_days":7,
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
+        "challenge_shadow":challenge_latest,
     }
 
 def safe_problem_tail(value: str, max_len: int = 72) -> str:
@@ -6575,6 +6727,9 @@ async def _hn_query_search(query: str, limit: int = 4, meta: dict | None = None)
                 "url":url,
                 "snippet":x.get("comment_text") or x.get("story_text") or x.get("title") or "",
                 "source":"hn-algolia-routed",
+                "created_at_epoch":x.get("created_at_i"),
+                "requester_key":x.get("author") or "",
+                "response_count":max(0,int(x.get("num_comments") or len(x.get("children") or []))),
             })
         return out
     except Exception:
@@ -6606,6 +6761,19 @@ async def _github_issue_query_search(query: str, limit: int = 4, meta: dict | No
             "url":x.get("html_url") or "",
             "snippet":x.get("body") or x.get("title") or "",
             "source":"github-issues-routed",
+            "created_at":x.get("created_at"),
+            "requester_key":((x.get("user") or {}).get("login") if isinstance(x.get("user"),dict) else "") or "",
+            "comments_count":max(0,int(x.get("comments") or 0)),
+            "reaction_count":max(0,int(((x.get("reactions") or {}).get("total_count") if isinstance(x.get("reactions"),dict) else 0) or 0)),
+            "labels":[
+                str(label.get("name") or "") for label in (x.get("labels") or [])
+                if isinstance(label,dict) and str(label.get("name") or "")
+            ][:12],
+            "duplicate_count":sum(
+                1 for label in (x.get("labels") or [])
+                if isinstance(label,dict) and "duplicate" in str(label.get("name") or "").lower()
+            ),
+            "state":x.get("state") or "",
         } for x in (data.get("items") or [])[:limit] if isinstance(x,dict)]
     except Exception:
         return []
@@ -6660,10 +6828,35 @@ async def _stackexchange_query_search(query: str, limit: int = 4, meta: dict | N
                 "url":x.get("link") or "",
                 "snippet":html.unescape(str(x.get("body") or "")),
                 "source":"stackexchange-routed",
+                "created_at_epoch":x.get("creation_date"),
+                "requester_key":str(((x.get("owner") or {}).get("user_id") if isinstance(x.get("owner"),dict) else "") or ""),
+                "answer_count":max(0,int(x.get("answer_count") or 0)),
+                "accepted_answer_id":x.get("accepted_answer_id"),
+                "satisfactory_answer":bool(x.get("accepted_answer_id")),
             })
         return out
     except Exception:
         return []
+
+
+async def _challenge_shadow_research() -> list[dict]:
+    """Zero-cost read-only long-window research, isolated from commercial provider counters."""
+    specs=[
+        (_github_issue_query_search,'"feature request" workaround',6,{"recency_days":365,"role":"challenge_shadow"}),
+        (_github_issue_query_search,'"help wanted" bounty',6,{"recency_days":365,"role":"challenge_shadow"}),
+        (_hn_query_search,'"is there a tool"',6,{"recency_days":365,"role":"challenge_shadow"}),
+        (_stackexchange_query_search,'"is there a tool"',6,{"recency_days":365,"role":"challenge_shadow"}),
+    ]
+    tasks=[func(query,limit,meta) for func,query,limit,meta in specs]
+    results=await asyncio.gather(*tasks,return_exceptions=True)
+    rows=[]
+    for result in results:
+        if isinstance(result,Exception):
+            continue
+        for row in result or []:
+            if isinstance(row,dict):
+                rows.append(row)
+    return rows[:24]
 
 
 async def _grep_app_code_search(query: str, limit: int = 5) -> list[dict]:
@@ -8502,6 +8695,7 @@ def _compact_director_result(result: dict) -> dict:
         "quality_gate": quality.get("quality_gate"),
         "gate_rule": quality.get("gate_rule"),
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
+        "challenge_shadow": quality.get("challenge_shadow") or ((AUTOPILOT_STATE.get("challenge_track") or {}).get("latest") or {}),
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "qualified_problem_keys": quality.get("qualified_problem_keys") or [],
         "evidence_schema_v": quality.get("evidence_schema_v"),
@@ -9038,11 +9232,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "observed_candidates_purged_by_reason":{},
     }
 
+    challenge_shadow_rows=await _challenge_shadow_research()
     evidence_quality = _commercial_evidence_quality(
         web_research,
         demand_evidence,
         query_meta,
         revalidation_stats=revalidation_stats,
+        challenge_shadow_rows=challenge_shadow_rows,
     )
     seti_catalog=seti_market_catalog(
         SETI_PRIVATE_STATE.get("candidates") or {},
@@ -12235,6 +12431,26 @@ async def readyz(request: Request):
     )
 
 
+def _hidden_challenge_control_telemetry() -> dict:
+    try:
+        result=evaluate_hidden_challenge_control()
+        summary={
+            "required":bool(result.get("required")),
+            "cases":max(0,int(result.get("cases") or 0)),
+            "correct":max(0,int(result.get("correct") or 0)),
+            "ok":bool(result.get("ok")),
+        }
+    except Exception:
+        summary={
+            "required":str(os.getenv("NEO_REQUIRE_HIDDEN_CHALLENGE_CONTROL") or "").strip().lower() in {"1","true","yes","on"},
+            "cases":0,
+            "correct":0,
+            "ok":False,
+        }
+    AUTOPILOT_STATE["hidden_challenge_control"]=summary
+    return summary
+
+
 def _hidden_control_telemetry() -> dict:
     try:
         result=evaluate_hidden_control()
@@ -12262,6 +12478,7 @@ async def health(request: Request):
     _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
     hidden_control=_hidden_control_telemetry()
+    hidden_challenge_control=_hidden_challenge_control_telemetry()
     return JSONResponse({
         "status":"ok",
         "service":"neo-collective",
@@ -12270,6 +12487,7 @@ async def health(request: Request):
         "runtime_profile":dict(RUNTIME_IDENTITY),
         "runtime_snapshot":snapshot,
         "hidden_control":hidden_control,
+        "hidden_challenge_control":hidden_challenge_control,
     })
 
 

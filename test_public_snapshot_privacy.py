@@ -361,6 +361,71 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"candidate_tagger"):
             validate_public_snapshot(bad)
 
+    def test_challenge_snapshot_is_aggregate_hmac_only_and_text_free(self):
+        raw={
+            "snapshot_schema":7,
+            "neo_version":"0.99.51",
+            "latest_result":{
+                "status":"SELECT",
+                "tool_opportunities":{"top5":[],"candidate_counts":{}},
+                "challenge_shadow":{
+                    "mode":"shadow",
+                    "status":"CHALLENGE_READY",
+                    "tagger_version":"1",
+                    "manual_confirmation_required":True,
+                    "thresholds":{"min_requesters":3,"min_domains":2,"min_age_days":60},
+                    "funnel":{
+                        "collected":9,"routed":4,"independent_requesters":3,
+                        "age_qualified":3,"workarounds":1,"feasibility_checked":4,"ready":1,
+                    },
+                    "candidate_counts":{"observed":2,"ready":1},
+                    "candidates":[{
+                        "candidate_id":"0123456789abcdef",
+                        "evidence_fingerprint":"fedcba9876543210",
+                        "id_key_version":"v1",
+                        "score":85,
+                        "source_count":4,
+                        "independent_domain_count":2,
+                        "independent_requester_count":3,
+                        "age_days":120,
+                        "workaround_count":1,
+                        "feasibility_code":"unknown",
+                        "reward_signal_count":1,
+                        "raw_gate_pass":True,
+                        "stable_gate_pass":True,
+                        "pass_streak":2,
+                        "fail_streak":0,
+                        "missing_codes":["https://secret.example/x","unknown_requirement"],
+                        "cycle":2000,
+                        "commit":"0123456789abcdef0123456789abcdef01234567",
+                        "first_cycle_after_deploy":False,
+                        "seconds_since_first_raw_pass":300,
+                        "tagger_version":"1",
+                        "url":"https://private.example/x",
+                        "domain":"private.example",
+                        "title":"PRIVATE CHALLENGE",
+                        "text":"PRIVATE TEXT",
+                    }],
+                },
+            },
+            "autopilot":{"cycles_completed":2000},
+        }
+        public=sanitize_public_snapshot(raw)
+        diag=public["autopilot"]["challenge_diagnostics"]
+        self.assertEqual(diag["status"],"CHALLENGE_READY")
+        self.assertEqual(diag["funnel"]["routed"],4)
+        self.assertEqual(len(diag["candidates"]),1)
+        self.assertEqual(diag["candidates"][0]["missing_codes"],["unknown_requirement"])
+        encoded=json.dumps(diag,sort_keys=True)
+        for forbidden in ("secret.example","private.example","PRIVATE CHALLENGE","PRIVATE TEXT","https://"):
+            self.assertNotIn(forbidden,encoded)
+        validate_public_snapshot(public)
+
+        bad=json.loads(json.dumps(public))
+        bad["autopilot"]["challenge_diagnostics"]["candidates"][0]["missing_codes"]=["secret.example"]
+        with self.assertRaisesRegex(ValueError,"challenge_missing_code"):
+            validate_public_snapshot(bad)
+
     def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
         raw={
             "autopilot":{
