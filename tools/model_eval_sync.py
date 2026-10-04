@@ -38,6 +38,7 @@ def _hidden_cases_from_render(secret: str) -> list[dict]:
         "https://neo-collettive.onrender.com"+HIDDEN_EVAL_PATH,
         headers={
             "X-MYCELIX-Self-Traffic":"github-actions-model-shadow",
+            "X-MYCELIX-Self-Traffic-Proof":make_self_traffic_proof(secret,HIDDEN_EVAL_PATH),
             "X-NEO-Model-Hidden-Proof":proof,
         },
     )
