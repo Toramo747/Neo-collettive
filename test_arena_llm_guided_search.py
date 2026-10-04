@@ -15,5 +15,10 @@ class LLMGuidedSearchTests(unittest.TestCase):
         self.assertIn("not supplying evidence or urls",p)
         self.assertIn("do not invent links",p)
 
+    def test_prompt_population_has_diverse_genomes(self):
+        self.assertGreaterEqual(len(m.PROMPT_GENOMES),5)
+        prompts={m.make_prompt("invoice reconciliation",name) for name in m.PROMPT_GENOMES}
+        self.assertEqual(len(prompts),len(m.PROMPT_GENOMES))
+
 if __name__=="__main__":
     unittest.main()
