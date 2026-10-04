@@ -201,6 +201,27 @@ jobs:
           set -euo pipefail
           [ -n "$RENDER_DEPLOY_HOOK" ] || { echo "Missing GitHub secret: RENDER_DEPLOY_HOOK"; exit 2; }
 
+      - name: Force durable checkpoint before deploy
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/checkpoint-status"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          curl -X POST --fail --show-error --silent --max-time 45 \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" \
+            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
+            "${target}" > /tmp/predeploy-checkpoint.json
+          cat /tmp/predeploy-checkpoint.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))
+          if d.get("ok") is not True:
+              raise SystemExit("pre-deploy checkpoint failed")
+          if int(d.get("cycles_completed") or 0) < 1:
+              raise SystemExit("pre-deploy checkpoint missing cycle state")
+          print("checkpoint_cycles="+str(d.get("cycles_completed")))
+          print("checkpoint_evidence_items="+str(d.get("commercial_evidence_items")))
+          PY
+
       - name: Trigger Render deploy
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
