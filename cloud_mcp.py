@@ -7406,12 +7406,17 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
     query_intent=str(meta.get("query_intent") or "pain").strip().lower()
     structured_first=bool(QUERY_BUILDER_V2_ENABLED and query_class in {"explore","exploit"})
     if query_intent=="desire":
-        tasks=[
-            free_web_search(query,max(2,min(limit,6))),
-            _hn_query_search(seed,3,meta),
-            _github_issue_query_search(seed,3,meta),
-            _stackexchange_query_search(seed,3,meta),
-        ]
+        route=[str(x).strip().lower() for x in (meta.get("source_route") or []) if str(x).strip()]
+        if not route:
+            route=["hn","stackexchange","web"]
+        source_tasks={
+            "web":lambda: free_web_search(query,max(2,min(limit,6))),
+            "hn":lambda: _hn_query_search(seed,3,meta),
+            "stackexchange":lambda: _stackexchange_query_search(seed,3,meta),
+            "github":lambda: _github_issue_query_search(seed,3,meta),
+        }
+        selected_sources=[x for x in route if x in source_tasks]
+        tasks=[source_tasks[x]() for x in selected_sources]
     elif structured_first:
         tasks=[
             _hn_query_search(seed,3),
