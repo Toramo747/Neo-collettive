@@ -6710,6 +6710,9 @@ async def _hn_query_search(query: str, limit: int = 4, meta: dict | None = None)
                 "url":url,
                 "snippet":x.get("comment_text") or x.get("story_text") or x.get("title") or "",
                 "source":"hn-algolia-routed",
+                "created_at_epoch":x.get("created_at_i"),
+                "requester_key":x.get("author") or "",
+                "response_count":max(0,int(x.get("num_comments") or len(x.get("children") or []))),
             })
         return out
     except Exception:
@@ -6741,6 +6744,19 @@ async def _github_issue_query_search(query: str, limit: int = 4, meta: dict | No
             "url":x.get("html_url") or "",
             "snippet":x.get("body") or x.get("title") or "",
             "source":"github-issues-routed",
+            "created_at":x.get("created_at"),
+            "requester_key":((x.get("user") or {}).get("login") if isinstance(x.get("user"),dict) else "") or "",
+            "comments_count":max(0,int(x.get("comments") or 0)),
+            "reaction_count":max(0,int(((x.get("reactions") or {}).get("total_count") if isinstance(x.get("reactions"),dict) else 0) or 0)),
+            "labels":[
+                str(label.get("name") or "") for label in (x.get("labels") or [])
+                if isinstance(label,dict) and str(label.get("name") or "")
+            ][:12],
+            "duplicate_count":sum(
+                1 for label in (x.get("labels") or [])
+                if isinstance(label,dict) and "duplicate" in str(label.get("name") or "").lower()
+            ),
+            "state":x.get("state") or "",
         } for x in (data.get("items") or [])[:limit] if isinstance(x,dict)]
     except Exception:
         return []
@@ -6795,6 +6811,11 @@ async def _stackexchange_query_search(query: str, limit: int = 4, meta: dict | N
                 "url":x.get("link") or "",
                 "snippet":html.unescape(str(x.get("body") or "")),
                 "source":"stackexchange-routed",
+                "created_at_epoch":x.get("creation_date"),
+                "requester_key":str(((x.get("owner") or {}).get("user_id") if isinstance(x.get("owner"),dict) else "") or ""),
+                "answer_count":max(0,int(x.get("answer_count") or 0)),
+                "accepted_answer_id":x.get("accepted_answer_id"),
+                "satisfactory_answer":bool(x.get("accepted_answer_id")),
             })
         return out
     except Exception:
@@ -8637,6 +8658,7 @@ def _compact_director_result(result: dict) -> dict:
         "quality_gate": quality.get("quality_gate"),
         "gate_rule": quality.get("gate_rule"),
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
+        "challenge_shadow": quality.get("challenge_shadow") or ((AUTOPILOT_STATE.get("challenge_track") or {}).get("latest") or {}),
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "qualified_problem_keys": quality.get("qualified_problem_keys") or [],
         "evidence_schema_v": quality.get("evidence_schema_v"),
