@@ -53,10 +53,17 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn("15%",doc)
 
     def test_schedule_is_realistic_and_documented(self):
-        self.assertIn('cron: "*/30 * * * *"',self.workflow)
+        self.assertIn('cron: "7,37 * * * *"',self.workflow)
         doc=Path("docs/heartbeat-operations.md").read_text(encoding="utf-8")
         self.assertIn("GitHub Actions does not guarantee",doc)
         self.assertIn("external uptime monitor",doc)
+
+    def test_watchdog_schedule_is_resilient_and_dispatches_primary(self):
+        w=Path(".github/workflows/mycelix-heartbeat-watchdog-v2.yml").read_text(encoding="utf-8")
+        self.assertIn('cron: "7,17,27,37,47,57 * * * *"',w)
+        self.assertIn("mycelix-heartbeat-watchdog",w)
+        self.assertIn("cancel-in-progress: false",w)
+        self.assertIn("actions/workflows/mycelix-heartbeat-v3.yml/dispatches",w)
 
     def test_runtime_snapshot_persists_inbound_audit_streams(self):
         w=self.workflow

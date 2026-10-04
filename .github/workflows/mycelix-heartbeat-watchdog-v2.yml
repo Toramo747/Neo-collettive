@@ -2,7 +2,7 @@ name: MYCELIX Heartbeat Watchdog v2
 
 on:
   schedule:
-    - cron: "3,23,43 * * * *"
+    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
   push:
     branches: [main]
@@ -12,6 +12,10 @@ on:
 permissions:
   actions: write
   contents: read
+
+concurrency:
+  group: mycelix-heartbeat-watchdog
+  cancel-in-progress: false
 
 jobs:
   ensure-heartbeat:
