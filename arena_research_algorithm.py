@@ -24,7 +24,14 @@ from typing import Any
 
 import httpx
 
-from evidence_integrity import commercial_family
+from evidence_integrity import (
+    buyer_voice_present,
+    first_person_buyer_voice_present,
+    commercial_family,
+    demand_signal_type,
+    is_vendor_content,
+    is_supply_offer,
+)
 
 NAMESPACE = "mycelix-arena"
 ARENA_ID = "mycelix-research-algorithm"
@@ -245,64 +252,115 @@ async def fetch_hn_query(client: httpx.AsyncClient, topic: str, query: str, rece
         return {"ok": False, "topic": topic, "query": query, "hits": [], "error": type(exc).__name__}
 
 
+def evaluate_control_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    total=0
+    correct=0
+    details=[]
+    for case in cases or []:
+        if not isinstance(case,dict):
+            continue
+        total += 1
+        title=str(case.get("title") or "")
+        body=str(case.get("body") or "")
+        source=str(case.get("source") or "")
+        url=str(case.get("url") or "")
+        expect=case.get("expect") if isinstance(case.get("expect"),dict) else {}
+        tags=demand_signal_type(title,body,query_role="buyer",seller_launch_guard=True,url=url,source=source,vendor_content_guard=True,web_buyer_voice_guard=True,supply_offer_guard=True)
+        observed={
+            "buyer":buyer_voice_present(title,body),
+            "first_person":first_person_buyer_voice_present(title,body),
+            "family":commercial_family((title+" "+body).lower()),
+            "positive":bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(tags)),
+        }
+        ok=all(observed.get(k)==v for k,v in expect.items())
+        correct += int(ok)
+        details.append({"id":str(case.get("id") or "")[:80],"ok":ok})
+    return {"cases":total,"correct":correct,"accuracy":round(correct/max(1,total),4),"used_for_evolution":False,"raw_external_text":False,"details":details}
+
 def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Score with the same buyer/demand primitives used by production."""
     genes = clamp_genome(genome)
     total_hits = 0
     relevant_hits = 0
     signal_hits = 0
-    pain_hits = 0
     buyer_hits = 0
-    workaround_hits = 0
+    first_person_buyer_hits = 0
     family_hits = 0
+    vendor_rejected = 0
+    supply_rejected = 0
     unique_threads: set[str] = set()
 
     for row in query_rows:
         topic_tokens = text_tokens(row.get("topic") or "")
+        query = str(row.get("query") or "")
         for hit in row.get("hits") or []:
             if not isinstance(hit, dict):
                 continue
             total_hits += 1
-            text = clean_text(hit.get("comment_text") or hit.get("story_text") or hit.get("title") or "")
+            title = clean_text(hit.get("title") or hit.get("story_title") or "")
+            body = clean_text(hit.get("comment_text") or hit.get("story_text") or "")
+            text = clean_text((title + " " + body).strip())
             tokens = text_tokens(text)
-            overlap = len(topic_tokens & tokens)
-            if overlap < genes["min_relevance_tokens"]:
+            if len(topic_tokens & tokens) < genes["min_relevance_tokens"]:
                 continue
             relevant_hits += 1
-            pain = bool(tokens & PAIN_MARKERS)
-            buyer = bool(tokens & BUYER_MARKERS)
-            workaround = bool(tokens & WORKAROUND_MARKERS)
+
+            url = str(hit.get("url") or hit.get("story_url") or "")
+            source = "hn-algolia-routed"
+            vendor = is_vendor_content(title, body, url, source)
+            supply = is_supply_offer(title, body, url, source)
+            if vendor:
+                vendor_rejected += 1
+                continue
+            if supply:
+                supply_rejected += 1
+                continue
+
             family = commercial_family(text)
-            pain_hits += int(pain)
+            family_ok = family != "other"
+            buyer = buyer_voice_present(title, body)
+            first_person = first_person_buyer_voice_present(title, body)
+            tags = demand_signal_type(
+                title,
+                body,
+                query_role="buyer",
+                strong_pain_only=False,
+                seller_launch_guard=True,
+                url=url,
+                source=source,
+                vendor_content_guard=True,
+                web_buyer_voice_guard=True,
+                supply_offer_guard=True,
+                query_echo_guard=True,
+                query=query,
+            )
+            positive = any(tag in {"PAIN","BUY_INTENT","PAID_DEMAND"} for tag in tags)
+
+            family_hits += int(family_ok)
             buyer_hits += int(buyer)
-            workaround_hits += int(workaround)
-            family_hits += int(family != "other")
-            if pain or buyer or workaround:
+            first_person_buyer_hits += int(first_person)
+            if family_ok and buyer and positive:
                 signal_hits += 1
                 sid = str(hit.get("story_id") or hit.get("objectID") or "")
                 if sid:
                     unique_threads.add(sid)
 
-    precision = signal_hits / max(1, relevant_hits)
-    relevance_rate = relevant_hits / max(1, total_hits)
-    independent = min(len(unique_threads), 15) / 15.0
-    buyer_component = min(buyer_hits, 5) / 5.0
-    pain_component = min(pain_hits, 10) / 10.0
-    workaround_component = min(workaround_hits, 8) / 8.0
+    production_precision = signal_hits / max(1, relevant_hits)
     family_match_rate = family_hits / max(1, relevant_hits)
-    base_fitness = (
-        precision * 30.0
-        + relevance_rate * 10.0
-        + independent * 20.0
-        + buyer_component * 10.0
-        + pain_component * 10.0
-        + workaround_component * 10.0
-        + family_match_rate * 10.0
-    )
-    # Prevent tiny perfect samples from dominating evolution.
-    # Full credit requires at least 4 relevant hits and 3 independent signal threads.
-    support_relevant = min(relevant_hits, 4) / 4.0
+    buyer_rate = buyer_hits / max(1, relevant_hits)
+    first_person_rate = first_person_buyer_hits / max(1, relevant_hits)
+    independent = min(len(unique_threads), 12) / 12.0
+    support_relevant = min(relevant_hits, 6) / 6.0
     support_independent = min(len(unique_threads), 3) / 3.0
     support_factor = 0.5 * support_relevant + 0.5 * support_independent
+    penalty = min(0.5, (vendor_rejected + supply_rejected) / max(1, relevant_hits))
+    base_fitness = (
+        production_precision * 45.0
+        + buyer_rate * 20.0
+        + first_person_rate * 10.0
+        + family_match_rate * 10.0
+        + independent * 15.0
+    ) * (1.0 - penalty)
     fitness = base_fitness * support_factor
     return {
         "fitness": round(fitness, 4),
@@ -312,15 +370,16 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
         "relevant_hits": relevant_hits,
         "signal_hits": signal_hits,
         "unique_signal_threads": len(unique_threads),
-        "pain_hits": pain_hits,
         "buyer_hits": buyer_hits,
-        "workaround_hits": workaround_hits,
+        "first_person_buyer_hits": first_person_buyer_hits,
         "family_hits": family_hits,
         "family_match_rate": round(family_match_rate, 4),
-        "precision": round(precision, 4),
-        "relevance_rate": round(relevance_rate, 4),
+        "buyer_rate": round(buyer_rate, 4),
+        "first_person_buyer_rate": round(first_person_rate, 4),
+        "precision": round(production_precision, 4),
+        "vendor_rejected": vendor_rejected,
+        "supply_rejected": supply_rejected,
     }
-
 
 async def evaluate_genome(client: httpx.AsyncClient, item: dict[str, Any]) -> dict[str, Any]:
     genes = clamp_genome(item.get("genes") or {})
@@ -665,6 +724,8 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
     state_path = data_dir / "research-algorithm" / "state.json"
     report_path = data_dir / "research-algorithm" / "latest.json"
     state = load_json(state_path, {})
+    control_data=load_json(data_dir / "research-algorithm" / "control_cases.json", {})
+    control_metrics=evaluate_control_cases(control_data.get("cases") or [])
     generation = int(state.get("generation") or 0)
     population = state.get("population") if isinstance(state.get("population"), list) else initial_population()
     if not population:
@@ -796,6 +857,7 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
             for x in ranked
         ],
         "collaborators": collaborators,
+        "control_metrics": control_metrics,
         "promotion_candidate": next_state["promotion_candidate"],
         "boundary": dict(BOUNDARY),
     }

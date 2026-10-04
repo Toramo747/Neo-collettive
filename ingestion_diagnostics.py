@@ -180,6 +180,7 @@ class IngestionDiagnostics:
         self.new_signal_rows_by_provider = Counter()
         self.rows_by_intent_class = Counter()
         self.buyer_signals_by_query_intent: dict[str, Counter] = defaultdict(Counter)
+        self.buyer_voice_by_source = Counter()
         self.intent_review_sample: list[dict] = []
         self.search_provider = {"name":"bing","calls_cycle":0,"calls_day":0,"errors":0,"fallbacks":0,"fallback_reasons":{}}
         self.revalidation = {"attempted":0,"promoted":0,"failed":0,"unreachable":0}
@@ -326,6 +327,13 @@ class IngestionDiagnostics:
         self.new_signal_rows_by_query_class[qclass] += 1
         self.new_signal_rows_by_provider[provider] += 1
 
+    def record_buyer_voice(self, source: str, count: int = 1) -> None:
+        if not self.enabled:
+            return
+        n=max(0,int(count or 0))
+        if n:
+            self.buyer_voice_by_source[canonical_source(source)] += n
+
     def record_intent_result(
         self,
         intent_class: str,
@@ -435,6 +443,7 @@ class IngestionDiagnostics:
             "new_signal_rows_by_query_class": dict(sorted(self.new_signal_rows_by_query_class.items())),
             "new_signal_rows_by_provider": dict(sorted(self.new_signal_rows_by_provider.items())),
             "rows_by_intent_class": dict(sorted(self.rows_by_intent_class.items())),
+            "buyer_voice_by_source": dict(sorted(self.buyer_voice_by_source.items())),
             "buyer_signals_by_query_intent": {
                 qintent: dict(sorted(counts.items()))
                 for qintent,counts in sorted(self.buyer_signals_by_query_intent.items())
