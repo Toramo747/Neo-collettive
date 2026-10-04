@@ -1,0 +1,42 @@
+name: Checkpoint Private Recovery
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: neo-checkpoint-private-recovery
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require recovery credentials
+        env:
+          ADMIN: ${{ secrets.NEO_ADMIN_TOKEN }}
+          RENDER: ${{ secrets.RENDER_API_KEY }}
+          PRIVATE: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          REPO: ${{ vars.MODEL_LABEL_REPO }}
+        run: |
+          test -n "$ADMIN" && test -n "$RENDER" && test -n "$PRIVATE" && test -n "$REPO"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Export current state only to private archive
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: python tools/recover_checkpoint.py export private-labels/runtime-checkpoints
+      - name: Persist private recovery backup
+        run: |
+          git -C private-labels config user.name "NEO Private Checkpoint Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add runtime-checkpoints/runtime-backup.json runtime-checkpoints/staged-checkpoint.txt
+          git -C private-labels commit --quiet -m "private runtime checkpoint recovery backup"
+          git -C private-labels push --quiet
+      - name: Stage and verify durable Render checkpoint
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: python tools/recover_checkpoint.py stage private-labels/runtime-checkpoints

@@ -22,6 +22,7 @@ import secrets
 import time
 import traceback
 import zlib
+from state_codec import encode_checkpoint, decode_checkpoint
 import ipaddress
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, quote_plus, parse_qs, urljoin
@@ -746,29 +747,12 @@ def _merge_state_payload(payload: dict | None) -> bool:
 
 
 def _decode_state_env(raw: str) -> dict | None:
-    raw=(raw or "").strip()
-    if not raw:
-        return None
-    try:
-        if raw.startswith(STATE_ENV_COMPRESSED_PREFIX):
-            packed=base64.b64decode(raw[len(STATE_ENV_COMPRESSED_PREFIX):].encode("ascii"), validate=True)
-            decoded=zlib.decompress(packed).decode("utf-8")
-            value=json.loads(decoded)
-        else:
-            value=json.loads(raw)
-        return value if isinstance(value,dict) else None
-    except Exception:
-        return None
+    return decode_checkpoint(raw)
 
 
 def _encode_state_env(payload: dict) -> tuple[str, int, int]:
-    raw=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    packed=zlib.compress(raw, level=9)
-    value=STATE_ENV_COMPRESSED_PREFIX + base64.b64encode(packed).decode("ascii")
-    encoded_bytes=len(value.encode("utf-8"))
-    if encoded_bytes > STATE_ENV_MAX_BYTES:
-        raise ValueError(f"compressed state exceeds safe env limit: {encoded_bytes}>{STATE_ENV_MAX_BYTES}")
-    return value, len(raw), encoded_bytes
+    return encode_checkpoint(payload, STATE_ENV_MAX_BYTES)
+
 
 
 def _encode_small_private_env(payload: dict) -> tuple[str,int,int]:
@@ -1110,7 +1094,7 @@ async def _checkpoint_state_to_render() -> dict:
                 "ok": r.is_success,
                 "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
                 "status": r.status_code,
-                "encoding": "zlib64",
+                "encoding": value.split(":",1)[0],
                 "raw_bytes": raw_bytes,
                 "stored_bytes": encoded_bytes,
                 "limit_bytes": STATE_ENV_MAX_BYTES,
