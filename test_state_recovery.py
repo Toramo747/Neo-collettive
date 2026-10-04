@@ -1,37 +1,59 @@
 import unittest
+from pathlib import Path
 
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state, state_freshness
 
 
 class StateRecoveryTests(unittest.TestCase):
-    def test_higher_cycle_count_beats_newer_but_stale_env_timestamp(self):
+    def test_higher_cycle_projection_does_not_replace_durable_private_state(self):
         source,payload,meta=select_freshest_state([
             ("render_env",{
                 "cycles_completed":139,
                 "state_saved_at_utc":"2026-09-23T03:00:00+00:00",
+                "commercial_evidence_memory":[{"id":"durable"}],
             }),
             ("repo_snapshot",{
                 "cycles_completed":141,
                 "last_finished_utc":"2026-09-23T00:41:36+00:00",
             }),
         ])
-        self.assertEqual(source,"repo_snapshot")
-        self.assertEqual(payload["cycles_completed"],141)
-        self.assertEqual(meta["selected_cycles"],141)
+        self.assertEqual(source,"render_env")
+        self.assertEqual(payload["cycles_completed"],139)
+        self.assertEqual(len(payload["commercial_evidence_memory"]),1)
+        self.assertTrue(meta["projection_bypassed"])
 
-    def test_timestamp_breaks_tie_between_equal_cycle_counts(self):
-        source,payload,_=select_freshest_state([
+    def test_sparse_repo_projection_never_beats_durable_env_on_tie(self):
+        source,payload,meta=select_freshest_state([
             ("render_env",{
                 "cycles_completed":141,
                 "state_saved_at_utc":"2026-09-23T00:40:00+00:00",
+                "commercial_evidence_memory":[{"id":"e1"}],
             }),
             ("repo_snapshot",{
                 "cycles_completed":141,
                 "last_finished_utc":"2026-09-23T00:41:36+00:00",
             }),
         ])
-        self.assertEqual(source,"repo_snapshot")
-        self.assertEqual(payload["cycles_completed"],141)
+        self.assertEqual(source,"render_env")
+        self.assertEqual(len(payload["commercial_evidence_memory"]),1)
+        self.assertTrue(meta["projection_bypassed"])
+
+    def test_newer_sparse_repo_projection_cannot_erase_28_evidence_rows(self):
+        evidence=[{"id":f"e{i}"} for i in range(28)]
+        source,payload,meta=select_freshest_state([
+            ("render_env",{
+                "cycles_completed":1948,
+                "state_saved_at_utc":"2026-10-04T07:55:53+00:00",
+                "commercial_evidence_memory":evidence,
+            }),
+            ("repo_snapshot",{
+                "cycles_completed":1948,
+                "last_finished_utc":"2026-10-04T07:58:02+00:00",
+            }),
+        ])
+        self.assertEqual(source,"render_env")
+        self.assertEqual(len(payload["commercial_evidence_memory"]),28)
+        self.assertTrue(meta["projection_bypassed"])
 
     def test_exact_tie_prefers_fuller_local_state(self):
         source,_,_=select_freshest_state([
@@ -190,6 +212,16 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertEqual(restored["cycles_used"],5)
         self.assertFalse(meta["reconciled"])
         self.assertEqual(meta["effective_cycles_used"],5)
+
+    def test_deploy_forces_checkpoint_before_trigger(self):
+        w=Path(".github/workflows/neo-render-deploy.yml").read_text(encoding="utf-8")
+        force=w.index("Force durable checkpoint before deploy")
+        trigger=w.index("Trigger Render deploy")
+        self.assertLess(force,trigger)
+        block=w[force:trigger]
+        self.assertIn("-X POST",block)
+        self.assertIn("/api/checkpoint-status",block)
+        self.assertIn('d.get("ok") is not True',block)
 
     def test_thesis_cycles_match_completed_age_before_final_budget_cycle(self):
         restored,meta=reconcile_thesis_cycles(
