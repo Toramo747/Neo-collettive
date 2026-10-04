@@ -180,8 +180,10 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
     )
     data=_llm_json_call(llm,prompt,max_tokens=220)
-    label=str(data.get("proposed_label") or "other")
-    if label not in MODEL_LABELS:
+    raw_label=data.get("proposed_label")
+    label=str(raw_label or "")
+    first_valid=label in MODEL_LABELS
+    if not first_valid:
         label="other"
 
     verify_prompt=(
@@ -192,7 +194,7 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
     )
     verify=_llm_json_call(llm,verify_prompt,max_tokens=64)
     verify_label=str(verify.get("proposed_label") or "")
-    confidence=1.0 if verify_label in MODEL_LABELS and verify_label==label else 0.0
+    confidence=1.0 if first_valid and verify_label in MODEL_LABELS and verify_label==label else 0.0
 
     extracted={
         "canonical_problem":" ".join(str(data.get("canonical_problem") or "").split())[:300],
