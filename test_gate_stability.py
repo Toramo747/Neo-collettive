@@ -1,5 +1,5 @@
 import unittest
-from gate_stability import apply_gate_hysteresis
+from gate_stability import apply_gate_hysteresis, opportunity_identity
 
 class GateStabilityTests(unittest.TestCase):
     def _row(self, passed, score=90, tool="X", family="finance_ops"):
@@ -33,6 +33,23 @@ class GateStabilityTests(unittest.TestCase):
         self.assertFalse(rows[0]["stable_gate_pass"])
         self.assertFalse(rows[1]["stable_gate_pass"])
         self.assertNotEqual(rows[0]["gate_candidate_key"],rows[1]["gate_candidate_key"])
+
+    def test_identity_ignores_source_order_title_and_generated_text(self):
+        a=self._row(True,tool="Invoice X")
+        a["title"]="Original title"
+        a["trend"]="Generated wording A"
+        a["sources"]=[{"domain":"a.example"},{"domain":"b.example"}]
+        b=dict(a)
+        b["title"]="Completely reformulated title"
+        b["trend"]="Generated wording B"
+        b["sources"]=list(reversed(a["sources"]))
+        self.assertEqual(opportunity_identity(a),opportunity_identity(b))
+
+    def test_different_candidates_same_family_have_different_identity(self):
+        self.assertNotEqual(
+            opportunity_identity(self._row(True,tool="Invoice X")),
+            opportunity_identity(self._row(True,tool="Invoice Y")),
+        )
 
     def test_one_failure_does_not_drop_stable_gate(self):
         s,_=apply_gate_hysteresis({},[self._row(True)])
