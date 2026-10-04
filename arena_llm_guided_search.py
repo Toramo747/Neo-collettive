@@ -15,12 +15,18 @@ NAMESPACE="mycelix-arena"
 ARENA_ID="llm-guided-commercial-search"
 TOPICS=("manual data entry","invoice reconciliation","security compliance evidence","spreadsheet workflow")
 MAX_QUERIES_PER_TOPIC=4
+PLATEAU_PATIENCE=3
+MAX_GENERATIONS=8
 
 MUTATION_GENOMES={
     "first_person_pain":"Add one concise first-person operational pain phrase; preserve the original workflow terms.",
     "buyer_intent":"Add one explicit buyer-intent phrase such as looking for help, need someone, need a tool, contractor, or recommendation.",
     "paid_demand":"Add one willingness-to-pay phrase such as budget, hiring, contractor, quote, fixed price, or paid help.",
     "operational_burden":"Add one recurring-burden phrase such as every week, takes hours, repetitive, backlog, rework, or error-prone.",
+    "pain_plus_buyer":"Add one first-person pain phrase and one explicit buyer-intent phrase, while preserving the workflow terms.",
+    "pain_plus_burden":"Add one first-person pain phrase and one recurring burden phrase, while preserving the workflow terms.",
+    "buyer_plus_paid":"Add one buyer-intent phrase and one willingness-to-pay phrase, while preserving the workflow terms.",
+    "precision_pain":"Add only the strongest first-person pain phrase; avoid generic automation/software terms and keep the query short.",
 }
 
 PROMPT_GENOMES={
@@ -140,51 +146,78 @@ async def run(model,data_dir,out_path):
         ])
         baseline=score_hits(genes,baseline_rows)
 
-        ranked=[]
-        for genome_name in MUTATION_GENOMES:
-            mutated_pairs=[]
-            mutation_map=[]
-            for topic,base_query in baseline_pairs:
-                mutated=mutate_query(model,topic,base_query,genome_name)
-                chosen=mutated or base_query
-                mutated_pairs.append((topic,chosen))
-                mutation_map.append({"topic":topic,"base":base_query,"mutated":mutated,"used":bool(mutated)})
-            rows=await asyncio.gather(*[
-                fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
-                for t,q in mutated_pairs
-            ])
-            metrics=score_hits(genes,rows)
-            accepted=bool(
-                metrics["fitness"]>baseline["fitness"]
-                and metrics["signal_hits"]>=baseline["signal_hits"]
-                and metrics["unique_signal_threads"]>=baseline["unique_signal_threads"]
-                and metrics["precision"]>=baseline["precision"]
-            )
-            ranked.append({
-                "genome":genome_name,
-                "status":"EVALUATED",
-                "fitness":metrics["fitness"],
-                "metrics":metrics,
-                "accepted_over_baseline":accepted,
-                "mutations":mutation_map,
-                "query_count":len(mutated_pairs),
-            })
+        current_pairs=list(baseline_pairs)
+        current_metrics=baseline
+        history=[]
+        no_improve=0
+        best_genome="baseline"
 
-    ranked.sort(key=lambda x:(-float(x.get("fitness") or -1),x["genome"]))
-    champion=ranked[0]
-    guided=champion.get("metrics") or {}
-    improved=bool(champion.get("accepted_over_baseline"))
+        for generation in range(1,MAX_GENERATIONS+1):
+            ranked=[]
+            for genome_name in MUTATION_GENOMES:
+                mutated_pairs=[]
+                mutation_map=[]
+                for topic,base_query in current_pairs:
+                    mutated=mutate_query(model,topic,base_query,genome_name)
+                    chosen=mutated or base_query
+                    mutated_pairs.append((topic,chosen))
+                    mutation_map.append({"topic":topic,"base":base_query,"mutated":mutated,"used":bool(mutated)})
+                rows=await asyncio.gather(*[
+                    fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
+                    for t,q in mutated_pairs
+                ])
+                metrics=score_hits(genes,rows)
+                accepted=bool(
+                    metrics["fitness"]>current_metrics["fitness"]
+                    and metrics["signal_hits"]>=current_metrics["signal_hits"]
+                    and metrics["unique_signal_threads"]>=current_metrics["unique_signal_threads"]
+                    and metrics["precision"]>=current_metrics["precision"]
+                )
+                ranked.append({
+                    "generation":generation,
+                    "genome":genome_name,
+                    "fitness":metrics["fitness"],
+                    "metrics":metrics,
+                    "accepted_over_parent":accepted,
+                    "mutations":mutation_map,
+                    "pairs":mutated_pairs,
+                })
+            ranked.sort(key=lambda x:(-float(x.get("fitness") or -1),x["genome"]))
+            winner=ranked[0]
+            improved=bool(winner.get("accepted_over_parent"))
+            history.append({
+                "generation":generation,
+                "parent_fitness":current_metrics["fitness"],
+                "winner_genome":winner["genome"],
+                "winner_fitness":winner["fitness"],
+                "improved":improved,
+                "ranked":[{"genome":x["genome"],"fitness":x["fitness"],"accepted":x["accepted_over_parent"]} for x in ranked],
+            })
+            if improved:
+                current_pairs=list(winner["pairs"])
+                current_metrics=dict(winner["metrics"])
+                best_genome=winner["genome"]
+                no_improve=0
+            else:
+                no_improve += 1
+            if no_improve>=PLATEAU_PATIENCE:
+                break
+
+    plateau=bool(no_improve>=PLATEAU_PATIENCE)
     report={
-        "schema_v":3,"namespace":NAMESPACE,"arena_id":ARENA_ID,"status":"EVOLVED",
-        "mode":"baseline_plus_single_llm_mutation",
+        "schema_v":4,"namespace":NAMESPACE,"arena_id":ARENA_ID,
+        "status":"PLATEAU" if plateau else "MAX_GENERATIONS_REACHED",
+        "mode":"iterative_baseline_plus_single_llm_mutation",
         "captured_at_utc":now_utc(),"model":model,"provider":"local_ollama",
         "search_provider":"hn_algolia_public_read_only","baseline_champion":champion_id,
         "baseline_metrics":baseline,
-        "evaluated_genomes":ranked,
-        "champion_genome":champion.get("genome"),
-        "llm_guided_metrics":guided,
-        "query_counts":{"baseline":len(baseline_pairs),"hybrid":champion.get("query_count",0)},
-        "candidate_better_than_baseline":improved,
+        "final_metrics":current_metrics,
+        "final_genome":best_genome,
+        "generations_run":len(history),
+        "plateau_patience":PLATEAU_PATIENCE,
+        "max_generations":MAX_GENERATIONS,
+        "history":history,
+        "candidate_better_than_baseline":bool(current_metrics["fitness"]>baseline["fitness"]),
         "production_promoted":False,
         "boundary":{
             "production_state_write":False,
@@ -203,10 +236,11 @@ async def run(model,data_dir,out_path):
     p.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
     print(json.dumps({
         "baseline":baseline["fitness"],
-        "champion":champion.get("genome"),
-        "guided":guided.get("fitness"),
-        "candidate":improved,
-        "ranked":[{"genome":x["genome"],"fitness":x.get("fitness"),"accepted":x.get("accepted_over_baseline")} for x in ranked]
+        "final":current_metrics["fitness"],
+        "final_genome":best_genome,
+        "status":report["status"],
+        "generations_run":len(history),
+        "history":history,
     }))
     return report
 
