@@ -138,7 +138,8 @@ STRONG_PAIN_TERMS = (
 BUY_INTENT_TERMS = (
     "looking for","need help","need a","need to hire","looking to hire","hire someone",
     "seeking","want someone","recommend a","what do you use","any recommendations",
-    "any way to automate","how can i automate","is there a tool","is there an app",
+    "any way to automate","how can i automate","how are you handling","how do you handle",
+    "is there a tool","is there an app",
     "looking for a tool","looking for software","alternative to","alternatives to",
     "switching from","switch from","replace ","replacing ",
     "request:","rfp","request for proposal",
@@ -213,6 +214,10 @@ def buyer_voice_present(title: str, body: str) -> bool:
         return False
     if any(contains_term(text,phrase) for phrase in BUYER_VOICE_PHRASES):
         return True
+    # Any validated first-person buyer voice is also buyer voice. Keeping this
+    # relationship explicit prevents drift between the two classifiers.
+    if first_person_buyer_voice_present(title,body):
+        return True
     # Direct buyer-style questions are acceptable even when the source does not
     # use a first-person phrase verbatim.
     return bool(re.search(
@@ -227,7 +232,8 @@ def seller_voice_present(title: str, body: str) -> bool:
     seller_phrases=(
         "our platform","our product","our service","our services","our solution",
         "our tool","our app","our software","we built","we've built","we have built",
-        "our team built","our team created","our team developed","customers use our",
+        "we provide","we offer","we help","our team built","our team created",
+        "our team developed","customers use our",
     )
     return bool(
         any(contains_term(text,term) for term in seller_phrases)
