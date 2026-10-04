@@ -83,6 +83,7 @@ ROUTE_POLICY = {
     "/api/runtime/snapshot-published": OPS,
     "/api/model-shadow/challenge-clusters": OPS,
     "/api/model-shadow/private-cases": OPS,
+    "/api/model-shadow/hidden-eval": OPS,
     "/api/market/run-cycles": OPS,
 }
 
