@@ -114,7 +114,7 @@ def mutate_query(model,topic,base_query,genome_name):
     response=post_json("http://127.0.0.1:11434/api/generate",{
         "model":model,"prompt":make_mutation_prompt(topic,base_query,genome_name),
         "stream":False,"format":"json",
-        "options":{"temperature":0.2,"num_predict":120,"num_ctx":2048},"keep_alive":"0",
+        "options":{"temperature":0.2,"num_predict":120,"num_ctx":2048},"keep_alive":"10m",
     })
     parsed=extract_json(response.get("response") or "")
     if not isinstance(parsed,dict):
