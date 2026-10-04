@@ -42,7 +42,7 @@ def lexicon_judge(title: str, body: str, url: str, source: str, query_role: str 
     low=text.lower()
     if re.search(r"\b(?:manual|manually|repetitive|copy.?paste|spreadsheet|workaround)\b", low):
         return {"judge": "lexicon", "label": "manual_recurring_work", "confidence": 0.80}
-    return {"judge": "lexicon", "label": "other", "confidence": 0.70}
+    return {"judge": "lexicon", "label": "other", "confidence": 0.0}
 
 
 def structural_judge(signals: dict | None) -> dict:
@@ -109,8 +109,13 @@ def choose_automatic_label(
         label=str(row.get("label") or "")
         confidence=float(row.get("confidence") or 0.0)
         judge=str(row.get("judge") or "")
-        if label in MODEL_LABELS and judge and confidence >= confidence_threshold:
+        if label in MODEL_LABELS and judge in {"nli", "local_llm", "structural", "outcome"} and confidence >= confidence_threshold:
             valid.append((judge,label,confidence))
+    # One independent vote per judge; contradictory duplicate votes abstain.
+    by_judge={}
+    for judge,label,confidence in valid:
+        by_judge.setdefault(judge,set()).add(label)
+    valid=[(judge,next(iter(labels)),1.0) for judge,labels in by_judge.items() if len(labels)==1]
     counts=Counter(label for _,label,_ in valid)
     if not counts:
         return {"label":"","origin":"auto","agreed_judges":0,"eligible_for_training":False}

@@ -80,7 +80,8 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         env:
           HF_HOME: ${{ runner.temp }}/hf-cache
-          MODEL_CLUSTER_HMAC_KEY: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+          MODEL_CLUSTER_HMAC_KEY: ${{ secrets.MODEL_CLUSTER_HMAC_KEY }}
+          NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -euo pipefail
           python tools/model_shadow_batch.py --private-dir private-labels --output-dir runtime/model-shadow --review-sample > /tmp/model-shadow-metrics.json

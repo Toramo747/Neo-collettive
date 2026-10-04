@@ -57,8 +57,8 @@ def validate_hidden_origins(cases: list[dict]) -> None:
         if not isinstance(row, dict):
             continue
         origin = str(row.get("label_origin") or "")
-        if origin not in {"human", "outcome"}:
-            raise ValueError("hidden_label_must_be_human_or_outcome")
+        if origin != "human":
+            raise ValueError("hidden_label_must_be_human")
 
 
 def _feature_index(ngram: str, dimension: int) -> int:
