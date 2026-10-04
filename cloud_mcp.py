@@ -48,6 +48,7 @@ from peer_quality import classify_peer_response, classify_stored_interviews, col
 from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from gate_stability import apply_gate_hysteresis
+from candidate_observability import build_candidate_telemetry
 from hidden_control_gate import evaluate_hidden_control
 from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
@@ -149,7 +150,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.49"  # OSIXBAY public-brand migration; legacy identifiers remain compatible
+VERSION = "0.99.50"  # privacy-safe commercial candidate observability
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -177,6 +178,8 @@ STATE_CHECKPOINT_EVERY = max(1, int(os.getenv("NEO_STATE_CHECKPOINT_EVERY", "6")
 POLICY_PATH = os.getenv("NEO_POLICY_PATH", "neo_policy.json")
 HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900")))
 HEARTBEAT_TOKEN = (os.getenv("NEO_HEARTBEAT_TOKEN") or "").strip()
+CANDIDATE_TELEMETRY_HMAC_KEY = (os.getenv("CANDIDATE_TELEMETRY_HMAC_KEY") or HEARTBEAT_TOKEN).strip()
+CANDIDATE_TELEMETRY_ID_KEY_VERSION = (os.getenv("CANDIDATE_TELEMETRY_ID_KEY_VERSION") or "v1").strip()[:16]
 NEO_ADMIN_TOKEN = (os.getenv("NEO_ADMIN_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
@@ -9053,8 +9056,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         source_diagnostics=source_diagnostics,
         usage_evidence=endpoint_verifier.usage_metrics_snapshot(),
     )
+    previous_gate_state=AUTOPILOT_STATE.get("gate_stability") or {}
+    first_cycle_after_deploy=bool(
+        DEPLOY_COMMIT
+        and str(previous_gate_state.get("last_observed_commit") or "") != DEPLOY_COMMIT
+    )
     gate_state,stable_rows=apply_gate_hysteresis(
-        AUTOPILOT_STATE.get("gate_stability") or {},
+        previous_gate_state,
         list(market_analysis.get("top5") or []),
         version=VERSION,
         commit=DEPLOY_COMMIT,
@@ -9069,6 +9077,17 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         counts=dict(market_analysis.get("candidate_counts") or {})
         counts["qualified_candidates"]=sum(1 for row in stable_rows if row.get("stable_gate_pass"))
         market_analysis["candidate_counts"]=counts
+    market_analysis["candidate_telemetry"]=build_candidate_telemetry(
+        stable_rows,
+        gate_state,
+        secret=CANDIDATE_TELEMETRY_HMAC_KEY,
+        cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
+        commit=DEPLOY_COMMIT,
+        tagger_version=TAGGER_VERSION,
+        observed_at_utc=str(market_analysis.get("generated_at_utc") or ""),
+        first_cycle_after_deploy=first_cycle_after_deploy,
+        id_key_version=CANDIDATE_TELEMETRY_ID_KEY_VERSION,
+    )
     AUTOPILOT_STATE["tool_opportunities"]=market_analysis
     council_rows=list(market_analysis.get("council_transcripts") or [])
     council_history=list(AUTOPILOT_STATE.get("council_history") or [])

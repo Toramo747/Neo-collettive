@@ -131,6 +131,9 @@ def apply_gate_hysteresis(
                 "current_fingerprint":fp,
                 "evidence_unchanged":bool(fp and fp==str(prev.get("last_fingerprint") or "")),
             })
+        first_raw_pass_utc=str(prev.get("first_raw_pass_utc") or "") if raw_pass else ""
+        if raw_pass and not first_raw_pass_utc:
+            first_raw_pass_utc=now
         candidates[key]={
             "stable":stable,
             "last_raw":raw_pass,
@@ -142,6 +145,8 @@ def apply_gate_hysteresis(
             "last_fingerprint":fp,
             "family":str(row.get("family") or "")[:64],
             "updated_at_utc":now,
+            "first_raw_pass_utc":first_raw_pass_utc,
+            "last_commit":str(commit or "")[:64],
         }
         results[key]=(stable,pass_streak,fail_streak)
 
@@ -153,6 +158,7 @@ def apply_gate_hysteresis(
         absent=int(prev.get("absent_streak") or 0)+1
         prev["absent_streak"]=absent
         prev["pass_streak"]=0
+        prev["first_raw_pass_utc"]=""
         if bool(prev.get("stable")) and absent>=EXIT_STREAK:
             prev["stable"]=False
             prev["fail_streak"]=max(EXIT_STREAK,int(prev.get("fail_streak") or 0))
@@ -182,4 +188,5 @@ def apply_gate_hysteresis(
         "candidates":candidates,
         "flips":flips[-MAX_FLIPS:],
         "updated_at_utc":now,
+        "last_observed_commit":str(commit or "")[:64],
     },out
