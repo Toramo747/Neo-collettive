@@ -20,5 +20,11 @@ class LLMGuidedSearchTests(unittest.TestCase):
         prompts={m.make_prompt("invoice reconciliation",name) for name in m.PROMPT_GENOMES}
         self.assertEqual(len(prompts),len(m.PROMPT_GENOMES))
 
+    def test_mutation_population_is_bounded(self):
+        self.assertGreaterEqual(len(m.MUTATION_GENOMES),4)
+        p=m.make_mutation_prompt("invoice reconciliation","invoice reconcile pay for","first_person_pain").lower()
+        self.assertIn("mutating an existing search query",p)
+        self.assertIn("do not add urls",p)
+
 if __name__=="__main__":
     unittest.main()
