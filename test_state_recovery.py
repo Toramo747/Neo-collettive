@@ -5,20 +5,22 @@ from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_stat
 
 
 class StateRecoveryTests(unittest.TestCase):
-    def test_higher_cycle_count_beats_newer_but_stale_env_timestamp(self):
+    def test_higher_cycle_projection_does_not_replace_durable_private_state(self):
         source,payload,meta=select_freshest_state([
             ("render_env",{
                 "cycles_completed":139,
                 "state_saved_at_utc":"2026-09-23T03:00:00+00:00",
+                "commercial_evidence_memory":[{"id":"durable"}],
             }),
             ("repo_snapshot",{
                 "cycles_completed":141,
                 "last_finished_utc":"2026-09-23T00:41:36+00:00",
             }),
         ])
-        self.assertEqual(source,"repo_snapshot")
-        self.assertEqual(payload["cycles_completed"],141)
-        self.assertEqual(meta["selected_cycles"],141)
+        self.assertEqual(source,"render_env")
+        self.assertEqual(payload["cycles_completed"],139)
+        self.assertEqual(len(payload["commercial_evidence_memory"]),1)
+        self.assertTrue(meta["projection_bypassed"])
 
     def test_sparse_repo_projection_never_beats_durable_env_on_tie(self):
         source,payload,meta=select_freshest_state([
