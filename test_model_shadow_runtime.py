@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import os
 import resource
@@ -17,7 +18,7 @@ class ModelShadowStudentRuntimeTests(unittest.TestCase):
         weights=np.zeros((len(labels),dim),dtype="<f4")
         weights[0,0]=1.0
         bias=np.zeros(len(labels),dtype="<f4")
-        return {
+        payload={
             "schema_v":1,
             "mode":"shadow",
             "trained":True,
@@ -28,9 +29,12 @@ class ModelShadowStudentRuntimeTests(unittest.TestCase):
             "labels":labels,
             "weights_f32_b64":base64.b64encode(weights.tobytes()).decode("ascii"),
             "bias_f32_b64":base64.b64encode(bias.tobytes()).decode("ascii"),
-            "artifact_sha256":"0"*64,
             "training_manifest_sha256":"1"*64,
         }
+        payload["artifact_sha256"]=hashlib.sha256(
+            json.dumps(payload,sort_keys=True,separators=(",",":")).encode("utf-8")
+        ).hexdigest()
+        return payload
 
     def test_student_artifact_and_inference_fit_render_budget(self):
         payload=self._artifact()
