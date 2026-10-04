@@ -41,6 +41,14 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result["source_empty"], {})
         self.assertEqual(result["source_errors"], {})
 
+    def test_web_attempt_is_attributed_to_actual_provider(self):
+        batches=[{"provider":"brave","results":[{"title":"A","url":"https://a.test/1","snippet":"pain","source":"brave-search"}]}]
+        result=routed_search_diagnostics(
+            batches,"q",{"class":"explore"},lambda *_:{"relevant":True},["web"]
+        )
+        self.assertEqual(result["source_attempts"],{"brave":1})
+        self.assertEqual(result["raw_by_source"],{"brave":1})
+
     def test_cycle_snapshot_merges_search_scout_and_rejections(self):
         diag = IngestionDiagnostics(True)
         diag.merge_web_research([{

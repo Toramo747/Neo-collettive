@@ -116,7 +116,7 @@ class FunnelObservabilityIntegrationTests(unittest.IsolatedAsyncioTestCase):
         d.merge_web_research([{"ingestion_diagnostics":routed}])
         diag=self.projected(d.snapshot())
         self.assertIn(
-            {"source":"web","error":"TimeoutError","count":1},
+            {"source":"brave","error":"TimeoutError","count":1},
             diag["funnel"]["errors_by_source"],
         )
         self.assertGreaterEqual(state["fallbacks"],1)

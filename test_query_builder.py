@@ -69,18 +69,24 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertTrue(q.startswith("HR workflow automation "))
         self.assertIn("Looking for help",q)
 
-    def test_desire_experiment_reserves_two_bounded_entries(self):
+    def test_desire_experiment_reserves_four_bounded_entries(self):
         base=[
             {"query":"q1","class":"explore","family":"manual_data_entry","sector":"ops"},
             {"query":"q2","class":"explore","family":"workflow_automation","sector":"ops2"},
             {"query":"q3","class":"explore","family":"integration_api","sector":"ops3"},
+            {"query":"q4","class":"explore","family":"invoice_reconciliation","sector":"ops4"},
         ]
-        rows=desire_experiment_entries(base,2)
-        self.assertEqual(len(rows),2)
+        rows=desire_experiment_entries(base,4)
+        self.assertEqual(len(rows),4)
         self.assertTrue(all(r["query_intent"]=="desire" for r in rows))
-        self.assertEqual({r["intent_class"] for r in rows},{"solution_search","paid_automation"})
-        self.assertTrue(any('"is there a tool"' in r["query"] for r in rows))
-        self.assertTrue(any('"hire someone to automate"' in r["query"] for r in rows))
+        self.assertEqual({r["intent_class"] for r in rows},{
+            "solution_search","automation_howto","tool_recommendation","paid_automation",
+        })
+        combined=" ".join(r["query"] for r in rows)
+        self.assertIn('"looking for a tool"',combined)
+        self.assertIn('"how do I automate"',combined)
+        self.assertIn('"what tool should I use"',combined)
+        self.assertIn('"hire someone to automate"',combined)
 
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")

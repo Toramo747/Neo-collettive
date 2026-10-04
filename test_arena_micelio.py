@@ -1,7 +1,7 @@
 import copy, json, tempfile, unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from arena_micelio import sync, reverify, critic_context, load_json, save_json, NAMESPACE
+from arena_micelio import sync, reverify, critic_context, load_json, save_json, compact_memory, NAMESPACE
 
 class MicelioTests(unittest.TestCase):
     def _session(self):
@@ -46,6 +46,21 @@ class MicelioTests(unittest.TestCase):
             private=load_json(root/"critic-private.json",{})
             self.assertEqual(private.get("owner"),"Critic")
             self.assertTrue(private.get("counterexamples"))
+    def test_compaction_preserves_active_and_bounds_inactive_history(self):
+        beliefs=[]
+        for i in range(4):
+            beliefs.append({"belief_id":f"a{i}","status":"ACTIVE","verification_history":[{"n":n} for n in range(12)]})
+        for i in range(80):
+            beliefs.append({"belief_id":f"h{i}","status":"HYPOTHESIS","verification_history":[]})
+        for i in range(140):
+            beliefs.append({"belief_id":f"q{i}","status":"QUARANTINE","verification_history":[{"n":n} for n in range(12)]})
+        out=compact_memory({"beliefs":beliefs})
+        self.assertEqual(sum(1 for x in out["beliefs"] if x["status"]=="ACTIVE"),4)
+        self.assertEqual(sum(1 for x in out["beliefs"] if x["status"]=="HYPOTHESIS"),50)
+        self.assertEqual(sum(1 for x in out["beliefs"] if x["status"]=="QUARANTINE"),100)
+        self.assertTrue(all(len(x.get("verification_history") or [])<=5 for x in out["beliefs"]))
+        self.assertEqual(out["compaction"]["dropped"],70)
+
     def test_expiry(self):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td); (root/"sessions").mkdir()

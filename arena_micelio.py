@@ -151,7 +151,7 @@ def reverify(root: Path, memory: dict, *, at: datetime|None=None) -> dict:
         ok=all(x[0] for x in results)
         history=list(row.get("verification_history") or [])
         history.append({"verified_at_utc":at.isoformat(),"ok":ok,"checks":[{"proof":name,"ok":v} for v,name in results]})
-        row["verification_history"]=history[-20:]
+        row["verification_history"]=history[-5:]
         row["last_verified_utc"]=at.isoformat()
         if expiry and at>=expiry:
             row["status"]="EXPIRED"; row["confidence"]=0.0
@@ -189,12 +189,28 @@ def update_critic_private(root: Path, sessions: dict[str,dict]):
     save_json(path,private)
     return private
 
+def compact_memory(memory: dict) -> dict:
+    """Bound Arena-only shared memory growth without dropping active facts."""
+    rows=[x for x in (memory.get("beliefs") or []) if isinstance(x,dict)]
+    active=[x for x in rows if x.get("status")=="ACTIVE"]
+    hypotheses=[x for x in rows if x.get("status")=="HYPOTHESIS"][-50:]
+    inactive=[x for x in rows if x.get("status") not in {"ACTIVE","HYPOTHESIS"}][-100:]
+    kept=active+hypotheses+inactive
+    for row in kept:
+        if isinstance(row.get("verification_history"),list):
+            row["verification_history"]=row["verification_history"][-5:]
+    out=dict(memory)
+    out["beliefs"]=kept
+    out["compaction"]={"active_preserved":len(active),"hypotheses_retained":len(hypotheses),"inactive_retained":len(inactive),"dropped":max(0,len(rows)-len(kept))}
+    return out
+
 def sync(root: str|Path="data/arena") -> dict:
     root=Path(root)
     memory=load_json(root/"micelio.json",{"schema_v":1,"namespace":NAMESPACE,"beliefs":[]})
     memory=seed_from_sessions(root,memory)
     memory=reverify(root,memory)
     memory,_=sync_registry_micelio(memory,"data/registry-health")
+    memory=compact_memory(memory)
     save_json(root/"micelio.json",memory)
     update_critic_private(root,_sessions(root))
     return memory
