@@ -2327,7 +2327,7 @@ async def _advertise_public_agent() -> dict:
                     register=await client.post(
                         "https://allagents.app/register",
                         json={
-                            "name":"MYCELIX",
+                            "name":BRAND_NAME,
                             "specialty":"agents-infra",
                             "description":"Autonomous collective-intelligence agent for evidence validation, peer critique, agent interviews, commercial research and bounded collective reasoning.",
                             "endpoints":{
@@ -5859,7 +5859,7 @@ def _family_relevance_terms(family: str) -> tuple[str,...]:
         "marketing_seo":("seo","marketing automation","keyword research","ad campaign"),
         "analytics_tools":("analytics","business intelligence","reporting dashboard","data analytics"),
         "compliance_tools":("compliance","audit evidence","gdpr","iso 27001","regulatory reporting"),
-        "finance_ops":("invoice","accounts payable","bookkeeping","expense reporting","finance operations"),
+        "finance_ops":("invoice","invoices","invoice reconciliation","reconciling invoices","accounts payable","bookkeeping","expense reporting","finance operations"),
         "hr_tools":("hr workflow","employee onboarding","recruiting","applicant tracking"),
         "education_tools":("education software","teacher admin","learning platform","course workflow"),
         "creator_tools":("creator tool","newsletter","podcast workflow","video creator"),
@@ -8523,6 +8523,7 @@ def _compact_director_result(result: dict) -> dict:
         "quarantined_evidence_items": quality.get("quarantined_evidence_items"),
         "rejected_current_results": quality.get("rejected_current_results") or [],
         "ingestion_diagnostics": quality.get("ingestion_diagnostics") or {},
+        "buyer_voice_by_source": ((quality.get("ingestion_diagnostics") or {}).get("buyer_voice_by_source") or {}),
         "problem_clusters": {
             key: {
                 "family": data.get("family"),
