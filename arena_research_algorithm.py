@@ -252,6 +252,31 @@ async def fetch_hn_query(client: httpx.AsyncClient, topic: str, query: str, rece
         return {"ok": False, "topic": topic, "query": query, "hits": [], "error": type(exc).__name__}
 
 
+def evaluate_control_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    total=0
+    correct=0
+    details=[]
+    for case in cases or []:
+        if not isinstance(case,dict):
+            continue
+        total += 1
+        title=str(case.get("title") or "")
+        body=str(case.get("body") or "")
+        source=str(case.get("source") or "")
+        url=str(case.get("url") or "")
+        expect=case.get("expect") if isinstance(case.get("expect"),dict) else {}
+        tags=demand_signal_type(title,body,query_role="buyer",seller_launch_guard=True,url=url,source=source,vendor_content_guard=True,web_buyer_voice_guard=True,supply_offer_guard=True)
+        observed={
+            "buyer":buyer_voice_present(title,body),
+            "first_person":first_person_buyer_voice_present(title,body),
+            "family":commercial_family((title+" "+body).lower()),
+            "positive":bool({"PAIN","BUY_INTENT","PAID_DEMAND"} & set(tags)),
+        }
+        ok=all(observed.get(k)==v for k,v in expect.items())
+        correct += int(ok)
+        details.append({"id":str(case.get("id") or "")[:80],"ok":ok})
+    return {"cases":total,"correct":correct,"accuracy":round(correct/max(1,total),4),"used_for_evolution":False,"raw_external_text":False,"details":details}
+
 def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Score with the same buyer/demand primitives used by production."""
     genes = clamp_genome(genome)
@@ -699,6 +724,8 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
     state_path = data_dir / "research-algorithm" / "state.json"
     report_path = data_dir / "research-algorithm" / "latest.json"
     state = load_json(state_path, {})
+    control_data=load_json(data_dir / "research-algorithm" / "control_cases.json", {})
+    control_metrics=evaluate_control_cases(control_data.get("cases") or [])
     generation = int(state.get("generation") or 0)
     population = state.get("population") if isinstance(state.get("population"), list) else initial_population()
     if not population:
@@ -830,6 +857,7 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
             for x in ranked
         ],
         "collaborators": collaborators,
+        "control_metrics": control_metrics,
         "promotion_candidate": next_state["promotion_candidate"],
         "boundary": dict(BOUNDARY),
     }
