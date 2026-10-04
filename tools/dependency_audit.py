@@ -32,6 +32,18 @@ def _classifier_license(metadata: md.PackageMetadata) -> str:
     return " | ".join(licenses)
 
 
+def _primary_license_evidence(metadata: md.PackageMetadata) -> tuple[str, str]:
+    """Select primary package-license metadata before bundled third-party notices."""
+    expression=(metadata.get("License-Expression") or "").strip()
+    classifier=_classifier_license(metadata)
+    raw=(metadata.get("License") or "").strip()
+    if expression:
+        return expression, ""
+    if classifier:
+        return "", classifier
+    return raw, ""
+
+
 def _canonical_license(raw: str, classifier: str) -> tuple[str, str]:
     source = " ".join(x for x in (raw, classifier) if x).strip()
     low = source.lower()
@@ -73,8 +85,7 @@ def collect() -> list[dict[str, str]]:
             continue
         seen.add(key)
 
-        raw = (metadata.get("License-Expression") or metadata.get("License") or "").strip()
-        classifier = _classifier_license(metadata)
+        raw, classifier = _primary_license_evidence(metadata)
         normalized, status = _canonical_license(raw, classifier)
         rows.append(
             {
