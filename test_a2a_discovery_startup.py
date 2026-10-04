@@ -24,5 +24,20 @@ class A2ADiscoveryStartupTests(unittest.TestCase):
         self.assertLess(disabled,first_io)
         self.assertIn('"last_registration_ok":False',body)
 
+    def test_arena_champion_uses_concurrent_registry_io_with_three_second_cap(self):
+        body=self.body
+        self.assertIn("registry_timeout=3.0",body)
+        self.assertIn("registry_rows=await asyncio.gather(",body)
+        gather=body.index("registry_rows=await asyncio.gather(")
+        allagents=body.index("advertise_allagents()",gather)
+        community=body.index("advertise_community()",gather)
+        global_registry=body.index("advertise_global()",gather)
+        self.assertLess(allagents,community)
+        self.assertLess(community,global_registry)
+
+    def test_registry_clients_share_bounded_arena_timeout(self):
+        body=self.body
+        self.assertGreaterEqual(body.count("timeout=registry_timeout"),3)
+
 if __name__=="__main__":
     unittest.main()
