@@ -14,6 +14,7 @@ from a2a_state_router import classify_runtime_state, enforcement_reply
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
+import hashlib
 import json
 import logging
 import os
