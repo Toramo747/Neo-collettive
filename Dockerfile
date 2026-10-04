@@ -6,4 +6,4 @@ COPY requirements.lock .
 RUN python -m pip install --no-cache-dir --require-hashes -r requirements.lock
 COPY . .
 ENV PORT=10000
-CMD ["python","cloud_mcp.py"]
+CMD ["python","startup_guard.py"]
