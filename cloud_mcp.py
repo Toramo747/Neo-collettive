@@ -14,6 +14,7 @@ from a2a_state_router import classify_runtime_state, enforcement_reply
 import aicomglobal_adapter as aicomglobal
 import base64
 import html
+import hashlib
 import json
 import logging
 import os
@@ -355,6 +356,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "model_shadow_observations": [],
     "challenge_track": {
         "mode":"shadow",
         "memory":[],
@@ -6416,6 +6418,7 @@ def _commercial_evidence_quality(
     for item in challenge_shadow_rows or []:
         if not isinstance(item,dict):
             continue
+        _observe_model_shadow_raw(item)
         url=str(item.get("url") or "")
         title=str(item.get("title") or "")
         body=str(item.get("snippet") or item.get("text") or "")
@@ -6437,6 +6440,7 @@ def _commercial_evidence_quality(
         role=str(meta.get("role") or meta.get("class") or "web")
         for item in group.get("results") or []:
             if isinstance(item,dict):
+                _observe_model_shadow_raw(item)
                 ingest(
                     item.get("url") or "",
                     item.get("title") or "",
@@ -6449,6 +6453,7 @@ def _commercial_evidence_quality(
 
     for item in scouts or []:
         if isinstance(item,dict):
+            _observe_model_shadow_raw(item)
             diagnostics.record_scout_deduped(item)
             ingest(
                 item.get("url") or "",item.get("title") or "",item.get("text") or "",
@@ -12336,12 +12341,73 @@ async def api_builder_status(request: Request):
     })
 
 
+
+def _observe_model_shadow_raw(row: dict) -> None:
+    """Bounded in-memory observation buffer for private shadow training only."""
+    if not isinstance(row,dict) or row.get("synthetic") or row.get("test_only"):
+        return
+    source=str(row.get("source") or "")[:200]
+    if any(x in source.lower() for x in ("synthetic","fixture","smoke","mock")):
+        return
+    url=str(row.get("url") or "")[:1200]
+    parsed=urlparse(url)
+    if parsed.scheme not in {"https","http"} or not parsed.hostname:
+        return
+    title=str(row.get("title") or "")[:300]
+    body=str(row.get("snippet") or row.get("text") or row.get("body") or "")[:1500]
+    text=" ".join((title+" "+body).split())
+    if not text:
+        return
+    raw=row.get("structural_signals") if isinstance(row.get("structural_signals"),dict) else row
+    signal_keys=(
+        "path_code","source_type","close_reason","accepted_answer","pricing_page",
+        "job_board","resolved","feature_request","help_wanted","duplicate_count",
+        "reaction_count","requester_key","feasibility","query_role",
+    )
+    signals={k:raw[k] for k in signal_keys if k in raw and isinstance(raw[k],(str,int,float,bool))}
+    item={
+        "url":url,
+        "title":title,
+        "snippet":body,
+        "source":source,
+        "structural_signals":signals,
+    }
+    key=hashlib.sha256((url+"\n"+text).encode()).hexdigest()[:24]
+    current=[
+        x for x in (AUTOPILOT_STATE.get("model_shadow_observations") or [])
+        if isinstance(x,dict)
+    ]
+    dedup=[]
+    seen={key}
+    dedup.append(item)
+    for old in reversed(current):
+        old_text=" ".join((str(old.get("title") or "")+" "+str(old.get("snippet") or "")).split())
+        old_key=hashlib.sha256((str(old.get("url") or "")+"\n"+old_text).encode()).hexdigest()[:24]
+        if old_key in seen:
+            continue
+        seen.add(old_key)
+        dedup.append(old)
+        if len(dedup)>=300:
+            break
+    AUTOPILOT_STATE["model_shadow_observations"]=list(reversed(dedup))
+
+
 async def api_model_private_cases(request: Request):
     from model_archive import private_cases, export_key, EXPORT_PATH
     proof=request.headers.get("x-neo-model-export-proof", "")
     if not HEARTBEAT_TOKEN or not verify_self_traffic_proof(export_key(HEARTBEAT_TOKEN),EXPORT_PATH,proof).get("valid"):
         return JSONResponse({"ok":False,"reason":"PRIVATE_EXPORT_AUTH_REQUIRED"},status_code=403)
     return JSONResponse({"ok":True,"cases":private_cases(AUTOPILOT_STATE)},headers={"Cache-Control":"no-store"})
+
+
+async def api_model_hidden_eval(request: Request):
+    from hidden_control_gate import load_hidden_cases
+    from model_archive import control_cases_to_model_eval, hidden_eval_key, HIDDEN_EVAL_PATH
+    proof=request.headers.get("x-neo-model-hidden-proof", "")
+    if not HEARTBEAT_TOKEN or not verify_self_traffic_proof(hidden_eval_key(HEARTBEAT_TOKEN),HIDDEN_EVAL_PATH,proof).get("valid"):
+        return JSONResponse({"ok":False,"reason":"HIDDEN_EVAL_AUTH_REQUIRED"},status_code=403)
+    cases=control_cases_to_model_eval(load_hidden_cases(),hidden=True)
+    return JSONResponse({"ok":True,"cases":cases},headers={"Cache-Control":"no-store"})
 
 
 async def api_autonomy_status(request: Request):
@@ -13053,6 +13119,7 @@ app = Starlette(
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
         Route("/api/model-shadow/private-cases", api_model_private_cases, methods=["GET"]),
+        Route("/api/model-shadow/hidden-eval", api_model_hidden_eval, methods=["GET"]),
         Route("/api/model-shadow/challenge-clusters", api_model_shadow_challenge_clusters, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),

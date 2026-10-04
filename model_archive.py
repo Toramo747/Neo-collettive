@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 EXPORT_PATH='/api/model-shadow/private-cases'
+HIDDEN_EVAL_PATH='/api/model-shadow/hidden-eval'
 MAX_CASES=100
 SIGNAL_KEYS=('path_code','source_type','close_reason','accepted_answer','pricing_page',
              'job_board','resolved','feature_request','help_wanted','duplicate_count',
@@ -22,6 +23,7 @@ def export_key(secret: str) -> str:
 def private_cases(state: dict) -> list[dict]:
     rows=list(state.get('commercial_evidence_memory') or [])
     rows+=list((state.get('challenge_track') or {}).get('memory') or [])
+    rows+=list(state.get('model_shadow_observations') or [])
     out=[]
     seen=set()
     for row in rows:
@@ -50,6 +52,47 @@ def private_cases(state: dict) -> list[dict]:
             break
     return out
 
+
+
+def hidden_eval_key(secret: str) -> str:
+    return hmac.new(secret.encode(),b'neo:model-shadow:hidden-eval:v1',hashlib.sha256).hexdigest()
+
+
+def control_cases_to_model_eval(cases: list[dict], *, hidden: bool=False) -> list[dict]:
+    out=[]
+    seen=set()
+    for row in cases or []:
+        if not isinstance(row,dict):
+            continue
+        expect=row.get('expect') if isinstance(row.get('expect'),dict) else {}
+        buyer=expect.get('buyer')
+        if not isinstance(buyer,bool):
+            continue
+        title=str(row.get('title') or '')[:300]
+        body=str(row.get('body') or row.get('snippet') or '')[:4000]
+        text=' '.join((title+' '+body).split())[:4000]
+        source=str(row.get('source') or '')[:200]
+        url=str(row.get('url') or '')[:1200]
+        if not text or not source:
+            continue
+        raw_id=str(row.get('id') or '')
+        digest=hashlib.sha256((raw_id+'\n'+source+'\n'+text).encode()).hexdigest()[:24]
+        case_id=('hidden-' if hidden else 'public-')+digest
+        if case_id in seen:
+            continue
+        seen.add(case_id)
+        out.append({
+            'id':case_id,
+            'normalized_text':text,
+            'title':title,
+            'source':source,
+            'url':url,
+            'structural_signals':{},
+            'date':'2026-10-04T00:00:00+00:00',
+            'label_origin':'human',
+            'final_label':'buyer_tool_search' if buyer else 'vendor_offer',
+        })
+    return out
 
 def read_rows(path: Path) -> list[dict]:
     if not path.exists():

@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from model_archive import private_cases, bootstrap_archive, export_key, EXPORT_PATH
+from model_archive import private_cases, bootstrap_archive, export_key, hidden_eval_key, control_cases_to_model_eval, EXPORT_PATH, HIDDEN_EVAL_PATH
 from self_traffic_auth import make_self_traffic_proof
 from starlette.testclient import TestClient
 import cloud_mcp
@@ -15,6 +15,42 @@ class PrivateArchiveTests(unittest.TestCase):
         self.assertEqual(rows[0]['final_label'],'')
         self.assertNotIn('query',rows[0])
         self.assertEqual(len(private_cases({'commercial_evidence_memory':[dict(row,url='https://example.test/'+str(i)) for i in range(150)]})),100)
+
+    def test_shadow_observation_buffer_expands_private_export(self):
+        base={'url':'https://example.test/a','title':'A','snippet':'Observed raw result','source':'brave-search'}
+        extra={'url':'https://example.test/b','title':'B','snippet':'Second raw result','source':'hn-algolia-routed'}
+        rows=private_cases({'commercial_evidence_memory':[base],'model_shadow_observations':[extra]})
+        self.assertEqual(len(rows),2)
+        self.assertEqual({row['source'] for row in rows},{'brave-search','hn-algolia-routed'})
+
+    def test_public_control_cases_convert_to_model_eval(self):
+        payload=json.load(open('data/arena/research-algorithm/control_cases.json',encoding='utf-8'))
+        rows=control_cases_to_model_eval(payload['cases'],hidden=False)
+        self.assertEqual(len(rows),24)
+        self.assertEqual(sum(row['final_label']=='buyer_tool_search' for row in rows),12)
+        self.assertEqual(sum(row['final_label']=='vendor_offer' for row in rows),12)
+
+    def test_hidden_eval_endpoint_is_authenticated_and_human_origin(self):
+        from unittest.mock import patch
+        hidden={'cases':[{
+            'id':'hidden-1','title':'Need a tool','body':'We need software for this workflow.',
+            'source':'hn-algolia-routed','url':'https://example.test/hidden',
+            'expect':{'buyer':True},
+        }]}
+        with patch.object(cloud_mcp,'HEARTBEAT_TOKEN','hidden-secret'), patch.object(cloud_mcp,'NEO_ADMIN_TOKEN','admin-secret'), patch.dict('os.environ',{'NEO_HIDDEN_CONTROL_JSON':json.dumps(hidden)}):
+            client=TestClient(cloud_mcp.app)
+            self.assertEqual(client.get(HIDDEN_EVAL_PATH).status_code,401)
+            proof=make_self_traffic_proof(hidden_eval_key('hidden-secret'),HIDDEN_EVAL_PATH)
+            route_proof=make_self_traffic_proof('hidden-secret',HIDDEN_EVAL_PATH)
+            response=client.get(HIDDEN_EVAL_PATH,headers={
+                'X-MYCELIX-Self-Traffic-Proof':route_proof,
+                'X-NEO-Model-Hidden-Proof':proof,
+            })
+            self.assertEqual(response.status_code,200)
+            rows=response.json()['cases']
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]['label_origin'],'human')
+            self.assertEqual(rows[0]['final_label'],'buyer_tool_search')
 
     def test_idempotent_import_preserves_heldout_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
