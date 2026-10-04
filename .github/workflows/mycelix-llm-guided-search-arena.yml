@@ -1,0 +1,80 @@
+name: MYCELIX LLM Guided Search Arena
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "arena_llm_guided_search.py"
+      - "test_arena_llm_guided_search.py"
+      - ".github/workflows/mycelix-llm-guided-search-arena.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mycelix-llm-guided-search-arena
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MODEL: qwen2.5:0.5b-instruct
+      REPORT: data/arena/llm-guided-search/latest.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Validate shadow experiment
+        run: |
+          set -euo pipefail
+          python -m py_compile arena_llm_guided_search.py
+          python -m unittest -v test_arena_llm_guided_search.py
+      - name: Run local-LLM guided search comparison
+        run: |
+          set -euo pipefail
+          timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+          ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break
+            sleep 1
+          done
+          timeout 300 ollama pull "$MODEL"
+          timeout 720 python arena_llm_guided_search.py --model "$MODEL" --out "$REPORT"
+      - name: Assert production isolation
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open("data/arena/llm-guided-search/latest.json",encoding="utf-8"))
+          b=d.get("boundary") or {}
+          assert b.get("production_state_write") is False
+          assert b.get("commercial_gate_influence")=="NONE"
+          assert b.get("qualified_hits_influence")=="NONE"
+          assert b.get("llm_urls_accepted_as_evidence") is False
+          assert b.get("provider_urls_only") is True
+          assert d.get("production_promoted") is False
+          print({"baseline":d["baseline_metrics"]["fitness"],"guided":d["final_metrics"]["fitness"],"candidate":d["candidate_better_than_baseline"],"status":d.get("status"),"generations":d.get("generations_run")})
+          PY
+      - name: Publish shadow result
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX LLM Search Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add "$REPORT"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "arena: local LLM guided search result [skip render]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mycelix-llm-guided-search
+          path: data/arena/llm-guided-search/latest.json
+          retention-days: 30
