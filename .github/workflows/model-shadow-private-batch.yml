@@ -111,7 +111,7 @@ jobs:
         if: steps.training.outputs.ready == 'true'
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check "numpy==2.3.3" "transformers==4.57.1" "sentence-transformers==5.1.1" "huggingface-hub==0.35.3" "llama-cpp-python==0.3.16"
+          python -m pip install --disable-pip-version-check "numpy==2.3.3" "transformers==4.57.1" "sentence-transformers==5.1.1" "huggingface-hub==0.35.3" "llama-cpp-python==0.3.16" "sentencepiece==0.2.1" "protobuf==6.33.0"
 
       - name: Run pinned multi-judge batch
         if: steps.training.outputs.ready == 'true'
@@ -122,7 +122,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! python tools/model_shadow_batch.py --private-dir private-labels --output-dir runtime/model-shadow --review-sample > /tmp/model-shadow-metrics.json 2>/tmp/model-shadow-private-errors; then
-            echo '{"ok":false,"reason":"PRIVATE_BATCH_FAILED"}'
+            cat /tmp/model-shadow-metrics.json
             exit 1
           fi
           python -m json.tool /tmp/model-shadow-metrics.json >/dev/null
