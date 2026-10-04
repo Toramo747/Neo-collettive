@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: BUSL-1.1
+from __future__ import annotations
+
+import hashlib
+import hmac
+from datetime import datetime, timezone
+from typing import Any
+
+from gate_stability import opportunity_fingerprint, opportunity_identity
+
+ID_KEY_VERSION = "v1"
+PUBLIC_ID_LENGTH = 16
+ALLOWED_MISSING_CODES = frozenset({
+    "specific_tool_name_and_target_user",
+    "two_independent_real_price_competitors",
+    "two_competitors_with_real_price",
+    "dissatisfaction_signal",
+    "documented_gap",
+    "three_independent_source_domains",
+    "two_existing_paid_tools",
+    "monetization_score_60",
+})
+
+
+def _hmac_id(secret: str, purpose: str, value: str) -> str:
+    key = hmac.new(
+        secret.encode("utf-8"),
+        ("mycelix-candidate-telemetry|" + ID_KEY_VERSION + "|" + purpose).encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return hmac.new(key, value.encode("utf-8"), hashlib.sha256).hexdigest()[:PUBLIC_ID_LENGTH]
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def build_candidate_telemetry(
+    rows: list[dict] | None,
+    gate_state: dict | None,
+    *,
+    secret: str,
+    cycle: int,
+    commit: str,
+    tagger_version: str,
+    observed_at_utc: str,
+    first_cycle_after_deploy: bool,
+) -> list[dict]:
+    if not secret:
+        return []
+    state = gate_state if isinstance(gate_state, dict) else {}
+    candidates = state.get("candidates") if isinstance(state.get("candidates"), dict) else {}
+    now = _parse_utc(observed_at_utc) or datetime.now(timezone.utc)
+    out = []
+    for row in list(rows or [])[:3]:
+        if not isinstance(row, dict):
+            continue
+        private_key = opportunity_identity(row)
+        candidate_state = candidates.get(private_key) if isinstance(candidates.get(private_key), dict) else {}
+        first_pass = _parse_utc(candidate_state.get("first_raw_pass_utc"))
+        source_rows = [x for x in (row.get("sources") or []) if isinstance(x, dict)]
+        domains = {
+            str(x.get("domain") or "").strip().lower()
+            for x in source_rows
+            if str(x.get("domain") or "").strip()
+        }
+        missing_codes = [
+            str(code) for code in (row.get("missing") or [])
+            if str(code) in ALLOWED_MISSING_CODES
+        ]
+        confirmation = row.get("gate_confirmation") if isinstance(row.get("gate_confirmation"), dict) else {}
+        private_fp = opportunity_fingerprint(row)
+        out.append({
+            "candidate_id": _hmac_id(secret, "candidate", private_key),
+            "evidence_fingerprint": _hmac_id(secret, "evidence", private_fp),
+            "id_key_version": ID_KEY_VERSION,
+            "score": max(0, int(row.get("monetization_score") or 0)),
+            "source_count": len(source_rows),
+            "independent_domain_count": len(domains),
+            "raw_gate_pass": bool(row.get("raw_gate_pass")),
+            "stable_gate_pass": bool(row.get("stable_gate_pass")),
+            "pass_streak": max(0, int(confirmation.get("pass_streak") or 0)),
+            "fail_streak": max(0, int(confirmation.get("fail_streak") or 0)),
+            "missing_codes": missing_codes[:12],
+            "cycle": max(0, int(cycle or 0)),
+            "commit": str(commit or "")[:64],
+            "first_cycle_after_deploy": bool(first_cycle_after_deploy),
+            "seconds_since_first_raw_pass": (
+                max(0, int((now - first_pass).total_seconds())) if first_pass else None
+            ),
+            "tagger_version": str(tagger_version or "")[:48],
+        })
+    return out
