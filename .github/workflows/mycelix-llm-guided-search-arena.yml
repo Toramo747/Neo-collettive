@@ -59,7 +59,7 @@ jobs:
           assert b.get("llm_urls_accepted_as_evidence") is False
           assert b.get("provider_urls_only") is True
           assert d.get("production_promoted") is False
-          print({"baseline":d["baseline_metrics"]["fitness"],"guided":d["llm_guided_metrics"]["fitness"],"candidate":d["candidate_better_than_baseline"]})
+          print({"baseline":d["baseline_metrics"]["fitness"],"guided":d["final_metrics"]["fitness"],"candidate":d["candidate_better_than_baseline"],"status":d.get("status"),"generations":d.get("generations_run")})
           PY
       - name: Publish shadow result
         if: github.ref == 'refs/heads/main'
