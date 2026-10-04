@@ -129,6 +129,53 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "last_scan_utc": None,
             "signal_memory_count": None,
         },
+        "challenge_diagnostics": {
+            "mode": None,
+            "status": None,
+            "tagger_version": None,
+            "manual_confirmation_required": None,
+            "thresholds": {
+                "min_requesters": None,
+                "min_domains": None,
+                "min_age_days": None,
+            },
+            "funnel": {
+                "collected": None,
+                "routed": None,
+                "independent_requesters": None,
+                "age_qualified": None,
+                "workarounds": None,
+                "feasibility_checked": None,
+                "ready": None,
+            },
+            "candidate_counts": {
+                "observed": None,
+                "ready": None,
+            },
+            "candidates": [{
+                "candidate_id": None,
+                "evidence_fingerprint": None,
+                "id_key_version": None,
+                "score": None,
+                "source_count": None,
+                "independent_domain_count": None,
+                "independent_requester_count": None,
+                "age_days": None,
+                "workaround_count": None,
+                "feasibility_code": None,
+                "reward_signal_count": None,
+                "raw_gate_pass": None,
+                "stable_gate_pass": None,
+                "pass_streak": None,
+                "fail_streak": None,
+                "missing_codes": [None],
+                "cycle": None,
+                "commit": None,
+                "first_cycle_after_deploy": None,
+                "seconds_since_first_raw_pass": None,
+                "tagger_version": None,
+            }],
+        },
         "select_diagnostics": {
             "status": None,
             "ingestion_enabled": None,
@@ -384,6 +431,16 @@ _CANDIDATE_MISSING_CODES = frozenset({
     "two_existing_paid_tools",
     "monetization_score_60",
 })
+_CHALLENGE_MISSING_CODES = frozenset({
+    "three_independent_requesters",
+    "two_independent_domains",
+    "problem_age_60_days",
+    "documented_workaround_or_failed_attempt",
+    "feasibility_explicit",
+    "feasibility_hard",
+    "problem_already_resolved",
+    "unknown_requirement",
+})
 
 
 def _safe_code(value: Any, max_len: int = 80) -> str:
@@ -576,6 +633,83 @@ def _project_candidate_telemetry(value: Any) -> list[dict]:
     return rows
 
 
+def _project_challenge_diagnostics(latest_result: Any) -> dict:
+    latest=latest_result if isinstance(latest_result,dict) else {}
+    raw=latest.get("challenge_shadow") if isinstance(latest.get("challenge_shadow"),dict) else {}
+    thresholds=raw.get("thresholds") if isinstance(raw.get("thresholds"),dict) else {}
+    funnel=raw.get("funnel") if isinstance(raw.get("funnel"),dict) else {}
+    counts=raw.get("candidate_counts") if isinstance(raw.get("candidate_counts"),dict) else {}
+    rows=[]
+    for item in list(raw.get("candidates") or [])[:3]:
+        if not isinstance(item,dict):
+            continue
+        candidate_id=str(item.get("candidate_id") or "")
+        evidence_fp=str(item.get("evidence_fingerprint") or "")
+        key_version=str(item.get("id_key_version") or "")
+        commit=str(item.get("commit") or "")
+        tagger=str(item.get("tagger_version") or "")
+        if not (_HEX16_RE.fullmatch(candidate_id) and _HEX16_RE.fullmatch(evidence_fp)):
+            continue
+        if not _VERSION_CODE_RE.fullmatch(key_version):
+            continue
+        if commit and not _HEX_COMMIT_RE.fullmatch(commit):
+            continue
+        if tagger and not _VERSION_CODE_RE.fullmatch(tagger):
+            continue
+        feasibility=str(item.get("feasibility_code") or "unknown")
+        if feasibility not in {"feasible","hard","unknown"}:
+            feasibility="unknown"
+        missing=[
+            str(code) for code in (item.get("missing_codes") or [])
+            if str(code) in _CHALLENGE_MISSING_CODES
+        ][:12]
+        row={
+            "candidate_id":candidate_id,
+            "evidence_fingerprint":evidence_fp,
+            "id_key_version":key_version,
+            "score":max(0,int(item.get("score") or 0)),
+            "source_count":max(0,int(item.get("source_count") or 0)),
+            "independent_domain_count":max(0,int(item.get("independent_domain_count") or 0)),
+            "independent_requester_count":max(0,int(item.get("independent_requester_count") or 0)),
+            "age_days":max(0,int(item.get("age_days") or 0)),
+            "workaround_count":max(0,int(item.get("workaround_count") or 0)),
+            "feasibility_code":feasibility,
+            "reward_signal_count":max(0,int(item.get("reward_signal_count") or 0)),
+            "raw_gate_pass":bool(item.get("raw_gate_pass")),
+            "stable_gate_pass":bool(item.get("stable_gate_pass")),
+            "pass_streak":max(0,int(item.get("pass_streak") or 0)),
+            "fail_streak":max(0,int(item.get("fail_streak") or 0)),
+            "missing_codes":missing,
+            "cycle":max(0,int(item.get("cycle") or 0)),
+            "commit":commit,
+            "first_cycle_after_deploy":bool(item.get("first_cycle_after_deploy")),
+            "tagger_version":tagger,
+        }
+        elapsed=item.get("seconds_since_first_raw_pass")
+        row["seconds_since_first_raw_pass"]=None if elapsed is None else max(0,int(elapsed or 0))
+        rows.append(row)
+    return {
+        "mode":"shadow" if str(raw.get("mode") or "")=="shadow" else "shadow",
+        "status":str(raw.get("status") or "CHALLENGE_SELECT") if str(raw.get("status") or "") in {"CHALLENGE_SELECT","CHALLENGE_READY"} else "CHALLENGE_SELECT",
+        "tagger_version":str(raw.get("tagger_version") or "")[:16],
+        "manual_confirmation_required":bool(raw.get("manual_confirmation_required",True)),
+        "thresholds":{
+            "min_requesters":max(0,int(thresholds.get("min_requesters") or 0)),
+            "min_domains":max(0,int(thresholds.get("min_domains") or 0)),
+            "min_age_days":max(0,int(thresholds.get("min_age_days") or 0)),
+        },
+        "funnel":{
+            key:max(0,int(funnel.get(key) or 0))
+            for key in ("collected","routed","independent_requesters","age_qualified","workarounds","feasibility_checked","ready")
+        },
+        "candidate_counts":{
+            "observed":max(0,int(counts.get("observed") or 0)),
+            "ready":max(0,int(counts.get("ready") or 0)),
+        },
+        "candidates":rows,
+    }
+
+
 def _project_select_diagnostics(latest_result: Any) -> dict:
     latest = latest_result if isinstance(latest_result, dict) else {}
     quality = latest.get("evidence_quality") if isinstance(latest.get("evidence_quality"), dict) else {}
@@ -763,6 +897,7 @@ def sanitize_public_snapshot(snapshot: dict | None) -> dict:
         "ok":bool(hidden.get("ok")),
     }
     out["autopilot"] = sanitize_public_autopilot(src.get("autopilot"))
+    out["autopilot"]["challenge_diagnostics"] = _project_challenge_diagnostics(src.get("latest_result"))
     out["autopilot"]["select_diagnostics"] = _project_select_diagnostics(src.get("latest_result"))
     validate_public_snapshot(out)
     return out
@@ -874,6 +1009,32 @@ def _validate_against_schema(snapshot: Any, schema_root: Any) -> None:
     walk(snapshot, schema_root, "$")
 
 
+def _validate_challenge_telemetry(snapshot: Any) -> None:
+    try:
+        diag=snapshot["autopilot"]["challenge_diagnostics"]
+        rows=diag["candidates"]
+    except Exception:
+        return
+    if str(diag.get("mode") or "")!="shadow":
+        raise ValueError("public_snapshot_challenge_mode")
+    if str(diag.get("status") or "") not in {"CHALLENGE_SELECT","CHALLENGE_READY"}:
+        raise ValueError("public_snapshot_challenge_status")
+    if not isinstance(rows,list) or len(rows)>3:
+        raise ValueError("public_snapshot_challenge_candidates_shape")
+    for row in rows:
+        if not isinstance(row,dict):
+            raise ValueError("public_snapshot_challenge_candidate_row")
+        if not _HEX16_RE.fullmatch(str(row.get("candidate_id") or "")):
+            raise ValueError("public_snapshot_challenge_candidate_id")
+        if not _HEX16_RE.fullmatch(str(row.get("evidence_fingerprint") or "")):
+            raise ValueError("public_snapshot_challenge_evidence_fingerprint")
+        if str(row.get("feasibility_code") or "") not in {"feasible","hard","unknown"}:
+            raise ValueError("public_snapshot_challenge_feasibility")
+        for code in row.get("missing_codes") or []:
+            if str(code) not in _CHALLENGE_MISSING_CODES:
+                raise ValueError("public_snapshot_challenge_missing_code")
+
+
 def _validate_candidate_telemetry(snapshot: Any) -> None:
     try:
         rows=snapshot["autopilot"]["select_diagnostics"]["candidates"]
@@ -904,6 +1065,7 @@ def _validate_candidate_telemetry(snapshot: Any) -> None:
 def validate_public_snapshot(snapshot: Any) -> None:
     """Fail closed on unknown keys, identifiers, long/free text, IPs or email addresses."""
     _validate_against_schema(snapshot, PUBLIC_SNAPSHOT_SCHEMA)
+    _validate_challenge_telemetry(snapshot)
     _validate_candidate_telemetry(snapshot)
 
 
