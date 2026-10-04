@@ -11,17 +11,12 @@ Raw cases must live in a separate private GitHub repository configured with:
 - repository secret `MODEL_LABEL_REPO_TOKEN`
 
 Required private files are `train.jsonl`, `public.jsonl`, and `hidden.jsonl`.
-Case IDs must be disjoint across all three files. Hidden labels accept only `human` or `outcome` origins.
+Case IDs must be disjoint across all three files. Hidden labels accept only `human` origins and are written by Andrea. Empty or unlabelled evaluation sets block promotion.
 
 ## Phase 1 — independent judges
 
 `model_shadow_registry.json` pins all model repositories, revisions, licenses and thresholds.
-The batch pipeline runs four independent judges:
-
-1. current lexical rules;
-2. multilingual zero-shot NLI;
-3. local quantized LLM;
-4. structural signals.
+The batch computes lexical comparison and three independent training judges: multilingual zero-shot NLI, local quantized LLM, and structural signals. The lexicon never supplies a training vote.
 
 Automatic training labels require at least three high-confidence agreeing judges.
 Outcome labels override automatic consensus.
@@ -53,7 +48,7 @@ Rollback is a one-step removal/disable of the student artifact, returning to lex
 
 ## Phase 5 — drift surveillance
 
-The weekly scheduled workflow creates `weekly_review.html` in the private label repository with five random cases
+The weekly scheduled workflow creates `weekly_review.html` in the private label repository with up to five cases, prioritizing high-confidence NLI/LLM agreement against the lexicon
 for Andrea to review. It also stores private drift history and raises an aggregate drift flag when agreement or
 label distribution changes sharply.
 
@@ -62,3 +57,17 @@ label distribution changes sharply.
 No raw evidence text, URLs or domains may be committed to this public repository or written to public Actions
 artifacts. The publicable model outputs are limited to the student weights, aggregate metrics and HMAC cluster map.
 `tools/model_shadow_privacy_check.py` fails closed on private-field names, URLs and email-like values.
+
+## Private bootstrap
+
+The private batch imports at most 100 retained real observations per call from
+`/api/model-shadow/private-cases`. The endpoint requires both existing per-path OPS
+HMAC and a second proof using a purpose-derived key. It is read-only and sends
+`Cache-Control: no-store`. Fixed-origin import refuses redirects and prints counts only.
+
+The importer preserves existing public/hidden evaluation files byte-for-byte, skips
+held-out IDs, deduplicates training IDs, and does not copy any lexical label into
+training. It creates empty evaluation files when absent; Andrea supplies hidden labels.
+`collect_only=true` imports without models, training or public publication. Fewer than
+four training cases skip heavy downloads. No raw evidence is cached or uploaded as
+public artifacts. Raw model errors remain in the temporary runner and are never printed.

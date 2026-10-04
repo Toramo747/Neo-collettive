@@ -82,6 +82,7 @@ ROUTE_POLICY = {
     "/api/heartbeat": OPS,
     "/api/runtime/snapshot-published": OPS,
     "/api/model-shadow/challenge-clusters": OPS,
+    "/api/model-shadow/private-cases": OPS,
     "/api/market/run-cycles": OPS,
 }
 

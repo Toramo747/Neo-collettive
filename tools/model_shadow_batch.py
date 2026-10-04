@@ -370,6 +370,8 @@ def evaluate_student(private_dir: Path, artifact: Path) -> dict:
     result["student_bytes"]=artifact.stat().st_size
     for split in ("public","hidden"):
         checks=[
+            bool(_read_jsonl(private_dir/PRIVATE_FILES[split])),
+            all(str(r.get("final_label") or "") in MODEL_LABELS for r in _read_jsonl(private_dir/PRIVATE_FILES[split])),
             result["student_"+split+"_accuracy_ppm"]>=result["lexicon_"+split+"_accuracy_ppm"],
             result["student_"+split+"_buyer_recall_ppm"]>=result["lexicon_"+split+"_buyer_recall_ppm"],
             result["student_"+split+"_vendor_false_positives"]<=result["lexicon_"+split+"_vendor_false_positives"],
@@ -562,7 +564,7 @@ def _safe_metrics(payload: dict) -> dict:
             "processed","eligible","discarded_disagreement","training_cases","version",
             "promotion_eligible","promotion_requires_manual_approval",
             "student_not_worse_public","student_not_worse_hidden","review_sample_cases",
-            "judge_agreement_rate_ppm","drift_alert","drift_history_points",
+            "judge_agreement_rate_ppm","drift_alert","drift_history_points","student_available",
         } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_")) or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
             if isinstance(value,(int,float,bool)) or value is None:
                 out[key]=value
@@ -588,6 +590,18 @@ def main() -> int:
     judged=judge_private_archive(private_dir,use_models=not args.skip_heavy_judges)
     metrics.update(judged)
     metrics.update(update_private_drift_history(private_dir,metrics))
+    if int(judged.get("eligible") or 0)<4:
+        metrics["student_available"]=False
+        metrics["training_cases"]=int(judged.get("eligible") or 0)
+        metrics["promotion_eligible"]=False
+        metrics["promotion_requires_manual_approval"]=True
+        if args.review_sample:
+            metrics.update(create_review_sample(private_dir,5))
+        safe=_safe_metrics(metrics)
+        output_dir.mkdir(parents=True,exist_ok=True)
+        (output_dir/"metrics.json").write_text(json.dumps(safe,sort_keys=True,separators=(",",":"))+"\n")
+        print(json.dumps(safe,sort_keys=True,separators=(",",":")))
+        return 0
     student_path=output_dir/"student.json"
     metrics.update(train_student(private_dir,student_path))
     metrics.update(evaluate_student(private_dir,student_path))
