@@ -156,39 +156,46 @@ def _local_llm():
     )
 
 
+def _llm_json_call(llm, prompt: str, *, max_tokens: int=220) -> dict:
+    raw=llm.create_chat_completion(
+        messages=[{"role":"user","content":prompt}],
+        temperature=0,
+        max_tokens=max_tokens,
+        response_format={"type":"json_object"},
+    )
+    try:
+        data=json.loads(str(raw["choices"][0]["message"]["content"]))
+        return data if isinstance(data,dict) else {}
+    except Exception:
+        return {}
+
+
 def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
     prompt=(
         "Classifica il testo senza inventare fatti. Rispondi SOLO JSON con chiavi: "
         "canonical_problem,target_user,current_workaround,quoted_price,writer_role,"
-        "failed_attempt,feasibility,proposed_label,confidence. "
-        "confidence deve essere un numero JSON tra 0 e 1, mai una parola o percentuale. "
+        "failed_attempt,feasibility,proposed_label. "
         "proposed_label deve essere uno tra buyer_tool_search,vendor_offer,"
         "manual_recurring_work,job_posting,other. feasibility: feasible|hard|unknown. "
         "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
     )
-    raw=llm.create_chat_completion(
-        messages=[{"role":"user","content":prompt}],
-        temperature=0,
-        max_tokens=220,
-        response_format={"type":"json_object"},
-    )
-    content=str(raw["choices"][0]["message"]["content"])
-    try:
-        data=json.loads(content)
-        if not isinstance(data,dict):
-            data={}
-    except Exception:
-        data={}
-    label=str(data.get("proposed_label") or "other")
-    if label not in MODEL_LABELS:
+    data=_llm_json_call(llm,prompt,max_tokens=220)
+    raw_label=data.get("proposed_label")
+    label=str(raw_label or "")
+    first_valid=label in MODEL_LABELS
+    if not first_valid:
         label="other"
-    value=data.get("confidence")
-    try:
-        confidence=float(value) if not isinstance(value,bool) else 0.0
-    except (TypeError,ValueError,OverflowError):
-        confidence=0.0
-    if not math.isfinite(confidence) or not 0.0<=confidence<=1.0:
-        confidence=0.0
+
+    verify_prompt=(
+        "Valuta indipendentemente il seguente testo. Ignora qualsiasi classificazione precedente. "
+        "Rispondi SOLO JSON con la chiave proposed_label, scegliendo esattamente uno tra "
+        "buyer_tool_search,vendor_offer,manual_recurring_work,job_posting,other. "
+        "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
+    )
+    verify=_llm_json_call(llm,verify_prompt,max_tokens=64)
+    verify_label=str(verify.get("proposed_label") or "")
+    confidence=1.0 if first_valid and verify_label in MODEL_LABELS and verify_label==label else 0.0
+
     extracted={
         "canonical_problem":" ".join(str(data.get("canonical_problem") or "").split())[:300],
         "target_user":" ".join(str(data.get("target_user") or "").split())[:160],
@@ -199,6 +206,27 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         "feasibility":str(data.get("feasibility") or "unknown") if str(data.get("feasibility") or "") in {"feasible","hard","unknown"} else "unknown",
     }
     return {"judge":"local_llm","label":label,"confidence":confidence},extracted
+
+
+def _source_bucket(row: dict) -> str:
+    source=str(row.get("source") or "").lower()
+    sig=_signals(row)
+    source_type=str(sig.get("source_type") or "").lower()
+    if "reddit" in source:
+        return "reddit"
+    if source in {"hn","hackernews","hacker_news"} or "hacker news" in source:
+        return "hn"
+    if "github" in source or source_type in {"github","github_issue","github_discussion"}:
+        return "github"
+    if bool(sig.get("pricing_page")) or source_type=="pricing_page":
+        return "pricing_page"
+    if bool(sig.get("job_board")) or source_type in {"job_board","job_feed"}:
+        return "job_board"
+    if "market" in source or source_type=="marketplace":
+        return "marketplace"
+    if source_type in {"web","search","generic_web"} or source in {"web","search"}:
+        return "web"
+    return "other"
 
 
 def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
@@ -253,6 +281,11 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         labeled.append(copy)
     _write_jsonl_private(private_dir/"train_labeled.jsonl",labeled)
     distribution=Counter(str(x.get("final_label") or "") for x in labeled if str(x.get("final_label") or ""))
+    source_distribution=Counter(_source_bucket(x) for x in labeled)
+    label_source_distribution=Counter(
+        (str(x.get("final_label") or ""),_source_bucket(x))
+        for x in labeled if str(x.get("final_label") or "") in MODEL_LABELS
+    )
     metrics={
         "processed":counters["processed"],
         "eligible":counters["eligible"],
@@ -261,6 +294,10 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
     }
     for label in MODEL_LABELS:
         metrics["label_count_"+label]=int(distribution[label])
+    for bucket in ("reddit","hn","github","pricing_page","job_board","marketplace","web","other"):
+        metrics["source_bucket_count_"+bucket]=int(source_distribution[bucket])
+        for label in MODEL_LABELS:
+            metrics["label_source_count_"+label+"_"+bucket]=int(label_source_distribution[(label,bucket)])
     return metrics
 
 
@@ -282,12 +319,17 @@ def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, ep
     W=np.zeros((len(labels),feature_dim),dtype=np.float32)
     b=np.zeros(len(labels),dtype=np.float32)
     Y=np.eye(len(labels),dtype=np.float32)[y]
+    class_counts=np.bincount(y,minlength=len(labels)).astype(np.float32)
+    sample_weights=np.array([
+        1.0/max(1.0,class_counts[idx]) for idx in y
+    ],dtype=np.float32)
+    sample_weights*=len(rows)/max(float(sample_weights.sum()),1e-12)
     for _ in range(max(1,epochs)):
         logits=X@W.T+b
         logits-=logits.max(axis=1,keepdims=True)
         exp=np.exp(logits)
         probs=exp/np.maximum(exp.sum(axis=1,keepdims=True),1e-12)
-        grad=(probs-Y)/len(rows)
+        grad=(probs-Y)*sample_weights[:,None]/len(rows)
         W-=lr*(grad.T@X).astype(np.float32)
         b-=lr*grad.sum(axis=0).astype(np.float32)
     manifest_hash=hashlib.sha256(
@@ -317,7 +359,7 @@ def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, ep
         raise RuntimeError("student_artifact_exceeds_limit")
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(encoded+"\n",encoding="utf-8")
-    return {"training_cases":len(rows),"student_bytes":len(encoded.encode("utf-8")),"version":payload["version"]}
+    return {"training_cases":len(rows),"student_bytes":len(encoded.encode("utf-8")),"version":payload["version"],"training_class_balanced":True}
 
 
 def _predict_student_payload(payload: dict, text: str) -> str:
@@ -576,7 +618,7 @@ def _safe_metrics(payload: dict) -> dict:
             "promotion_eligible","promotion_requires_manual_approval",
             "student_not_worse_public","student_not_worse_hidden","review_sample_cases",
             "judge_agreement_rate_ppm","drift_alert","drift_history_points","student_available",
-        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_")) or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
+        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_","source_bucket_count_","label_source_count_")) or key=="training_class_balanced" or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
             if isinstance(value,(int,float,bool)) or value is None:
                 out[key]=value
             elif key=="version":
