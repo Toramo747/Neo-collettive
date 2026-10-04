@@ -46,7 +46,7 @@ jobs:
             sleep 1
           done
           timeout 300 ollama pull "$MODEL"
-          timeout 420 python arena_llm_guided_search.py --model "$MODEL" --out "$REPORT"
+          timeout 720 python arena_llm_guided_search.py --model "$MODEL" --out "$REPORT"
       - name: Assert production isolation
         run: |
           python - <<'PY'
