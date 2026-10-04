@@ -255,6 +255,8 @@ async def fetch_hn_query(client: httpx.AsyncClient, topic: str, query: str, rece
 def evaluate_control_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
     total=0
     correct=0
+    family_correct=0
+    family_expected=0
     details=[]
     for case in cases or []:
         if not isinstance(case,dict):
@@ -274,8 +276,11 @@ def evaluate_control_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
         }
         ok=all(observed.get(k)==v for k,v in expect.items())
         correct += int(ok)
-        details.append({"id":str(case.get("id") or "")[:80],"ok":ok})
-    return {"cases":total,"correct":correct,"accuracy":round(correct/max(1,total),4),"used_for_evolution":False,"raw_external_text":False,"details":details}
+        if "family" in expect:
+            family_expected += 1
+            family_correct += int(observed.get("family")==expect.get("family"))
+        details.append({"id":str(case.get("id") or "")[:80],"ok":ok,"family_ok":observed.get("family")==expect.get("family") if "family" in expect else None})
+    return {"cases":total,"correct":correct,"accuracy":round(correct/max(1,total),4),"family_cases":family_expected,"family_correct":family_correct,"family_accuracy":round(family_correct/max(1,family_expected),4),"used_for_evolution":False,"raw_external_text":False,"details":details}
 
 def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Score with the same buyer/demand primitives used by production."""

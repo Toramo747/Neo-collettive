@@ -4,6 +4,7 @@ from evidence_integrity import (
     canonical_problem_key,
     canonical_url,
     commercial_family,
+    commercial_family_scores,
     demand_signal_type,
     gate_eligible_problem_key,
     migrate_evidence_memory,
@@ -15,6 +16,17 @@ from evidence_integrity import (
 
 
 class EvidenceIntegrityTests(unittest.TestCase):
+    def test_scored_family_matching_handles_real_buyer_language(self):
+        self.assertEqual(commercial_family("We spend hours reconciling invoices every month with our bookkeeper"),"finance_ops")
+        self.assertEqual(commercial_family("Our team spends too much time cleaning CSV files by hand"),"spreadsheet_process")
+        self.assertEqual(commercial_family("We copy employee details into three systems for every new hire"),"hr_tools")
+
+    def test_specific_family_outscores_generic_ai_or_automation_terms(self):
+        text="Our DevOps team uses an LLM to automate deployment and code review workflows"
+        scores=commercial_family_scores(text)
+        self.assertGreater(scores.get("developer_tools",0),scores.get("ai_tools",0))
+        self.assertEqual(commercial_family(text),"developer_tools")
+
     def test_rate_substring_does_not_create_paid_demand(self):
         tags=demand_signal_type("", "generate accurate integrate operate")
         self.assertNotIn("PAID_DEMAND", tags)

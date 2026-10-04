@@ -138,6 +138,7 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertEqual(result["cases"],6)
         self.assertGreaterEqual(result["accuracy"],0.0)
         self.assertLessEqual(result["accuracy"],1.0)
+        self.assertGreaterEqual(result["family_accuracy"],0.6667)
 
     def test_arena_uses_production_buyer_and_guard_primitives(self):
         src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
