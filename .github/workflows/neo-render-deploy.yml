@@ -49,6 +49,12 @@ on:
       - "data/arena/research-algorithm/control_cases.json"
       - "test_a2a_discovery_startup.py"
       - "hidden_control_gate.py"
+      - "hidden_challenge_control_gate.py"
+      - "challenge_track.py"
+      - "data/challenge/control_cases.json"
+      - "test_challenge_track.py"
+      - "test_hidden_challenge_control_gate.py"
+      - "test_commercial_gate_non_regression.py"
       - "startup_guard.py"
       - "test_hidden_control_gate.py"
       - "gate_stability.py"
@@ -129,7 +135,7 @@ jobs:
       - name: Validate source before deploy
         run: |
           set -euo pipefail
-          python -m py_compile cloud_mcp.py jarvis_service/app.py
+          python -m py_compile cloud_mcp.py challenge_track.py hidden_challenge_control_gate.py jarvis_service/app.py
           python -m json.tool neo_policy.json >/dev/null
           python -m json.tool runtime_profile.json >/dev/null
           python - <<'PY'
@@ -155,7 +161,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+          python -m unittest -v test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
 
       - name: Require all public commercial controls
         run: |
@@ -174,6 +180,21 @@ jobs:
               raise SystemExit(f"commercial control gate failed: {correct}/{cases}; require all cases with cases>=6")
           if family_correct != family_cases:
               raise SystemExit(f"commercial family control gate failed: {family_correct}/{family_cases}")
+          PY
+
+      - name: Require all public challenge controls
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from challenge_track import evaluate_public_control_cases
+          data=json.load(open("data/challenge/control_cases.json",encoding="utf-8"))
+          result=evaluate_public_control_cases(data.get("cases") or [])
+          print(json.dumps(result,indent=2))
+          cases=int(result.get("cases") or 0)
+          correct=int(result.get("correct") or 0)
+          if cases < 12 or correct != cases:
+              raise SystemExit(f"challenge control gate failed: {correct}/{cases}; require all cases with cases>=12")
           PY
 
       - name: Build Docker image in GitHub CI
@@ -290,6 +311,28 @@ jobs:
           echo "Timed out waiting for NEO v$expected"
           cat /tmp/health.json || true
           exit 5
+
+      - name: Require hidden challenge control when configured on Render
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/health"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          curl --fail --silent --show-error --max-time 30 \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" \
+            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
+            "${target}" > /tmp/hidden-challenge-health.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/hidden-challenge-health.json",encoding="utf-8"))
+          h=d.get("hidden_challenge_control") or {}
+          required=bool(h.get("required"))
+          ok=bool(h.get("ok"))
+          cases=int(h.get("cases") or 0)
+          correct=int(h.get("correct") or 0)
+          print({"required":required,"cases":cases,"correct":correct,"ok":ok})
+          if required and (not ok or cases < 1 or correct != cases):
+              raise SystemExit("hidden challenge control failed on Render")
+          PY
 
       - name: Capture public health if version wait fails
         if: failure()
