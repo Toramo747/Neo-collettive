@@ -83,10 +83,11 @@ class QueryBuilderTests(unittest.TestCase):
             "solution_search","automation_howto","tool_recommendation","paid_automation",
         })
         combined=" ".join(r["query"] for r in rows)
-        self.assertIn('"looking for a tool"',combined)
+        self.assertIn('"I am looking for a tool"',combined)
         self.assertIn('"how do I automate"',combined)
-        self.assertIn('"what tool should I use"',combined)
-        self.assertIn('"hire someone to automate"',combined)
+        self.assertIn('"what do you use"',combined)
+        self.assertIn('"we spend hours"',combined)
+        self.assertEqual([r["source_route"] for r in rows],[["hn"],["stackexchange"],["hn"],["web"]])
 
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")
