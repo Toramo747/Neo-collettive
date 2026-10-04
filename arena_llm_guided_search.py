@@ -159,9 +159,10 @@ async def run(model,data_dir,out_path):
                 mutation_map=[]
                 mutated_topics=set()
                 for topic,base_query in current_pairs:
-                    # Keep the experiment bounded: mutate at most one query per topic
-                    # and preserve the rest of the current champion verbatim.
-                    should_mutate=topic not in mutated_topics
+                    # Generation 1 reproduces the strongest known search space:
+                    # mutate every baseline query. Later generations are bounded
+                    # to one mutation per topic around the new champion.
+                    should_mutate=(generation==1) or (topic not in mutated_topics)
                     mutated=mutate_query(model,topic,base_query,genome_name) if should_mutate else ""
                     if should_mutate:
                         mutated_topics.add(topic)
