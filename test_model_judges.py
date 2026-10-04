@@ -26,7 +26,9 @@ class ModelJudgeContractTests(unittest.TestCase):
             validate_split_separation({"a"},{"a"},{"d"})
 
     def test_hidden_never_accepts_auto_label_origin(self):
-        validate_hidden_origins([{"label_origin":"human"},{"label_origin":"outcome"}])
+        validate_hidden_origins([{"label_origin":"human"}])
+        with self.assertRaisesRegex(ValueError,"hidden_label"):
+            validate_hidden_origins([{"label_origin":"outcome"}])
         with self.assertRaisesRegex(ValueError,"hidden_label"):
             validate_hidden_origins([{"label_origin":"auto"}])
 
@@ -38,6 +40,8 @@ class ModelJudgeContractTests(unittest.TestCase):
         result=choose_automatic_label(rows,minimum_judges=3,confidence_threshold=0.7)
         self.assertFalse(result["eligible_for_training"])
         rows.append({"judge":"local_llm","label":"buyer_tool_search","confidence":0.8})
+        self.assertFalse(choose_automatic_label(rows)["eligible_for_training"])
+        rows.append({"judge":"structural","label":"buyer_tool_search","confidence":0.8})
         result=choose_automatic_label(rows,minimum_judges=3,confidence_threshold=0.7)
         self.assertTrue(result["eligible_for_training"])
         self.assertEqual(result["label"],"buyer_tool_search")

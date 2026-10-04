@@ -33,12 +33,7 @@ from model_shadow import (
 )
 
 REGISTRY=json.loads((ROOT/"model_shadow_registry.json").read_text(encoding="utf-8"))
-NLI_LABEL_MAP={
-    "chi scrive cerca uno strumento":"buyer_tool_search",
-    "chi scrive vende un prodotto o servizio":"vendor_offer",
-    "chi scrive descrive un lavoro manuale ricorrente":"manual_recurring_work",
-    "annuncio di lavoro":"job_posting",
-}
+NLI_LABEL_MAP={'the writer is looking for a tool': 'buyer_tool_search', 'the writer is selling a product or service': 'vendor_offer', 'the writer describes recurring manual work': 'manual_recurring_work', 'a job posting': 'job_posting', 'a generic discussion unrelated to these needs': 'other'}
 PRIVATE_FILES={"train":"train.jsonl","public":"public.jsonl","hidden":"hidden.jsonl"}
 PUBLIC_METRIC_KEYS={
     "cases","consensus_labeled","discarded_disagreement","agreement_rate_ppm",
@@ -99,8 +94,8 @@ def validate_archive(private_dir: Path) -> dict:
                 raise ValueError("archive_case_missing_fields")
             if name=="hidden":
                 origin=str(row.get("label_origin") or "")
-                if origin not in {"human","outcome"}:
-                    raise ValueError("hidden_label_must_be_human_or_outcome")
+                if origin != "human":
+                    raise ValueError("hidden_label_must_be_human")
     sep=validate_split_separation(ids["train"],ids["public"],ids["hidden"])
     validate_hidden_origins(splits["hidden"])
     return {"splits":{k:len(v) for k,v in splits.items()},**sep}
@@ -119,7 +114,8 @@ def _nli_pipeline():
 
 def nli_judge(pipe, text: str) -> dict:
     labels=list(REGISTRY["judges"]["nli"]["labels"])
-    result=pipe(text,labels,multi_label=False)
+    result=pipe(text,labels,multi_label=False,
+                hypothesis_template=REGISTRY["judges"]["nli"]["hypothesis_template"])
     natural=str((result.get("labels") or [""])[0])
     score=float((result.get("scores") or [0.0])[0])
     return {
@@ -238,6 +234,7 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         copy["final_label"]=decision["label"]
         copy["label_origin"]=decision["origin"] if decision["label"] else ""
         copy["label_date"]=_utc()
+        copy["consensus_policy_version"]=2
         copy["eligible_for_training"]=bool(decision["eligible_for_training"])
         counters["processed"]+=1
         counters["eligible"]+=int(bool(copy["eligible_for_training"]))
@@ -431,10 +428,14 @@ def cluster_challenges(private_dir: Path, output: Path, *, threshold: float | No
             assigned[i]=len(centers)
             centers.append(v.copy())
             members.append([i])
-    secret=(os.getenv("MODEL_CLUSTER_HMAC_KEY") or os.getenv("NEO_HEARTBEAT_TOKEN") or "").encode("utf-8")
-    if not secret:
-        raise RuntimeError("cluster_hmac_key_missing")
     import hmac
+    dedicated=os.getenv("MODEL_CLUSTER_HMAC_KEY") or ""
+    heartbeat=os.getenv("NEO_HEARTBEAT_TOKEN") or ""
+    if not dedicated and not heartbeat:
+        raise RuntimeError("cluster_hmac_key_missing")
+    secret=dedicated.encode("utf-8") if dedicated else hmac.new(
+        heartbeat.encode("utf-8"), b"neo:model-shadow:cluster-map:v1", hashlib.sha256
+    ).digest()
     safe=[]
     requester_by_cluster=defaultdict(set)
     cap=int(REGISTRY["challenge_clustering"]["requester_reaction_duplicate_cap"])
@@ -496,9 +497,27 @@ def update_private_drift_history(private_dir: Path, metrics: dict) -> dict:
 
 
 def create_review_sample(private_dir: Path, count: int=5) -> dict:
-    rows=[x for x in _read_jsonl(private_dir/"train_labeled.jsonl") if str(x.get("final_label") or "")]
+    rows=_read_jsonl(private_dir/"train_labeled.jsonl")
+    priority=[]
+    regular=[]
+    for row in rows:
+        votes={x.get("judge"):x for x in row.get("judge_labels",[])}
+        nli=votes.get("nli",{})
+        llm=votes.get("local_llm",{})
+        lex=votes.get("lexicon",{})
+        against_lexicon=(nli.get("label") in MODEL_LABELS
+            and nli.get("label")==llm.get("label")
+            and nli.get("label")!=lex.get("label")
+            and float(nli.get("confidence") or 0)>=0.90
+            and float(llm.get("confidence") or 0)>=0.90)
+        if against_lexicon:
+            priority.append(row)
+        elif row.get("final_label"):
+            regular.append(row)
     rng=random.SystemRandom()
-    sample=rng.sample(rows,min(max(0,count),len(rows))) if rows else []
+    rng.shuffle(priority)
+    rng.shuffle(regular)
+    sample=(priority+regular)[:max(0,count)]
     review=[]
     for row in sample:
         review.append({
@@ -529,7 +548,7 @@ def create_review_sample(private_dir: Path, count: int=5) -> dict:
     html_doc=(
         "<!doctype html><html><head><meta charset='utf-8'><title>NEO weekly label review</title></head>"
         "<body><h1>Weekly shadow-label review</h1>"
-        "<p>Privato. Cinque casi casuali; compilazione manuale di Andrea.</p>"
+        "<p>Privato. Priorità ai modelli concordi contro il lessico; compilazione manuale di Andrea.</p>"
         +"".join(rows)+"</body></html>"
     )
     (private_dir/"weekly_review.html").write_text(html_doc,encoding="utf-8")
