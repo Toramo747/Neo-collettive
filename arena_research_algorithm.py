@@ -355,16 +355,22 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
     buyer_rate = buyer_hits / max(1, relevant_hits)
     first_person_rate = first_person_buyer_hits / max(1, relevant_hits)
     independent = min(len(unique_threads), 12) / 12.0
+    absolute_signal_score = min(signal_hits, 12) / 12.0
+    absolute_thread_score = min(len(unique_threads), 8) / 8.0
     support_relevant = min(relevant_hits, 6) / 6.0
     support_independent = min(len(unique_threads), 3) / 3.0
     support_factor = 0.5 * support_relevant + 0.5 * support_independent
     penalty = min(0.5, (vendor_rejected + supply_rejected) / max(1, relevant_hits))
+    # Absolute evidence carries most of the weight. Precision can refine a
+    # candidate, but shrinking the denominator alone cannot dominate fitness.
     base_fitness = (
-        production_precision * 45.0
-        + buyer_rate * 20.0
-        + first_person_rate * 10.0
+        production_precision * 20.0
+        + buyer_rate * 10.0
+        + first_person_rate * 5.0
         + family_match_rate * 10.0
         + independent * 15.0
+        + absolute_signal_score * 25.0
+        + absolute_thread_score * 15.0
     ) * (1.0 - penalty)
     fitness = base_fitness * support_factor
     return {
@@ -382,9 +388,23 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
         "buyer_rate": round(buyer_rate, 4),
         "first_person_buyer_rate": round(first_person_rate, 4),
         "precision": round(production_precision, 4),
+        "absolute_signal_score": round(absolute_signal_score, 4),
+        "absolute_thread_score": round(absolute_thread_score, 4),
+        "evidence_volume_score": round(signal_hits * 5.0 + len(unique_threads) * 3.0, 4),
         "vendor_rejected": vendor_rejected,
         "supply_rejected": supply_rejected,
     }
+
+def ranking_key(item: dict[str, Any]) -> tuple[int, int, float]:
+    """Never rank fewer absolute demand signals above more evidence."""
+    metrics=item.get("metrics") if isinstance(item,dict) else {}
+    metrics=metrics if isinstance(metrics,dict) else {}
+    return (
+        int(metrics.get("signal_hits") or 0),
+        int(metrics.get("unique_signal_threads") or 0),
+        float(metrics.get("fitness") or 0.0),
+    )
+
 
 async def evaluate_genome(client: httpx.AsyncClient, item: dict[str, Any]) -> dict[str, Any]:
     genes = clamp_genome(item.get("genes") or {})
@@ -745,7 +765,7 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
         evaluated = await asyncio.gather(*(evaluate_genome(client, x) for x in population))
         successful_queries = sum(int((x.get("metrics") or {}).get("successful_queries") or 0) for x in evaluated)
         measured = successful_queries >= MIN_SUCCESSFUL_QUERIES
-        ranked = sorted(evaluated, key=lambda x: float((x.get("metrics") or {}).get("fitness") or 0), reverse=True)
+        ranked = sorted(evaluated, key=ranking_key, reverse=True)
         champion = ranked[0] if ranked else population[0]
         collaborators = (
             await collaborator_mutations(client, champion, generation + 1, explicit_candidate_id)
