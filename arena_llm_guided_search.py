@@ -157,11 +157,20 @@ async def run(model,data_dir,out_path):
             for genome_name in MUTATION_GENOMES:
                 mutated_pairs=[]
                 mutation_map=[]
+                mutated_topics=set()
                 for topic,base_query in current_pairs:
-                    mutated=mutate_query(model,topic,base_query,genome_name)
+                    # Keep the experiment bounded: mutate at most one query per topic
+                    # and preserve the rest of the current champion verbatim.
+                    should_mutate=topic not in mutated_topics
+                    mutated=mutate_query(model,topic,base_query,genome_name) if should_mutate else ""
+                    if should_mutate:
+                        mutated_topics.add(topic)
                     chosen=mutated or base_query
                     mutated_pairs.append((topic,chosen))
-                    mutation_map.append({"topic":topic,"base":base_query,"mutated":mutated,"used":bool(mutated)})
+                    mutation_map.append({
+                        "topic":topic,"base":base_query,"mutated":mutated,
+                        "used":bool(mutated),"eligible_for_mutation":should_mutate,
+                    })
                 rows=await asyncio.gather(*[
                     fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
                     for t,q in mutated_pairs
