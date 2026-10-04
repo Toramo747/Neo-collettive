@@ -305,6 +305,62 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertNotIn("PRIVATE",encoded)
         validate_public_snapshot(public)
 
+    def test_candidate_telemetry_is_bounded_hmac_only_and_code_only(self):
+        raw={
+            "snapshot_schema":7,
+            "neo_version":"0.99.50",
+            "latest_result":{
+                "status":"SELECT",
+                "tool_opportunities":{
+                    "top5":[],
+                    "candidate_counts":{},
+                    "candidate_telemetry":[{
+                        "candidate_id":"0123456789abcdef",
+                        "evidence_fingerprint":"fedcba9876543210",
+                        "id_key_version":"v1",
+                        "score":90,
+                        "source_count":4,
+                        "independent_domain_count":3,
+                        "raw_gate_pass":True,
+                        "stable_gate_pass":False,
+                        "pass_streak":1,
+                        "fail_streak":0,
+                        "missing_codes":["documented_gap","https://secret.example/x"],
+                        "cycle":1958,
+                        "commit":"0123456789abcdef0123456789abcdef01234567",
+                        "first_cycle_after_deploy":True,
+                        "seconds_since_first_raw_pass":12,
+                        "tagger_version":"3",
+                        "url":"https://private.example/x",
+                        "domain":"private.example",
+                        "title":"PRIVATE TITLE",
+                    }],
+                },
+            },
+            "autopilot":{"cycles_completed":1958},
+        }
+        public=sanitize_public_snapshot(raw)
+        rows=public["autopilot"]["select_diagnostics"]["candidates"]
+        self.assertEqual(len(rows),1)
+        row=rows[0]
+        self.assertEqual(row["candidate_id"],"0123456789abcdef")
+        self.assertEqual(row["evidence_fingerprint"],"fedcba9876543210")
+        self.assertEqual(row["missing_codes"],["documented_gap"])
+        encoded=json.dumps(rows,sort_keys=True)
+        for forbidden in ("secret.example","private.example","PRIVATE TITLE","https://"):
+            self.assertNotIn(forbidden,encoded)
+        validate_public_snapshot(public)
+
+        bad=json.loads(json.dumps(public))
+        bad["autopilot"]["select_diagnostics"]["candidates"][0]["missing_codes"]=["secret.example"]
+        with self.assertRaisesRegex(ValueError,"candidate_missing_code"):
+            validate_public_snapshot(bad)
+
+        bad=json.loads(json.dumps(public))
+        bad["autopilot"]["select_diagnostics"]["candidates"][0]["tagger_version"]="secret.example"
+        with self.assertRaisesRegex(ValueError,"candidate_tagger"):
+            validate_public_snapshot(bad)
+
     def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
         raw={
             "autopilot":{
