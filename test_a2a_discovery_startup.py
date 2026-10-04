@@ -46,8 +46,8 @@ class A2ADiscoveryStartupTests(unittest.TestCase):
 
     def test_g4_finance_relevance_covers_plural_reconciliation_language(self):
         src=Path("cloud_mcp.py").read_text(encoding="utf-8")
-        self.assertIn('"reconciling invoices"',src)
-        self.assertIn('"invoice reconciliation"',src)
+        self.assertIn("integrity_family_relevance_terms",src)
+        self.assertIn("return integrity_family_relevance_terms(family)",src)
 
     def test_public_snapshot_exports_buyer_voice_by_source(self):
         src=Path("cloud_mcp.py").read_text(encoding="utf-8")

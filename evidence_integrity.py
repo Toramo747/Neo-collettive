@@ -426,16 +426,17 @@ def commercial_family_scores(text: str) -> dict[str, int]:
     """Score all matching families; longer/specific phrases outrank generic tokens."""
     low=(text or "").lower()
     scores: dict[str,int]={}
-    for family,base_terms in FAMILY_TERMS:
-        terms=tuple(dict.fromkeys(tuple(base_terms)+tuple(FAMILY_RELEVANCE_TERMS.get(family,()))+tuple(FAMILY_EXPANSIONS.get(family,()))))
+    for family,_base_terms in FAMILY_TERMS:
+        terms=family_relevance_terms(family)
         score=0
+        expansions=set(FAMILY_EXPANSIONS.get(family,()))
         for term in terms:
             if not contains_term(low,term):
                 continue
             words=max(1,len(term.split()))
             # Multi-word and expansion matches are more discriminative than generic tokens.
             weight=1 if words==1 else min(6,words+1)
-            if term in FAMILY_EXPANSIONS.get(family,()):
+            if term in expansions:
                 weight += 2
             score += weight
         if score:
@@ -451,12 +452,33 @@ def commercial_family(text: str) -> str:
     return max(scores,key=lambda family:(scores[family],-order.get(family,9999)))
 
 
+def _simple_family_inflections(term: str) -> tuple[str, ...]:
+    """Add conservative singular/plural surface variants for single-word family terms."""
+    value=str(term or "").strip().lower()
+    if not value or " " in value or not value.isalpha() or len(value)<4:
+        return ()
+    if value.endswith("s"):
+        return ()
+    # Do not auto-pluralize human-role nouns (developer->developers, customer->customers);
+    # those are too broad for family attribution and have caused historical false positives.
+    if value.endswith(("er","or","ist","ian")):
+        return ()
+    if value.endswith(("ch","sh","x","z")):
+        return (value+"es",)
+    if value.endswith("y") and len(value)>1 and value[-2] not in "aeiou":
+        return (value[:-1]+"ies",)
+    return (value+"s",)
+
+
 def family_relevance_terms(family: str) -> tuple[str, ...]:
     family=str(family or "").strip()
     base=next((terms for name,terms in FAMILY_TERMS if name==family),())
     extra=FAMILY_RELEVANCE_TERMS.get(family,())
     expansions=FAMILY_EXPANSIONS.get(family,())
-    return tuple(dict.fromkeys(tuple(base)+tuple(extra)+tuple(expansions)))
+    terms=list(dict.fromkeys(tuple(base)+tuple(extra)+tuple(expansions)))
+    for term in list(terms):
+        terms.extend(x for x in _simple_family_inflections(term) if x not in terms)
+    return tuple(terms)
 
 
 def family_text_matches(family: str, text: str) -> bool:
