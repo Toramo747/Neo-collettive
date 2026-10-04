@@ -1,0 +1,211 @@
+name: Model Shadow Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_heavy_judges:
+        description: "Run pinned NLI, local LLM and embedding judges"
+        required: false
+        type: boolean
+        default: true
+      publish_student:
+        description: "Publish safe shadow student + aggregate metrics to main"
+        required: false
+        type: boolean
+        default: false
+      publish_clusters:
+        description: "Send HMAC-only challenge cluster map to Render"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: "31 3 * * 1"
+  pull_request:
+    paths:
+      - "model_shadow.py"
+      - "model_judges.py"
+      - "model_shadow_registry.json"
+      - "tools/model_shadow_batch.py"
+      - "tools/model_shadow_privacy_check.py"
+      - "test_model_*.py"
+      - "public_snapshot.py"
+      - "test_public_snapshot_privacy.py"
+      - ".github/workflows/model-shadow-pipeline.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: model-shadow-pipeline
+  cancel-in-progress: false
+
+jobs:
+  public-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install public shadow test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile shadow sources
+        run: |
+          set -euo pipefail
+          python -m py_compile model_shadow.py model_judges.py tools/model_shadow_batch.py tools/model_shadow_privacy_check.py
+          python -m json.tool model_shadow_registry.json >/dev/null
+          python -m json.tool docs/private-label-archive-contract.json >/dev/null
+      - name: Gate and privacy regression
+        run: |
+          set -euo pipefail
+          python -m unittest -v             test_model_judges.py             test_model_shadow_runtime.py             test_model_shadow_gate_non_regression.py             test_public_snapshot_privacy.py             test_route_policy.py
+
+  private-batch:
+    if: github.event_name != 'pull_request'
+    needs: public-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_HOME: ${{ runner.temp }}/hf-cache
+      MODEL_LABEL_REPO: ${{ vars.MODEL_LABEL_REPO }}
+      MODEL_LABEL_REPO_TOKEN: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+      MODEL_CLUSTER_HMAC_KEY: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+      HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require private label archive configuration
+        id: private_config
+        run: |
+          set -euo pipefail
+          if [ -z "$MODEL_LABEL_REPO" ] || [ -z "$MODEL_LABEL_REPO_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo '{"private_archive":"not_configured","batch":"skipped"}'
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo '{"private_archive":"configured"}'
+
+      - name: Checkout private label archive
+        if: steps.private_config.outputs.configured == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        if: steps.private_config.outputs.configured == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Cache pinned model downloads
+        if: steps.private_config.outputs.configured == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hf-cache
+          key: model-shadow-v1-${{ runner.os }}-${{ hashFiles('model_shadow_registry.json') }}
+          restore-keys: |
+            model-shadow-v1-${{ runner.os }}-
+
+      - name: Install CPU batch dependencies
+        if: steps.private_config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check             "numpy==2.3.3"             "transformers==4.57.1"             "sentence-transformers==5.1.1"             "huggingface-hub==0.35.3"             "llama-cpp-python==0.3.16"
+
+      - name: Validate private split contract
+        if: steps.private_config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from tools.model_shadow_batch import validate_archive
+          result=validate_archive(Path("private-labels"))
+          print({"train":result["train"],"public":result["public"],"hidden":result["hidden"],"disjoint":result["disjoint"]})
+          PY
+
+      - name: Run multi-judge shadow batch
+        if: steps.private_config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          heavy=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.run_heavy_judges }}" = "false" ]; then
+            heavy="--skip-heavy-judges"
+          fi
+          python tools/model_shadow_batch.py             --private-dir private-labels             --output-dir runtime/model-shadow             --review-sample             $heavy > /tmp/model-shadow-metrics.json
+          python -m json.tool /tmp/model-shadow-metrics.json >/dev/null
+          cat /tmp/model-shadow-metrics.json
+
+      - name: Privacy-check all publicable outputs
+        if: steps.private_config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          python tools/model_shadow_privacy_check.py             runtime/model-shadow/metrics.json             runtime/model-shadow/student.json             runtime/model-shadow/challenge-cluster-map.json
+
+      - name: Commit labels and weekly review only to private repository
+        if: steps.private_config.outputs.configured == 'true'
+        working-directory: private-labels
+        run: |
+          set -euo pipefail
+          git config user.name "NEO Private Label Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html
+          if git diff --cached --quiet; then
+            echo '{"private_archive_update":"unchanged"}'
+          else
+            git commit -m "shadow labels and weekly review"
+            git push
+            echo '{"private_archive_update":"published"}'
+          fi
+
+      - name: Publish shadow student only after explicit manual dispatch
+        if: >-
+          steps.private_config.outputs.configured == 'true' &&
+          github.event_name == 'workflow_dispatch' &&
+          inputs.publish_student == true
+        run: |
+          set -euo pipefail
+          git config user.name "NEO Model Shadow"
+          git config user.email "actions@users.noreply.github.com"
+          git add runtime/model-shadow/student.json runtime/model-shadow/metrics.json
+          if git diff --cached --quiet; then
+            echo '{"student_publish":"unchanged"}'
+            exit 0
+          fi
+          git commit -m "model-shadow: publish student and aggregate metrics [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then
+              echo '{"student_publish":"published"}'
+              exit 0
+            fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt * 3))
+          done
+          exit 1
+
+      - name: Send HMAC-only challenge clusters after explicit manual dispatch
+        if: >-
+          steps.private_config.outputs.configured == 'true' &&
+          github.event_name == 'workflow_dispatch' &&
+          inputs.publish_clusters == true
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/model-shadow/challenge-clusters"
+          proof="$(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url "$target" --marker github-actions-model-shadow)"
+          curl --fail --silent --show-error --max-time 45             -X POST             -H "content-type: application/json"             -H "X-MYCELIX-Self-Traffic: github-actions-model-shadow"             -H "X-MYCELIX-Self-Traffic-Proof: $proof"             --data-binary @runtime/model-shadow/challenge-cluster-map.json             "$target" > /tmp/model-shadow-cluster-response.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/model-shadow-cluster-response.json",encoding="utf-8"))
+          print({k:d.get(k) for k in ("ok","mode","mapping_count","cluster_count","review_required","checkpoint_ok")})
+          if d.get("ok") is not True or d.get("mode")!="shadow":
+              raise SystemExit("shadow cluster upload failed")
+          PY
