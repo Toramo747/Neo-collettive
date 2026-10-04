@@ -6201,6 +6201,7 @@ def _commercial_evidence_quality(
         )
         if not web_buyer_voice_missing:
             diagnostics.record_funnel_stage("buyer_voice")
+            diagnostics.record_buyer_voice(source)
         signal_types=integrity_demand_signal_type(
             title,context,query_role,
             strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
