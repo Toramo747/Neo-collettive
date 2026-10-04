@@ -459,6 +459,10 @@ def _simple_family_inflections(term: str) -> tuple[str, ...]:
         return ()
     if value.endswith("s"):
         return ()
+    # Do not auto-pluralize human-role nouns (developer->developers, customer->customers);
+    # those are too broad for family attribution and have caused historical false positives.
+    if value.endswith(("er","or","ist","ian","ant","ent")):
+        return ()
     if value.endswith(("ch","sh","x","z")):
         return (value+"es",)
     if value.endswith("y") and len(value)>1 and value[-2] not in "aeiou":
