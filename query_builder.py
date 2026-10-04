@@ -129,13 +129,13 @@ def breakout_queries(marker: str, evidence_rows: Iterable[dict] | None, family: 
 
 
 DESIRE_EXPERIMENT_INTENT_CLASSES = (
-    "solution_search","paid_automation",
+    "solution_search","automation_howto","tool_recommendation","paid_automation",
 )
 
 
 def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -> list[dict]:
     """Build exactly bounded desire probes from already-selected family slots."""
-    limit=max(0,min(int(limit or 0),2))
+    limit=max(0,min(int(limit or 0),4))
     if not limit:
         return []
     candidates=[]
@@ -160,9 +160,13 @@ def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -
         anchor=family.replace("_"," ")
         intent_class=DESIRE_EXPERIMENT_INTENT_CLASSES[idx % len(DESIRE_EXPERIMENT_INTENT_CLASSES)]
         if intent_class=="solution_search":
-            query=f'"{anchor}" ("is there a tool" OR "looking for software" OR "any recommendations")'
+            query=f'"{anchor}" ("is there a tool" OR "looking for a tool" OR "looking for software")'
+        elif intent_class=="automation_howto":
+            query=f'"{anchor}" ("how do I automate" OR "how can I automate" OR "automate this process")'
+        elif intent_class=="tool_recommendation":
+            query=f'"{anchor}" ("any recommendations" OR "what tool should I use" OR "tool for this")'
         else:
-            query=f'"{anchor}" ("hire someone to automate" OR ("budget" AND automate))'
+            query=f'"{anchor}" ("hire someone to automate" OR ("budget" AND automate) OR "pay for automation")'
         out.append({
             "query":_clean(query,260),
             "class":"desire",
