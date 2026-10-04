@@ -11999,6 +11999,7 @@ async def api_builder_status(request: Request):
 
 
 async def api_autonomy_status(request: Request):
+    hidden_control=_hidden_control_telemetry()
     rows=_load_recent_results(1)
     latest=rows[-1] if rows else None
     build=(latest or {}).get("build") or AUTOPILOT_STATE.get("last_build") or {}
@@ -12008,6 +12009,7 @@ async def api_autonomy_status(request: Request):
         "ok":True,
         "neo_version":VERSION,
         "runtime_profile":dict(RUNTIME_IDENTITY),
+        "hidden_control":hidden_control,
         "latest_result":latest,
         "autopilot":{
             "enabled":AUTOPILOT_STATE.get("enabled"),
@@ -12017,6 +12019,7 @@ async def api_autonomy_status(request: Request):
             "last_error":AUTOPILOT_STATE.get("last_error"),
             "last_started_utc":AUTOPILOT_STATE.get("last_started_utc"),
             "last_finished_utc":AUTOPILOT_STATE.get("last_finished_utc"),
+            "hidden_control":hidden_control,
         },
         "lifecycle":(latest or {}).get("lifecycle") or {},
         "coordinator":{
