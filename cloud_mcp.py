@@ -12352,6 +12352,14 @@ async def api_builder_status(request: Request):
     })
 
 
+async def api_model_private_cases(request: Request):
+    from model_archive import private_cases, export_key, EXPORT_PATH
+    proof=request.headers.get("x-neo-model-export-proof", "")
+    if not HEARTBEAT_TOKEN or not verify_self_traffic_proof(export_key(HEARTBEAT_TOKEN),EXPORT_PATH,proof).get("valid"):
+        return JSONResponse({"ok":False,"reason":"PRIVATE_EXPORT_AUTH_REQUIRED"},status_code=403)
+    return JSONResponse({"ok":True,"cases":private_cases(AUTOPILOT_STATE)},headers={"Cache-Control":"no-store"})
+
+
 async def api_autonomy_status(request: Request):
     hidden_control=_hidden_control_telemetry()
     rows=_load_recent_results(1)
@@ -13060,6 +13068,7 @@ app = Starlette(
         Route("/api/market/run-cycles", api_run_market_cycles, methods=["POST"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
+        Route("/api/model-shadow/private-cases", api_model_private_cases, methods=["GET"]),
         Route("/api/model-shadow/challenge-clusters", api_model_shadow_challenge_clusters, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
