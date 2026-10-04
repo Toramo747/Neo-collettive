@@ -5,6 +5,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import os
 import random
 import subprocess
@@ -160,6 +161,7 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         "Classifica il testo senza inventare fatti. Rispondi SOLO JSON con chiavi: "
         "canonical_problem,target_user,current_workaround,quoted_price,writer_role,"
         "failed_attempt,feasibility,proposed_label,confidence. "
+        "confidence deve essere un numero JSON tra 0 e 1, mai una parola o percentuale. "
         "proposed_label deve essere uno tra buyer_tool_search,vendor_offer,"
         "manual_recurring_work,job_posting,other. feasibility: feasible|hard|unknown. "
         "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
@@ -173,12 +175,20 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
     content=str(raw["choices"][0]["message"]["content"])
     try:
         data=json.loads(content)
+        if not isinstance(data,dict):
+            data={}
     except Exception:
         data={}
     label=str(data.get("proposed_label") or "other")
     if label not in MODEL_LABELS:
         label="other"
-    confidence=max(0.0,min(1.0,float(data.get("confidence") or 0.0)))
+    value=data.get("confidence")
+    try:
+        confidence=float(value) if not isinstance(value,bool) else 0.0
+    except (TypeError,ValueError):
+        confidence=0.0
+    if not math.isfinite(confidence) or not 0.0<=confidence<=1.0:
+        confidence=0.0
     extracted={
         "canonical_problem":" ".join(str(data.get("canonical_problem") or "").split())[:300],
         "target_user":" ".join(str(data.get("target_user") or "").split())[:160],
