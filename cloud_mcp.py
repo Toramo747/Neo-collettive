@@ -6128,6 +6128,9 @@ def _commercial_evidence_quality(
     query_meta=query_meta or {}
     current_rows=[]
     rejected=[]
+    challenge_current=[]
+    challenge_seen=set()
+    challenge_collected=0
     diagnostics=IngestionDiagnostics(INGESTION_DIAGNOSTICS_ENABLED)
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
@@ -6162,7 +6165,34 @@ def _commercial_evidence_quality(
         if len(rejected)<40:
             rejected.append({"reason":reason,"url":(url or "")[:500],"title":(title or "")[:180],"query_role":role})
 
-    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False):
+    def observe_challenge(
+        url: str,
+        title: str,
+        body: str,
+        source: str,
+        metadata: dict | None = None,
+        commercial_rejection_reason: str = "",
+    ) -> None:
+        row=route_challenge_evidence(
+            url=url,
+            title=title,
+            body=body,
+            source=source,
+            metadata=metadata or {},
+            commercial_rejection_reason=commercial_rejection_reason,
+            now_epoch=now_epoch,
+        )
+        if not isinstance(row,dict):
+            return
+        fp=str(row.get("fingerprint") or "")
+        if fp and fp in challenge_seen:
+            return
+        if fp:
+            challenge_seen.add(fp)
+        challenge_current.append(row)
+
+    def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False, metadata: dict | None = None):
+        nonlocal challenge_collected
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
         query_intent=str(meta.get("query_intent") or "pain").strip().lower()
@@ -6174,6 +6204,8 @@ def _commercial_evidence_quality(
         if not host or any(host==n or host.endswith("."+n) for n in noise):
             reject("noise_domain",url,title,query_role,source,query_class)
             return
+        challenge_collected+=1
+        observe_challenge(url,title,body,source,metadata)
         title_low=(title or "").lower()
         body_low=(body or "").lower()
         if host == "github.com":
@@ -6190,6 +6222,10 @@ def _commercial_evidence_quality(
                 "repetitive","problem","pain","customer","client","freelance","contractor",
             )
             if not any(contains_term(title_low+" "+body_low,x) for x in github_demand):
+                observe_challenge(
+                    url,title,body,source,metadata,
+                    commercial_rejection_reason="github_no_buyer_problem_context",
+                )
                 reject("github_no_buyer_problem_context",url,title,query_role,source,query_class)
                 return
 
@@ -6289,6 +6325,7 @@ def _commercial_evidence_quality(
             and positive
         )
         row={
+            "track":"commercial",
             "schema_v":EVIDENCE_SCHEMA_VERSION,
             "tagger_v":TAGGER_VERSION,
             "migration_v":EVIDENCE_SCHEMA_VERSION,
@@ -6343,6 +6380,7 @@ def _commercial_evidence_quality(
                     item.get("source") or "web",
                     q,
                     role,
+                    metadata=item,
                 )
 
     for item in scouts or []:
@@ -6350,7 +6388,7 @@ def _commercial_evidence_quality(
             diagnostics.record_scout_deduped(item)
             ingest(
                 item.get("url") or "",item.get("title") or "",item.get("text") or "",
-                item.get("source") or "scout",str(item.get("query") or ""),"scout",scout=True
+                item.get("source") or "scout",str(item.get("query") or ""),"scout",scout=True,metadata=item
             )
 
     # Migrate legacy rows idempotently. v1 rows remain discovery-visible but are
@@ -6369,6 +6407,10 @@ def _commercial_evidence_quality(
         supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
         query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
     )
+
+    for row in memory:
+        if isinstance(row,dict):
+            row["track"]="commercial"
 
     index={}
     for i,row in enumerate(memory):
@@ -6449,6 +6491,64 @@ def _commercial_evidence_quality(
             break
     memory=bounded
     AUTOPILOT_STATE["commercial_evidence_memory"]=memory
+
+    previous_challenge=AUTOPILOT_STATE.get("challenge_track") if isinstance(AUTOPILOT_STATE.get("challenge_track"),dict) else {}
+    previous_challenge=previous_challenge or {}
+    previous_gate_state=previous_challenge.get("gate_state") if isinstance(previous_challenge.get("gate_state"),dict) else {}
+    first_challenge_cycle_after_deploy=bool(
+        DEPLOY_COMMIT
+        and str(previous_gate_state.get("last_observed_commit") or "") != DEPLOY_COMMIT
+    )
+    challenge_memory=merge_challenge_memory(
+        previous_challenge.get("memory") if isinstance(previous_challenge.get("memory"),list) else [],
+        challenge_current,
+        now_epoch=now_epoch,
+    )
+    challenge_candidates=evaluate_challenges(
+        challenge_memory,
+        config=challenge_config(),
+        now_epoch=now_epoch,
+    )
+    challenge_gate_state,challenge_stable_rows=apply_challenge_hysteresis(
+        previous_gate_state,
+        challenge_candidates,
+        commit=DEPLOY_COMMIT,
+        observed_at_utc=datetime.now(timezone.utc).isoformat(),
+    )
+    challenge_telemetry=build_challenge_telemetry(
+        challenge_stable_rows,
+        challenge_gate_state,
+        secret=CANDIDATE_TELEMETRY_HMAC_KEY,
+        id_key_version=CANDIDATE_TELEMETRY_ID_KEY_VERSION,
+        cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
+        commit=DEPLOY_COMMIT,
+        first_cycle_after_deploy=first_challenge_cycle_after_deploy,
+        observed_at_utc=datetime.now(timezone.utc).isoformat(),
+    )
+    challenge_latest={
+        "mode":"shadow",
+        "status":"CHALLENGE_READY" if any(bool(x.get("stable_gate_pass")) for x in challenge_stable_rows) else "CHALLENGE_SELECT",
+        "tagger_version":CHALLENGE_TAGGER_VERSION,
+        "manual_confirmation_required":True,
+        "thresholds":{
+            "min_requesters":int(challenge_config().get("min_requesters") or 3),
+            "min_domains":int(challenge_config().get("min_domains") or 2),
+            "min_age_days":int(challenge_config().get("min_age_days") or 60),
+        },
+        "funnel":challenge_funnel(challenge_collected,challenge_current,challenge_stable_rows),
+        "candidate_counts":{
+            "observed":len(challenge_candidates),
+            "ready":sum(1 for x in challenge_stable_rows if bool(x.get("stable_gate_pass"))),
+        },
+        "candidates":challenge_telemetry,
+    }
+    AUTOPILOT_STATE["challenge_track"]={
+        "mode":"shadow",
+        "memory":challenge_memory,
+        "gate_state":challenge_gate_state,
+        "latest":challenge_latest,
+    }
+
     migration.update({
         "rows":len(memory),
         "quarantined":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
@@ -6573,6 +6673,7 @@ def _commercial_evidence_quality(
         "memory_retention_days":21,
         "freshness_window_days":7,
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
+        "challenge_shadow":challenge_latest,
     }
 
 def safe_problem_tail(value: str, max_len: int = 72) -> str:
