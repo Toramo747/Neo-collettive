@@ -132,6 +132,13 @@ DESIRE_EXPERIMENT_INTENT_CLASSES = (
     "solution_search","automation_howto","tool_recommendation","paid_automation",
 )
 
+DESIRE_SOURCE_ROUTES = (
+    ("hn",),
+    ("stackexchange",),
+    ("hn",),
+    ("web",),
+)
+
 
 def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -> list[dict]:
     """Build exactly bounded desire probes from already-selected family slots."""
@@ -159,14 +166,15 @@ def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -
     for idx,(family,row) in enumerate(candidates[:limit]):
         anchor=family.replace("_"," ")
         intent_class=DESIRE_EXPERIMENT_INTENT_CLASSES[idx % len(DESIRE_EXPERIMENT_INTENT_CLASSES)]
+        source_route=list(DESIRE_SOURCE_ROUTES[idx % len(DESIRE_SOURCE_ROUTES)])
         if intent_class=="solution_search":
-            query=f'"{anchor}" ("is there a tool" OR "looking for a tool" OR "looking for software")'
+            query=f'"{anchor}" ("is there a tool" OR "I am looking for a tool" OR "we need a tool")'
         elif intent_class=="automation_howto":
-            query=f'"{anchor}" ("how do I automate" OR "how can I automate" OR "automate this process")'
+            query=f'"{anchor}" ("how do I automate" OR "how can we automate" OR "we have to do this manually")'
         elif intent_class=="tool_recommendation":
-            query=f'"{anchor}" ("any recommendations" OR "what tool should I use" OR "tool for this")'
+            query=f'"{anchor}" ("what do you use" OR "any recommendations" OR "what tool should I use")'
         else:
-            query=f'"{anchor}" ("hire someone to automate" OR ("budget" AND automate) OR "pay for automation")'
+            query=f'"{anchor}" ("we spend hours" OR "need to hire" OR "budget for automation") (site:reddit.com OR site:news.ycombinator.com)'
         out.append({
             "query":_clean(query,260),
             "class":"desire",
@@ -176,5 +184,6 @@ def desire_experiment_entries(base_entries: list[dict] | None, limit: int = 2) -
             "family":family,
             "sector":row.get("sector"),
             "search_alias_used":anchor,
+            "source_route":source_route,
         })
     return out
