@@ -240,6 +240,30 @@ def _bounded_history_value(value: Any, *, depth: int = 0) -> Any:
     return value
 
 
+def compact_challenge_track(payload: dict) -> dict:
+    out=deepcopy(payload)
+    raw=out.get("challenge_track")
+    if not isinstance(raw,dict):
+        return out
+    track=dict(raw)
+    memory=[x for x in (track.get("memory") or []) if isinstance(x,dict)]
+    track["memory"]=memory[-180:]
+    gate=track.get("gate_state") if isinstance(track.get("gate_state"),dict) else {}
+    if gate:
+        gate=dict(gate)
+        states=gate.get("candidates") if isinstance(gate.get("candidates"),dict) else {}
+        ordered=sorted(
+            states.items(),
+            key=lambda kv:str((kv[1] or {}).get("updated_at_utc") or ""),
+            reverse=True,
+        )
+        gate["candidates"]=dict(ordered[:60])
+        gate["flips"]=list(gate.get("flips") or [])[-40:]
+        track["gate_state"]=gate
+    out["challenge_track"]=track
+    return out
+
+
 def compact_residual_histories(payload: dict) -> dict:
     out = deepcopy(payload)
     candidates = (
@@ -302,7 +326,8 @@ def compact_state_payload(
         ("b_deduplicate", deduplicate_current_tool_opportunities),
         ("c_historical_transcripts", compact_historical_transcripts),
         ("d_inbound_traffic_events", trim_inbound_traffic_events),
-        ("e_residual_histories", compact_residual_histories),
+        ("e_challenge_track", compact_challenge_track),
+        ("f_residual_histories", compact_residual_histories),
     )
     for name, func in levels:
         current = func(current)
