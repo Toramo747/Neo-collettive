@@ -38,7 +38,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertTrue(contains_term("we wasted half a day on this","waste time"))
         self.assertTrue(contains_term("our team spends hours on this","spend"))
         self.assertFalse(contains_term("manuality is not the same thing","manual"))
-        self.assertFalse(contains_term("newspaper spending report","spend"))
+        self.assertFalse(contains_term("overspending report","spend"))
 
     def test_rate_substring_does_not_create_paid_demand(self):
         tags=demand_signal_type("", "generate accurate integrate operate")
