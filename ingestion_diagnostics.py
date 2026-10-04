@@ -24,6 +24,9 @@ _SOURCE_ALIASES = {
     "github": "github",
     "stackexchange-routed": "stackexchange",
     "stackexchange": "stackexchange",
+    "brave-search": "brave",
+    "brave": "brave",
+    "bing": "bing-rss",
 }
 
 
@@ -76,6 +79,10 @@ def routed_search_diagnostics(
 
     for index,batch in enumerate(batches or []):
         source_hint = canonical_source(batch_sources[index] if index < len(batch_sources) else "unknown")
+        if source_hint=="web" and isinstance(batch,dict):
+            provider_hint=canonical_source(batch.get("provider") or "")
+            if provider_hint in {"brave","bing-rss","google-pse"}:
+                source_hint=provider_hint
         if isinstance(batch, BaseException):
             errors += 1
             attempts[source_hint] += 1
