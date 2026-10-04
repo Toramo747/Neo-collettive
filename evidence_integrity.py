@@ -69,6 +69,32 @@ FAMILY_TERMS = [
     ("workflow_automation", ("workflow automation","automating","automation","repetitive task","manual workflow","back office","reporting automation")),
 ]
 
+FAMILY_EXPANSIONS = {
+    "finance_ops": (
+        "invoice reconciliation","reconciling invoices","reconcile invoices",
+        "invoice matching","matching invoices","bookkeeper","bookkeeping",
+        "month end close","month-end close","accounts payable",
+    ),
+    "spreadsheet_process": (
+        "cleaning csv","clean csv","cleaning spreadsheets","spreadsheet cleanup",
+        "spreadsheet cleaning","copying between spreadsheets","excel cleanup",
+        "csv files","csv file","sheets cleanup",
+    ),
+    "hr_tools": (
+        "employee details","employee records","new hire","new hires",
+        "onboard employees","onboarding employees","employee onboarding",
+        "people operations","hr admin",
+    ),
+    "manual_data_entry": (
+        "rekeying","re-keying","copying data","copy paste data","copying fields",
+        "entering data manually","manually entering data",
+    ),
+    "workflow_automation": (
+        "automate this process","automating this process","automate the workflow",
+        "manual workflow","repetitive workflow","repetitive process",
+    ),
+}
+
 FAMILY_RELEVANCE_TERMS = {
     "spreadsheet_process": ("spreadsheet","excel","google sheets","csv","manual process"),
     "workflow_automation": ("workflow automation","manual workflow","repetitive task","back office","automation"),
@@ -362,12 +388,33 @@ def find_term_positions(text: str, term: str, limit: int = 8) -> list[tuple[int,
     return [(m.start(), m.end()) for m in _term_regex(term).finditer(text)][:max(0, limit)]
 
 
+def commercial_family_scores(text: str) -> dict[str, int]:
+    """Score all matching families; longer/specific phrases outrank generic tokens."""
+    low=(text or "").lower()
+    scores: dict[str,int]={}
+    for family,base_terms in FAMILY_TERMS:
+        terms=tuple(dict.fromkeys(tuple(base_terms)+tuple(FAMILY_RELEVANCE_TERMS.get(family,()))+tuple(FAMILY_EXPANSIONS.get(family,()))))
+        score=0
+        for term in terms:
+            if not contains_term(low,term):
+                continue
+            words=max(1,len(term.split()))
+            # Multi-word and expansion matches are more discriminative than generic tokens.
+            weight=1 if words==1 else min(6,words+1)
+            if term in FAMILY_EXPANSIONS.get(family,()):
+                weight += 2
+            score += weight
+        if score:
+            scores[family]=score
+    return scores
+
+
 def commercial_family(text: str) -> str:
-    low = (text or "").lower()
-    for family, terms in FAMILY_TERMS:
-        if contains_any(low, terms):
-            return family
-    return "other"
+    scores=commercial_family_scores(text)
+    if not scores:
+        return "other"
+    order={family:i for i,(family,_) in enumerate(FAMILY_TERMS)}
+    return max(scores,key=lambda family:(scores[family],-order.get(family,9999)))
 
 
 def family_relevance_terms(family: str) -> tuple[str, ...]:
