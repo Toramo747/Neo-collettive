@@ -2287,9 +2287,8 @@ async def _advertise_public_agent() -> dict:
         "registries":{},
         "last_registration_reason":"registration_in_progress" if enabled else "disabled_by_policy",
     })
-    # Publish policy-derived discovery availability before any external registry I/O.
-    # The deploy smoke checks whether public registry advertisement is enabled,
-    # not whether a remote directory has already accepted the listing.
+    # Arena winner: publish policy state before registry I/O so startup health
+    # does not depend on third-party directory latency.
     AUTOPILOT_STATE["a2a_discovery"]=dict(state)
     _save_local_state()
     if not enabled:
@@ -2301,150 +2300,153 @@ async def _advertise_public_agent() -> dict:
         return state
 
     now=datetime.now(timezone.utc).isoformat()
-    registries={}
+    registry_timeout=3.0
 
-    # First try the community A2A Registry endpoint documented by its repository.
-    try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=False) as client:
-            response=await client.post(
-                GLOBAL_A2A_REGISTRY+"/public/ingest",
-                json={"manifestUrl":manifest_url},
-                headers={"Accept":"application/json","Content-Type":"application/json"},
-            )
-        body=""
+    async def advertise_allagents() -> tuple[str,dict]:
+        row={"ok":False,"status":None,"reason":"not_attempted"}
         try:
-            body=json.dumps(response.json(),ensure_ascii=False,default=str)[:600]
-        except Exception:
-            body=(response.text or "")[:600]
-        registries["a2a_registry"]={
-            "ok":bool(response.is_success),
-            "status":response.status_code,
-            "reason":body,
-        }
-    except Exception as e:
-        registries["a2a_registry"]={
-            "ok":False,
-            "status":None,
-            "reason":type(e).__name__+": "+str(e)[:300],
-        }
-
-
-    # Also advertise in the live community registry whose documented API exposes
-    # /api/agents, /health and /chat. Treat duplicate registration as success.
-    community={"ok":False,"status":None,"reason":"not_attempted"}
-    try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=True) as client:
-            search=await client.get(
-                COMMUNITY_A2A_REGISTRY+"/api/agents",
-                params={"search":BRAND_NAME,"limit":10},
-                headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
-            )
-            search_text=(search.text or "").lower()[:30000]
-            already_listed=(
-                search.is_success
-                and _listing_has_own_endpoint(search_text,PUBLIC_BASE_URL)
-            )
-            if already_listed:
-                community={
-                    "ok":True,
-                    "status":search.status_code,
-                    "reason":"existing_listing_found",
-                }
-            else:
-                register=await client.post(
-                    COMMUNITY_A2A_REGISTRY+"/api/agents/register",
-                    json={"wellKnownURI":manifest_url},
-                    headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
+            async with httpx.AsyncClient(timeout=registry_timeout,follow_redirects=True) as client:
+                search=await client.get(
+                    "https://allagents.app/search",
+                    params={"q":BRAND_NAME},
+                    headers={"Accept":"application/json"},
                 )
-                community={
-                    "ok":bool(register.is_success or register.status_code==409),
-                    "status":register.status_code,
-                    "reason":"registered" if register.is_success else ("already_registered" if register.status_code==409 else "registration_failed"),
-                }
-    except Exception as e:
-        community={
-            "ok":False,
-            "status":None,
-            "reason":type(e).__name__+": "+str(e)[:300],
-        }
-    registries["community_a2a_registry"]=community
-
-    # The documented Global A2A Registry ingest is currently observed returning 404.
-    # Use allagents as a second public yellow-pages directory, but never persist
-    # registration edit tokens or recovery phrases returned by that service.
-    allagents={"ok":False,"status":None,"reason":"not_attempted"}
-    try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT,20),follow_redirects=True) as client:
-            search=await client.get(
-                "https://allagents.app/search",
-                params={"q":BRAND_NAME},
-                headers={"Accept":"application/json"},
-            )
-            existing_text=(search.text or "").lower()[:20000]
-            already_listed=(
-                search.is_success
-                and _listing_has_own_endpoint(existing_text,PUBLIC_BASE_URL)
-            )
-            if already_listed:
-                allagents={
-                    "ok":True,
-                    "status":search.status_code,
-                    "reason":"existing_listing_found",
-                    "listing":"https://allagents.app/search?q="+BRAND_NAME,
-                }
-            else:
-                register=await client.post(
-                    "https://allagents.app/register",
-                    json={
-                        "name":"MYCELIX",
-                        "specialty":"agents-infra",
-                        "description":"Autonomous collective-intelligence agent for evidence validation, peer critique, agent interviews, commercial research and bounded collective reasoning.",
-                        "endpoints":{
-                            "a2a":PUBLIC_BASE_URL+"/a2a",
-                            "agent_card":manifest_url,
-                            "site":PUBLIC_BASE_URL,
+                existing_text=(search.text or "").lower()[:20000]
+                already_listed=(
+                    search.is_success
+                    and _listing_has_own_endpoint(existing_text,PUBLIC_BASE_URL)
+                )
+                if already_listed:
+                    row={
+                        "ok":True,
+                        "status":search.status_code,
+                        "reason":"existing_listing_found",
+                        "listing":"https://allagents.app/search?q="+BRAND_NAME,
+                    }
+                else:
+                    register=await client.post(
+                        "https://allagents.app/register",
+                        json={
+                            "name":"MYCELIX",
+                            "specialty":"agents-infra",
+                            "description":"Autonomous collective-intelligence agent for evidence validation, peer critique, agent interviews, commercial research and bounded collective reasoning.",
+                            "endpoints":{
+                                "a2a":PUBLIC_BASE_URL+"/a2a",
+                                "agent_card":manifest_url,
+                                "site":PUBLIC_BASE_URL,
+                            },
+                            "protocols":["A2A 1.0","A2A 0.3","JSONRPC"],
+                            "tags":[
+                                "agent-discovery","evidence-validation","commercial-research",
+                                "collective-reasoning","peer-dialogue","a2a",
+                            ],
                         },
-                        "protocols":["A2A 1.0","A2A 0.3","JSONRPC"],
-                        "tags":[
-                            "agent-discovery","evidence-validation","commercial-research",
-                            "collective-reasoning","peer-dialogue","a2a",
-                        ],
-                    },
+                        headers={"Accept":"application/json","Content-Type":"application/json"},
+                    )
+                    listing=None
+                    if register.is_success:
+                        try:
+                            payload=register.json()
+                            if isinstance(payload,dict):
+                                agent=payload.get("agent") if isinstance(payload.get("agent"),dict) else {}
+                                slug=str(
+                                    payload.get("slug")
+                                    or agent.get("slug")
+                                    or payload.get("id")
+                                    or ""
+                                ).strip()[:160]
+                                if slug:
+                                    listing="https://allagents.app/agent/"+slug
+                        except Exception:
+                            pass
+                    row={
+                        "ok":bool(register.is_success),
+                        "status":register.status_code,
+                        "reason":"registered" if register.is_success else "registration_failed",
+                    }
+                    if listing:
+                        row["listing"]=listing
+        except Exception as e:
+            row={
+                "ok":False,
+                "status":None,
+                "reason":type(e).__name__+": "+str(e)[:300],
+            }
+        return "allagents",row
+
+    async def advertise_community() -> tuple[str,dict]:
+        row={"ok":False,"status":None,"reason":"not_attempted"}
+        try:
+            async with httpx.AsyncClient(timeout=registry_timeout,follow_redirects=True) as client:
+                search=await client.get(
+                    COMMUNITY_A2A_REGISTRY+"/api/agents",
+                    params={"search":BRAND_NAME,"limit":10},
+                    headers={"Accept":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
+                )
+                search_text=(search.text or "").lower()[:30000]
+                already_listed=(
+                    search.is_success
+                    and _listing_has_own_endpoint(search_text,PUBLIC_BASE_URL)
+                )
+                if already_listed:
+                    row={
+                        "ok":True,
+                        "status":search.status_code,
+                        "reason":"existing_listing_found",
+                    }
+                else:
+                    register=await client.post(
+                        COMMUNITY_A2A_REGISTRY+"/api/agents/register",
+                        json={"wellKnownURI":manifest_url},
+                        headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
+                    )
+                    row={
+                        "ok":bool(register.is_success or register.status_code==409),
+                        "status":register.status_code,
+                        "reason":"registered" if register.is_success else ("already_registered" if register.status_code==409 else "registration_failed"),
+                    }
+        except Exception as e:
+            row={
+                "ok":False,
+                "status":None,
+                "reason":type(e).__name__+": "+str(e)[:300],
+            }
+        return "community_a2a_registry",row
+
+    async def advertise_global() -> tuple[str,dict]:
+        try:
+            async with httpx.AsyncClient(timeout=registry_timeout,follow_redirects=False) as client:
+                response=await client.post(
+                    GLOBAL_A2A_REGISTRY+"/public/ingest",
+                    json={"manifestUrl":manifest_url},
                     headers={"Accept":"application/json","Content-Type":"application/json"},
                 )
-                # Deliberately do not store or log the response body: registration
-                # may return an edit token and recovery phrase.
-                listing=None
-                slug=None
-                if register.is_success:
-                    try:
-                        payload=register.json()
-                        if isinstance(payload,dict):
-                            agent=payload.get("agent") if isinstance(payload.get("agent"),dict) else {}
-                            slug=str(
-                                payload.get("slug")
-                                or agent.get("slug")
-                                or payload.get("id")
-                                or ""
-                            ).strip()[:160]
-                            if slug:
-                                listing="https://allagents.app/agent/"+slug
-                    except Exception:
-                        pass
-                allagents={
-                    "ok":bool(register.is_success),
-                    "status":register.status_code,
-                    "reason":"registered" if register.is_success else "registration_failed",
-                }
-                if listing:
-                    allagents["listing"]=listing
-    except Exception as e:
-        allagents={
-            "ok":False,
-            "status":None,
-            "reason":type(e).__name__+": "+str(e)[:300],
-        }
-    registries["allagents"]=allagents
+            body=""
+            try:
+                body=json.dumps(response.json(),ensure_ascii=False,default=str)[:600]
+            except Exception:
+                body=(response.text or "")[:600]
+            row={
+                "ok":bool(response.is_success),
+                "status":response.status_code,
+                "reason":body,
+            }
+        except Exception as e:
+            row={
+                "ok":False,
+                "status":None,
+                "reason":type(e).__name__+": "+str(e)[:300],
+            }
+        return "a2a_registry",row
+
+    # A2A Recovery Arena champion g0-6:
+    # concurrent registries, 3s per-registry cap, AllAgents-first result order.
+    registry_rows=await asyncio.gather(
+        advertise_allagents(),
+        advertise_community(),
+        advertise_global(),
+    )
+    registries={name:row for name,row in registry_rows}
 
     successful=[name for name,row in registries.items() if isinstance(row,dict) and row.get("ok")]
     state.update({
@@ -2464,7 +2466,6 @@ async def _advertise_public_agent() -> dict:
     AUTOPILOT_STATE["a2a_discovery"]=state
     _save_local_state()
     return state
-
 
 def _tokens(text: str) -> set[str]:
     stop = {"the","and","for","with","that","this","from","into","your","their","have","will","sono","per","con","che","dei","delle","della","dell","una","uno","gli","nel","nella","quali","quale","oggi","come","rete","primi","primo","piu","più"}
