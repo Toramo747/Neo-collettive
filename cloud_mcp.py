@@ -6116,6 +6116,7 @@ def _commercial_evidence_quality(
     scouts: list[dict] | None = None,
     query_meta: dict[str, dict] | None = None,
     revalidation_stats: dict[str, int] | None = None,
+    challenge_shadow_rows: list[dict] | None = None,
 ) -> dict:
     """Evidence Integrity v2: accumulate only attributable, gate-eligible commercial evidence."""
     noise=("wikipedia.org","dict.cc","leo.org","linguee.de","pons.com","langenscheidt.com","dwds.de")
@@ -6364,6 +6365,22 @@ def _commercial_evidence_quality(
             "seen_count":1,
         }
         current_rows.append(row)
+
+    for item in challenge_shadow_rows or []:
+        if not isinstance(item,dict):
+            continue
+        url=str(item.get("url") or "")
+        title=str(item.get("title") or "")
+        body=str(item.get("snippet") or item.get("text") or "")
+        source=str(item.get("source") or "challenge-shadow")
+        if SELF_CONTAMINATION_GUARD_ENABLED and is_self_contamination(url,source,title+" "+body):
+            continue
+        raw_host=(urlparse(url or "").hostname or "").lower()
+        host=canonical_domain(raw_host)
+        if not host or any(host==n or host.endswith("."+n) for n in noise):
+            continue
+        challenge_collected+=1
+        observe_challenge(url,title,body,source,item)
 
     for group in web_research:
         if not isinstance(group,dict):
@@ -6820,6 +6837,26 @@ async def _stackexchange_query_search(query: str, limit: int = 4, meta: dict | N
         return out
     except Exception:
         return []
+
+
+async def _challenge_shadow_research() -> list[dict]:
+    """Zero-cost read-only long-window research, isolated from commercial provider counters."""
+    specs=[
+        (_github_issue_query_search,'"feature request" workaround',6,{"recency_days":365,"role":"challenge_shadow"}),
+        (_github_issue_query_search,'"help wanted" bounty',6,{"recency_days":365,"role":"challenge_shadow"}),
+        (_hn_query_search,'"is there a tool"',6,{"recency_days":365,"role":"challenge_shadow"}),
+        (_stackexchange_query_search,'"is there a tool"',6,{"recency_days":365,"role":"challenge_shadow"}),
+    ]
+    tasks=[func(query,limit,meta) for func,query,limit,meta in specs]
+    results=await asyncio.gather(*tasks,return_exceptions=True)
+    rows=[]
+    for result in results:
+        if isinstance(result,Exception):
+            continue
+        for row in result or []:
+            if isinstance(row,dict):
+                rows.append(row)
+    return rows[:24]
 
 
 async def _grep_app_code_search(query: str, limit: int = 5) -> list[dict]:
@@ -9195,11 +9232,13 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "observed_candidates_purged_by_reason":{},
     }
 
+    challenge_shadow_rows=await _challenge_shadow_research()
     evidence_quality = _commercial_evidence_quality(
         web_research,
         demand_evidence,
         query_meta,
         revalidation_stats=revalidation_stats,
+        challenge_shadow_rows=challenge_shadow_rows,
     )
     seti_catalog=seti_market_catalog(
         SETI_PRIVATE_STATE.get("candidates") or {},
