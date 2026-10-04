@@ -232,6 +232,7 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
             judges,
             minimum_judges=int(consensus_cfg["minimum_judges"]),
             confidence_threshold=float(consensus_cfg["confidence_threshold"]),
+            structural_abstention_pair_threshold=float(consensus_cfg.get("structural_abstention_pair_threshold",0.85)),
             outcome_label=outcome if outcome in MODEL_LABELS else "",
         )
         copy=dict(row)
@@ -244,7 +245,7 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         copy["final_label"]=decision["label"]
         copy["label_origin"]=decision["origin"] if decision["label"] else ""
         copy["label_date"]=_utc()
-        copy["consensus_policy_version"]=2
+        copy["consensus_policy_version"]=int(consensus_cfg.get("policy_version",3))
         copy["eligible_for_training"]=bool(decision["eligible_for_training"])
         counters["processed"]+=1
         counters["eligible"]+=int(bool(copy["eligible_for_training"]))
