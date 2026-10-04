@@ -136,9 +136,10 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertFalse(result["used_for_evolution"])
         self.assertFalse(result["raw_external_text"])
         self.assertEqual(result["cases"],6)
-        self.assertGreaterEqual(result["accuracy"],0.0)
-        self.assertLessEqual(result["accuracy"],1.0)
-        self.assertGreaterEqual(result["family_accuracy"],0.6667)
+        self.assertEqual(result["correct"],6)
+        self.assertEqual(result["accuracy"],1.0)
+        self.assertEqual(result["family_correct"],6)
+        self.assertEqual(result["family_accuracy"],1.0)
 
     def test_arena_uses_production_buyer_and_guard_primitives(self):
         src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
@@ -149,6 +150,23 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
         self.assertIn("commercial_family,",src)
         self.assertIn('family != "other"',src)
+
+    def test_ranking_never_prefers_fewer_absolute_signals(self):
+        more={"metrics":{"signal_hits":5,"unique_signal_threads":4,"fitness":20.0}}
+        fewer={"metrics":{"signal_hits":4,"unique_signal_threads":4,"fitness":99.0}}
+        self.assertGreater(ara.ranking_key(more),ara.ranking_key(fewer))
+
+    def test_absolute_evidence_is_explicit_in_fitness(self):
+        genome={"query_mode":"workaround","query_count":3,"recency_days":14,"min_relevance_tokens":1}
+        rows=[{"topic":"manual data entry","hits":[
+            {"comment_text":"I need a tool for manual data entry because this is repetitive","story_id":"1"},
+            {"comment_text":"We need to automate manual data entry in spreadsheets","story_id":"2"},
+            {"comment_text":"How do I automate manual data entry for CSV files?","story_id":"3"},
+        ]}]
+        metrics=ara.score_hits(genome,rows)
+        self.assertGreater(metrics["absolute_signal_score"],0)
+        self.assertGreater(metrics["absolute_thread_score"],0)
+        self.assertGreater(metrics["evidence_volume_score"],0)
 
     def test_support_penalty_blocks_tiny_perfect_sample(self):
         genome={"query_mode":"workaround","query_count":3,"recency_days":14,"min_relevance_tokens":1}
