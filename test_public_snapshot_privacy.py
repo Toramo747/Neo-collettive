@@ -426,6 +426,66 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"challenge_missing_code"):
             validate_public_snapshot(bad)
 
+    def test_model_shadow_snapshot_is_aggregate_only(self):
+        raw={
+            "snapshot_schema":7,
+            "neo_version":"0.99.52",
+            "autopilot":{
+                "cycles_completed":2001,
+                "model_shadow":{
+                    "schema_v":1,
+                    "mode":"shadow",
+                    "student_metrics":{
+                        "student_available":True,
+                        "observed":100,
+                        "agreement":82,
+                        "disagreement":18,
+                        "agreement_rate_ppm":820000,
+                        "lexicon_positive":40,
+                        "student_positive":42,
+                        "student_low_confidence":7,
+                        "student_version_code":"student-v1",
+                        "text":"PRIVATE EVIDENCE",
+                        "url":"https://secret.example/x",
+                    },
+                    "challenge_cluster_map":{
+                        "schema_v":1,
+                        "updated_at_utc":"2026-10-04T10:00:00Z",
+                        "mapping":[{
+                            "evidence_id":"0123456789abcdef",
+                            "cluster_id":"fedcba9876543210",
+                            "review_state":"REVIEW_REQUIRED",
+                            "requester_weight":3,
+                            "domain":"secret.example",
+                            "text":"PRIVATE",
+                        }],
+                    },
+                    "promotion":{"mode":"manual_only","approved":False},
+                },
+            },
+        }
+        public=sanitize_public_snapshot(raw)
+        shadow=public["autopilot"]["model_shadow"]
+        self.assertEqual(shadow["observed"],100)
+        self.assertEqual(shadow["agreement"],82)
+        self.assertEqual(shadow["challenge_clusters"]["mapping_count"],1)
+        self.assertEqual(shadow["challenge_clusters"]["cluster_count"],1)
+        self.assertEqual(shadow["challenge_clusters"]["review_required"],1)
+        self.assertEqual(shadow["promotion"],{"mode":"manual_only","approved":False})
+        encoded=json.dumps(shadow,sort_keys=True)
+        for forbidden in (
+            "PRIVATE","secret.example","https://",
+            "0123456789abcdef","fedcba9876543210",
+            '"mapping"',
+        ):
+            self.assertNotIn(forbidden,encoded)
+        validate_public_snapshot(public)
+
+        bad=json.loads(json.dumps(public))
+        bad["autopilot"]["model_shadow"]["text"]="PRIVATE"
+        with self.assertRaises(ValueError):
+            validate_public_snapshot(bad)
+
     def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
         raw={
             "autopilot":{
