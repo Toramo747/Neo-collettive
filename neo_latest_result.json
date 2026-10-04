@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-10-04T08:24:22.394538+00:00",
+  "captured_at_utc": "2026-10-04T09:13:23.331179+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.49",
   "runtime_profile": {
@@ -15,60 +15,60 @@
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 111.603559,
-    "cycles_completed": 1953,
-    "last_started_utc": "2026-10-04T08:22:29.402749+00:00",
-    "last_finished_utc": "2026-10-04T08:22:57.411202+00:00",
+    "last_started_age_seconds": 279.42986,
+    "cycles_completed": 1957,
+    "last_started_utc": "2026-10-04T09:08:41.896161+00:00",
+    "last_finished_utc": "2026-10-04T09:09:08.095079+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-04T08:24:22.283589+00:00",
+    "captured_at_utc": "2026-10-04T09:13:23.223778+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-04T08:24:20.055Z",
+        "timestamp_utc": "2026-10-04T09:13:20.346Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 413.52,
+        "latency_ms": 469.86,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-04T08:24:20.462Z",
+        "timestamp_utc": "2026-10-04T09:13:20.962Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 361.53,
+        "latency_ms": 571.6,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-04T08:24:21.857Z",
+        "timestamp_utc": "2026-10-04T09:13:22.547Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 309.83,
+        "latency_ms": 408.38,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-04T08:24:22.263Z",
+        "timestamp_utc": "2026-10-04T09:13:23.204Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 363.0,
+        "latency_ms": 612.53,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "2746a68b140c51c50ac009b87ea88c62a2e87ae8",
+    "source_commit": "8b57b80cd9d075767276d32ddd87a373b731f1aa",
     "runtime_contract_verified": true,
     "hidden_control": {
       "required": true,
@@ -80,9 +80,9 @@
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 1953,
-    "last_started_utc": "2026-10-04T08:22:29.402749+00:00",
-    "last_finished_utc": "2026-10-04T08:22:57.411202+00:00",
+    "cycles_completed": 1957,
+    "last_started_utc": "2026-10-04T09:08:41.896161+00:00",
+    "last_finished_utc": "2026-10-04T09:09:08.095079+00:00",
     "last_status": "SELECT",
     "recent_sectors": [],
     "family_performance": [],
@@ -130,88 +130,94 @@
     "select_diagnostics": {
       "status": "SELECT",
       "ingestion_enabled": true,
-      "raw_results": 110,
-      "relevance_pass": 97,
-      "useful_results": 5,
-      "persistent_evidence_items": 8,
-      "quarantined_evidence_items": 6,
+      "raw_results": 157,
+      "relevance_pass": 100,
+      "useful_results": 2,
+      "persistent_evidence_items": 10,
+      "quarantined_evidence_items": 8,
       "rejected_current_count": 40,
       "new_signal_rows": 0,
-      "problem_cluster_count": 7,
+      "problem_cluster_count": 8,
       "qualified_problem_count": 0,
       "configured_categories": 9,
-      "evidenced_candidates": 5,
-      "gate_eligible_candidates": 5,
+      "evidenced_candidates": 8,
+      "gate_eligible_candidates": 8,
       "qualified_candidates": 0,
       "top_gate_pass": false,
-      "top_monetization_score": 90,
-      "top_missing": [],
+      "top_monetization_score": 35,
+      "top_missing": [
+        "two_independent_real_price_competitors",
+        "two_competitors_with_real_price",
+        "three_independent_source_domains",
+        "two_existing_paid_tools",
+        "monetization_score_60"
+      ],
       "rejection_reasons": [
         {
-          "reason": "no_demand_signal",
-          "count": 35
+          "reason": "no_family",
+          "count": 28
         },
         {
-          "reason": "no_family",
-          "count": 14
+          "reason": "no_demand_signal",
+          "count": 24
         },
         {
           "reason": "weak_family_relevance",
-          "count": 13
+          "count": 20
         },
         {
           "reason": "github_no_buyer_problem_context",
-          "count": 9
+          "count": 11
+        },
+        {
+          "reason": "noise_domain",
+          "count": 8
         },
         {
           "reason": "github_noise",
           "count": 3
-        },
-        {
-          "reason": "noise_domain",
-          "count": 1
         }
       ],
       "search_sources": [
         {
           "source": "bing-rss",
-          "attempts": 1,
+          "attempts": 15,
           "empty": 0,
           "errors": 0,
-          "raw_results": 6,
-          "relevance_pass": 6
+          "raw_results": 90,
+          "relevance_pass": 49
         },
         {
           "source": "brave",
-          "attempts": 10,
+          "attempts": 16,
           "empty": 0,
-          "errors": 1,
-          "raw_results": 54,
-          "relevance_pass": 54
+          "errors": 15,
+          "raw_results": 6,
+          "relevance_pass": 6
         },
         {
           "source": "github",
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 19,
-          "relevance_pass": 8
+          "raw_results": 18,
+          "relevance_pass": 7
         },
         {
           "source": "hn",
-          "attempts": 10,
-          "empty": 0,
+          "attempts": 16,
+          "empty": 1,
           "errors": 0,
-          "raw_results": 30,
-          "relevance_pass": 29
+          "raw_results": 41,
+          "relevance_pass": 37
         },
         {
           "source": "mcp-registry",
           "attempts": 0,
           "empty": 0,
           "errors": 0,
-          "raw_results": 1,
-          "relevance_pass": 0
+          "raw_results": 2,
+          "relevance_pass": 1
         },
         {
           "source": "stackexchange",
@@ -224,12 +230,16 @@
       ],
       "buyer_voice_by_source": [
         {
-          "source": "brave",
-          "count": 9
+          "source": "hn",
+          "count": 7
         },
         {
           "source": "github",
-          "count": 6
+          "count": 5
+        },
+        {
+          "source": "brave",
+          "count": 1
         }
       ],
       "search_provider": {
@@ -237,73 +247,73 @@
         "configured_provider": "brave",
         "provider_key_present": true,
         "fallback_used": true,
-        "calls_cycle": 10,
-        "calls_day": 40,
-        "errors": 1,
-        "fallbacks": 1,
+        "calls_cycle": 1,
+        "calls_day": 59,
+        "errors": 0,
+        "fallbacks": 15,
         "fallback_reasons": [
           {
-            "reason": "HTTPStatusError:429",
-            "count": 1
+            "reason": "budget_paced",
+            "count": 15
           }
         ]
       },
       "funnel": {
-        "queries_planned": 10,
-        "queries_executed": 10,
+        "queries_planned": 16,
+        "queries_executed": 16,
         "queries_skipped_by_reason": [],
         "calls_by_source": [
           {
             "source": "bing-rss",
-            "count": 1
+            "count": 15
           },
           {
             "source": "brave",
-            "count": 10
+            "count": 16
           },
           {
             "source": "hn",
-            "count": 10
+            "count": 16
           }
         ],
         "errors_by_source": [
           {
             "source": "brave",
-            "error": "HTTPStatusError:429",
-            "count": 1
+            "error": "budget_paced",
+            "count": 15
           }
         ],
-        "raw_received": 110,
-        "deduped": 109,
-        "query_relevant": 97,
-        "family_matched": 53,
-        "buyer_voice": 15,
-        "commercial_signal": 5,
-        "persisted": 5,
+        "raw_received": 157,
+        "deduped": 153,
+        "query_relevant": 100,
+        "family_matched": 46,
+        "buyer_voice": 13,
+        "commercial_signal": 2,
+        "persisted": 2,
         "discarded_by_reason": [
           {
-            "reason": "no_demand_signal",
-            "count": 35
+            "reason": "no_family",
+            "count": 28
           },
           {
-            "reason": "no_family",
-            "count": 14
+            "reason": "no_demand_signal",
+            "count": 24
           },
           {
             "reason": "weak_family_relevance",
-            "count": 13
+            "count": 20
           },
           {
             "reason": "github_no_buyer_problem_context",
-            "count": 9
+            "count": 11
+          },
+          {
+            "reason": "noise_domain",
+            "count": 8
           },
           {
             "reason": "github_noise",
             "count": 3
-          },
-          {
-            "reason": "noise_domain",
-            "count": 1
           }
         ],
         "monotonicity_warnings": []
