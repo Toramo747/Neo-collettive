@@ -11716,15 +11716,20 @@ async def api_outcomes(request: Request):
 async def api_checkpoint_status(request: Request):
     if request.method=="POST":
         checkpoint=await _checkpoint_state_to_render()
-    else:
-        checkpoint=AUTOPILOT_STATE.get("last_checkpoint") or {}
+        return JSONResponse({
+            "ok":bool(checkpoint.get("ok")),
+            "stored_bytes":checkpoint.get("stored_bytes"),
+            "limit_bytes":checkpoint.get("limit_bytes") or STATE_ENV_MAX_BYTES,
+            "last_checkpoint_utc":checkpoint.get("checkpoint_utc"),
+            "cycles_completed":int(AUTOPILOT_STATE.get("cycles_completed") or 0),
+            "commercial_evidence_items":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
+        })
+    checkpoint=AUTOPILOT_STATE.get("last_checkpoint") or {}
     return JSONResponse({
         "ok":bool(checkpoint.get("ok")),
         "stored_bytes":checkpoint.get("stored_bytes"),
         "limit_bytes":checkpoint.get("limit_bytes") or STATE_ENV_MAX_BYTES,
         "last_checkpoint_utc":checkpoint.get("checkpoint_utc"),
-        "cycles_completed":int(AUTOPILOT_STATE.get("cycles_completed") or 0),
-        "commercial_evidence_items":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
     })
 
 
