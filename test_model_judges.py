@@ -1,3 +1,5 @@
+import json
+import re
 import unittest
 
 from model_judges import choose_automatic_label, challenge_semantic_review
@@ -5,6 +7,18 @@ from model_shadow import validate_hidden_origins, validate_split_separation
 
 
 class ModelJudgeContractTests(unittest.TestCase):
+    def test_model_registry_is_pinned_and_commercially_licensed(self):
+        registry=json.load(open("model_shadow_registry.json",encoding="utf-8"))
+        allowed={"MIT","Apache-2.0"}
+        for name in ("nli","local_llm","embedding"):
+            row=registry["judges"][name]
+            self.assertTrue(row["commercial_use_allowed"],name)
+            self.assertIn(row["license"],allowed,name)
+            self.assertRegex(row["revision"],r"^[0-9a-f]{40}$")
+        self.assertRegex(registry["judges"]["local_llm"]["sha256"],r"^[0-9a-f]{64}$")
+        self.assertEqual(registry["promotion"],"manual_only")
+        self.assertEqual(registry["student"]["render_mode"],"shadow")
+
     def test_splits_must_be_strictly_disjoint(self):
         result=validate_split_separation({"a","b"},{"c"},{"d"})
         self.assertTrue(result["disjoint"])
