@@ -90,6 +90,7 @@ def choose_automatic_label(
     *,
     minimum_judges: int = 3,
     confidence_threshold: float = 0.70,
+    structural_abstention_pair_threshold: float = 0.85,
     outcome_label: str = "",
 ) -> dict:
     if outcome_label:
@@ -103,19 +104,52 @@ def choose_automatic_label(
         }
 
     valid=[]
+    raw_by_judge={}
     for row in judges or []:
         if not isinstance(row, dict):
             continue
         label=str(row.get("label") or "")
         confidence=float(row.get("confidence") or 0.0)
         judge=str(row.get("judge") or "")
+        if judge in {"nli", "local_llm", "structural", "outcome"} and label in MODEL_LABELS:
+            raw_by_judge.setdefault(judge,[]).append((label,confidence))
         if label in MODEL_LABELS and judge in {"nli", "local_llm", "structural", "outcome"} and confidence >= confidence_threshold:
             valid.append((judge,label,confidence))
+
     # One independent vote per judge; contradictory duplicate votes abstain.
     by_judge={}
     for judge,label,confidence in valid:
         by_judge.setdefault(judge,set()).add(label)
     valid=[(judge,next(iter(labels)),1.0) for judge,labels in by_judge.items() if len(labels)==1]
+
+    # If the structural judge has a usable vote, it must participate in the
+    # normal all-three consensus. A structural abstention may be bypassed only
+    # when NLI and the local LLM independently agree at the stricter threshold
+    # and no voting judge contradicts that label.
+    structural_rows=raw_by_judge.get("structural",[])
+    structural_voting=any(confidence >= confidence_threshold for _,confidence in structural_rows)
+    if not structural_voting:
+        strict={}
+        for judge in ("nli","local_llm"):
+            rows=raw_by_judge.get(judge,[])
+            labels={label for label,confidence in rows if confidence >= structural_abstention_pair_threshold}
+            if len(labels)==1:
+                strict[judge]=next(iter(labels))
+        if len(strict)==2 and strict["nli"]==strict["local_llm"]:
+            candidate=strict["nli"]
+            contradictory={
+                label
+                for judge,label,_ in valid
+                if judge not in {"nli","local_llm"} and label != candidate
+            }
+            if not contradictory:
+                return {
+                    "label": candidate,
+                    "origin": "auto",
+                    "agreed_judges": 2,
+                    "eligible_for_training": True,
+                }
+
     counts=Counter(label for _,label,_ in valid)
     if not counts:
         return {"label":"","origin":"auto","agreed_judges":0,"eligible_for_training":False}
@@ -128,7 +162,6 @@ def choose_automatic_label(
         "agreed_judges": agreed,
         "eligible_for_training": bool(agreed >= minimum_judges),
     }
-
 
 def agreement_metrics(rows: list[dict]) -> dict:
     total=0
