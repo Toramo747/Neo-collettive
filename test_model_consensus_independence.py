@@ -11,10 +11,14 @@ class IndependentConsensusTests(unittest.TestCase):
         votes.append({'judge':'lexicon','label':'vendor_offer','confidence':1})
         self.assertEqual(choose_automatic_label(votes)['label'],'buyer_tool_search')
 
-    def test_lexicon_and_duplicates_cannot_supply_missing_judge(self):
-        votes=[{'judge':j,'label':'buyer_tool_search','confidence':.95} for j in ('nli','local_llm','lexicon','nli')]
+    def test_lexicon_and_duplicate_single_model_cannot_supply_pair(self):
+        votes=[
+            {'judge':'nli','label':'buyer_tool_search','confidence':.95},
+            {'judge':'nli','label':'buyer_tool_search','confidence':.96},
+            {'judge':'lexicon','label':'buyer_tool_search','confidence':1.0},
+            {'judge':'structural','label':'other','confidence':.60},
+        ]
         self.assertFalse(choose_automatic_label(votes)['eligible_for_training'])
-
 
     def test_strict_model_pair_allowed_when_structural_abstains(self):
         votes=[
