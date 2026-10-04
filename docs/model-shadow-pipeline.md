@@ -60,14 +60,16 @@ artifacts. The publicable model outputs are limited to the student weights, aggr
 
 ## Private bootstrap
 
-The private batch imports at most 100 retained real observations per call from
-`/api/model-shadow/private-cases`. The endpoint requires both existing per-path OPS
+The private batch imports at most 100 real observations per call from
+`/api/model-shadow/private-cases`. In addition to retained commercial/challenge memory, production keeps a bounded in-memory shadow-only buffer of raw observed search rows. This buffer is excluded from commercial/challenge decisions and from durable checkpoints; its only consumer is the authenticated private export. The endpoint requires both existing per-path OPS
 HMAC and a second proof using a purpose-derived key. It is read-only and sends
 `Cache-Control: no-store`. Fixed-origin import refuses redirects and prints counts only.
 
-The importer preserves existing public/hidden evaluation files byte-for-byte, skips
-held-out IDs, deduplicates training IDs, and does not copy any lexical label into
-training. It creates empty evaluation files when absent; Andrea supplies hidden labels.
+The importer skips held-out IDs, deduplicates training IDs, and does not copy any lexical label into training. Before judging, the workflow rebuilds the 24-case public model evaluation set from the public control corpus and fetches the hidden control set from Render through a separate purpose-bound HMAC endpoint. Hidden rows are ephemeral on the runner, have human origin, are never committed to the public repository, and only aggregate evaluation results may leave the private batch.
 `collect_only=true` imports without models, training or public publication. Fewer than
 four training cases skip heavy downloads. No raw evidence is cached or uploaded as
 public artifacts. Raw model errors remain in the temporary runner and are never printed.
+
+## Consensus diagnostics
+
+The private batch emits aggregate-only diagnostics for consensus path, NLI confidence bands, dual-prompt LLM validity/agreement, NLI x LLM label counts, and structural agreement state. The same counters are split by canonical source bucket. Weekly private review sampling includes discarded disagreements as well as accepted labels, prioritizing cases where the model judges agree but consensus still blocks training. No evidence text, URL, domain, or requester identifier is written to public logs or artifacts.
