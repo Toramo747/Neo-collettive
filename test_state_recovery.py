@@ -19,19 +19,38 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertEqual(payload["cycles_completed"],141)
         self.assertEqual(meta["selected_cycles"],141)
 
-    def test_timestamp_breaks_tie_between_equal_cycle_counts(self):
-        source,payload,_=select_freshest_state([
+    def test_sparse_repo_projection_never_beats_durable_env_on_tie(self):
+        source,payload,meta=select_freshest_state([
             ("render_env",{
                 "cycles_completed":141,
                 "state_saved_at_utc":"2026-09-23T00:40:00+00:00",
+                "commercial_evidence_memory":[{"id":"e1"}],
             }),
             ("repo_snapshot",{
                 "cycles_completed":141,
                 "last_finished_utc":"2026-09-23T00:41:36+00:00",
             }),
         ])
-        self.assertEqual(source,"repo_snapshot")
-        self.assertEqual(payload["cycles_completed"],141)
+        self.assertEqual(source,"render_env")
+        self.assertEqual(len(payload["commercial_evidence_memory"]),1)
+        self.assertTrue(meta["projection_bypassed"])
+
+    def test_newer_sparse_repo_projection_cannot_erase_28_evidence_rows(self):
+        evidence=[{"id":f"e{i}"} for i in range(28)]
+        source,payload,meta=select_freshest_state([
+            ("render_env",{
+                "cycles_completed":1948,
+                "state_saved_at_utc":"2026-10-04T07:55:53+00:00",
+                "commercial_evidence_memory":evidence,
+            }),
+            ("repo_snapshot",{
+                "cycles_completed":1948,
+                "last_finished_utc":"2026-10-04T07:58:02+00:00",
+            }),
+        ])
+        self.assertEqual(source,"render_env")
+        self.assertEqual(len(payload["commercial_evidence_memory"]),28)
+        self.assertTrue(meta["projection_bypassed"])
 
     def test_exact_tie_prefers_fuller_local_state(self):
         source,_,_=select_freshest_state([
