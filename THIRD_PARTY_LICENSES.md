@@ -5,7 +5,7 @@ Build tooling (`pip`, `setuptools`, `wheel`) is excluded from the runtime invent
 
 Allowed license families: MIT, BSD, Apache-2.0, ISC, PSF, MPL-2.0.
 
-- Runtime packages audited: **31**
+- Runtime packages audited: **32**
 - Blocked/copyleft packages (GPL/AGPL/LGPL/SSPL): **0**
 - Unknown/unclassified licenses: **0**
 
@@ -14,20 +14,21 @@ Allowed license families: MIT, BSD, Apache-2.0, ISC, PSF, MPL-2.0.
 | annotated-types | 0.8.0 | MIT | ALLOWED | MIT |
 | anyio | 4.15.1 | MIT | ALLOWED | MIT |
 | attrs | 26.1.0 | MIT | ALLOWED | MIT |
-| certifi | 2026.7.22 | MPL-2.0 | ALLOWED | MPL-2.0 |
+| certifi | 2026.7.22 | MPL-2.0 | ALLOWED | License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0) |
 | cffi | 2.1.1 | MIT | ALLOWED | MIT-0 |
 | click | 8.5.0 | BSD | ALLOWED | BSD-3-Clause |
 | cryptography | 50.0.1 | BSD OR Apache-2.0 | ALLOWED | Apache-2.0 OR BSD-3-Clause |
-| h11 | 0.16.0 | MIT | ALLOWED | MIT |
+| h11 | 0.16.0 | MIT | ALLOWED | License :: OSI Approved :: MIT License |
 | httpcore | 1.0.9 | BSD | ALLOWED | BSD-3-Clause |
 | httpcore2 | 2.13.1 | BSD | ALLOWED | BSD-3-Clause |
-| httpx | 0.28.1 | BSD | ALLOWED | BSD-3-Clause |
+| httpx | 0.28.1 | BSD | ALLOWED | License :: OSI Approved :: BSD License |
 | httpx2 | 2.13.1 | BSD | ALLOWED | BSD-3-Clause |
 | idna | 3.20 | BSD | ALLOWED | BSD-3-Clause |
 | jsonschema | 4.26.0 | MIT | ALLOWED | MIT |
 | jsonschema-specifications | 2025.9.1 | MIT | ALLOWED | MIT |
-| mcp | 2.2.0 | MIT | ALLOWED | MIT |
-| mcp-types | 2.2.0 | MIT | ALLOWED | MIT |
+| mcp | 2.2.0 | MIT | ALLOWED | License :: OSI Approved :: MIT License |
+| mcp-types | 2.2.0 | MIT | ALLOWED | License :: OSI Approved :: MIT License |
+| numpy | 2.3.3 | BSD | ALLOWED | License :: OSI Approved :: BSD License |
 | opentelemetry-api | 1.45.0 | Apache-2.0 | ALLOWED | Apache-2.0 |
 | pycparser | 3.0 | BSD | ALLOWED | BSD-3-Clause |
 | pydantic | 2.13.5 | MIT | ALLOWED | MIT |
