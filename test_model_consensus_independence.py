@@ -15,6 +15,35 @@ class IndependentConsensusTests(unittest.TestCase):
         votes=[{'judge':j,'label':'buyer_tool_search','confidence':.95} for j in ('nli','local_llm','lexicon','nli')]
         self.assertFalse(choose_automatic_label(votes)['eligible_for_training'])
 
+
+    def test_strict_model_pair_allowed_when_structural_abstains(self):
+        votes=[
+            {'judge':'nli','label':'buyer_tool_search','confidence':.95},
+            {'judge':'local_llm','label':'buyer_tool_search','confidence':.90},
+            {'judge':'structural','label':'other','confidence':.60},
+            {'judge':'lexicon','label':'vendor_offer','confidence':1.0},
+        ]
+        result=choose_automatic_label(votes)
+        self.assertTrue(result['eligible_for_training'])
+        self.assertEqual(result['label'],'buyer_tool_search')
+        self.assertEqual(result['agreed_judges'],2)
+
+    def test_strict_model_pair_requires_high_confidence(self):
+        votes=[
+            {'judge':'nli','label':'buyer_tool_search','confidence':.95},
+            {'judge':'local_llm','label':'buyer_tool_search','confidence':.84},
+            {'judge':'structural','label':'other','confidence':.60},
+        ]
+        self.assertFalse(choose_automatic_label(votes)['eligible_for_training'])
+
+    def test_structural_vote_must_agree_when_present(self):
+        votes=[
+            {'judge':'nli','label':'buyer_tool_search','confidence':.95},
+            {'judge':'local_llm','label':'buyer_tool_search','confidence':.95},
+            {'judge':'structural','label':'vendor_offer','confidence':.95},
+        ]
+        self.assertFalse(choose_automatic_label(votes)['eligible_for_training'])
+
     def test_unrecognized_lexicon_abstains(self):
         self.assertLess(lexicon_judge('','The weather is pleasant.','','')['confidence'],.7)
 
