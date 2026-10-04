@@ -19,6 +19,8 @@ ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
 
+from ingestion_diagnostics import canonical_source
+
 from model_judges import (
     MODEL_LABELS,
     agreement_metrics,
@@ -156,10 +158,10 @@ def _local_llm():
     )
 
 
-def _llm_json_call(llm, prompt: str, *, max_tokens: int=220) -> dict:
+def _llm_json_call(llm, prompt: str, *, max_tokens: int=220, temperature: float=0.0) -> dict:
     raw=llm.create_chat_completion(
         messages=[{"role":"user","content":prompt}],
-        temperature=0,
+        temperature=temperature,
         max_tokens=max_tokens,
         response_format={"type":"json_object"},
     )
@@ -187,12 +189,13 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         label="other"
 
     verify_prompt=(
-        "Valuta indipendentemente il seguente testo. Ignora qualsiasi classificazione precedente. "
-        "Rispondi SOLO JSON con la chiave proposed_label, scegliendo esattamente uno tra "
-        "buyer_tool_search,vendor_offer,manual_recurring_work,job_posting,other. "
-        "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
+        "Independently classify this text by the writer's intent. Return ONLY JSON with the key "
+        "proposed_label. Choose exactly one label from this deliberately reordered list: "
+        "other,job_posting,manual_recurring_work,vendor_offer,buyer_tool_search. "
+        "Do not infer facts that are not in the text or structural signals. "
+        "Text:\n"+text[:1800]+"\nStructural signals:"+json.dumps(signals,separators=(",",":"))[:1000]
     )
-    verify=_llm_json_call(llm,verify_prompt,max_tokens=64)
+    verify=_llm_json_call(llm,verify_prompt,max_tokens=64,temperature=0.0)
     verify_label=str(verify.get("proposed_label") or "")
     confidence=1.0 if first_valid and verify_label in MODEL_LABELS and verify_label==label else 0.0
 
@@ -209,22 +212,20 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
 
 
 def _source_bucket(row: dict) -> str:
-    source=str(row.get("source") or "").lower()
+    source=canonical_source(str(row.get("source") or "unknown"))
     sig=_signals(row)
-    source_type=str(sig.get("source_type") or "").lower()
-    if "reddit" in source:
+    source_type=canonical_source(str(sig.get("source_type") or ""))
+    if source.startswith("reddit"):
         return "reddit"
-    if source in {"hn","hackernews","hacker_news"} or "hacker news" in source:
-        return "hn"
-    if "github" in source or source_type in {"github","github_issue","github_discussion"}:
-        return "github"
+    if source in {"hn","bing-rss","brave","github","stackexchange"}:
+        return source
     if bool(sig.get("pricing_page")) or source_type=="pricing_page":
         return "pricing_page"
     if bool(sig.get("job_board")) or source_type in {"job_board","job_feed"}:
         return "job_board"
-    if "market" in source or source_type=="marketplace":
+    if source_type=="marketplace" or "market" in source:
         return "marketplace"
-    if source_type in {"web","search","generic_web"} or source in {"web","search"}:
+    if source in {"web","search","generic_web"} or source_type in {"web","search","generic_web"}:
         return "web"
     return "other"
 
@@ -294,7 +295,7 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
     }
     for label in MODEL_LABELS:
         metrics["label_count_"+label]=int(distribution[label])
-    for bucket in ("reddit","hn","github","pricing_page","job_board","marketplace","web","other"):
+    for bucket in ("reddit","hn","bing-rss","brave","github","stackexchange","pricing_page","job_board","marketplace","web","other"):
         metrics["source_bucket_count_"+bucket]=int(source_distribution[bucket])
         for label in MODEL_LABELS:
             metrics["label_source_count_"+label+"_"+bucket]=int(label_source_distribution[(label,bucket)])
@@ -305,14 +306,31 @@ def _encode_f32(arr) -> str:
     return base64.b64encode(arr.astype("<f4",copy=False).tobytes(order="C")).decode("ascii")
 
 
-def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, epochs: int=18, lr: float=0.18) -> dict:
-    import numpy as np
+def _student_training_selection(private_dir: Path) -> tuple[list[dict],dict]:
     rows=[
         x for x in _read_jsonl(private_dir/"train_labeled.jsonl")
         if bool(x.get("eligible_for_training")) and str(x.get("final_label") or "") in MODEL_LABELS
     ]
-    if len(rows)<4:
-        raise RuntimeError("insufficient_consensus_training_cases")
+    min_per_class=int(REGISTRY["student"].get("min_examples_per_class",4))
+    counts=Counter(str(x.get("final_label") or "") for x in rows)
+    allowed={label for label,count in counts.items() if count>=min_per_class}
+    selected=[x for x in rows if str(x.get("final_label") or "") in allowed]
+    metrics={}
+    for label in MODEL_LABELS:
+        metrics["training_label_count_"+label]=int(counts[label])
+        metrics["training_label_used_"+label]=int(counts[label] if label in allowed else 0)
+        metrics["training_label_excluded_"+label]=int(counts[label] if label not in allowed else 0)
+    metrics["training_classes_used"]=len(allowed)
+    metrics["training_cases_selected"]=len(selected)
+    metrics["training_min_examples_per_class"]=min_per_class
+    return selected,metrics
+
+
+def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, epochs: int=18, lr: float=0.18) -> dict:
+    import numpy as np
+    rows,selection_metrics=_student_training_selection(private_dir)
+    if len(rows)<4 or int(selection_metrics["training_classes_used"])<2:
+        raise RuntimeError("insufficient_balanced_training_cases")
     labels=list(MODEL_LABELS)
     X=np.stack([hashed_char_ngrams(_case_text(x),feature_dim,3,5) for x in rows]).astype(np.float32)
     y=np.array([labels.index(str(x["final_label"])) for x in rows],dtype=np.int64)
@@ -320,9 +338,14 @@ def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, ep
     b=np.zeros(len(labels),dtype=np.float32)
     Y=np.eye(len(labels),dtype=np.float32)[y]
     class_counts=np.bincount(y,minlength=len(labels)).astype(np.float32)
-    sample_weights=np.array([
-        1.0/max(1.0,class_counts[idx]) for idx in y
-    ],dtype=np.float32)
+    nonzero=class_counts[class_counts>0]
+    max_count=float(nonzero.max()) if len(nonzero) else 1.0
+    max_ratio=float(REGISTRY["student"].get("max_class_weight_ratio",10.0))
+    class_weights=np.zeros(len(labels),dtype=np.float32)
+    for idx,count in enumerate(class_counts):
+        if count>0:
+            class_weights[idx]=min(max_count/float(count),max_ratio)
+    sample_weights=np.array([class_weights[idx] for idx in y],dtype=np.float32)
     sample_weights*=len(rows)/max(float(sample_weights.sum()),1e-12)
     for _ in range(max(1,epochs)):
         logits=X@W.T+b
@@ -359,7 +382,14 @@ def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, ep
         raise RuntimeError("student_artifact_exceeds_limit")
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(encoded+"\n",encoding="utf-8")
-    return {"training_cases":len(rows),"student_bytes":len(encoded.encode("utf-8")),"version":payload["version"],"training_class_balanced":True}
+    return {
+        "training_cases":len(rows),
+        "student_bytes":len(encoded.encode("utf-8")),
+        "version":payload["version"],
+        "training_class_balanced":True,
+        "training_max_class_weight_ratio":max_ratio,
+        **selection_metrics,
+    }
 
 
 def _predict_student_payload(payload: dict, text: str) -> str:
@@ -618,7 +648,7 @@ def _safe_metrics(payload: dict) -> dict:
             "promotion_eligible","promotion_requires_manual_approval",
             "student_not_worse_public","student_not_worse_hidden","review_sample_cases",
             "judge_agreement_rate_ppm","drift_alert","drift_history_points","student_available",
-        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_","source_bucket_count_","label_source_count_")) or key=="training_class_balanced" or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
+        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_","source_bucket_count_","label_source_count_","training_label_count_","training_label_used_","training_label_excluded_")) or key in {"training_class_balanced","training_classes_used","training_cases_selected","training_min_examples_per_class","training_max_class_weight_ratio"} or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
             if isinstance(value,(int,float,bool)) or value is None:
                 out[key]=value
             elif key=="version":
@@ -643,9 +673,11 @@ def main() -> int:
     judged=judge_private_archive(private_dir,use_models=not args.skip_heavy_judges)
     metrics.update(judged)
     metrics.update(update_private_drift_history(private_dir,metrics))
-    if int(judged.get("eligible") or 0)<4:
+    selected_rows,selection_metrics=_student_training_selection(private_dir)
+    metrics.update(selection_metrics)
+    if len(selected_rows)<4 or int(selection_metrics.get("training_classes_used") or 0)<2:
         metrics["student_available"]=False
-        metrics["training_cases"]=int(judged.get("eligible") or 0)
+        metrics["training_cases"]=len(selected_rows)
         metrics["promotion_eligible"]=False
         metrics["promotion_requires_manual_approval"]=True
         if args.review_sample:
