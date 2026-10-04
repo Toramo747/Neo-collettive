@@ -290,6 +290,37 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(merged["last_real_contact_utc"], original["last_real_contact_utc"])
         self.assertEqual(merged["counts"]["last_24h"], recent["counts"]["last_24h"])
 
+    def test_challenge_track_compaction_is_bounded_and_separate(self):
+        payload=_heavy_payload()
+        payload["challenge_track"]={
+            "mode":"shadow",
+            "memory":[
+                {
+                    "track":"challenge",
+                    "fingerprint":hashlib.sha256(f"challenge-{i}".encode()).hexdigest()[:24],
+                    "challenge_key":hashlib.sha256(f"key-{i}".encode()).hexdigest()[:24],
+                    "requester_key":f"r-{i}",
+                    "domain":"example.invalid",
+                    "updated_at_utc":f"2026-10-04T10:{i%60:02d}:00Z",
+                }
+                for i in range(260)
+            ],
+            "gate_state":{
+                "candidates":{
+                    f"k-{i}":{"updated_at_utc":f"2026-10-04T10:{i%60:02d}:00Z"}
+                    for i in range(100)
+                },
+                "flips":[{"n":i} for i in range(90)],
+            },
+            "latest":{"status":"CHALLENGE_SELECT"},
+        }
+        compacted,_=compact_state_payload(payload,max_bytes=100_000,target_bytes=60_000,force=True)
+        challenge=compacted["challenge_track"]
+        self.assertLessEqual(len(challenge["memory"]),180)
+        self.assertLessEqual(len(challenge["gate_state"]["candidates"]),60)
+        self.assertLessEqual(len(challenge["gate_state"]["flips"]),40)
+        self.assertEqual(compacted["commercial_evidence_memory"],payload["commercial_evidence_memory"])
+
     def test_key_weight_report_names_only(self):
         payload = _heavy_payload()
         compacted, _ = compact_state_payload(payload, max_bytes=100_000, force=True)
