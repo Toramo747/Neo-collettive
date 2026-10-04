@@ -617,4 +617,15 @@ def main() -> int:
 
 
 if __name__=="__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        import traceback
+        allowed = {"ImportError", "ModuleNotFoundError", "ValueError", "RuntimeError", "OSError", "TypeError", "KeyError"}
+        kind = type(exc).__name__
+        frames = [frame.lineno for frame in traceback.extract_tb(exc.__traceback__)
+                  if Path(frame.filename).resolve() == Path(__file__).resolve()]
+        print(json.dumps({"ok": False, "reason": "PRIVATE_BATCH_FAILED",
+                          "error_type": kind if kind in allowed else "MODEL_ERROR",
+                          "batch_lines": frames}))
+        raise SystemExit(1)
