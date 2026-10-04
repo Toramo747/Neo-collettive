@@ -129,6 +129,31 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "last_scan_utc": None,
             "signal_memory_count": None,
         },
+        "model_shadow": {
+            "schema_v": None,
+            "mode": None,
+            "student_available": None,
+            "observed": None,
+            "agreement": None,
+            "disagreement": None,
+            "agreement_rate_ppm": None,
+            "lexicon_positive": None,
+            "student_positive": None,
+            "student_low_confidence": None,
+            "student_version_code": None,
+            "challenge_clusters": {
+                "mapping_count": None,
+                "cluster_count": None,
+                "review_required": None,
+                "feasible": None,
+                "hard": None,
+                "resolved": None
+            },
+            "promotion": {
+                "mode": None,
+                "approved": None
+            }
+        },
         "challenge_diagnostics": {
             "mode": None,
             "status": None,
@@ -813,6 +838,9 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     monitor = src.get("agent_chat_monitor") if isinstance(src.get("agent_chat_monitor"), dict) else {}
     demand = src.get("agent_demand_observatory") if isinstance(src.get("agent_demand_observatory"), dict) else {}
     seti = src.get("seti") if isinstance(src.get("seti"), dict) else {}
+    model_shadow = src.get("model_shadow") if isinstance(src.get("model_shadow"), dict) else {}
+    student_metrics = model_shadow.get("student_metrics") if isinstance(model_shadow.get("student_metrics"),dict) else {}
+    cluster_map = model_shadow.get("challenge_cluster_map") if isinstance(model_shadow.get("challenge_cluster_map"),dict) else {}
     checkpoint = src.get("last_checkpoint") if isinstance(src.get("last_checkpoint"), dict) else {}
     compaction = checkpoint.get("compaction") if isinstance(checkpoint.get("compaction"), dict) else {}
 
@@ -845,6 +873,30 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     out["seti"] = {
         **_copy_keys(seti, ("enabled", "mode", "every_cycles", "last_scan_utc")),
         "signal_memory_count": len(seti.get("signal_memory") or {}) if "signal_memory_count" not in seti else seti.get("signal_memory_count"),
+    }
+    mapping=[x for x in (cluster_map.get("mapping") or []) if isinstance(x,dict)]
+    cluster_ids={str(x.get("cluster_id") or "") for x in mapping if str(x.get("cluster_id") or "")}
+    out["model_shadow"] = {
+        "schema_v":1,
+        "mode":"shadow",
+        "student_available":bool(student_metrics.get("student_available")),
+        "observed":max(0,int(student_metrics.get("observed") or 0)),
+        "agreement":max(0,int(student_metrics.get("agreement") or 0)),
+        "disagreement":max(0,int(student_metrics.get("disagreement") or 0)),
+        "agreement_rate_ppm":max(0,min(1000000,int(student_metrics.get("agreement_rate_ppm") or 0))),
+        "lexicon_positive":max(0,int(student_metrics.get("lexicon_positive") or 0)),
+        "student_positive":max(0,int(student_metrics.get("student_positive") or 0)),
+        "student_low_confidence":max(0,int(student_metrics.get("student_low_confidence") or 0)),
+        "student_version_code":_safe_code(student_metrics.get("student_version_code"),32),
+        "challenge_clusters":{
+            "mapping_count":len(mapping),
+            "cluster_count":len(cluster_ids),
+            "review_required":sum(1 for x in mapping if str(x.get("review_state") or "")=="REVIEW_REQUIRED"),
+            "feasible":sum(1 for x in mapping if str(x.get("review_state") or "")=="FEASIBLE"),
+            "hard":sum(1 for x in mapping if str(x.get("review_state") or "")=="HARD"),
+            "resolved":sum(1 for x in mapping if str(x.get("review_state") or "")=="RESOLVED"),
+        },
+        "promotion":{"mode":"manual_only","approved":False},
     }
     out["last_checkpoint"] = {
         **_copy_keys(checkpoint, ("ok", "status", "raw_bytes", "stored_bytes", "limit_bytes")),
