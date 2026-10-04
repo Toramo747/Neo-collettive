@@ -79,27 +79,37 @@ def routed_search_diagnostics(
 
     for index,batch in enumerate(batches or []):
         source_hint = canonical_source(batch_sources[index] if index < len(batch_sources) else "unknown")
+        primary_hint=""
+        fallback_hint=""
         if source_hint=="web" and isinstance(batch,dict):
-            provider_hint=canonical_source(batch.get("provider") or "")
-            if provider_hint in {"brave","bing-rss","google-pse"}:
-                source_hint=provider_hint
+            primary_hint=canonical_source(batch.get("provider_fallback_from") or "")
+            fallback_hint=canonical_source(batch.get("provider") or "")
+            if not primary_hint and fallback_hint in {"brave","bing-rss","google-pse"}:
+                source_hint=fallback_hint
         if isinstance(batch, BaseException):
             errors += 1
             attempts[source_hint] += 1
             source_errors[source_hint] += 1
             errors_by_source[source_hint][type(batch).__name__] += 1
             continue
+        error_source=primary_hint or source_hint
         if isinstance(batch, dict) and batch.get("error"):
             code=str(batch.get("error") or "exception")[:80]
-            source_errors[source_hint] += 1
-            errors_by_source[source_hint][code] += 1
+            source_errors[error_source] += 1
+            errors_by_source[error_source][code] += 1
         if isinstance(batch,dict) and batch.get("provider_fallback_reason"):
             code=str(batch.get("provider_fallback_reason") or "")[:80]
             if code and code not in {"provider_unconfigured_or_bing","empty_primary_result"}:
-                source_errors[source_hint] += 1
-                errors_by_source[source_hint][code] += 1
+                source_errors[error_source] += 1
+                errors_by_source[error_source][code] += 1
         rows = _rows_from_batch(batch)
-        if source_hint != "unknown":
+        if primary_hint:
+            attempts[primary_hint] += 1
+            if fallback_hint and fallback_hint!="unknown":
+                attempts[fallback_hint] += 1
+                if not rows:
+                    empty[fallback_hint] += 1
+        elif source_hint != "unknown":
             attempts[source_hint] += 1
             if not rows:
                 empty[source_hint] += 1
