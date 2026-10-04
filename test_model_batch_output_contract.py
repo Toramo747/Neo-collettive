@@ -1,14 +1,18 @@
 # SPDX-License-Identifier: BUSL-1.1
 import json
+import tempfile
 import unittest
-from tools.model_shadow_batch import llm_judge
+from pathlib import Path
+from tools.model_shadow_batch import llm_judge, _source_bucket, _student_training_selection
 
 class FakeLLM:
     def __init__(self, responses):
         self.responses=list(responses if isinstance(responses,list) else [responses])
         self.calls=0
+        self.kwargs=[]
     def create_chat_completion(self, **kwargs):
         idx=min(self.calls,len(self.responses)-1)
+        self.kwargs.append(kwargs)
         self.calls+=1
         return {"choices":[{"message":{"content":json.dumps(self.responses[idx])}}]}
 
@@ -45,6 +49,50 @@ class OutputContractTests(unittest.TestCase):
         llm=FakeLLM([[],{"proposed_label":"other"}])
         vote,_=llm_judge(llm,"synthetic",{})
         self.assertEqual(vote["confidence"],0.0)
+
+    def test_second_prompt_is_materially_different(self):
+        llm=FakeLLM([
+            {"proposed_label":"buyer_tool_search"},
+            {"proposed_label":"buyer_tool_search"},
+        ])
+        llm_judge(llm,"synthetic",{})
+        first=llm.kwargs[0]["messages"][0]["content"]
+        second=llm.kwargs[1]["messages"][0]["content"]
+        self.assertIn("Classifica il testo",first)
+        self.assertIn("Independently classify",second)
+        self.assertIn("other,job_posting,manual_recurring_work,vendor_offer,buyer_tool_search",second)
+        self.assertNotEqual(first,second)
+
+    def test_source_bucket_reuses_production_canonical_sources(self):
+        cases={
+            "hn-algolia-routed":"hn",
+            "bing-rss-free":"bing-rss",
+            "brave-search":"brave",
+            "stackexchange":"stackexchange",
+            "github":"github",
+            "reddit-web":"reddit",
+        }
+        for source,expected in cases.items():
+            with self.subTest(source=source):
+                self.assertEqual(_source_bucket({"source":source}),expected)
+
+    def test_training_excludes_classes_below_minimum(self):
+        with tempfile.TemporaryDirectory() as folder:
+            p=Path(folder)
+            rows=[]
+            for i in range(5):
+                rows.append({"id":"o"+str(i),"final_label":"other","eligible_for_training":True})
+            for i in range(3):
+                rows.append({"id":"j"+str(i),"final_label":"job_posting","eligible_for_training":True})
+            (p/"train_labeled.jsonl").write_text(
+                "\n".join(json.dumps(row) for row in rows)+"\n",
+                encoding="utf-8",
+            )
+            selected,metrics=_student_training_selection(p)
+            self.assertEqual(len(selected),5)
+            self.assertEqual(metrics["training_label_used_other"],5)
+            self.assertEqual(metrics["training_label_excluded_job_posting"],3)
+            self.assertEqual(metrics["training_classes_used"],1)
 
 if __name__=="__main__":
     unittest.main()
