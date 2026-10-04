@@ -111,6 +111,13 @@ class StudentModel:
         self.weights = _decode_f32(str(payload.get("weights_f32_b64") or ""), (len(self.labels), self.feature_dim))
         self.bias = _decode_f32(str(payload.get("bias_f32_b64") or ""), (len(self.labels),))
         self.artifact_sha256 = str(payload.get("artifact_sha256") or "")
+        canonical=dict(payload)
+        canonical.pop("artifact_sha256",None)
+        observed_sha=hashlib.sha256(
+            json.dumps(canonical,sort_keys=True,separators=(",",":")).encode("utf-8")
+        ).hexdigest()
+        if not self.artifact_sha256 or observed_sha != self.artifact_sha256:
+            raise ValueError("student_artifact_sha256_mismatch")
         self.training_manifest_sha256 = str(payload.get("training_manifest_sha256") or "")
         self.mode = "shadow"
 
