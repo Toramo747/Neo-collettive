@@ -16,6 +16,27 @@ ARENA_ID="llm-guided-commercial-search"
 TOPICS=("manual data entry","invoice reconciliation","security compliance evidence","spreadsheet workflow")
 MAX_QUERIES_PER_TOPIC=4
 
+PROMPT_GENOMES={
+    "first_person_pain":{
+        "instruction":"Use first-person operational pain language such as I spend hours, we manually, I hate, we struggle, this takes hours. Avoid generic product terms."
+    },
+    "buyer_intent":{
+        "instruction":"Target explicit buyer intent: looking for help, need someone, need a tool, contractor, consultant, recommend a solution. Prefer buyer voice over vendor language."
+    },
+    "paid_demand":{
+        "instruction":"Target willingness-to-pay signals: budget, hiring, paid help, contractor, consultant, quote, fixed price. Keep the concrete workflow problem in every query."
+    },
+    "operational_burden":{
+        "instruction":"Target recurring operational burden: every day, every week, takes hours, repetitive, backlog, rework, error-prone, manual workaround."
+    },
+    "hybrid":{
+        "instruction":"Mix first-person operational pain with explicit buyer intent or willingness-to-pay. Every query must contain both a concrete workflow problem and a buyer/pain signal."
+    },
+    "skeptical_precision":{
+        "instruction":"Optimize for precision rather than volume. Use concise natural buyer language, one strong pain or buying signal per query, and avoid broad automation/software/vendor terms."
+    },
+}
+
 def now_utc(): return datetime.now(timezone.utc).isoformat()
 
 def post_json(url,payload,timeout=75):
@@ -40,18 +61,19 @@ def valid_query(value):
         return ""
     return q
 
-def make_prompt(topic):
+def make_prompt(topic,genome_name="hybrid"):
+    genome=PROMPT_GENOMES.get(genome_name) or PROMPT_GENOMES["hybrid"]
     return (
         "Return JSON only: {\"queries\":[...]} with 4 concise search queries. "
         "You are planning search queries, not supplying evidence or URLs. "
-        "Optimize for first-person buyer pain, explicit need, hiring/budget intent, "
-        "and operational burden. Avoid vendor/SEO phrasing. Do not invent links. "
+        + genome["instruction"] + " "
+        "Avoid vendor/SEO phrasing. Do not invent links. "
         "Topic: "+json.dumps(topic)
     )
 
-def plan_queries(model,topic):
+def plan_queries(model,topic,genome_name):
     response=post_json("http://127.0.0.1:11434/api/generate",{
-        "model":model,"prompt":make_prompt(topic),"stream":False,"format":"json",
+        "model":model,"prompt":make_prompt(topic,genome_name),"stream":False,"format":"json",
         "options":{"temperature":0.25,"num_predict":220,"num_ctx":2048},"keep_alive":"0",
     })
     parsed=extract_json(response.get("response") or "")
@@ -74,35 +96,54 @@ def load_champion(data_dir):
 async def run(model,data_dir,out_path):
     genes,champion_id=load_champion(data_dir)
     baseline_pairs=build_queries(genes)
-    plans={topic:plan_queries(model,topic) for topic in TOPICS}
-    llm_pairs=[(topic,q) for topic in TOPICS for q in plans.get(topic,[])]
-    if len(llm_pairs)<len(TOPICS):
-        raise RuntimeError("insufficient valid local-LLM queries")
 
     async with httpx.AsyncClient(timeout=20,follow_redirects=True) as client:
         baseline_rows=await asyncio.gather(*[
             fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
             for t,q in baseline_pairs
         ])
-        llm_rows=await asyncio.gather(*[
-            fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
-            for t,q in llm_pairs
-        ])
+        baseline=score_hits(genes,baseline_rows)
 
-    baseline=score_hits(genes,baseline_rows)
-    guided=score_hits(genes,llm_rows)
+        ranked=[]
+        for genome_name in PROMPT_GENOMES:
+            plans={topic:plan_queries(model,topic,genome_name) for topic in TOPICS}
+            pairs=[(topic,q) for topic in TOPICS for q in plans.get(topic,[])]
+            if len(pairs)<len(TOPICS):
+                ranked.append({"genome":genome_name,"status":"INSUFFICIENT_QUERIES","fitness":-1.0,"metrics":{},"plans":plans})
+                continue
+            rows=await asyncio.gather(*[
+                fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
+                for t,q in pairs
+            ])
+            metrics=score_hits(genes,rows)
+            ranked.append({
+                "genome":genome_name,
+                "status":"EVALUATED",
+                "fitness":metrics["fitness"],
+                "metrics":metrics,
+                "plans":plans,
+                "query_count":len(pairs),
+            })
+
+    ranked.sort(key=lambda x:(-float(x.get("fitness") or -1),x["genome"]))
+    champion=ranked[0]
+    guided=champion.get("metrics") or {}
     improved=bool(
-        guided["fitness"]>baseline["fitness"]
+        guided
+        and guided["fitness"]>baseline["fitness"]
         and guided["signal_hits"]>=baseline["signal_hits"]
         and guided["unique_signal_threads"]>=baseline["unique_signal_threads"]
     )
     report={
-        "schema_v":1,"namespace":NAMESPACE,"arena_id":ARENA_ID,"status":"COMPLETED",
+        "schema_v":2,"namespace":NAMESPACE,"arena_id":ARENA_ID,"status":"EVOLVED",
         "captured_at_utc":now_utc(),"model":model,"provider":"local_ollama",
         "search_provider":"hn_algolia_public_read_only","baseline_champion":champion_id,
-        "baseline_metrics":baseline,"llm_guided_metrics":guided,
-        "query_counts":{"baseline":len(baseline_pairs),"llm_guided":len(llm_pairs)},
-        "llm_query_plan":plans,
+        "baseline_metrics":baseline,
+        "evaluated_genomes":ranked,
+        "champion_genome":champion.get("genome"),
+        "llm_guided_metrics":guided,
+        "query_counts":{"baseline":len(baseline_pairs),"llm_guided":champion.get("query_count",0)},
+        "llm_query_plan":champion.get("plans") or {},
         "candidate_better_than_baseline":improved,
         "production_promoted":False,
         "boundary":{
@@ -118,7 +159,7 @@ async def run(model,data_dir,out_path):
     }
     p=Path(out_path); p.parent.mkdir(parents=True,exist_ok=True)
     p.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    print(json.dumps({"baseline":baseline["fitness"],"guided":guided["fitness"],"candidate":improved}))
+    print(json.dumps({"baseline":baseline["fitness"],"champion":champion.get("genome"),"guided":guided.get("fitness"),"candidate":improved,"ranked":[{"genome":x["genome"],"fitness":x.get("fitness")} for x in ranked]}))
     return report
 
 def main():
