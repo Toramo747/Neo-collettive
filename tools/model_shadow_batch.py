@@ -161,6 +161,7 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         "Classifica il testo senza inventare fatti. Rispondi SOLO JSON con chiavi: "
         "canonical_problem,target_user,current_workaround,quoted_price,writer_role,"
         "failed_attempt,feasibility,proposed_label,confidence. "
+        "confidence deve essere un numero JSON tra 0 e 1, mai una parola o percentuale. "
         "proposed_label deve essere uno tra buyer_tool_search,vendor_offer,"
         "manual_recurring_work,job_posting,other. feasibility: feasible|hard|unknown. "
         "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
