@@ -31,7 +31,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
@@ -90,6 +89,7 @@ jobs:
           PY
 
       - name: Publish Arena state
+        if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           git config user.name "MYCELIX Research Arena"
