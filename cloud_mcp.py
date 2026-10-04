@@ -114,6 +114,7 @@ from evidence_integrity import (
     canonical_problem_key,
     canonical_url,
     commercial_family as integrity_commercial_family,
+    family_relevance_terms as integrity_family_relevance_terms,
     classify_intent_class,
     contains_any,
     contains_term,
@@ -5846,34 +5847,8 @@ def _gap_score(tags: list[str], domains: int, strong_domains: int) -> int:
 
 
 def _family_relevance_terms(family: str) -> tuple[str,...]:
-    mapping={
-        "spreadsheet_process":("spreadsheet","excel","google sheets","csv","manual process"),
-        "workflow_automation":("workflow automation","manual workflow","repetitive task","back office","automation"),
-        "crm_lead_ops":("crm","lead management","sales ops","lead qualification","follow up"),
-        "website_audit":("website audit","site audit","accessibility audit","website qa","broken link"),
-        "developer_tools":("developer tool","developer workflow","devops","code review","api debugging"),
-        "integration_api":("api integration","webhook","integration platform","system integration"),
-        "ai_tools":("ai assistant","ai tool","llm","generative ai","agentic"),
-        "micro_saas":("micro saas","niche saas","vertical saas"),
-        "ecommerce_tools":("ecommerce","shopify","woocommerce","catalog","order operations"),
-        "marketing_seo":("seo","marketing automation","keyword research","ad campaign"),
-        "analytics_tools":("analytics","business intelligence","reporting dashboard","data analytics"),
-        "compliance_tools":("compliance","audit evidence","gdpr","iso 27001","regulatory reporting"),
-        "finance_ops":("invoice","invoices","invoice reconciliation","reconciling invoices","accounts payable","bookkeeping","expense reporting","finance operations"),
-        "hr_tools":("hr workflow","employee onboarding","recruiting","applicant tracking"),
-        "education_tools":("education software","teacher admin","learning platform","course workflow"),
-        "creator_tools":("creator tool","newsletter","podcast workflow","video creator"),
-        "productivity_tools":("productivity tool","knowledge management","task workflow","note taking"),
-        "local_business_tools":("appointment booking","quote preparation","local business","service business"),
-        "document_processing":("document processing","pdf extraction","document parser","form filling","ocr"),
-        "manual_data_entry":("manual data entry","data entry"),
-        "it_hygiene":("it inventory","patch reporting","asset inventory","security hygiene"),
-        "cybersecurity_tools":("cybersecurity","vulnerability","phishing","security automation","soc"),
-        "customer_support":("customer support","support ticket","support triage","faq workflow"),
-        "data_cleanup":("data cleanup","duplicate data","deduplication","csv cleanup"),
-        "content_tools":("content workflow","content repurposing","localization","catalog description"),
-    }
-    return mapping.get(family,())
+    """Single source of truth: production relevance uses Evidence Integrity expansions."""
+    return integrity_family_relevance_terms(family)
 
 
 def _evidence_context(title: str, body: str, family: str) -> tuple[str,int,int]:
