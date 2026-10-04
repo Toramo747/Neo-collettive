@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-10-04T18:37:02.940024+00:00",
+  "captured_at_utc": "2026-10-04T21:52:06.495775+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.52",
   "runtime_profile": {
@@ -15,60 +15,60 @@
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 207.896841,
-    "cycles_completed": 2057,
-    "last_started_utc": "2026-10-04T18:33:32.795454+00:00",
-    "last_finished_utc": "2026-10-04T18:34:09.691486+00:00",
+    "last_started_age_seconds": 239.641646,
+    "cycles_completed": 2090,
+    "last_started_utc": "2026-10-04T21:48:04.451549+00:00",
+    "last_finished_utc": "2026-10-04T21:48:45.592460+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-04T18:37:02.862934+00:00",
+    "captured_at_utc": "2026-10-04T21:52:06.386068+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-04T18:36:58.846Z",
+        "timestamp_utc": "2026-10-04T21:52:02.873Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 755.08,
+        "latency_ms": 876.49,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-04T18:36:59.956Z",
+        "timestamp_utc": "2026-10-04T21:52:03.468Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 1079.46,
+        "latency_ms": 552.11,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-04T18:37:02.143Z",
+        "timestamp_utc": "2026-10-04T21:52:05.774Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 817.11,
+        "latency_ms": 675.12,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-04T18:37:02.850Z",
+        "timestamp_utc": "2026-10-04T21:52:06.366Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 673.25,
+        "latency_ms": 547.69,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "31c681532dfcec84f985f7cc43c25c094a1d73af",
+    "source_commit": "558c701c42eae09d5701e334d7bb9c9f49d50823",
     "runtime_contract_verified": true,
     "hidden_control": {
       "required": true,
@@ -80,9 +80,9 @@
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 2057,
-    "last_started_utc": "2026-10-04T18:33:32.795454+00:00",
-    "last_finished_utc": "2026-10-04T18:34:09.691486+00:00",
+    "cycles_completed": 2090,
+    "last_started_utc": "2026-10-04T21:48:04.451549+00:00",
+    "last_finished_utc": "2026-10-04T21:48:45.592460+00:00",
     "last_status": "SELECT",
     "recent_sectors": [],
     "family_performance": [],
@@ -163,19 +163,45 @@
         "min_age_days": 60
       },
       "funnel": {
-        "collected": 109,
-        "routed": 23,
-        "independent_requesters": 10,
-        "age_qualified": 1,
-        "workarounds": 4,
-        "feasibility_checked": 23,
+        "collected": 104,
+        "routed": 21,
+        "independent_requesters": 12,
+        "age_qualified": 2,
+        "workarounds": 5,
+        "feasibility_checked": 21,
         "ready": 0
       },
       "candidate_counts": {
-        "observed": 295,
+        "observed": 270,
         "ready": 0
       },
       "candidates": [
+        {
+          "candidate_id": "db7d21fe9d66b084",
+          "evidence_fingerprint": "e3bc414d98fc7d12",
+          "id_key_version": "v1",
+          "score": 65,
+          "source_count": 1,
+          "independent_domain_count": 1,
+          "independent_requester_count": 1,
+          "age_days": 1139,
+          "workaround_count": 1,
+          "feasibility_code": "unknown",
+          "reward_signal_count": 0,
+          "raw_gate_pass": false,
+          "stable_gate_pass": false,
+          "pass_streak": 0,
+          "fail_streak": 10,
+          "missing_codes": [
+            "three_independent_requesters",
+            "two_independent_domains"
+          ],
+          "cycle": 2090,
+          "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
+          "first_cycle_after_deploy": false,
+          "tagger_version": "1",
+          "seconds_since_first_raw_pass": null
+        },
         {
           "candidate_id": "40f12a387ed178ac",
           "evidence_fingerprint": "dedb784e5fac29d6",
@@ -191,12 +217,12 @@
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 3,
+          "fail_streak": 12,
           "missing_codes": [
             "three_independent_requesters",
             "two_independent_domains"
           ],
-          "cycle": 2057,
+          "cycle": 2090,
           "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
           "first_cycle_after_deploy": false,
           "tagger_version": "1",
@@ -210,45 +236,19 @@
           "source_count": 1,
           "independent_domain_count": 1,
           "independent_requester_count": 1,
-          "age_days": 2028,
+          "age_days": 2029,
           "workaround_count": 1,
           "feasibility_code": "unknown",
           "reward_signal_count": 0,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 20,
+          "fail_streak": 12,
           "missing_codes": [
             "three_independent_requesters",
             "two_independent_domains"
           ],
-          "cycle": 2057,
-          "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
-          "first_cycle_after_deploy": false,
-          "tagger_version": "1",
-          "seconds_since_first_raw_pass": null
-        },
-        {
-          "candidate_id": "3d759bb93f13b541",
-          "evidence_fingerprint": "603daf4fe2e4e40b",
-          "id_key_version": "v1",
-          "score": 65,
-          "source_count": 1,
-          "independent_domain_count": 1,
-          "independent_requester_count": 1,
-          "age_days": 708,
-          "workaround_count": 1,
-          "feasibility_code": "unknown",
-          "reward_signal_count": 0,
-          "raw_gate_pass": false,
-          "stable_gate_pass": false,
-          "pass_streak": 0,
-          "fail_streak": 21,
-          "missing_codes": [
-            "three_independent_requesters",
-            "two_independent_domains"
-          ],
-          "cycle": 2057,
+          "cycle": 2090,
           "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
           "first_cycle_after_deploy": false,
           "tagger_version": "1",
@@ -259,14 +259,14 @@
     "select_diagnostics": {
       "status": "SELECT",
       "ingestion_enabled": true,
-      "raw_results": 156,
-      "relevance_pass": 120,
-      "useful_results": 5,
-      "persistent_evidence_items": 31,
+      "raw_results": 160,
+      "relevance_pass": 115,
+      "useful_results": 3,
+      "persistent_evidence_items": 32,
       "quarantined_evidence_items": 25,
       "rejected_current_count": 40,
       "new_signal_rows": 0,
-      "problem_cluster_count": 14,
+      "problem_cluster_count": 15,
       "qualified_problem_count": 0,
       "configured_categories": 9,
       "evidenced_candidates": 7,
@@ -291,60 +291,61 @@
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 95,
+          "fail_streak": 128,
           "missing_codes": [
             "two_independent_real_price_competitors",
             "two_competitors_with_real_price",
             "two_existing_paid_tools",
             "monetization_score_60"
           ],
-          "cycle": 2057,
+          "cycle": 2090,
           "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
           "first_cycle_after_deploy": false,
           "tagger_version": "3",
           "seconds_since_first_raw_pass": null
         },
         {
-          "candidate_id": "af6f6d5978c65d0c",
-          "evidence_fingerprint": "cfbc6cc0bcff9a8a",
+          "candidate_id": "2b51898ca2519673",
+          "evidence_fingerprint": "ba65f12c05e99aa6",
           "id_key_version": "v1",
-          "score": 25,
-          "source_count": 16,
-          "independent_domain_count": 14,
+          "score": 30,
+          "source_count": 14,
+          "independent_domain_count": 12,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 99,
+          "fail_streak": 80,
           "missing_codes": [
             "two_independent_real_price_competitors",
             "two_competitors_with_real_price",
             "two_existing_paid_tools",
             "monetization_score_60"
           ],
-          "cycle": 2057,
+          "cycle": 2090,
           "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
           "first_cycle_after_deploy": false,
           "tagger_version": "3",
           "seconds_since_first_raw_pass": null
         },
         {
-          "candidate_id": "4e737d2b22b03589",
-          "evidence_fingerprint": "d8344b83104a9dfa",
+          "candidate_id": "caf9007735ae6b6f",
+          "evidence_fingerprint": "09e9edc96c7ebd1f",
           "id_key_version": "v1",
           "score": 25,
-          "source_count": 16,
-          "independent_domain_count": 14,
+          "source_count": 4,
+          "independent_domain_count": 1,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 36,
+          "fail_streak": 76,
           "missing_codes": [
             "two_independent_real_price_competitors",
             "two_competitors_with_real_price",
+            "three_independent_source_domains",
             "two_existing_paid_tools",
             "monetization_score_60"
           ],
-          "cycle": 2057,
+          "cycle": 2090,
           "commit": "d0f8c3a72bbbe9e0ffb7c4250dc0c3da96390e65",
           "first_cycle_after_deploy": false,
           "tagger_version": "3",
@@ -353,32 +354,32 @@
       ],
       "rejection_reasons": [
         {
-          "reason": "no_family",
-          "count": 30
+          "reason": "no_demand_signal",
+          "count": 39
         },
         {
           "reason": "weak_family_relevance",
-          "count": 19
-        },
-        {
-          "reason": "no_demand_signal",
-          "count": 18
+          "count": 21
         },
         {
           "reason": "noise_domain",
-          "count": 17
+          "count": 14
         },
         {
-          "reason": "github_no_buyer_problem_context",
-          "count": 8
+          "reason": "no_family",
+          "count": 9
         },
         {
           "reason": "github_noise",
-          "count": 3
+          "count": 8
+        },
+        {
+          "reason": "github_no_buyer_problem_context",
+          "count": 5
         },
         {
           "reason": "query_irrelevant",
-          "count": 2
+          "count": 1
         }
       ],
       "search_sources": [
@@ -387,8 +388,8 @@
           "attempts": 15,
           "empty": 0,
           "errors": 0,
-          "raw_results": 90,
-          "relevance_pass": 66
+          "raw_results": 86,
+          "relevance_pass": 55
         },
         {
           "source": "brave",
@@ -409,10 +410,10 @@
         {
           "source": "hn",
           "attempts": 16,
-          "empty": 2,
+          "empty": 0,
           "errors": 0,
-          "raw_results": 40,
-          "relevance_pass": 40
+          "raw_results": 48,
+          "relevance_pass": 46
         },
         {
           "source": "stackexchange",
@@ -425,20 +426,20 @@
       ],
       "buyer_voice_by_source": [
         {
-          "source": "github",
-          "count": 3
-        },
-        {
           "source": "hn",
-          "count": 3
+          "count": 7
         },
         {
           "source": "bing-rss",
+          "count": 4
+        },
+        {
+          "source": "github",
           "count": 2
         },
         {
           "source": "brave",
-          "count": 2
+          "count": 1
         }
       ],
       "search_provider": {
@@ -447,7 +448,7 @@
         "provider_key_present": true,
         "fallback_used": true,
         "calls_cycle": 1,
-        "calls_day": 118,
+        "calls_day": 138,
         "errors": 0,
         "fallbacks": 15,
         "fallback_reasons": [
@@ -482,50 +483,50 @@
             "count": 15
           }
         ],
-        "raw_received": 156,
-        "deduped": 156,
-        "query_relevant": 120,
-        "family_matched": 42,
-        "buyer_voice": 10,
-        "commercial_signal": 5,
-        "persisted": 5,
+        "raw_received": 160,
+        "deduped": 159,
+        "query_relevant": 115,
+        "family_matched": 63,
+        "buyer_voice": 14,
+        "commercial_signal": 3,
+        "persisted": 3,
         "discarded_by_reason": [
           {
-            "reason": "no_family",
-            "count": 30
+            "reason": "no_demand_signal",
+            "count": 39
           },
           {
             "reason": "weak_family_relevance",
-            "count": 19
-          },
-          {
-            "reason": "no_demand_signal",
-            "count": 18
+            "count": 21
           },
           {
             "reason": "noise_domain",
-            "count": 17
+            "count": 14
           },
           {
-            "reason": "github_no_buyer_problem_context",
-            "count": 8
+            "reason": "no_family",
+            "count": 9
           },
           {
             "reason": "github_noise",
-            "count": 3
+            "count": 8
+          },
+          {
+            "reason": "github_no_buyer_problem_context",
+            "count": 5
           },
           {
             "reason": "query_irrelevant",
-            "count": 2
+            "count": 1
           }
         ],
         "monotonicity_warnings": []
       },
       "agent_probes": {
         "probes_attempted": 8,
-        "agents_reached": 1,
-        "answers_received": 8,
-        "valid_answers": 1,
+        "agents_reached": 2,
+        "answers_received": 16,
+        "valid_answers": 2,
         "rejected_answers": 0,
         "timeouts": 0
       }
