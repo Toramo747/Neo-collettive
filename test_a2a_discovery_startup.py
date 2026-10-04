@@ -39,5 +39,19 @@ class A2ADiscoveryStartupTests(unittest.TestCase):
         body=self.body
         self.assertGreaterEqual(body.count("timeout=registry_timeout"),3)
 
+    def test_allagents_registration_uses_current_brand(self):
+        body=self.body
+        self.assertIn('"name":BRAND_NAME',body)
+        self.assertNotIn('"name":"MYCELIX"',body)
+
+    def test_g4_finance_relevance_covers_plural_reconciliation_language(self):
+        src=Path("cloud_mcp.py").read_text(encoding="utf-8")
+        self.assertIn('"reconciling invoices"',src)
+        self.assertIn('"invoice reconciliation"',src)
+
+    def test_public_snapshot_exports_buyer_voice_by_source(self):
+        src=Path("cloud_mcp.py").read_text(encoding="utf-8")
+        self.assertIn('"buyer_voice_by_source": ((quality.get("ingestion_diagnostics") or {}).get("buyer_voice_by_source") or {})',src)
+
 if __name__=="__main__":
     unittest.main()
