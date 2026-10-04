@@ -107,6 +107,7 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
                         "query_relevance_pass_by_source":{"bing-rss":7,"github":2},
                         "rejected_by_reason":{"query_irrelevant":6,"vendor content":4},
                         "new_signal_rows":3,
+                        "buyer_voice_by_source":{"brave-search":3,"hn-algolia-routed":2},
                         "source_attempts":{"web":4,"hn":3,"github":2,"stackexchange":1},
                         "source_empty":{"web":1,"github":1},
                         "source_errors":{"stackexchange":1},
@@ -197,6 +198,9 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
             diag["funnel"]["errors_by_source"],
         )
         self.assertEqual(diag["agent_probes"]["valid_answers"],2)
+        voices={row["source"]:row["count"] for row in diag["buyer_voice_by_source"]}
+        self.assertEqual(voices["brave-search"],3)
+        self.assertEqual(voices["hn-algolia-routed"],2)
         sources={row["source"]:row for row in diag["search_sources"]}
         self.assertEqual(sources["web"]["attempts"],4)
         self.assertEqual(sources["github"]["empty"],1)

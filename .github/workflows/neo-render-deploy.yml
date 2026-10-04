@@ -48,6 +48,9 @@ on:
       - "test_arena_research_algorithm.py"
       - "data/arena/research-algorithm/control_cases.json"
       - "test_a2a_discovery_startup.py"
+      - "hidden_control_gate.py"
+      - "startup_guard.py"
+      - "test_hidden_control_gate.py"
       - "test_runtime_boundary.py"
       - "runtime_boundary.py"
       - "runtime_profile.json"
@@ -150,9 +153,9 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+          python -m unittest -v test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
 
-      - name: Require commercial control set 6 of 6
+      - name: Require all public commercial controls
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -161,10 +164,14 @@ jobs:
           data=json.load(open("data/arena/research-algorithm/control_cases.json",encoding="utf-8"))
           result=evaluate_control_cases(data.get("cases") or [])
           print(json.dumps(result,indent=2))
-          if result.get("cases") != 6 or result.get("correct") != 6:
-              raise SystemExit("commercial control gate failed: deploy requires 6/6")
-          if result.get("family_correct") != 6:
-              raise SystemExit("commercial family control gate failed: deploy requires 6/6")
+          cases=int(result.get("cases") or 0)
+          correct=int(result.get("correct") or 0)
+          family_cases=int(result.get("family_cases") or 0)
+          family_correct=int(result.get("family_correct") or 0)
+          if cases < 6 or correct != cases:
+              raise SystemExit(f"commercial control gate failed: {correct}/{cases}; require all cases with cases>=6")
+          if family_correct != family_cases:
+              raise SystemExit(f"commercial family control gate failed: {family_correct}/{family_cases}")
           PY
 
       - name: Build Docker image in GitHub CI

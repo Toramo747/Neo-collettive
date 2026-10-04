@@ -154,6 +154,10 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "raw_results": None,
                 "relevance_pass": None,
             }],
+            "buyer_voice_by_source": [{
+                "source": None,
+                "count": None,
+            }],
             "search_provider": {
                 "name": None,
                 "configured_provider": None,
@@ -382,6 +386,23 @@ def _project_reason_counts(value: Any, limit: int = 12) -> list[dict]:
     return rows[:limit]
 
 
+def _project_source_counts(value: Any, limit: int = 16) -> list[dict]:
+    if not isinstance(value,dict):
+        return []
+    rows=[]
+    for source,count in sorted(value.items()):
+        safe_source=_safe_code(source,48)
+        if not safe_source:
+            continue
+        try:
+            n=max(0,int(count or 0))
+        except Exception:
+            n=0
+        rows.append({"source":safe_source,"count":n})
+    rows.sort(key=lambda row:(-row["count"],row["source"]))
+    return rows[:limit]
+
+
 def _project_search_sources(ingestion: dict) -> list[dict]:
     attempts = ingestion.get("source_attempts") if isinstance(ingestion.get("source_attempts"), dict) else {}
     empty = ingestion.get("source_empty") if isinstance(ingestion.get("source_empty"), dict) else {}
@@ -551,6 +572,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "top_missing": missing[:12],
         "rejection_reasons": _project_reason_counts(ingestion.get("rejected_by_reason")),
         "search_sources": _project_search_sources(ingestion),
+        "buyer_voice_by_source": _project_source_counts(ingestion.get("buyer_voice_by_source")),
         "search_provider": {
             "name": _safe_code(provider.get("name"), 48),
             "configured_provider": _safe_code(provider.get("configured_provider"), 48),

@@ -1,14 +1,14 @@
 {
-  "schema_v": 1,
-  "purpose": "fixed_non_evolutionary_control",
+  "schema_v": 2,
+  "purpose": "public_generalization_control",
   "raw_external_text": false,
   "cases": [
     {
-      "id": "buyer-family-1",
-      "title": "How do we automate invoice reconciliation?",
-      "body": "We spend hours every month reconciling invoices manually and need a better workflow.",
+      "id": "pub-buy-01",
+      "title": "Invoice matching is eating our Fridays",
+      "body": "We manually match invoices to purchase orders every week and need a better way.",
       "source": "hn-algolia-routed",
-      "url": "https://news.ycombinator.com/item?id=1",
+      "url": "https://news.ycombinator.com/item?id=101",
       "expect": {
         "buyer": true,
         "first_person": true,
@@ -17,11 +17,11 @@
       }
     },
     {
-      "id": "buyer-family-2",
-      "title": "What do you use for repetitive spreadsheet cleanup?",
-      "body": "Our team spends too much time cleaning CSV files by hand.",
-      "source": "hn-algolia-routed",
-      "url": "https://news.ycombinator.com/item?id=2",
+      "id": "pub-buy-02",
+      "title": "Any recommendations for CSV cleanup?",
+      "body": "Our team spends hours cleaning CSV exports before reporting.",
+      "source": "stackexchange-routed",
+      "url": "https://stackoverflow.com/questions/101",
       "expect": {
         "buyer": true,
         "first_person": true,
@@ -30,37 +30,11 @@
       }
     },
     {
-      "id": "vendor-1",
-      "title": "Pricing for automated invoice workflows",
-      "body": "Our platform helps customers automate finance operations. Start a free trial.",
-      "source": "brave-search",
-      "url": "https://vendor.example/pricing",
-      "expect": {
-        "buyer": false,
-        "first_person": false,
-        "family": "finance_ops",
-        "positive": false
-      }
-    },
-    {
-      "id": "supply-1",
-      "title": "Hire our automation experts",
-      "body": "We provide workflow automation services for businesses.",
-      "source": "bing-rss-free",
-      "url": "https://agency.example/services/automation",
-      "expect": {
-        "buyer": false,
-        "first_person": false,
-        "family": "workflow_automation",
-        "positive": false
-      }
-    },
-    {
-      "id": "buyer-family-3",
-      "title": "Is there a tool for employee onboarding?",
-      "body": "We have to copy the same employee details into three systems and want to automate it.",
+      "id": "pub-buy-03",
+      "title": "How are you handling new hire data?",
+      "body": "We have to copy employee records between HR systems for every new hire.",
       "source": "hn-algolia-routed",
-      "url": "https://news.ycombinator.com/item?id=3",
+      "url": "https://news.ycombinator.com/item?id=103",
       "expect": {
         "buyer": true,
         "first_person": true,
@@ -69,15 +43,275 @@
       }
     },
     {
-      "id": "noise-1",
-      "title": "LLM pricing for customers",
-      "body": "New enterprise plans for generative AI.",
+      "id": "pub-buy-04",
+      "title": "Manual data entry from PDFs",
+      "body": "I am rekeying fields from documents and need to automate the data entry.",
+      "source": "github-issues-routed",
+      "url": "https://github.com/example/project/issues/104",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "manual_data_entry",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-05",
+      "title": "Alternative to Make.com for integrations?",
+      "body": "We need something simpler to connect our SaaS tools without the current integration overhead.",
+      "source": "hn-algolia-routed",
+      "url": "https://news.ycombinator.com/item?id=105",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "integration_api",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-06",
+      "title": "What do you use for support triage?",
+      "body": "Our team spends too much time routing customer support tickets by hand.",
+      "source": "stackexchange-routed",
+      "url": "https://stackoverflow.com/questions/106",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "customer_support",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-07",
+      "title": "Need help with audit evidence",
+      "body": "We manually collect ISO 27001 audit evidence every month and need a better workflow.",
+      "source": "hn-algolia-routed",
+      "url": "https://news.ycombinator.com/item?id=107",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "compliance_tools",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-08",
+      "title": "Looking for a better lead qualification workflow",
+      "body": "We manually qualify inbound CRM leads and want to automate follow up.",
+      "source": "github-issues-routed",
+      "url": "https://github.com/example/crm/issues/108",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "crm_lead_ops",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-09",
+      "title": "Any way to automate repetitive back office work?",
+      "body": "I spend hours on a repetitive workflow every Monday.",
+      "source": "hn-algolia-routed",
+      "url": "https://news.ycombinator.com/item?id=109",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "workflow_automation",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-10",
+      "title": "Is there an app for appointment admin?",
+      "body": "We need a better appointment booking workflow for our local service business.",
+      "source": "hn-algolia-routed",
+      "url": "https://news.ycombinator.com/item?id=110",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "local_business_tools",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-11",
+      "title": "How can we reduce phishing triage?",
+      "body": "We spend hours reviewing phishing reports and need help with security automation.",
+      "source": "stackexchange-routed",
+      "url": "https://security.stackexchange.com/questions/111",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "cybersecurity_tools",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-buy-12",
+      "title": "Looking for software to extract PDF data",
+      "body": "We have to copy fields from PDFs into our system and want document processing automation.",
+      "source": "hn-algolia-routed",
+      "url": "https://news.ycombinator.com/item?id=112",
+      "expect": {
+        "buyer": true,
+        "first_person": true,
+        "family": "document_processing",
+        "positive": true
+      }
+    },
+    {
+      "id": "pub-sell-01",
+      "title": "Automated AP platform",
+      "body": "Our tool automates invoice workflows. Book a demo today.",
       "source": "brave-search",
-      "url": "https://vendor.example/blog/llm-pricing",
+      "url": "https://vendor.example/solutions/ap",
       "expect": {
         "buyer": false,
         "first_person": false,
-        "family": "ai_tools",
+        "family": "finance_ops",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-02",
+      "title": "CSV cleanup software pricing",
+      "body": "Our app cleans spreadsheets automatically. Pricing starts at 29 per month.",
+      "source": "bing-rss-free",
+      "url": "https://vendor.example/pricing/csv",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "spreadsheet_process",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-03",
+      "title": "Employee onboarding automation",
+      "body": "Our software helps HR teams automate employee onboarding. Try it free.",
+      "source": "brave-search",
+      "url": "https://vendor.example/solutions/onboarding",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "hr_tools",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-04",
+      "title": "Data entry automation service",
+      "body": "We provide manual data entry automation services for businesses.",
+      "source": "bing-rss-free",
+      "url": "https://agency.example/services/data-entry",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "manual_data_entry",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-05",
+      "title": "Connect your apps with our integration platform",
+      "body": "Our platform connects SaaS systems and webhooks. Start a free trial.",
+      "source": "brave-search",
+      "url": "https://vendor.example/solutions/integrations",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "integration_api",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-06",
+      "title": "Customer support automation",
+      "body": "Our team built software that automates support ticket triage. Book a call.",
+      "source": "brave-search",
+      "url": "https://vendor.example/blog/support",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "customer_support",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-07",
+      "title": "ISO compliance evidence platform",
+      "body": "Our solution collects audit evidence for ISO 27001. Pricing starts at 99.",
+      "source": "brave-search",
+      "url": "https://vendor.example/solutions/compliance",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "compliance_tools",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-08",
+      "title": "CRM lead qualification experts",
+      "body": "We offer CRM lead management and qualification services. Get a quote from us.",
+      "source": "bing-rss-free",
+      "url": "https://agency.example/services/crm",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "crm_lead_ops",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-09",
+      "title": "Workflow automation for operations",
+      "body": "Our product eliminates repetitive workflow tasks. Book a demo.",
+      "source": "brave-search",
+      "url": "https://vendor.example/solutions/workflow",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "workflow_automation",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-10",
+      "title": "Appointment booking software",
+      "body": "Our app handles appointment booking for local businesses. Try free.",
+      "source": "brave-search",
+      "url": "https://vendor.example/pricing/booking",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "local_business_tools",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-11",
+      "title": "Security automation platform",
+      "body": "Our platform automates phishing analysis and SOC workflows. Book a demo.",
+      "source": "brave-search",
+      "url": "https://vendor.example/solutions/security",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "cybersecurity_tools",
+        "positive": false
+      }
+    },
+    {
+      "id": "pub-sell-12",
+      "title": "Document processing API",
+      "body": "Our tool extracts data from PDF documents using OCR. Pricing starts at 49.",
+      "source": "brave-search",
+      "url": "https://vendor.example/pricing/ocr",
+      "expect": {
+        "buyer": false,
+        "first_person": false,
+        "family": "document_processing",
         "positive": false
       }
     }

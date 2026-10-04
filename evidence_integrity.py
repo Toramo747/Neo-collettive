@@ -93,6 +93,10 @@ FAMILY_EXPANSIONS = {
         "automate this process","automating this process","automate the workflow",
         "manual workflow","repetitive workflow","repetitive process",
     ),
+    "integration_api": (
+        "zapier","make.com","integromat","n8n","workflow integration",
+        "connect apps","connect systems","integration automation",
+    ),
 }
 
 FAMILY_RELEVANCE_TERMS = {
@@ -134,7 +138,10 @@ STRONG_PAIN_TERMS = (
 BUY_INTENT_TERMS = (
     "looking for","need help","need a","need to hire","looking to hire","hire someone",
     "seeking","want someone","recommend a","what do you use","any recommendations",
-    "how can i automate","is there a tool","is there an app","looking for a tool","looking for software",
+    "any way to automate","how can i automate","how are you handling","how do you handle",
+    "is there a tool","is there an app",
+    "looking for a tool","looking for software","alternative to","alternatives to",
+    "switching from","switch from","replace ","replacing ",
     "request:","rfp","request for proposal",
 )
 BUYER_PAID_TERMS = (
@@ -143,8 +150,9 @@ BUYER_PAID_TERMS = (
     "contractor","seeking contractor","quote requested","request a quote",
 )
 SUPPLY_TERMS = (
-    "pricing","price","subscription","plans","book a call","book a demo",
-    "enterprise","free trial","one-time purchase","per month","per year",
+    "pricing","price","pricing starts","starts at","subscription","plans",
+    "book a call","book a demo","try it free","try free","enterprise",
+    "free trial","one-time purchase","per month","per year",
 )
 
 LAUNCH_TITLE_MARKERS = (
@@ -158,6 +166,8 @@ SUPPLY_OFFER_TERMS = (
     "hire our","hire one of our","our freelancers","our freelancer","our experts",
     "our expert","we offer","we provide","book a call","book a demo",
     "get a quote from us","start a free trial","start free trial","try us free",
+    "try it free","try free","pricing starts","starts at","our tool","our app",
+    "our software","our platform","our product","our solution",
 )
 GIG_MARKET_DOMAINS = (
     "fiverr.com","upwork.com","freelancer.com","guru.com","peopleperhour.com","toptal.com",
@@ -172,7 +182,8 @@ BUYER_VOICE_PHRASES = (
     "we're struggling","i am struggling","i'm struggling","we struggle","i struggle",
     "we manually","i manually","we have to","i have to","can anyone","does anyone",
     "has anyone","any recommendations","what do you use","how do i","how can i",
-    "how do we","how can we","looking for help",
+    "how do we","how can we","looking for help","any way to automate",
+    "alternative to","alternatives to","switching from","switch from",
 )
 
 STRUCTURED_PAID_SOURCES = {
@@ -199,7 +210,13 @@ def generic_web_source(source: str) -> bool:
 
 def buyer_voice_present(title: str, body: str) -> bool:
     text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    if seller_voice_present(title,body):
+        return False
     if any(contains_term(text,phrase) for phrase in BUYER_VOICE_PHRASES):
+        return True
+    # Any validated first-person buyer voice is also buyer voice. Keeping this
+    # relationship explicit prevents drift between the two classifiers.
+    if first_person_buyer_voice_present(title,body):
         return True
     # Direct buyer-style questions are acceptable even when the source does not
     # use a first-person phrase verbatim.
@@ -210,15 +227,28 @@ def buyer_voice_present(title: str, body: str) -> bool:
     ))
 
 
+def seller_voice_present(title: str, body: str) -> bool:
+    text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    seller_phrases=(
+        "our platform","our product","our service","our services","our solution",
+        "our tool","our app","our software","we built","we've built","we have built",
+        "we provide","we offer","we help","our team built","our team created",
+        "our team developed","customers use our",
+    )
+    return bool(
+        any(contains_term(text,term) for term in seller_phrases)
+        or re.search(r"\bour team\b[^.!?]{0,80}\b(?:built|created|developed|launched|offers?)\b",text,re.I)
+    )
+
+
 def first_person_buyer_voice_present(title: str, body: str) -> bool:
     text=" ".join(((title or "")+" "+(body or "")).lower().split())
-    # Reject obvious seller/vendor voice before accepting first-person language.
-    if any(contains_term(text,term) for term in ("our platform","our product","our service","our services","our solution")):
+    if seller_voice_present(title,body):
         return False
     if not re.search(r"\b(?:i|we|our|my)\b",text):
         return False
     return bool(re.search(
-        r"\b(?:i|we|our|my)\b[^.!?]{0,140}\b(?:need|looking|seeking|want|hire|pay|budget|replace|switch|automate|spend|spends|manual|manually|struggl)\b",
+        r"\b(?:i|we|our|my)\b[^.!?]{0,160}\b(?:need|looking|seeking|want|hire|pay|budget|replace|switch|automate|spend|spends|manual|manually|re-?key|struggl|have to)\b",
         text,
         flags=re.I,
     ))
@@ -425,7 +455,8 @@ def family_relevance_terms(family: str) -> tuple[str, ...]:
     family=str(family or "").strip()
     base=next((terms for name,terms in FAMILY_TERMS if name==family),())
     extra=FAMILY_RELEVANCE_TERMS.get(family,())
-    return tuple(dict.fromkeys(tuple(base)+tuple(extra)))
+    expansions=FAMILY_EXPANSIONS.get(family,())
+    return tuple(dict.fromkeys(tuple(base)+tuple(extra)+tuple(expansions)))
 
 
 def family_text_matches(family: str, text: str) -> bool:
