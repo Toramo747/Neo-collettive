@@ -185,7 +185,7 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
     value=data.get("confidence")
     try:
         confidence=float(value) if not isinstance(value,bool) else 0.0
-    except (TypeError,ValueError):
+    except (TypeError,ValueError,OverflowError):
         confidence=0.0
     if not math.isfinite(confidence) or not 0.0<=confidence<=1.0:
         confidence=0.0
