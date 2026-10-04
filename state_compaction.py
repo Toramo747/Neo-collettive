@@ -320,14 +320,16 @@ def compact_state_payload(
         return source, meta
 
     protected_before = protected_serialized_values(source)
-    current = source
+    # Challenge state is independently bounded whenever compaction runs. Apply it
+    # before size-based early exits so the shadow track cannot grow unbounded even
+    # when another compaction level alone reaches the target.
+    current = compact_challenge_track(source)
     levels = (
         ("a_council_history", compact_council_history),
         ("b_deduplicate", deduplicate_current_tool_opportunities),
         ("c_historical_transcripts", compact_historical_transcripts),
         ("d_inbound_traffic_events", trim_inbound_traffic_events),
-        ("e_challenge_track", compact_challenge_track),
-        ("f_residual_histories", compact_residual_histories),
+        ("e_residual_histories", compact_residual_histories),
     )
     for name, func in levels:
         current = func(current)
