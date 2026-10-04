@@ -82,8 +82,10 @@ def routed_search_diagnostics(
         primary_hint=""
         fallback_hint=""
         if source_hint=="web" and isinstance(batch,dict):
-            primary_hint=canonical_source(batch.get("provider_fallback_from") or "")
-            fallback_hint=canonical_source(batch.get("provider") or "")
+            primary_raw=str(batch.get("provider_fallback_from") or "").strip()
+            fallback_raw=str(batch.get("provider") or "").strip()
+            primary_hint=canonical_source(primary_raw) if primary_raw else ""
+            fallback_hint=canonical_source(fallback_raw) if fallback_raw else ""
             if not primary_hint and fallback_hint in {"brave","bing-rss","google-pse"}:
                 source_hint=fallback_hint
         if isinstance(batch, BaseException):
