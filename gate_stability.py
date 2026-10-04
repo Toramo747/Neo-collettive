@@ -158,6 +158,7 @@ def apply_gate_hysteresis(
         absent=int(prev.get("absent_streak") or 0)+1
         prev["absent_streak"]=absent
         prev["pass_streak"]=0
+        prev["first_raw_pass_utc"]=""
         if bool(prev.get("stable")) and absent>=EXIT_STREAK:
             prev["stable"]=False
             prev["fail_streak"]=max(EXIT_STREAK,int(prev.get("fail_streak") or 0))
