@@ -439,6 +439,25 @@ def create_review_sample(private_dir: Path, count: int=5) -> dict:
             "review_result":"",
         })
     _write_jsonl_private(private_dir/"weekly_review_queue.jsonl",review)
+    from html import escape
+    rows=[]
+    for item in review:
+        judges=escape(json.dumps(item.get("judge_labels") or [],ensure_ascii=False))
+        rows.append(
+            "<article><h2>"+escape(str(item.get("id") or ""))+"</h2>"
+            "<p><b>Testo:</b> "+escape(str(item.get("normalized_text") or ""))+"</p>"
+            "<p><b>Sorgente:</b> "+escape(str(item.get("source") or ""))+"</p>"
+            "<p><b>Etichetta:</b> "+escape(str(item.get("final_label") or ""))+"</p>"
+            "<details><summary>Giudici</summary><pre>"+judges+"</pre></details>"
+            "<p>Revisione Andrea: ____________________</p></article>"
+        )
+    html_doc=(
+        "<!doctype html><html><head><meta charset='utf-8'><title>NEO weekly label review</title></head>"
+        "<body><h1>Weekly shadow-label review</h1>"
+        "<p>Privato. Cinque casi casuali; compilazione manuale di Andrea.</p>"
+        +"".join(rows)+"</body></html>"
+    )
+    (private_dir/"weekly_review.html").write_text(html_doc,encoding="utf-8")
     return {"review_sample_cases":len(review)}
 
 
