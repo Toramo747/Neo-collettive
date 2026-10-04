@@ -135,10 +135,10 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         result=ara.evaluate_control_cases(data["cases"])
         self.assertFalse(result["used_for_evolution"])
         self.assertFalse(result["raw_external_text"])
-        self.assertEqual(result["cases"],6)
-        self.assertEqual(result["correct"],6)
+        self.assertGreaterEqual(result["cases"],24)
+        self.assertEqual(result["correct"],result["cases"])
         self.assertEqual(result["accuracy"],1.0)
-        self.assertEqual(result["family_correct"],6)
+        self.assertEqual(result["family_correct"],result["family_cases"])
         self.assertEqual(result["family_accuracy"],1.0)
 
     def test_arena_uses_production_buyer_and_guard_primitives(self):
