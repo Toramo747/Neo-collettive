@@ -13,6 +13,13 @@ BUYER_SIGNAL_TERMS = (
     "time consuming","time-consuming","struggle","problem","pain",
 )
 
+PAIN_PLUS_BUYER_FRAMES = (
+    '"we manually" "looking for help"',
+    '"I spend hours" "need help"',
+    '"we are struggling" "looking for a tool"',
+    '"this takes hours" contractor',
+)
+
 
 def _clean(value: str, limit: int = 180) -> str:
     return " ".join(str(value or "").replace("\n"," ").split())[:limit].strip()
@@ -73,17 +80,15 @@ def discovery_query(
     query_class: str,
     evidence_rows: Iterable[dict] | None,
 ) -> str:
-    """Prefer observed buyer language; use a deterministic family-specific fallback."""
+    """Prefer observed buyer language; fall back to the Arena-proven pain+buyer pattern."""
     phrases=observed_buyer_phrases(evidence_rows,family,4)
     terms=[_clean(x,100) for x in (sector_terms or []) if _clean(x,100)]
     anchor=terms[0] if terms else str(family or "").replace("_"," ")
     if phrases:
         return _clean(f"{anchor} {phrases[0]}",220)
-    if query_class=="explore":
-        suffix='("I need" OR "we are struggling" OR "looking for help") (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
-    else:
-        suffix='("looking for help" OR hiring OR contractor OR RFP) (site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
-    return _clean(f"{anchor} {suffix}",260)
+    frame=PAIN_PLUS_BUYER_FRAMES[0 if query_class=="explore" else 3]
+    community='(site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
+    return _clean(f"{anchor} {frame} {community}",260)
 
 
 def scout_queries(evidence_rows: Iterable[dict] | None, limit: int = 7) -> list[str]:
@@ -93,13 +98,13 @@ def scout_queries(evidence_rows: Iterable[dict] | None, limit: int = 7) -> list[
         return phrases[:max(1,limit)]
     community='(site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
     fallbacks=[
-        f'manual data entry ("I need" OR "we are struggling" OR "looking for help") {community}',
-        f'API integration ("I need" OR "looking for help" OR contractor) {community}',
-        f'spreadsheet automation ("our team spends" OR "we manually" OR "how do I") {community}',
-        f'reporting dashboard ("I need" OR "we are struggling" OR RFP) {community}',
-        f'customer support ("our team spends" OR "we manually" OR "looking for help") {community}',
-        f'document processing ("I need" OR "we manually" OR contractor) {community}',
-        f'CRM lead qualification ("we manually" OR hiring OR contractor) {community}',
+        f'manual data entry {PAIN_PLUS_BUYER_FRAMES[0]} {community}',
+        f'API integration {PAIN_PLUS_BUYER_FRAMES[1]} {community}',
+        f'spreadsheet automation {PAIN_PLUS_BUYER_FRAMES[2]} {community}',
+        f'reporting dashboard {PAIN_PLUS_BUYER_FRAMES[3]} {community}',
+        f'customer support {PAIN_PLUS_BUYER_FRAMES[0]} {community}',
+        f'document processing {PAIN_PLUS_BUYER_FRAMES[1]} {community}',
+        f'CRM lead qualification {PAIN_PLUS_BUYER_FRAMES[2]} {community}',
     ]
     return fallbacks[:max(1,limit)]
 
