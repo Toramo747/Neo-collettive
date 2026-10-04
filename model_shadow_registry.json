@@ -1,0 +1,66 @@
+{
+  "schema_v": 1,
+  "mode": "shadow",
+  "promotion": "manual_only",
+  "judges": {
+    "lexicon": {"kind": "existing_rules", "module": "evidence_integrity", "tagger_version": 3},
+    "nli": {
+      "kind": "zero_shot_nli",
+      "repository": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+      "revision": "8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c",
+      "license": "MIT",
+      "commercial_use_allowed": true,
+      "task": "zero-shot-classification",
+      "cache_only": true,
+      "actions_only": true,
+      "labels": [
+        "chi scrive cerca uno strumento",
+        "chi scrive vende un prodotto o servizio",
+        "chi scrive descrive un lavoro manuale ricorrente",
+        "annuncio di lavoro"
+      ]
+    },
+    "local_llm": {
+      "kind": "local_quantized_llm",
+      "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+      "revision": "dd26da440ef0330c47919d1ecae0966d24022222",
+      "filename": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "bytes": 1117320736,
+      "license": "Apache-2.0",
+      "commercial_use_allowed": true,
+      "actions_only": true,
+      "output_contract": ["canonical_problem", "target_user", "current_workaround", "quoted_price", "writer_role", "failed_attempt", "proposed_label"]
+    },
+    "embedding": {
+      "kind": "semantic_embedding",
+      "repository": "intfloat/multilingual-e5-small",
+      "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+      "license": "MIT",
+      "commercial_use_allowed": true,
+      "actions_only": true,
+      "dimensions": 384
+    },
+    "structural": {"kind": "deterministic_structural_signals", "actions_only": false}
+  },
+  "consensus": {
+    "minimum_judges": 3,
+    "confidence_threshold": 0.70,
+    "disagreement_action": "exclude_from_training",
+    "outcome_labels_override_automatic": true
+  },
+  "student": {
+    "kind": "hashed_char_ngram_logistic_regression",
+    "runtime": "numpy",
+    "max_artifact_bytes": 5000000,
+    "render_mode": "shadow",
+    "promotion": "manual_only"
+  },
+  "challenge_clustering": {
+    "similarity": "cosine",
+    "default_threshold": 0.82,
+    "actions_only": true,
+    "map_delivery": "authenticated_hmac",
+    "requester_reaction_duplicate_cap": 5
+  }
+}

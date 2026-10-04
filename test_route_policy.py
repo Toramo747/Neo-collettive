@@ -124,6 +124,17 @@ class RoutePolicyAuthTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(status,401)
 
+    async def test_model_shadow_cluster_upload_is_hmac_ops(self):
+        self.assertEqual(classify_path("/api/model-shadow/challenge-clusters"),OPS)
+        proof=make_self_traffic_proof("test-hmac","/api/model-shadow/challenge-clusters")
+        status,_,_=await _call(
+            self.middleware(),
+            "/api/model-shadow/challenge-clusters",
+            method="POST",
+            headers={"x-mycelix-self-traffic-proof":proof},
+        )
+        self.assertEqual(status,200)
+
     async def test_admin_also_works_on_ops(self):
         status,_,_=await _call(
             self.middleware(),"/api/memory/status",

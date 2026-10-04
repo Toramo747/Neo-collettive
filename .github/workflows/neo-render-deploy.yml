@@ -68,6 +68,16 @@ on:
       - "test_state_compaction.py"
       - "public_snapshot.py"
       - "test_public_snapshot_privacy.py"
+      - "model_shadow.py"
+      - "model_judges.py"
+      - "model_shadow_registry.json"
+      - "test_model_judges.py"
+      - "test_model_shadow_runtime.py"
+      - "test_model_shadow_gate_non_regression.py"
+      - "test_model_shadow_privacy.py"
+      - "tools/model_shadow_privacy_check.py"
+      - "runtime/model-shadow/student.json"
+      - "runtime/model-shadow/metrics.json"
       - "inbound_interview.py"
       - "test_inbound_interview.py"
       - "trust_lab.py"
@@ -139,9 +149,20 @@ jobs:
       - name: Validate source before deploy
         run: |
           set -euo pipefail
-          python -m py_compile cloud_mcp.py challenge_track.py hidden_challenge_control_gate.py jarvis_service/app.py
+          python -m py_compile cloud_mcp.py challenge_track.py hidden_challenge_control_gate.py model_shadow.py model_judges.py jarvis_service/app.py
           python -m json.tool neo_policy.json >/dev/null
           python -m json.tool runtime_profile.json >/dev/null
+          python -m json.tool model_shadow_registry.json >/dev/null
+          python - <<'PY'
+          import json
+          r=json.load(open("model_shadow_registry.json",encoding="utf-8"))
+          if r.get("mode")!="shadow" or r.get("promotion")!="manual_only":
+              raise SystemExit("model shadow promotion policy is not fail-closed")
+          student=r.get("student") or {}
+          if student.get("render_mode")!="shadow" or student.get("promotion")!="manual_only":
+              raise SystemExit("student shadow policy is not fail-closed")
+          print("model shadow policy: shadow/manual_only")
+          PY
           python - <<'PY'
           from runtime_boundary import load_runtime_profile
           p=load_runtime_profile()
@@ -165,7 +186,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+          python -m unittest -v test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_route_policy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
 
       - name: Require all public commercial controls
         run: |

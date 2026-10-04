@@ -49,6 +49,13 @@ from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from gate_stability import apply_gate_hysteresis
 from candidate_observability import build_candidate_telemetry
+from model_judges import lexicon_judge
+from model_shadow import (
+    empty_shadow_metrics,
+    load_student,
+    public_shadow_projection,
+    update_shadow_metrics,
+)
 from challenge_track import (
     CHALLENGE_TAGGER_VERSION,
     apply_challenge_hysteresis,
@@ -161,7 +168,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.51"  # independent commercial and shadow challenge tracks
+VERSION = "0.99.52"  # shadow model judges and student observability
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -191,6 +198,9 @@ HEARTBEAT_MIN_SECONDS = max(300, int(os.getenv("NEO_HEARTBEAT_MIN_SECONDS", "900
 HEARTBEAT_TOKEN = (os.getenv("NEO_HEARTBEAT_TOKEN") or "").strip()
 CANDIDATE_TELEMETRY_HMAC_KEY = (os.getenv("CANDIDATE_TELEMETRY_HMAC_KEY") or HEARTBEAT_TOKEN).strip()
 CANDIDATE_TELEMETRY_ID_KEY_VERSION = (os.getenv("CANDIDATE_TELEMETRY_ID_KEY_VERSION") or "v1").strip()[:16]
+MODEL_SHADOW_MAX_PER_CYCLE = max(0,min(256,int(os.getenv("NEO_MODEL_SHADOW_MAX_PER_CYCLE","64"))))
+MODEL_SHADOW_CLUSTER_LIMIT = max(1,min(2000,int(os.getenv("NEO_MODEL_SHADOW_CLUSTER_LIMIT","500"))))
+SHADOW_STUDENT = load_student()
 NEO_ADMIN_TOKEN = (os.getenv("NEO_ADMIN_TOKEN") or "").strip()
 DIRECTOR_RESULT_LOG: list[dict[str, Any]] = []
 AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECONDS", "300")))
@@ -351,6 +361,13 @@ AUTOPILOT_STATE: dict[str, Any] = {
         "latest":{"status":"CHALLENGE_SELECT","funnel":{},"candidates":[]},
     },
     "hidden_challenge_control":{"required":False,"cases":0,"correct":0,"ok":True},
+    "model_shadow":{
+        "schema_v":1,
+        "mode":"shadow",
+        "student_metrics":empty_shadow_metrics(),
+        "challenge_cluster_map":{"schema_v":1,"updated_at_utc":None,"mapping":[]},
+        "promotion":{"mode":"manual_only","approved":False},
+    },
     "search_provider_state": {},
     "evidence_integrity": {
         "schema_v": EVIDENCE_SCHEMA_VERSION,
@@ -470,6 +487,7 @@ def _state_payload() -> dict:
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
+        "model_shadow": AUTOPILOT_STATE.get("model_shadow") or {},
         "search_provider_state": AUTOPILOT_STATE.get("search_provider_state") or {},
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
         "active_thesis": AUTOPILOT_STATE.get("active_thesis"),
@@ -666,6 +684,34 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["challenge_track"]=restored_challenge
     if isinstance(payload.get("hidden_challenge_control"), dict):
         AUTOPILOT_STATE["hidden_challenge_control"]=payload.get("hidden_challenge_control") or {}
+    if isinstance(payload.get("model_shadow"), dict):
+        restored_model=dict(payload.get("model_shadow") or {})
+        restored_model["schema_v"]=1
+        restored_model["mode"]="shadow"
+        restored_model["promotion"]={"mode":"manual_only","approved":False}
+        metrics=restored_model.get("student_metrics") if isinstance(restored_model.get("student_metrics"),dict) else empty_shadow_metrics()
+        restored_model["student_metrics"]=public_shadow_projection(metrics)
+        cluster=restored_model.get("challenge_cluster_map") if isinstance(restored_model.get("challenge_cluster_map"),dict) else {}
+        mapping=[]
+        for row in list(cluster.get("mapping") or [])[:MODEL_SHADOW_CLUSTER_LIMIT]:
+            if not isinstance(row,dict):
+                continue
+            evidence_id=str(row.get("evidence_id") or "")
+            cluster_id=str(row.get("cluster_id") or "")
+            review_state=str(row.get("review_state") or "")
+            if re.fullmatch(r"[0-9a-f]{16}",evidence_id) and re.fullmatch(r"[0-9a-f]{16}",cluster_id) and review_state in {"FEASIBLE","REVIEW_REQUIRED","HARD","RESOLVED"}:
+                mapping.append({
+                    "evidence_id":evidence_id,
+                    "cluster_id":cluster_id,
+                    "review_state":review_state,
+                    "requester_weight":max(1,min(20,int(row.get("requester_weight") or 1))),
+                })
+        restored_model["challenge_cluster_map"]={
+            "schema_v":1,
+            "updated_at_utc":cluster.get("updated_at_utc"),
+            "mapping":mapping,
+        }
+        AUTOPILOT_STATE["model_shadow"]=restored_model
     if isinstance(payload.get("hidden_control"), dict):
         AUTOPILOT_STATE["hidden_control"] = payload.get("hidden_control") or {}
     if not migration_changed and isinstance(payload.get("problem_performance"), dict):
@@ -6132,6 +6178,10 @@ def _commercial_evidence_quality(
     challenge_current=[]
     challenge_seen=set()
     challenge_collected=0
+    model_shadow_state=AUTOPILOT_STATE.get("model_shadow") if isinstance(AUTOPILOT_STATE.get("model_shadow"),dict) else {}
+    shadow_metrics=public_shadow_projection((model_shadow_state or {}).get("student_metrics") or {})
+    shadow_metrics["student_available"]=bool(SHADOW_STUDENT is not None)
+    shadow_seen=0
     diagnostics=IngestionDiagnostics(INGESTION_DIAGNOSTICS_ENABLED)
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
@@ -6193,7 +6243,7 @@ def _commercial_evidence_quality(
         challenge_current.append(row)
 
     def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False, metadata: dict | None = None):
-        nonlocal challenge_collected
+        nonlocal challenge_collected, shadow_metrics, shadow_seen
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
         query_intent=str(meta.get("query_intent") or "pain").strip().lower()
@@ -6205,6 +6255,19 @@ def _commercial_evidence_quality(
         if not host or any(host==n or host.endswith("."+n) for n in noise):
             reject("noise_domain",url,title,query_role,source,query_class)
             return
+        if SHADOW_STUDENT is not None and shadow_seen < MODEL_SHADOW_MAX_PER_CYCLE:
+            try:
+                lexical=lexicon_judge(title,body,url,source,query_role)
+                prediction=SHADOW_STUDENT.predict(" ".join(((title or "")+" "+(body or "")).split()))
+                shadow_metrics=update_shadow_metrics(
+                    shadow_metrics,
+                    lexicon_label=str(lexical.get("label") or ""),
+                    student_prediction=prediction,
+                    confidence_threshold=0.70,
+                )
+                shadow_seen+=1
+            except Exception:
+                pass
         challenge_collected+=1
         observe_challenge(url,title,body,source,metadata)
         title_low=(title or "").lower()
@@ -6566,6 +6629,14 @@ def _commercial_evidence_quality(
         "latest":challenge_latest,
     }
 
+    model_shadow_state=AUTOPILOT_STATE.get("model_shadow") if isinstance(AUTOPILOT_STATE.get("model_shadow"),dict) else {}
+    model_shadow_state=dict(model_shadow_state or {})
+    model_shadow_state["schema_v"]=1
+    model_shadow_state["mode"]="shadow"
+    model_shadow_state["student_metrics"]=public_shadow_projection(shadow_metrics)
+    model_shadow_state["promotion"]={"mode":"manual_only","approved":False}
+    AUTOPILOT_STATE["model_shadow"]=model_shadow_state
+
     migration.update({
         "rows":len(memory),
         "quarantined":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
@@ -6691,6 +6762,7 @@ def _commercial_evidence_quality(
         "freshness_window_days":7,
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
         "challenge_shadow":challenge_latest,
+        "model_shadow":public_shadow_projection(shadow_metrics),
     }
 
 def safe_problem_tail(value: str, max_len: int = 72) -> str:
@@ -8696,6 +8768,7 @@ def _compact_director_result(result: dict) -> dict:
         "gate_rule": quality.get("gate_rule"),
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
         "challenge_shadow": quality.get("challenge_shadow") or ((AUTOPILOT_STATE.get("challenge_track") or {}).get("latest") or {}),
+        "model_shadow": quality.get("model_shadow") or public_shadow_projection(((AUTOPILOT_STATE.get("model_shadow") or {}).get("student_metrics") or {})),
         "qualified_problem_clusters": quality.get("qualified_problem_clusters") or [],
         "qualified_problem_keys": quality.get("qualified_problem_keys") or [],
         "evidence_schema_v": quality.get("evidence_schema_v"),
@@ -10670,6 +10743,62 @@ def _runtime_snapshot_freshness() -> dict:
         "age_seconds":age,
         "last_published_utc":last or None,
     }
+
+
+async def api_model_shadow_challenge_clusters(request: Request):
+    if not _ops_request_authorized(request):
+        return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
+    try:
+        payload=await request.json()
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_json"},status_code=400)
+    if not isinstance(payload,dict) or int(payload.get("schema_v") or 0)!=1:
+        return JSONResponse({"ok":False,"error":"invalid_schema"},status_code=400)
+    raw_mapping=payload.get("mapping")
+    if not isinstance(raw_mapping,list) or len(raw_mapping)>MODEL_SHADOW_CLUSTER_LIMIT:
+        return JSONResponse({"ok":False,"error":"mapping_limit"},status_code=400)
+    mapping=[]
+    for raw in raw_mapping:
+        if not isinstance(raw,dict):
+            return JSONResponse({"ok":False,"error":"invalid_mapping_row"},status_code=400)
+        evidence_id=str(raw.get("evidence_id") or "")
+        cluster_id=str(raw.get("cluster_id") or "")
+        review_state=str(raw.get("review_state") or "")
+        if not re.fullmatch(r"[0-9a-f]{16}",evidence_id):
+            return JSONResponse({"ok":False,"error":"invalid_evidence_id"},status_code=400)
+        if not re.fullmatch(r"[0-9a-f]{16}",cluster_id):
+            return JSONResponse({"ok":False,"error":"invalid_cluster_id"},status_code=400)
+        if review_state not in {"FEASIBLE","REVIEW_REQUIRED","HARD","RESOLVED"}:
+            return JSONResponse({"ok":False,"error":"invalid_review_state"},status_code=400)
+        mapping.append({
+            "evidence_id":evidence_id,
+            "cluster_id":cluster_id,
+            "review_state":review_state,
+            "requester_weight":max(1,min(20,int(raw.get("requester_weight") or 1))),
+        })
+    state=AUTOPILOT_STATE.get("model_shadow") if isinstance(AUTOPILOT_STATE.get("model_shadow"),dict) else {}
+    state=dict(state or {})
+    state["schema_v"]=1
+    state["mode"]="shadow"
+    state["promotion"]={"mode":"manual_only","approved":False}
+    state["challenge_cluster_map"]={
+        "schema_v":1,
+        "updated_at_utc":datetime.now(timezone.utc).isoformat(),
+        "mapping":mapping,
+    }
+    AUTOPILOT_STATE["model_shadow"]=state
+    _save_local_state()
+    checkpoint=await _checkpoint_state_to_render()
+    clusters=len({x["cluster_id"] for x in mapping})
+    review_required=sum(1 for x in mapping if x["review_state"]=="REVIEW_REQUIRED")
+    return JSONResponse({
+        "ok":True,
+        "mode":"shadow",
+        "mapping_count":len(mapping),
+        "cluster_count":clusters,
+        "review_required":review_required,
+        "checkpoint_ok":bool(checkpoint.get("ok")),
+    })
 
 
 async def api_runtime_snapshot_published(request: Request):
@@ -12931,6 +13060,7 @@ app = Starlette(
         Route("/api/market/run-cycles", api_run_market_cycles, methods=["POST"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
+        Route("/api/model-shadow/challenge-clusters", api_model_shadow_challenge_clusters, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
@@ -12972,6 +13102,7 @@ class _ExplicitReviewASGI:
         "/api/market/run-cycles":{"POST"},
         "/api/heartbeat":{"GET"},
         "/api/runtime/snapshot-published":{"POST"},
+        "/api/model-shadow/challenge-clusters":{"POST"},
         "/api/checkpoint-status":{"POST"},
         "/api/trust/evaluate":{"POST"},
         "/venture":{"POST"},
