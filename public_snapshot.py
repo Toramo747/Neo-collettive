@@ -373,7 +373,7 @@ def _project_family_performance(value: Any) -> list[dict]:
 _SAFE_CODE_RE = re.compile(r"[^A-Za-z0-9_.:-]+")
 _HEX16_RE = re.compile(r"^[0-9a-f]{16}$")
 _HEX_COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}$")
-_VERSION_CODE_RE = re.compile(r"^(?:v?[0-9]+(?:\\.[0-9]+){0,3})$")
+_VERSION_CODE_RE = re.compile(r"^(?:v?[0-9]+(?:\.[0-9]+){0,3})$")
 _CANDIDATE_MISSING_CODES = frozenset({
     "specific_tool_name_and_target_user",
     "two_independent_real_price_competitors",
