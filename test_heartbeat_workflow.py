@@ -103,6 +103,15 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn('if [ "$require_new_cycle" = "1" ]; then',w)
         self.assertIn("requires a clean completed cycle",w)
 
+    def test_autonomy_status_exposes_hidden_control_for_snapshot(self):
+        source=Path("cloud_mcp.py").read_text(encoding="utf-8")
+        start=source.index("async def api_autonomy_status")
+        end=source.index("\n\nasync def system",start)
+        block=source[start:end]
+        self.assertIn("hidden_control=_hidden_control_telemetry()",block)
+        self.assertIn('"hidden_control":hidden_control',block)
+        self.assertIn('ap_private.get("hidden_control") or raw.get("hidden_control")',self.workflow)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")
