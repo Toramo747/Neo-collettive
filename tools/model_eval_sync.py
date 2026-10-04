@@ -10,7 +10,6 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 
-from hidden_control_gate import load_hidden_cases
 from model_archive import (
     HIDDEN_EVAL_PATH,
     control_cases_to_model_eval,
