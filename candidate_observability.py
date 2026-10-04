@@ -8,7 +8,6 @@ from typing import Any
 
 from gate_stability import opportunity_fingerprint, opportunity_identity
 
-ID_KEY_VERSION = "v1"
 PUBLIC_ID_LENGTH = 16
 ALLOWED_MISSING_CODES = frozenset({
     "specific_tool_name_and_target_user",
@@ -22,10 +21,10 @@ ALLOWED_MISSING_CODES = frozenset({
 })
 
 
-def _hmac_id(secret: str, purpose: str, value: str) -> str:
+def _hmac_id(secret: str, id_key_version: str, purpose: str, value: str) -> str:
     key = hmac.new(
         secret.encode("utf-8"),
-        ("mycelix-candidate-telemetry|" + ID_KEY_VERSION + "|" + purpose).encode("utf-8"),
+        ("mycelix-candidate-telemetry|" + id_key_version + "|" + purpose).encode("utf-8"),
         hashlib.sha256,
     ).digest()
     return hmac.new(key, value.encode("utf-8"), hashlib.sha256).hexdigest()[:PUBLIC_ID_LENGTH]
@@ -51,9 +50,11 @@ def build_candidate_telemetry(
     tagger_version: str,
     observed_at_utc: str,
     first_cycle_after_deploy: bool,
+    id_key_version: str="v1",
 ) -> list[dict]:
     if not secret:
         return []
+    id_key_version = str(id_key_version or "v1")[:16]
     state = gate_state if isinstance(gate_state, dict) else {}
     candidates = state.get("candidates") if isinstance(state.get("candidates"), dict) else {}
     now = _parse_utc(observed_at_utc) or datetime.now(timezone.utc)
@@ -77,9 +78,9 @@ def build_candidate_telemetry(
         confirmation = row.get("gate_confirmation") if isinstance(row.get("gate_confirmation"), dict) else {}
         private_fp = opportunity_fingerprint(row)
         out.append({
-            "candidate_id": _hmac_id(secret, "candidate", private_key),
-            "evidence_fingerprint": _hmac_id(secret, "evidence", private_fp),
-            "id_key_version": ID_KEY_VERSION,
+            "candidate_id": _hmac_id(secret, id_key_version, "candidate", private_key),
+            "evidence_fingerprint": _hmac_id(secret, id_key_version, "evidence", private_fp),
+            "id_key_version": id_key_version,
             "score": max(0, int(row.get("monetization_score") or 0)),
             "source_count": len(source_rows),
             "independent_domain_count": len(domains),
