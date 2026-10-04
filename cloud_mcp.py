@@ -12392,6 +12392,26 @@ async def readyz(request: Request):
     )
 
 
+def _hidden_challenge_control_telemetry() -> dict:
+    try:
+        result=evaluate_hidden_challenge_control()
+        summary={
+            "required":bool(result.get("required")),
+            "cases":max(0,int(result.get("cases") or 0)),
+            "correct":max(0,int(result.get("correct") or 0)),
+            "ok":bool(result.get("ok")),
+        }
+    except Exception:
+        summary={
+            "required":str(os.getenv("NEO_REQUIRE_HIDDEN_CHALLENGE_CONTROL") or "").strip().lower() in {"1","true","yes","on"},
+            "cases":0,
+            "correct":0,
+            "ok":False,
+        }
+    AUTOPILOT_STATE["hidden_challenge_control"]=summary
+    return summary
+
+
 def _hidden_control_telemetry() -> dict:
     try:
         result=evaluate_hidden_control()
@@ -12419,6 +12439,7 @@ async def health(request: Request):
     _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
     hidden_control=_hidden_control_telemetry()
+    hidden_challenge_control=_hidden_challenge_control_telemetry()
     return JSONResponse({
         "status":"ok",
         "service":"neo-collective",
@@ -12427,6 +12448,7 @@ async def health(request: Request):
         "runtime_profile":dict(RUNTIME_IDENTITY),
         "runtime_snapshot":snapshot,
         "hidden_control":hidden_control,
+        "hidden_challenge_control":hidden_challenge_control,
     })
 
 
