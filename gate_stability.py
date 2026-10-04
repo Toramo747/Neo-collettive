@@ -17,13 +17,25 @@ def opportunity_fingerprint(row: dict | None) -> str:
     payload={
         "family":str(src.get("family") or ""),
         "tool_name":str(src.get("tool_name") or src.get("title") or ""),
-        "score":int(src.get("monetization_score") or 0),
-        "missing":sorted(str(x) for x in (src.get("missing") or [])),
-        "domains":sorted({
-            str(x.get("domain") or "")
+        "sources":sorted([
+            {
+                "domain":str(x.get("domain") or ""),
+                "signal_types":sorted(str(v) for v in (x.get("signal_types") or [])),
+                "real_price":bool(x.get("real_price")),
+                "payment_required":bool(x.get("payment_required")),
+                "coverage_source":str(x.get("coverage_source") or ""),
+            }
             for x in (src.get("sources") or [])
-            if isinstance(x,dict) and str(x.get("domain") or "")
-        }),
+            if isinstance(x,dict)
+        ],key=lambda x:json.dumps(x,sort_keys=True)),
+        "existing_tools":sorted([
+            {
+                "domain":str(x.get("domain") or ""),
+                "price":str(x.get("price") or ""),
+            }
+            for x in (src.get("existing_tools") or [])
+            if isinstance(x,dict)
+        ],key=lambda x:json.dumps(x,sort_keys=True)),
     }
     raw=json.dumps(payload,sort_keys=True,separators=(",",":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
@@ -75,9 +87,13 @@ def apply_gate_hysteresis(
                 "to_raw":raw_pass,
                 "stable_before":bool(prev.get("stable")),
                 "stable_after":stable,
-                "score":int(row.get("monetization_score") or 0),
-                "missing":[str(x)[:80] for x in (row.get("missing") or [])[:12]],
-                "fingerprint":fp,
+                "previous_score":int(prev.get("last_score") or 0),
+                "current_score":int(row.get("monetization_score") or 0),
+                "previous_missing":[str(x)[:80] for x in (prev.get("last_missing") or [])[:12]],
+                "current_missing":[str(x)[:80] for x in (row.get("missing") or [])[:12]],
+                "previous_fingerprint":str(prev.get("last_fingerprint") or ""),
+                "current_fingerprint":fp,
+                "evidence_unchanged":bool(fp and fp==str(prev.get("last_fingerprint") or "")),
             })
 
         families[family]={
@@ -86,6 +102,7 @@ def apply_gate_hysteresis(
             "pass_streak":pass_streak,
             "fail_streak":fail_streak,
             "last_score":int(row.get("monetization_score") or 0),
+            "last_missing":[str(x)[:80] for x in (row.get("missing") or [])[:12]],
             "last_fingerprint":fp,
             "updated_at_utc":now,
         }
