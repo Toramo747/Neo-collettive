@@ -136,6 +136,8 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertFalse(result["used_for_evolution"])
         self.assertFalse(result["raw_external_text"])
         self.assertGreaterEqual(result["cases"],24)
+        if result["correct"] != result["cases"]:
+            print("CONTROL_FAILURES="+json.dumps([x for x in result["details"] if not x["ok"]],sort_keys=True))
         self.assertEqual(result["correct"],result["cases"])
         self.assertEqual(result["accuracy"],1.0)
         self.assertEqual(result["family_correct"],result["family_cases"])
