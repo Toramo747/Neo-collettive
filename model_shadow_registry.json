@@ -46,7 +46,15 @@
         "proposed_label"
       ],
       "confidence_source": "dual_prompt_label_agreement",
-      "self_reported_confidence_used": false
+      "self_reported_confidence_used": false,
+      "second_prompt_language": "en",
+      "second_prompt_label_order": [
+        "other",
+        "job_posting",
+        "manual_recurring_work",
+        "vendor_offer",
+        "buyer_tool_search"
+      ]
     },
     "embedding": {
       "kind": "semantic_embedding",
@@ -77,7 +85,9 @@
     "max_artifact_bytes": 5000000,
     "render_mode": "shadow",
     "promotion": "manual_only",
-    "class_balance": "inverse_frequency_weighting"
+    "class_balance": "inverse_frequency_weighting_capped",
+    "max_class_weight_ratio": 10,
+    "min_examples_per_class": 4
   },
   "challenge_clustering": {
     "similarity": "cosine",
