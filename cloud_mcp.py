@@ -10745,6 +10745,62 @@ def _runtime_snapshot_freshness() -> dict:
     }
 
 
+async def api_model_shadow_challenge_clusters(request: Request):
+    if not _ops_request_authorized(request):
+        return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
+    try:
+        payload=await request.json()
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_json"},status_code=400)
+    if not isinstance(payload,dict) or int(payload.get("schema_v") or 0)!=1:
+        return JSONResponse({"ok":False,"error":"invalid_schema"},status_code=400)
+    raw_mapping=payload.get("mapping")
+    if not isinstance(raw_mapping,list) or len(raw_mapping)>MODEL_SHADOW_CLUSTER_LIMIT:
+        return JSONResponse({"ok":False,"error":"mapping_limit"},status_code=400)
+    mapping=[]
+    for raw in raw_mapping:
+        if not isinstance(raw,dict):
+            return JSONResponse({"ok":False,"error":"invalid_mapping_row"},status_code=400)
+        evidence_id=str(raw.get("evidence_id") or "")
+        cluster_id=str(raw.get("cluster_id") or "")
+        review_state=str(raw.get("review_state") or "")
+        if not re.fullmatch(r"[0-9a-f]{16}",evidence_id):
+            return JSONResponse({"ok":False,"error":"invalid_evidence_id"},status_code=400)
+        if not re.fullmatch(r"[0-9a-f]{16}",cluster_id):
+            return JSONResponse({"ok":False,"error":"invalid_cluster_id"},status_code=400)
+        if review_state not in {"FEASIBLE","REVIEW_REQUIRED","HARD","RESOLVED"}:
+            return JSONResponse({"ok":False,"error":"invalid_review_state"},status_code=400)
+        mapping.append({
+            "evidence_id":evidence_id,
+            "cluster_id":cluster_id,
+            "review_state":review_state,
+            "requester_weight":max(1,min(20,int(raw.get("requester_weight") or 1))),
+        })
+    state=AUTOPILOT_STATE.get("model_shadow") if isinstance(AUTOPILOT_STATE.get("model_shadow"),dict) else {}
+    state=dict(state or {})
+    state["schema_v"]=1
+    state["mode"]="shadow"
+    state["promotion"]={"mode":"manual_only","approved":False}
+    state["challenge_cluster_map"]={
+        "schema_v":1,
+        "updated_at_utc":datetime.now(timezone.utc).isoformat(),
+        "mapping":mapping,
+    }
+    AUTOPILOT_STATE["model_shadow"]=state
+    _save_local_state()
+    checkpoint=await _checkpoint_state_to_render()
+    clusters=len({x["cluster_id"] for x in mapping})
+    review_required=sum(1 for x in mapping if x["review_state"]=="REVIEW_REQUIRED")
+    return JSONResponse({
+        "ok":True,
+        "mode":"shadow",
+        "mapping_count":len(mapping),
+        "cluster_count":clusters,
+        "review_required":review_required,
+        "checkpoint_ok":bool(checkpoint.get("ok")),
+    })
+
+
 async def api_runtime_snapshot_published(request: Request):
     if not _ops_request_authorized(request):
         return JSONResponse({"ok":False,"error":"unauthorized"},status_code=401)
@@ -13004,6 +13060,7 @@ app = Starlette(
         Route("/api/market/run-cycles", api_run_market_cycles, methods=["POST"]),
         Route("/api/heartbeat", api_heartbeat, methods=["GET"]),
         Route("/api/runtime/snapshot-published", api_runtime_snapshot_published, methods=["POST"]),
+        Route("/api/model-shadow/challenge-clusters", api_model_shadow_challenge_clusters, methods=["POST"]),
         Route("/api/self-improvement/proposal", api_self_improvement_proposal, methods=["GET"]),
         Route("/venture", venture, methods=["GET","POST"]),
         Route("/api/venture/audit", api_venture_audit, methods=["GET","POST"]),
@@ -13045,6 +13102,7 @@ class _ExplicitReviewASGI:
         "/api/market/run-cycles":{"POST"},
         "/api/heartbeat":{"GET"},
         "/api/runtime/snapshot-published":{"POST"},
+        "/api/model-shadow/challenge-clusters":{"POST"},
         "/api/checkpoint-status":{"POST"},
         "/api/trust/evaluate":{"POST"},
         "/venture":{"POST"},
