@@ -15,7 +15,7 @@ except Exception:  # dependency-lock rollout may briefly precede the audited loc
     np = None
 
 MODEL_SHADOW_SCHEMA_V = 1
-DEFAULT_ARTIFACT_PATH = "runtime/model_shadow_student.json"
+DEFAULT_ARTIFACT_PATH = "runtime/model-shadow/student.json"
 _ALLOWED_LABELS = (
     "buyer_tool_search",
     "vendor_offer",
