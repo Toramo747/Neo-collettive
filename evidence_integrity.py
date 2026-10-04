@@ -133,8 +133,8 @@ STRONG_PAIN_TERMS = (
 )
 BUY_INTENT_TERMS = (
     "looking for","need help","need a","need to hire","looking to hire","hire someone",
-    "seeking","want someone","recommend a","how can i automate","is there a tool",
-    "is there an app","looking for a tool","looking for software",
+    "seeking","want someone","recommend a","what do you use","any recommendations",
+    "how can i automate","is there a tool","is there an app","looking for a tool","looking for software",
     "request:","rfp","request for proposal",
 )
 BUYER_PAID_TERMS = (
