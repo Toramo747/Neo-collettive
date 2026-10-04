@@ -130,6 +130,19 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertGreater(family["family_match_rate"],other["family_match_rate"])
         self.assertGreater(family["fitness"],other["fitness"])
 
+    def test_control_set_is_report_only_and_production_aligned(self):
+        data=json.loads(Path("data/arena/research-algorithm/control_cases.json").read_text(encoding="utf-8"))
+        result=ara.evaluate_control_cases(data["cases"])
+        self.assertFalse(result["used_for_evolution"])
+        self.assertFalse(result["raw_external_text"])
+        self.assertEqual(result["cases"],6)
+        self.assertGreaterEqual(result["accuracy"],0.8)
+
+    def test_arena_uses_production_buyer_and_guard_primitives(self):
+        src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
+        for name in ("buyer_voice_present","first_person_buyer_voice_present","demand_signal_type","is_vendor_content","is_supply_offer"):
+            self.assertIn(name,src)
+        self.assertNotIn('buyer = bool(tokens & BUYER_MARKERS)',src)
     def test_family_metric_uses_production_classifier(self):
         src=Path("arena_research_algorithm.py").read_text(encoding="utf-8")
         self.assertIn("from evidence_integrity import commercial_family",src)
