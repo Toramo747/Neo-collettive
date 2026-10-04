@@ -16,6 +16,13 @@ ARENA_ID="llm-guided-commercial-search"
 TOPICS=("manual data entry","invoice reconciliation","security compliance evidence","spreadsheet workflow")
 MAX_QUERIES_PER_TOPIC=4
 
+MUTATION_GENOMES={
+    "first_person_pain":"Add one concise first-person operational pain phrase; preserve the original workflow terms.",
+    "buyer_intent":"Add one explicit buyer-intent phrase such as looking for help, need someone, need a tool, contractor, or recommendation.",
+    "paid_demand":"Add one willingness-to-pay phrase such as budget, hiring, contractor, quote, fixed price, or paid help.",
+    "operational_burden":"Add one recurring-burden phrase such as every week, takes hours, repetitive, backlog, rework, or error-prone.",
+}
+
 PROMPT_GENOMES={
     "first_person_pain":{
         "instruction":"Use first-person operational pain language such as I spend hours, we manually, I hate, we struggle, this takes hours. Avoid generic product terms."
@@ -86,6 +93,35 @@ def plan_queries(model,topic,genome_name):
         if len(out)>=MAX_QUERIES_PER_TOPIC: break
     return out
 
+
+def make_mutation_prompt(topic,base_query,genome_name):
+    instruction=MUTATION_GENOMES[genome_name]
+    return (
+        "Return JSON only: {\"query\":\"...\"}. "
+        "You are mutating an existing search query, not replacing its topic. "
+        + instruction + " "
+        "Keep the query concise. Do not add URLs. Do not add vendor/SEO language. "
+        "Original query: "+json.dumps(base_query)+" Topic: "+json.dumps(topic)
+    )
+
+def mutate_query(model,topic,base_query,genome_name):
+    response=post_json("http://127.0.0.1:11434/api/generate",{
+        "model":model,"prompt":make_mutation_prompt(topic,base_query,genome_name),
+        "stream":False,"format":"json",
+        "options":{"temperature":0.2,"num_predict":120,"num_ctx":2048},"keep_alive":"0",
+    })
+    parsed=extract_json(response.get("response") or "")
+    if not isinstance(parsed,dict):
+        return ""
+    q=valid_query(parsed.get("query"))
+    if not q:
+        return ""
+    base_tokens={x for x in re.findall(r"[a-z0-9]+",base_query.lower()) if len(x)>=3}
+    new_tokens={x for x in re.findall(r"[a-z0-9]+",q.lower()) if len(x)>=3}
+    if base_tokens and len(base_tokens & new_tokens) < max(1,min(2,len(base_tokens))):
+        return ""
+    return q
+
 def load_champion(data_dir):
     path=Path(data_dir)/"research-algorithm/latest.json"
     report=json.loads(path.read_text(encoding="utf-8"))
@@ -105,45 +141,49 @@ async def run(model,data_dir,out_path):
         baseline=score_hits(genes,baseline_rows)
 
         ranked=[]
-        for genome_name in PROMPT_GENOMES:
-            plans={topic:plan_queries(model,topic,genome_name) for topic in TOPICS}
-            pairs=[(topic,q) for topic in TOPICS for q in plans.get(topic,[])]
-            if len(pairs)<len(TOPICS):
-                ranked.append({"genome":genome_name,"status":"INSUFFICIENT_QUERIES","fitness":-1.0,"metrics":{},"plans":plans})
-                continue
+        for genome_name in MUTATION_GENOMES:
+            mutated_pairs=[]
+            mutation_map=[]
+            for topic,base_query in baseline_pairs:
+                mutated=mutate_query(model,topic,base_query,genome_name)
+                chosen=mutated or base_query
+                mutated_pairs.append((topic,chosen))
+                mutation_map.append({"topic":topic,"base":base_query,"mutated":mutated,"used":bool(mutated)})
             rows=await asyncio.gather(*[
                 fetch_hn_query(client,t,q,genes["recency_days"],genes["source_scope"])
-                for t,q in pairs
+                for t,q in mutated_pairs
             ])
             metrics=score_hits(genes,rows)
+            accepted=bool(
+                metrics["fitness"]>baseline["fitness"]
+                and metrics["signal_hits"]>=baseline["signal_hits"]
+                and metrics["unique_signal_threads"]>=baseline["unique_signal_threads"]
+                and metrics["precision"]>=baseline["precision"]
+            )
             ranked.append({
                 "genome":genome_name,
                 "status":"EVALUATED",
                 "fitness":metrics["fitness"],
                 "metrics":metrics,
-                "plans":plans,
-                "query_count":len(pairs),
+                "accepted_over_baseline":accepted,
+                "mutations":mutation_map,
+                "query_count":len(mutated_pairs),
             })
 
     ranked.sort(key=lambda x:(-float(x.get("fitness") or -1),x["genome"]))
     champion=ranked[0]
     guided=champion.get("metrics") or {}
-    improved=bool(
-        guided
-        and guided["fitness"]>baseline["fitness"]
-        and guided["signal_hits"]>=baseline["signal_hits"]
-        and guided["unique_signal_threads"]>=baseline["unique_signal_threads"]
-    )
+    improved=bool(champion.get("accepted_over_baseline"))
     report={
-        "schema_v":2,"namespace":NAMESPACE,"arena_id":ARENA_ID,"status":"EVOLVED",
+        "schema_v":3,"namespace":NAMESPACE,"arena_id":ARENA_ID,"status":"EVOLVED",
+        "mode":"baseline_plus_single_llm_mutation",
         "captured_at_utc":now_utc(),"model":model,"provider":"local_ollama",
         "search_provider":"hn_algolia_public_read_only","baseline_champion":champion_id,
         "baseline_metrics":baseline,
         "evaluated_genomes":ranked,
         "champion_genome":champion.get("genome"),
         "llm_guided_metrics":guided,
-        "query_counts":{"baseline":len(baseline_pairs),"llm_guided":champion.get("query_count",0)},
-        "llm_query_plan":champion.get("plans") or {},
+        "query_counts":{"baseline":len(baseline_pairs),"hybrid":champion.get("query_count",0)},
         "candidate_better_than_baseline":improved,
         "production_promoted":False,
         "boundary":{
@@ -153,13 +193,21 @@ async def run(model,data_dir,out_path):
             "commercial_evidence_influence":"NONE",
             "llm_urls_accepted_as_evidence":False,
             "provider_urls_only":True,
+            "baseline_queries_preserved_as_fallback":True,
+            "single_mutation_per_query":True,
             "production_variant_promotion":False,
             "promotion":"MANUAL_REVIEW_ONLY"
         }
     }
     p=Path(out_path); p.parent.mkdir(parents=True,exist_ok=True)
     p.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
-    print(json.dumps({"baseline":baseline["fitness"],"champion":champion.get("genome"),"guided":guided.get("fitness"),"candidate":improved,"ranked":[{"genome":x["genome"],"fitness":x.get("fitness")} for x in ranked]}))
+    print(json.dumps({
+        "baseline":baseline["fitness"],
+        "champion":champion.get("genome"),
+        "guided":guided.get("fitness"),
+        "candidate":improved,
+        "ranked":[{"genome":x["genome"],"fitness":x.get("fitness"),"accepted":x.get("accepted_over_baseline")} for x in ranked]
+    }))
     return report
 
 def main():
