@@ -222,6 +222,8 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertIn("-X POST",block)
         self.assertIn("/api/checkpoint-status",block)
         self.assertIn('d.get("ok") is not True',block)
+        self.assertIn('code}" = "404"',block)
+        self.assertIn("checkpoint too old",block)
 
     def test_thesis_cycles_match_completed_age_before_final_budget_cycle(self):
         restored,meta=reconcile_thesis_cycles(
