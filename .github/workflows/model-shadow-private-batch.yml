@@ -76,6 +76,14 @@ jobs:
             git -C private-labels push --quiet
           fi
 
+      - name: Sync public and hidden evaluation sets
+        if: steps.config.outputs.configured == 'true'
+        env:
+          NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          python tools/model_eval_sync.py private-labels
+
       - name: Check training prerequisites before heavy downloads
         id: training
         if: steps.config.outputs.configured == 'true'
