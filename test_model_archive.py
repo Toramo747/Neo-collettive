@@ -37,11 +37,15 @@ class PrivateArchiveTests(unittest.TestCase):
             'source':'hn-algolia-routed','url':'https://example.test/hidden',
             'expect':{'buyer':True},
         }]}
-        with patch.object(cloud_mcp,'HEARTBEAT_TOKEN','hidden-secret'), patch.dict('os.environ',{'NEO_HIDDEN_CONTROL_JSON':json.dumps(hidden)}):
+        with patch.object(cloud_mcp,'HEARTBEAT_TOKEN','hidden-secret'), patch.object(cloud_mcp,'NEO_ADMIN_TOKEN','admin-secret'), patch.dict('os.environ',{'NEO_HIDDEN_CONTROL_JSON':json.dumps(hidden)}):
             client=TestClient(cloud_mcp.app)
-            self.assertEqual(client.get(HIDDEN_EVAL_PATH).status_code,403)
+            self.assertEqual(client.get(HIDDEN_EVAL_PATH).status_code,401)
             proof=make_self_traffic_proof(hidden_eval_key('hidden-secret'),HIDDEN_EVAL_PATH)
-            response=client.get(HIDDEN_EVAL_PATH,headers={'X-NEO-Model-Hidden-Proof':proof})
+            route_proof=make_self_traffic_proof('hidden-secret',HIDDEN_EVAL_PATH)
+            response=client.get(HIDDEN_EVAL_PATH,headers={
+                'X-MYCELIX-Self-Traffic-Proof':route_proof,
+                'X-NEO-Model-Hidden-Proof':proof,
+            })
             self.assertEqual(response.status_code,200)
             rows=response.json()['cases']
             self.assertEqual(len(rows),1)
