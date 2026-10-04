@@ -197,7 +197,16 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
     )
     verify=_llm_json_call(llm,verify_prompt,max_tokens=64,temperature=0.0)
     verify_label=str(verify.get("proposed_label") or "")
-    confidence=1.0 if first_valid and verify_label in MODEL_LABELS and verify_label==label else 0.0
+    second_valid=verify_label in MODEL_LABELS
+    if not first_valid:
+        diagnostic="first_invalid"
+    elif not second_valid:
+        diagnostic="second_invalid"
+    elif verify_label!=label:
+        diagnostic="discordant"
+    else:
+        diagnostic="concordant"
+    confidence=1.0 if diagnostic=="concordant" else 0.0
 
     extracted={
         "canonical_problem":" ".join(str(data.get("canonical_problem") or "").split())[:300],
@@ -208,7 +217,7 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         "failed_attempt":bool(data.get("failed_attempt")),
         "feasibility":str(data.get("feasibility") or "unknown") if str(data.get("feasibility") or "") in {"feasible","hard","unknown"} else "unknown",
     }
-    return {"judge":"local_llm","label":label,"confidence":confidence},extracted
+    return {"judge":"local_llm","label":label,"confidence":confidence,"diagnostic":diagnostic},extracted
 
 
 def _source_bucket(row: dict) -> str:
@@ -266,7 +275,12 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         )
         copy=dict(row)
         copy["judge_labels"]=[
-            {"judge":str(x.get("judge") or ""),"label":str(x.get("label") or ""),"confidence":round(float(x.get("confidence") or 0.0),6)}
+            {
+                "judge":str(x.get("judge") or ""),
+                "label":str(x.get("label") or ""),
+                "confidence":round(float(x.get("confidence") or 0.0),6),
+                **({"diagnostic":str(x.get("diagnostic") or "")} if x.get("diagnostic") else {}),
+            }
             for x in judges
         ]
         copy["canonical_fields"]=extracted
@@ -276,6 +290,43 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         copy["label_date"]=_utc()
         copy["consensus_policy_version"]=int(consensus_cfg.get("policy_version",3))
         copy["eligible_for_training"]=bool(decision["eligible_for_training"])
+        bucket=_source_bucket(row)
+        vote_map={str(x.get("judge") or ""):x for x in judges if isinstance(x,dict)}
+        nli_vote=vote_map.get("nli",{})
+        llm_vote=vote_map.get("local_llm",{})
+        structural_vote=vote_map.get("structural",{})
+        nli_score=float(nli_vote.get("confidence") or 0.0)
+        if nli_score<0.50:
+            nli_band="lt_050"
+        elif nli_score<0.70:
+            nli_band="050_070"
+        elif nli_score<0.85:
+            nli_band="070_085"
+        else:
+            nli_band="gte_085"
+        llm_state=str(llm_vote.get("diagnostic") or "first_invalid")
+        structural_conf=float(structural_vote.get("confidence") or 0.0)
+        path="triple" if structural_conf>=float(consensus_cfg["confidence_threshold"]) else "pair"
+        counters["consensus_path_"+path]+=1
+        counters["source_"+bucket+"_consensus_path_"+path]+=1
+        counters["nli_band_"+nli_band]+=1
+        counters["source_"+bucket+"_nli_band_"+nli_band]+=1
+        counters["llm_state_"+llm_state]+=1
+        counters["source_"+bucket+"_llm_state_"+llm_state]+=1
+        nli_label=str(nli_vote.get("label") or "")
+        llm_label=str(llm_vote.get("label") or "")
+        if nli_label in MODEL_LABELS and llm_label in MODEL_LABELS:
+            counters["nli_llm_"+nli_label+"__"+llm_label]+=1
+            counters["source_"+bucket+"_nli_llm_"+nli_label+"__"+llm_label]+=1
+        if structural_conf<float(consensus_cfg["confidence_threshold"]):
+            structural_state="abstained"
+        elif nli_label in MODEL_LABELS and llm_label in MODEL_LABELS and nli_label==llm_label==str(structural_vote.get("label") or ""):
+            structural_state="concordant"
+        else:
+            structural_state="contrary"
+        counters["structural_state_"+structural_state]+=1
+        counters["source_"+bucket+"_structural_state_"+structural_state]+=1
+
         counters["processed"]+=1
         counters["eligible"]+=int(bool(copy["eligible_for_training"]))
         counters["discarded"]+=int(not bool(copy["eligible_for_training"]))
@@ -295,10 +346,34 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
     }
     for label in MODEL_LABELS:
         metrics["label_count_"+label]=int(distribution[label])
-    for bucket in ("reddit","hn","bing-rss","brave","github","stackexchange","pricing_page","job_board","marketplace","web","other"):
+    buckets=("reddit","hn","bing-rss","brave","github","stackexchange","pricing_page","job_board","marketplace","web","other")
+    for bucket in buckets:
         metrics["source_bucket_count_"+bucket]=int(source_distribution[bucket])
         for label in MODEL_LABELS:
             metrics["label_source_count_"+label+"_"+bucket]=int(label_source_distribution[(label,bucket)])
+    for path in ("pair","triple"):
+        metrics["consensus_path_count_"+path]=int(counters["consensus_path_"+path])
+    for band in ("lt_050","050_070","070_085","gte_085"):
+        metrics["nli_band_count_"+band]=int(counters["nli_band_"+band])
+    for state in ("first_invalid","second_invalid","discordant","concordant"):
+        metrics["llm_state_count_"+state]=int(counters["llm_state_"+state])
+    for state in ("abstained","concordant","contrary"):
+        metrics["structural_state_count_"+state]=int(counters["structural_state_"+state])
+    for nli_label in MODEL_LABELS:
+        for llm_label in MODEL_LABELS:
+            metrics["nli_llm_count_"+nli_label+"__"+llm_label]=int(counters["nli_llm_"+nli_label+"__"+llm_label])
+    for bucket in buckets:
+        for path in ("pair","triple"):
+            metrics["source_"+bucket+"_consensus_path_count_"+path]=int(counters["source_"+bucket+"_consensus_path_"+path])
+        for band in ("lt_050","050_070","070_085","gte_085"):
+            metrics["source_"+bucket+"_nli_band_count_"+band]=int(counters["source_"+bucket+"_nli_band_"+band])
+        for state in ("first_invalid","second_invalid","discordant","concordant"):
+            metrics["source_"+bucket+"_llm_state_count_"+state]=int(counters["source_"+bucket+"_llm_state_"+state])
+        for state in ("abstained","concordant","contrary"):
+            metrics["source_"+bucket+"_structural_state_count_"+state]=int(counters["source_"+bucket+"_structural_state_"+state])
+        for nli_label in MODEL_LABELS:
+            for llm_label in MODEL_LABELS:
+                metrics["source_"+bucket+"_nli_llm_count_"+nli_label+"__"+llm_label]=int(counters["source_"+bucket+"_nli_llm_"+nli_label+"__"+llm_label])
     return metrics
 
 
@@ -584,25 +659,33 @@ def update_private_drift_history(private_dir: Path, metrics: dict) -> dict:
 def create_review_sample(private_dir: Path, count: int=5) -> dict:
     rows=_read_jsonl(private_dir/"train_labeled.jsonl")
     priority=[]
+    disagreements=[]
     regular=[]
     for row in rows:
         votes={x.get("judge"):x for x in row.get("judge_labels",[])}
         nli=votes.get("nli",{})
         llm=votes.get("local_llm",{})
         lex=votes.get("lexicon",{})
-        against_lexicon=(nli.get("label") in MODEL_LABELS
+        models_agree=(nli.get("label") in MODEL_LABELS
             and nli.get("label")==llm.get("label")
+            and float(llm.get("confidence") or 0)>=0.85)
+        blocked_models_agree=bool(models_agree and not row.get("final_label"))
+        against_lexicon=bool(
+            models_agree
             and nli.get("label")!=lex.get("label")
-            and float(nli.get("confidence") or 0)>=0.90
-            and float(llm.get("confidence") or 0)>=0.90)
-        if against_lexicon:
+            and float(nli.get("confidence") or 0)>=0.85
+        )
+        if blocked_models_agree or against_lexicon:
             priority.append(row)
-        elif row.get("final_label"):
+        elif not row.get("final_label"):
+            disagreements.append(row)
+        else:
             regular.append(row)
     rng=random.SystemRandom()
     rng.shuffle(priority)
+    rng.shuffle(disagreements)
     rng.shuffle(regular)
-    sample=(priority+regular)[:max(0,count)]
+    sample=(priority+disagreements+regular)[:max(0,count)]
     review=[]
     for row in sample:
         review.append({
@@ -648,7 +731,7 @@ def _safe_metrics(payload: dict) -> dict:
             "promotion_eligible","promotion_requires_manual_approval",
             "student_not_worse_public","student_not_worse_hidden","review_sample_cases",
             "judge_agreement_rate_ppm","drift_alert","drift_history_points","student_available",
-        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_","source_bucket_count_","label_source_count_","training_label_count_","training_label_used_","training_label_excluded_")) or key in {"training_class_balanced","training_classes_used","training_cases_selected","training_min_examples_per_class","training_max_class_weight_ratio"} or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
+        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_","source_bucket_count_","label_source_count_","training_label_count_","training_label_used_","training_label_excluded_","consensus_path_count_","nli_band_count_","llm_state_count_","structural_state_count_","nli_llm_count_","source_")) or key in {"training_class_balanced","training_classes_used","training_cases_selected","training_min_examples_per_class","training_max_class_weight_ratio","train_cases","public_cases","hidden_cases"} or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
             if isinstance(value,(int,float,bool)) or value is None:
                 out[key]=value
             elif key=="version":
@@ -670,6 +753,9 @@ def main() -> int:
     metrics={}
     archive=validate_archive(private_dir)
     metrics["cases"]=sum(int(x) for x in archive["splits"].values())
+    metrics["train_cases"]=int(archive["splits"].get("train") or 0)
+    metrics["public_cases"]=int(archive["splits"].get("public") or 0)
+    metrics["hidden_cases"]=int(archive["splits"].get("hidden") or 0)
     judged=judge_private_archive(private_dir,use_models=not args.skip_heavy_judges)
     metrics.update(judged)
     metrics.update(update_private_drift_history(private_dir,metrics))
