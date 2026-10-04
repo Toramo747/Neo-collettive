@@ -244,11 +244,16 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         counters["discarded"]+=int(not bool(copy["eligible_for_training"]))
         labeled.append(copy)
     _write_jsonl_private(private_dir/"train_labeled.jsonl",labeled)
-    return {
+    distribution=Counter(str(x.get("final_label") or "") for x in labeled if str(x.get("final_label") or ""))
+    metrics={
         "processed":counters["processed"],
         "eligible":counters["eligible"],
         "discarded_disagreement":counters["discarded"],
+        "judge_agreement_rate_ppm":int(counters["eligible"]*1_000_000/max(1,counters["processed"])),
     }
+    for label in MODEL_LABELS:
+        metrics["label_count_"+label]=int(distribution[label])
+    return metrics
 
 
 def _encode_f32(arr) -> str:
@@ -312,15 +317,37 @@ def _predict_student_payload(payload: dict, text: str) -> str:
     return str(StudentModel(payload).predict(text).get("label") or "")
 
 
-def _accuracy(rows: list[dict], prediction) -> int:
-    total=hit=0
+def _evaluation_metrics(rows: list[dict], prediction, prefix: str) -> dict:
+    totals=Counter()
+    hits=Counter()
+    vendor_fp=0
+    buyer_total=0
+    buyer_hit=0
+    overall_total=0
+    overall_hit=0
     for row in rows:
         truth=str(row.get("final_label") or "")
         if truth not in MODEL_LABELS:
             continue
-        total+=1
-        hit+=int(str(prediction(row))==truth)
-    return int(hit*1_000_000/max(1,total))
+        pred=str(prediction(row) or "")
+        overall_total+=1
+        overall_hit+=int(pred==truth)
+        totals[truth]+=1
+        hits[truth]+=int(pred==truth)
+        if truth=="buyer_tool_search":
+            buyer_total+=1
+            buyer_hit+=int(pred=="buyer_tool_search")
+        if truth=="vendor_offer" and pred=="buyer_tool_search":
+            vendor_fp+=1
+    out={
+        prefix+"_accuracy_ppm":int(overall_hit*1_000_000/max(1,overall_total)),
+        prefix+"_vendor_false_positives":vendor_fp,
+        prefix+"_buyer_recall_ppm":int(buyer_hit*1_000_000/max(1,buyer_total)),
+    }
+    for label in MODEL_LABELS:
+        out[prefix+"_class_"+label+"_accuracy_ppm"]=int(hits[label]*1_000_000/max(1,totals[label]))
+        out[prefix+"_class_"+label+"_cases"]=int(totals[label])
+    return out
 
 
 def evaluate_student(private_dir: Path, artifact: Path) -> dict:
@@ -330,22 +357,25 @@ def evaluate_student(private_dir: Path, artifact: Path) -> dict:
         rows=_read_jsonl(private_dir/PRIVATE_FILES[split])
         if split=="hidden":
             validate_hidden_origins(rows)
-        result["student_"+split+"_accuracy_ppm"]=_accuracy(
-            rows,lambda r:_predict_student_payload(payload,_case_text(r))
-        )
-        result["lexicon_"+split+"_accuracy_ppm"]=_accuracy(
-            rows,lambda r:lexicon_judge(
+        result.update(_evaluation_metrics(
+            rows,
+            lambda r:_predict_student_payload(payload,_case_text(r)),
+            "student_"+split,
+        ))
+        result.update(_evaluation_metrics(
+            rows,
+            lambda r:lexicon_judge(
                 str(r.get("title") or ""),_case_text(r),str(r.get("url") or ""),
                 str(r.get("source") or ""),str(_signals(r).get("query_role") or "")
-            )["label"]
-        )
+            )["label"],
+            "lexicon_"+split,
+        ))
     result["student_bytes"]=artifact.stat().st_size
     result["student_not_worse_public"]=result["student_public_accuracy_ppm"]>=result["lexicon_public_accuracy_ppm"]
     result["student_not_worse_hidden"]=result["student_hidden_accuracy_ppm"]>=result["lexicon_hidden_accuracy_ppm"]
     result["promotion_eligible"]=bool(result["student_not_worse_public"] and result["student_not_worse_hidden"])
     result["promotion_requires_manual_approval"]=True
     return result
-
 
 def _embedder():
     cfg=REGISTRY["judges"]["embedding"]
@@ -420,6 +450,39 @@ def cluster_challenges(private_dir: Path, output: Path, *, threshold: float | No
     }
 
 
+def update_private_drift_history(private_dir: Path, metrics: dict) -> dict:
+    path=private_dir/"drift_history.jsonl"
+    history=_read_jsonl(path)
+    current={
+        "date":_utc(),
+        "processed":int(metrics.get("processed") or 0),
+        "judge_agreement_rate_ppm":int(metrics.get("judge_agreement_rate_ppm") or 0),
+        "discarded_disagreement":int(metrics.get("discarded_disagreement") or 0),
+        "label_distribution":{
+            label:int(metrics.get("label_count_"+label) or 0)
+            for label in MODEL_LABELS
+        },
+    }
+    alert=False
+    if history:
+        prev=history[-1] if isinstance(history[-1],dict) else {}
+        prev_total=max(1,sum(int(x or 0) for x in (prev.get("label_distribution") or {}).values()))
+        cur_total=max(1,sum(current["label_distribution"].values()))
+        agreement_delta=abs(
+            current["judge_agreement_rate_ppm"]-int(prev.get("judge_agreement_rate_ppm") or 0)
+        )
+        if agreement_delta>=200000:
+            alert=True
+        for label in MODEL_LABELS:
+            p=int((prev.get("label_distribution") or {}).get(label) or 0)/prev_total
+            c=current["label_distribution"][label]/cur_total
+            if abs(c-p)>=0.20:
+                alert=True
+    history.append(current)
+    _write_jsonl_private(path,history[-104:])
+    return {"drift_alert":alert,"drift_history_points":len(history[-104:])}
+
+
 def create_review_sample(private_dir: Path, count: int=5) -> dict:
     rows=[x for x in _read_jsonl(private_dir/"train_labeled.jsonl") if str(x.get("final_label") or "")]
     rng=random.SystemRandom()
@@ -468,7 +531,8 @@ def _safe_metrics(payload: dict) -> dict:
             "processed","eligible","discarded_disagreement","training_cases","version",
             "promotion_eligible","promotion_requires_manual_approval",
             "student_not_worse_public","student_not_worse_hidden","review_sample_cases",
-        }:
+            "judge_agreement_rate_ppm","drift_alert","drift_history_points",
+        } or key.startswith(("student_public_class_","student_hidden_class_","lexicon_public_class_","lexicon_hidden_class_","label_count_")) or key.endswith(("_vendor_false_positives","_buyer_recall_ppm")):
             if isinstance(value,(int,float,bool)) or value is None:
                 out[key]=value
             elif key=="version":
@@ -492,6 +556,7 @@ def main() -> int:
     metrics["cases"]=sum(int(x) for x in archive["splits"].values())
     judged=judge_private_archive(private_dir,use_models=not args.skip_heavy_judges)
     metrics.update(judged)
+    metrics.update(update_private_drift_history(private_dir,metrics))
     student_path=output_dir/"student.json"
     metrics.update(train_student(private_dir,student_path))
     metrics.update(evaluate_student(private_dir,student_path))
