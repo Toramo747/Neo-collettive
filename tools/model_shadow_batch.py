@@ -371,8 +371,20 @@ def evaluate_student(private_dir: Path, artifact: Path) -> dict:
             "lexicon_"+split,
         ))
     result["student_bytes"]=artifact.stat().st_size
-    result["student_not_worse_public"]=result["student_public_accuracy_ppm"]>=result["lexicon_public_accuracy_ppm"]
-    result["student_not_worse_hidden"]=result["student_hidden_accuracy_ppm"]>=result["lexicon_hidden_accuracy_ppm"]
+    for split in ("public","hidden"):
+        checks=[
+            result["student_"+split+"_accuracy_ppm"]>=result["lexicon_"+split+"_accuracy_ppm"],
+            result["student_"+split+"_buyer_recall_ppm"]>=result["lexicon_"+split+"_buyer_recall_ppm"],
+            result["student_"+split+"_vendor_false_positives"]<=result["lexicon_"+split+"_vendor_false_positives"],
+        ]
+        for label in MODEL_LABELS:
+            cases=int(result["lexicon_"+split+"_class_"+label+"_cases"] or 0)
+            if cases>0:
+                checks.append(
+                    result["student_"+split+"_class_"+label+"_accuracy_ppm"]
+                    >= result["lexicon_"+split+"_class_"+label+"_accuracy_ppm"]
+                )
+        result["student_not_worse_"+split]=bool(all(checks))
     result["promotion_eligible"]=bool(result["student_not_worse_public"] and result["student_not_worse_hidden"])
     result["promotion_requires_manual_approval"]=True
     return result
