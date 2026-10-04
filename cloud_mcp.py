@@ -7336,7 +7336,7 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
     )
     batch_sources=[]
     if query_intent=="desire":
-        batch_sources=["web","hn","github","stackexchange"]
+        batch_sources=selected_sources
     elif structured_first:
         batch_sources=["hn","github","stackexchange","web"]
     else:
