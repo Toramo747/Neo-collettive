@@ -45,7 +45,11 @@ class PrivateArchiveTests(unittest.TestCase):
             p=Path(folder)
             for name in ('public.jsonl','hidden.jsonl'):
                 (p/name).touch()
-            (p/'train_labeled.jsonl').write_text(''.join(json.dumps({'id':str(i),'normalized_text':'request '+str(i),'eligible_for_training':True,'final_label':'other','label_origin':'auto'})+'\n' for i in range(4)))
+            rows=[]
+            for i in range(4):
+                rows.append({'id':'o'+str(i),'normalized_text':'generic discussion '+str(i),'eligible_for_training':True,'final_label':'other','label_origin':'auto'})
+                rows.append({'id':'b'+str(i),'normalized_text':'looking for a tool '+str(i),'eligible_for_training':True,'final_label':'buyer_tool_search','label_origin':'auto'})
+            (p/'train_labeled.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in rows))
             train_student(p,p/'student.json',feature_dim=128,epochs=1)
             result=evaluate_student(p,p/'student.json')
             self.assertFalse(result['promotion_eligible'])
