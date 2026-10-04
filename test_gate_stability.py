@@ -27,7 +27,11 @@ class GateStabilityTests(unittest.TestCase):
         f=s["flips"][0]
         self.assertEqual(f["from_raw"],False)
         self.assertEqual(f["to_raw"],True)
-        self.assertIn("fingerprint",f)
+        self.assertTrue(f["evidence_unchanged"])
+        self.assertEqual(f["previous_score"],30)
+        self.assertEqual(f["current_score"],90)
+        self.assertIn("previous_fingerprint",f)
+        self.assertIn("current_fingerprint",f)
         self.assertNotIn("sources",f)
 
 if __name__=="__main__":
