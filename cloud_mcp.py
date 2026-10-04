@@ -5631,10 +5631,10 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
     for row in planned:
         row.setdefault("query_intent","pain")
         row.setdefault("intent_class","")
-    if DESIRE_EXPERIMENT_ENABLED and count>=2 and len(planned)>=2:
-        desire_entries=build_desire_experiment_entries(planned,2)
-        if len(desire_entries)==2:
-            planned=planned[:-2]+desire_entries
+    if DESIRE_EXPERIMENT_ENABLED and count>=4 and len(planned)>=4:
+        desire_entries=build_desire_experiment_entries(planned,4)
+        if len(desire_entries)==4:
+            planned=planned[:-4]+desire_entries
     executed_sectors=[str(x.get("sector")) for x in planned if x.get("sector")]
     AUTOPILOT_STATE["recent_sectors"]=(recent+executed_sectors)[-12:]
     AUTOPILOT_STATE["query_execution"]={"planned":planned,"executed":[]}
