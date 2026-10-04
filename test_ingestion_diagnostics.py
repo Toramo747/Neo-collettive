@@ -117,6 +117,12 @@ class IngestionDiagnosticsTests(unittest.TestCase):
         )
 
 
+    def test_buyer_voice_by_source_is_visible(self):
+        d=IngestionDiagnostics(True)
+        d.record_buyer_voice("hn-algolia-routed",2)
+        d.record_buyer_voice("brave-search",1)
+        snap=d.snapshot()
+        self.assertEqual(snap["buyer_voice_by_source"],{"brave":1,"hn":2})
     def test_desire_experiment_metrics_and_sample_are_visible(self):
         d=IngestionDiagnostics(True)
         d.record_intent_result(
