@@ -1,0 +1,14 @@
+{
+  "schema_v": 1,
+  "private_repository_required": true,
+  "public_repository_must_never_contain_raw_cases": true,
+  "case_fields": ["id", "normalized_text", "source", "structural_signals", "judge_labels", "final_label", "label_origin", "date"],
+  "label_origins": ["auto", "structural", "outcome", "human"],
+  "splits": ["train", "public", "hidden"],
+  "hidden_label_authority": "Andrea",
+  "invariants": [
+    "case_id_unique_across_all_splits",
+    "hidden_never_auto_labeled",
+    "no_raw_text_in_public_logs_artifacts_commits"
+  ]
+}
