@@ -1,5 +1,7 @@
 import unittest
 
+from evidence_integrity import contains_term
+
 from evidence_integrity import (
     canonical_problem_key,
     canonical_url,
@@ -30,6 +32,13 @@ class EvidenceIntegrityTests(unittest.TestCase):
         scores=commercial_family_scores(text)
         self.assertGreater(scores.get("developer_tools",0),scores.get("ai_tools",0))
         self.assertEqual(commercial_family(text),"developer_tools")
+
+    def test_controlled_inflections_preserve_word_boundaries(self):
+        self.assertTrue(contains_term("we do this manually every day","manual"))
+        self.assertTrue(contains_term("we wasted half a day on this","waste time"))
+        self.assertTrue(contains_term("our team spends hours on this","spend"))
+        self.assertFalse(contains_term("manuality is not the same thing","manual"))
+        self.assertFalse(contains_term("newspaper spending report","spend"))
 
     def test_rate_substring_does_not_create_paid_demand(self):
         tags=demand_signal_type("", "generate accurate integrate operate")
