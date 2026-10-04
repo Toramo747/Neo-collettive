@@ -148,6 +148,24 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "top_gate_pass": None,
             "top_monetization_score": None,
             "top_missing": [None],
+            "candidates": [{
+                "candidate_id": None,
+                "evidence_fingerprint": None,
+                "id_key_version": None,
+                "score": None,
+                "source_count": None,
+                "independent_domain_count": None,
+                "raw_gate_pass": None,
+                "stable_gate_pass": None,
+                "pass_streak": None,
+                "fail_streak": None,
+                "missing_codes": [None],
+                "cycle": None,
+                "commit": None,
+                "first_cycle_after_deploy": None,
+                "seconds_since_first_raw_pass": None,
+                "tagger_version": None,
+            }],
             "rejection_reasons": [{
                 "reason": None,
                 "count": None,
@@ -353,6 +371,19 @@ def _project_family_performance(value: Any) -> list[dict]:
 
 
 _SAFE_CODE_RE = re.compile(r"[^A-Za-z0-9_.:-]+")
+_HEX16_RE = re.compile(r"^[0-9a-f]{16}$")
+_HEX_COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}$")
+_VERSION_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,48}$")
+_CANDIDATE_MISSING_CODES = frozenset({
+    "specific_tool_name_and_target_user",
+    "two_independent_real_price_competitors",
+    "two_competitors_with_real_price",
+    "dissatisfaction_signal",
+    "documented_gap",
+    "three_independent_source_domains",
+    "two_existing_paid_tools",
+    "monetization_score_60",
+})
 
 
 def _safe_code(value: Any, max_len: int = 80) -> str:
@@ -500,6 +531,51 @@ def _project_agent_probes(value: Any) -> dict:
     }
 
 
+def _project_candidate_telemetry(value: Any) -> list[dict]:
+    rows=[]
+    for raw in list(value or [])[:3]:
+        if not isinstance(raw,dict):
+            continue
+        candidate_id=str(raw.get("candidate_id") or "")
+        evidence_fp=str(raw.get("evidence_fingerprint") or "")
+        id_key_version=str(raw.get("id_key_version") or "")
+        commit=str(raw.get("commit") or "")
+        tagger_version=str(raw.get("tagger_version") or "")
+        if not (_HEX16_RE.fullmatch(candidate_id) and _HEX16_RE.fullmatch(evidence_fp)):
+            continue
+        if not _VERSION_CODE_RE.fullmatch(id_key_version):
+            continue
+        if commit and not _HEX_COMMIT_RE.fullmatch(commit):
+            continue
+        if tagger_version and not _VERSION_CODE_RE.fullmatch(tagger_version):
+            continue
+        missing=[
+            str(code) for code in (raw.get("missing_codes") or [])
+            if str(code) in _CANDIDATE_MISSING_CODES
+        ][:12]
+        row={
+            "candidate_id":candidate_id,
+            "evidence_fingerprint":evidence_fp,
+            "id_key_version":id_key_version,
+            "score":max(0,int(raw.get("score") or 0)),
+            "source_count":max(0,int(raw.get("source_count") or 0)),
+            "independent_domain_count":max(0,int(raw.get("independent_domain_count") or 0)),
+            "raw_gate_pass":bool(raw.get("raw_gate_pass")),
+            "stable_gate_pass":bool(raw.get("stable_gate_pass")),
+            "pass_streak":max(0,int(raw.get("pass_streak") or 0)),
+            "fail_streak":max(0,int(raw.get("fail_streak") or 0)),
+            "missing_codes":missing,
+            "cycle":max(0,int(raw.get("cycle") or 0)),
+            "commit":commit,
+            "first_cycle_after_deploy":bool(raw.get("first_cycle_after_deploy")),
+            "tagger_version":tagger_version,
+        }
+        elapsed=raw.get("seconds_since_first_raw_pass")
+        row["seconds_since_first_raw_pass"]=None if elapsed is None else max(0,int(elapsed or 0))
+        rows.append(row)
+    return rows
+
+
 def _project_select_diagnostics(latest_result: Any) -> dict:
     latest = latest_result if isinstance(latest_result, dict) else {}
     quality = latest.get("evidence_quality") if isinstance(latest.get("evidence_quality"), dict) else {}
@@ -576,6 +652,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "top_gate_pass": bool(top.get("gate_pass")),
         "top_monetization_score": max(0, int(top.get("monetization_score") or 0)),
         "top_missing": missing[:12],
+        "candidates": _project_candidate_telemetry(tool.get("candidate_telemetry")),
         "rejection_reasons": _project_reason_counts(ingestion.get("rejected_by_reason")),
         "search_sources": _project_search_sources(ingestion),
         "buyer_voice_by_source": _project_source_counts(ingestion.get("buyer_voice_by_source")),
@@ -797,9 +874,37 @@ def _validate_against_schema(snapshot: Any, schema_root: Any) -> None:
     walk(snapshot, schema_root, "$")
 
 
+def _validate_candidate_telemetry(snapshot: Any) -> None:
+    try:
+        rows=snapshot["autopilot"]["select_diagnostics"]["candidates"]
+    except Exception:
+        return
+    if not isinstance(rows,list) or len(rows)>3:
+        raise ValueError("public_snapshot_candidate_telemetry_shape")
+    for row in rows:
+        if not isinstance(row,dict):
+            raise ValueError("public_snapshot_candidate_telemetry_row")
+        if not _HEX16_RE.fullmatch(str(row.get("candidate_id") or "")):
+            raise ValueError("public_snapshot_candidate_id")
+        if not _HEX16_RE.fullmatch(str(row.get("evidence_fingerprint") or "")):
+            raise ValueError("public_snapshot_evidence_fingerprint")
+        if not _VERSION_CODE_RE.fullmatch(str(row.get("id_key_version") or "")):
+            raise ValueError("public_snapshot_id_key_version")
+        commit=str(row.get("commit") or "")
+        if commit and not _HEX_COMMIT_RE.fullmatch(commit):
+            raise ValueError("public_snapshot_candidate_commit")
+        tagger=str(row.get("tagger_version") or "")
+        if tagger and not _VERSION_CODE_RE.fullmatch(tagger):
+            raise ValueError("public_snapshot_candidate_tagger")
+        for code in row.get("missing_codes") or []:
+            if str(code) not in _CANDIDATE_MISSING_CODES:
+                raise ValueError("public_snapshot_candidate_missing_code")
+
+
 def validate_public_snapshot(snapshot: Any) -> None:
     """Fail closed on unknown keys, identifiers, long/free text, IPs or email addresses."""
     _validate_against_schema(snapshot, PUBLIC_SNAPSHOT_SCHEMA)
+    _validate_candidate_telemetry(snapshot)
 
 
 def validate_public_jarvis_snapshot(snapshot: Any) -> None:
