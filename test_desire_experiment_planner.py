@@ -15,7 +15,7 @@ class DesireExperimentPlannerTests(unittest.TestCase):
         self.assertEqual(len(rows),8)
         desire=[r for r in rows if r.get("query_intent")=="desire"]
         self.assertEqual(len(desire),4)
-        self.assertEqual({r.get("intent_class") for r in desire},{"solution_search","paid_automation"})
+        self.assertEqual({r.get("intent_class") for r in desire},{"solution_search","automation_howto","tool_recommendation","paid_automation"})
         self.assertTrue(all(r.get("role")=="buyer" for r in desire))
 
 
