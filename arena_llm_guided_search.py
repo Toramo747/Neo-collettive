@@ -177,11 +177,16 @@ async def run(model,data_dir,out_path):
                     for t,q in mutated_pairs
                 ])
                 metrics=score_hits(genes,rows)
+                absolute_evidence_gain=bool(
+                    metrics["signal_hits"]>current_metrics["signal_hits"]
+                    or metrics["unique_signal_threads"]>current_metrics["unique_signal_threads"]
+                )
                 accepted=bool(
                     metrics["fitness"]>current_metrics["fitness"]
                     and metrics["signal_hits"]>=current_metrics["signal_hits"]
                     and metrics["unique_signal_threads"]>=current_metrics["unique_signal_threads"]
                     and metrics["precision"]>=current_metrics["precision"]
+                    and absolute_evidence_gain
                 )
                 ranked.append({
                     "generation":generation,
@@ -189,6 +194,7 @@ async def run(model,data_dir,out_path):
                     "fitness":metrics["fitness"],
                     "metrics":metrics,
                     "accepted_over_parent":accepted,
+                    "absolute_evidence_gain":absolute_evidence_gain,
                     "mutations":mutation_map,
                     "pairs":mutated_pairs,
                 })

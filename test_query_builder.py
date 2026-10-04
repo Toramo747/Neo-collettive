@@ -41,8 +41,9 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertIn('"we manually"',explore)
         self.assertIn('"looking for help"',explore)
         self.assertTrue(exploit.startswith("manual data entry "))
-        self.assertIn('"this takes hours"',exploit)
-        self.assertIn("contractor",exploit)
+        self.assertIn('"looking for help"',exploit)
+        self.assertIn('"need a tool"',exploit)
+        self.assertNotIn("contractor",exploit)
         self.assertIn("site:reddit.com",exploit)
 
     def test_quarantined_or_old_tagger_rows_are_not_learned(self):

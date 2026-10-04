@@ -133,7 +133,8 @@ STRONG_PAIN_TERMS = (
 )
 BUY_INTENT_TERMS = (
     "looking for","need help","need a","need to hire","looking to hire","hire someone",
-    "seeking","want someone","recommend a","how can i automate",
+    "seeking","want someone","recommend a","what do you use","any recommendations",
+    "how can i automate","is there a tool","is there an app","looking for a tool","looking for software",
     "request:","rfp","request for proposal",
 )
 BUYER_PAID_TERMS = (
@@ -211,10 +212,13 @@ def buyer_voice_present(title: str, body: str) -> bool:
 
 def first_person_buyer_voice_present(title: str, body: str) -> bool:
     text=" ".join(((title or "")+" "+(body or "")).lower().split())
+    # Reject obvious seller/vendor voice before accepting first-person language.
+    if any(contains_term(text,term) for term in ("our platform","our product","our service","our services","our solution")):
+        return False
     if not re.search(r"\b(?:i|we|our|my)\b",text):
         return False
     return bool(re.search(
-        r"\b(?:i|we|our|my)\b[^.!?]{0,140}\b(?:need|looking|seeking|want|hire|pay|budget|replace|switch|automate)\b",
+        r"\b(?:i|we|our|my)\b[^.!?]{0,140}\b(?:need|looking|seeking|want|hire|pay|budget|replace|switch|automate|spend|spends|manual|manually|struggl)\b",
         text,
         flags=re.I,
     ))

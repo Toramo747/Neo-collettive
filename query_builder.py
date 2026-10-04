@@ -14,10 +14,10 @@ BUYER_SIGNAL_TERMS = (
 )
 
 PAIN_PLUS_BUYER_FRAMES = (
-    '"we manually" "looking for help"',
-    '"I spend hours" "need help"',
-    '"we are struggling" "looking for a tool"',
-    '"this takes hours" contractor',
+    '("we manually" OR "I spend hours" OR "we are struggling" OR "looking for help")',
+    '("need help" OR "need a tool" OR "any recommendations" OR "what do you use")',
+    '("we manually" OR "this takes hours" OR "looking for a tool" OR "need help")',
+    '("looking for help" OR "need a tool" OR "request for proposal" OR "any recommendations")',
 )
 
 

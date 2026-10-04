@@ -26,5 +26,12 @@ class LLMGuidedSearchTests(unittest.TestCase):
         self.assertIn("mutating an existing search query",p)
         self.assertIn("do not add urls",p)
 
+    def test_acceptance_requires_absolute_evidence_gain(self):
+        src=open("arena_llm_guided_search.py",encoding="utf-8").read()
+        self.assertIn("absolute_evidence_gain=bool(",src)
+        self.assertIn('metrics["signal_hits"]>current_metrics["signal_hits"]',src)
+        self.assertIn('metrics["unique_signal_threads"]>current_metrics["unique_signal_threads"]',src)
+        self.assertIn("and absolute_evidence_gain",src)
+
 if __name__=="__main__":
     unittest.main()
