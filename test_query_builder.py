@@ -38,8 +38,10 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertIn("site:reddit.com",explore)
         self.assertIn("site:stackoverflow.com",explore)
         self.assertIn("site:news.ycombinator.com",explore)
-        self.assertIn('"I need"',explore)
+        self.assertIn('"we manually"',explore)
+        self.assertIn('"looking for help"',explore)
         self.assertTrue(exploit.startswith("manual data entry "))
+        self.assertIn('"this takes hours"',exploit)
         self.assertIn("contractor",exploit)
         self.assertIn("site:reddit.com",exploit)
 
@@ -89,12 +91,17 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertIn('"we spend hours"',combined)
         self.assertEqual([r["source_route"] for r in rows],[["hn"],["stackexchange"],["hn"],["web"]])
 
+    def test_arena_pain_plus_buyer_fallback_contains_both_signal_classes(self):
+        q=discovery_query("manual_data_entry",["manual data entry"],"explore",[])
+        self.assertIn('"we manually"',q)
+        self.assertIn('"looking for help"',q)
+
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")
         self.assertEqual(len(queries),2)
         self.assertTrue(all("site:reddit.com" in q for q in queries))
-        self.assertTrue(any('"I need"' in q for q in queries))
-        self.assertTrue(any("RFP" in q for q in queries))
+        self.assertTrue(any('"I need"' in q or '"looking for help"' in q for q in queries))
+        self.assertTrue(any("RFP" in q or "contractor" in q for q in queries))
 
 
 if __name__=="__main__":
