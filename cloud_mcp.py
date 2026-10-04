@@ -49,7 +49,18 @@ from thesis_control import exhausted_seed_blocked, finalize_exhausted_thesis
 from outcome_control import outcome_council
 from gate_stability import apply_gate_hysteresis
 from candidate_observability import build_candidate_telemetry
+from challenge_track import (
+    CHALLENGE_TAGGER_VERSION,
+    apply_challenge_hysteresis,
+    build_challenge_telemetry,
+    challenge_config,
+    challenge_funnel,
+    evaluate_challenges,
+    merge_challenge_memory,
+    route_challenge_evidence,
+)
 from hidden_control_gate import evaluate_hidden_control
+from hidden_challenge_control_gate import evaluate_hidden_challenge_control
 from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
     analyze_tool_opportunities,
@@ -150,7 +161,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.50"  # privacy-safe commercial candidate observability
+VERSION = "0.99.51"  # independent commercial and shadow challenge tracks
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -333,6 +344,13 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "challenge_track": {
+        "mode":"shadow",
+        "memory":[],
+        "gate_state":{"schema_v":1,"candidates":{},"flips":[]},
+        "latest":{"status":"CHALLENGE_SELECT","funnel":{},"candidates":[]},
+    },
+    "hidden_challenge_control":{"required":False,"cases":0,"correct":0,"ok":True},
     "search_provider_state": {},
     "evidence_integrity": {
         "schema_v": EVIDENCE_SCHEMA_VERSION,
@@ -450,6 +468,8 @@ def _state_payload() -> dict:
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
+        "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
+        "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "search_provider_state": AUTOPILOT_STATE.get("search_provider_state") or {},
         "evidence_integrity": AUTOPILOT_STATE.get("evidence_integrity") or {},
         "active_thesis": AUTOPILOT_STATE.get("active_thesis"),
@@ -632,6 +652,20 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["thesis_history"] = payload.get("thesis_history")[-30:]
     if isinstance(payload.get("gate_stability"), dict):
         AUTOPILOT_STATE["gate_stability"] = payload.get("gate_stability") or {"schema_v":1,"families":{},"flips":[]}
+    if isinstance(payload.get("challenge_track"), dict):
+        restored_challenge=dict(payload.get("challenge_track") or {})
+        restored_challenge["mode"]="shadow"
+        restored_challenge["memory"]=[
+            x for x in (restored_challenge.get("memory") or [])[-300:]
+            if isinstance(x,dict) and str(x.get("track") or "")=="challenge"
+        ]
+        if not isinstance(restored_challenge.get("gate_state"),dict):
+            restored_challenge["gate_state"]={"schema_v":1,"candidates":{},"flips":[]}
+        if not isinstance(restored_challenge.get("latest"),dict):
+            restored_challenge["latest"]={"status":"CHALLENGE_SELECT","funnel":{},"candidates":[]}
+        AUTOPILOT_STATE["challenge_track"]=restored_challenge
+    if isinstance(payload.get("hidden_challenge_control"), dict):
+        AUTOPILOT_STATE["hidden_challenge_control"]=payload.get("hidden_challenge_control") or {}
     if isinstance(payload.get("hidden_control"), dict):
         AUTOPILOT_STATE["hidden_control"] = payload.get("hidden_control") or {}
     if not migration_changed and isinstance(payload.get("problem_performance"), dict):
