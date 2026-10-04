@@ -21,6 +21,10 @@ class EvidenceIntegrityTests(unittest.TestCase):
         self.assertEqual(commercial_family("Our team spends too much time cleaning CSV files by hand"),"spreadsheet_process")
         self.assertEqual(commercial_family("We copy employee details into three systems for every new hire"),"hr_tools")
 
+    def test_family_matching_handles_simple_plural_surface_forms(self):
+        self.assertEqual(commercial_family("Is there a tool for invoices?"),"finance_ops")
+        self.assertEqual(commercial_family("We review documents every day"),"document_processing")
+
     def test_specific_family_outscores_generic_ai_or_automation_terms(self):
         text="Our DevOps team uses an LLM to automate deployment and code review workflows"
         scores=commercial_family_scores(text)
