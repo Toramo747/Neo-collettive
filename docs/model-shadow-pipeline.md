@@ -87,6 +87,14 @@ allowlisted exception types and local source line numbers. Evaluation-set change
 invalidate the completed-batch cache. Private batches triggered by code pushes
 run only on main, avoiding duplicate branch/main imports.
 
+An ordinary run can process up to eight 50-case segments of the same corpus.
+Each segment is committed privately before the next begins. No new segment
+starts after 70 minutes; remaining cases continue in the next hourly run.
+Completion, class coverage and both held-out quality checks still determine
+whether a student can be trained and published in shadow.
+The private batch pins PyTorch 2.8.0 from the official CPU wheel index, avoiding
+unneeded CUDA downloads on the CPU-only runner.
+
 ## Consensus diagnostics
 
 The private batch emits aggregate-only diagnostics for consensus path, NLI confidence bands, dual-prompt LLM validity/agreement, NLI x LLM label counts, and structural agreement state. The same counters are split by canonical source bucket. Weekly private review sampling includes discarded disagreements as well as accepted labels, prioritizing cases where the model judges agree but consensus still blocks training. No evidence text, URL, domain, or requester identifier is written to public logs or artifacts.
