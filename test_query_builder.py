@@ -97,6 +97,18 @@ class QueryBuilderTests(unittest.TestCase):
         self.assertIn('"we manually"',q)
         self.assertIn('"looking for help"',q)
 
+    def test_promoted_arena_profile_is_signal_first_and_compact(self):
+        q=discovery_query(
+            "manual_data_entry",
+            ["manual data entry","data entry"],
+            "explore",
+            [],
+            arena_profile=True,
+        )
+        self.assertTrue(q.startswith('("we manually"'))
+        self.assertIn("data entry",q)
+        self.assertNotIn("manual data entry",q)
+
     def test_breakout_has_no_reddit_template(self):
         queries=breakout_queries("manual data entry",[],family="manual_data_entry")
         self.assertEqual(len(queries),2)
