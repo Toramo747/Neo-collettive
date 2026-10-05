@@ -27,8 +27,9 @@ Actions trains a hashed character n-gram logistic classifier. Render loads only 
 `runtime/model-shadow/student.json`. It runs beside the lexical classifier in shadow and records aggregate
 agreement/disagreement counters only. The artifact is limited to 5 MB.
 
-Publishing a newly trained student requires an explicit manual workflow dispatch with `publish_student=true`.
-This does not promote the student to decision authority.
+A newly trained student is published automatically to the public repository only after a batch completes and the student passes the existing non-regression checks on both the public and human-authored hidden sets. Incomplete or idle batches, missing artifacts, and any regression block publication.
+
+This publishes the artifact in shadow mode only. It does not grant decision authority; production promotion remains manual-only.
 
 ## Phase 3 — semantic challenge clustering
 
