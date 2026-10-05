@@ -10,10 +10,11 @@ import os
 import random
 import subprocess
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ROOT=Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -67,9 +68,23 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 def _write_jsonl_private(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True,exist_ok=True)
-    with path.open("w",encoding="utf-8") as fh:
-        for row in rows:
-            fh.write(json.dumps(row,ensure_ascii=False,separators=(",",":"))+"\n")
+    # Replace only a completely written checkpoint; an interrupted write must
+    # never destroy labels already stored by an earlier batch.
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                     prefix=".labels-", delete=False) as fh:
+        temporary = Path(fh.name)
+        try:
+            for row in rows:
+                fh.write(json.dumps(row,ensure_ascii=False,separators=(",",":"))+"\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _case_text(row: dict) -> str:
@@ -152,13 +167,19 @@ def _local_llm():
     _verify_sha256(path,cfg["sha256"])
     return Llama(
         model_path=str(path),
-        n_ctx=1024,
+        n_ctx=4096,
         n_threads=max(1,min(4,os.cpu_count() or 2)),
         verbose=False,
     )
 
 
 def _llm_json_call(llm, prompt: str, *, max_tokens: int=220, temperature: float=0.0) -> dict:
+    # Character limits do not bound tokens (URLs and multilingual text can be
+    # particularly expensive). Reserve space for the chat template and output.
+    if callable(getattr(llm, "tokenize", None)) and callable(getattr(llm, "n_ctx", None)):
+        prompt_tokens = len(llm.tokenize(prompt.encode("utf-8")))
+        if prompt_tokens + max_tokens + 128 > llm.n_ctx():
+            return {}  # Invalid vote, excluded by the existing consensus rules.
     raw=llm.create_chat_completion(
         messages=[{"role":"user","content":prompt}],
         temperature=temperature,
@@ -239,7 +260,8 @@ def _source_bucket(row: dict) -> str:
     return "other"
 
 
-def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
+def judge_private_archive(private_dir: Path, *, use_models: bool=True,
+                          on_labeled: Callable[[dict], None] | None=None) -> dict:
     train=_read_jsonl(private_dir/PRIVATE_FILES["train"])
     nli=None
     llm=None
@@ -331,6 +353,8 @@ def judge_private_archive(private_dir: Path, *, use_models: bool=True) -> dict:
         counters["eligible"]+=int(bool(copy["eligible_for_training"]))
         counters["discarded"]+=int(not bool(copy["eligible_for_training"]))
         labeled.append(copy)
+        if on_labeled is not None:
+            on_labeled(copy)
     _write_jsonl_private(private_dir/"train_labeled.jsonl",labeled)
     distribution=Counter(str(x.get("final_label") or "") for x in labeled if str(x.get("final_label") or ""))
     source_distribution=Counter(_source_bucket(x) for x in labeled)
