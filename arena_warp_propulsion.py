@@ -14,6 +14,7 @@ import random
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from warp_physics import evaluate_population
 
 SCHEMA_V = 1
 ARENA = "warp-propulsion-research"
@@ -168,6 +169,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
         "best":champions[0] if champions else None,
         "top_candidates":champions,
         "hard_flagged":sum(bool(x["hard_flags"]) for x in evaluated),
+        "physical_evaluation":evaluate_population(evaluated),
         "boundary":{
             "production_state_write":False,
             "production_runtime_influence":"NONE",
@@ -175,7 +177,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
             "automatic_engineering_promotion":False,
             "promotion":"HUMAN_SCIENTIFIC_REVIEW_ONLY",
         },
-        "disclaimer":"Dimensionless surrogate exploration only; not a solution of Einstein equations and not evidence of a buildable warp drive.",
+        "disclaimer":"Fitness remains a dimensionless heuristic. Separate Alcubierre reference diagnostics evaluate only Eulerian energy density; no full candidate validation or evidence of a buildable warp drive.",
     }
     return next_state,report
 
