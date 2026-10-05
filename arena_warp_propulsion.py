@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from warp_physics import evaluate_population
+from warp_reference_search import run_reference_search
 
 SCHEMA_V = 1
 ARENA = "warp-propulsion-research"
@@ -149,6 +150,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
     champions=ranked[:4]
 
     generation=int(state.get("generation") or 0)+1
+    reference_state,reference_report=run_reference_search(state.get("reference_search") or {},seed)
     next_state={
         "schema_v":SCHEMA_V,
         "arena":ARENA,
@@ -157,6 +159,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
         "champions":[x["parameters"] for x in champions],
         "best_fitness":champions[0]["fitness"] if champions else 0.0,
         "production_promoted":False,
+        "reference_search":reference_state,
     }
     report={
         "schema_v":SCHEMA_V,
@@ -170,6 +173,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
         "top_candidates":champions,
         "hard_flagged":sum(bool(x["hard_flags"]) for x in evaluated),
         "physical_evaluation":evaluate_population(evaluated),
+        "fixed_target_research":reference_report,
         "boundary":{
             "production_state_write":False,
             "production_runtime_influence":"NONE",
@@ -177,7 +181,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
             "automatic_engineering_promotion":False,
             "promotion":"HUMAN_SCIENTIFIC_REVIEW_ONLY",
         },
-        "disclaimer":"Fitness remains a dimensionless heuristic. Separate Alcubierre reference diagnostics evaluate only Eulerian energy density; no full candidate validation or evidence of a buildable warp drive.",
+        "disclaimer":"Original fitness remains heuristic. Separate fixed-target Alcubierre profile research computes required stress tensors and sampled tides/energy-condition violations; no realizable matter source, dynamic validation or evidence of a buildable warp drive.",
     }
     return next_state,report
 

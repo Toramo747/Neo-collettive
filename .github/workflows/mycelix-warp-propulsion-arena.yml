@@ -8,6 +8,9 @@ on:
       - "test_arena_warp_propulsion.py"
       - "warp_physics.py"
       - "test_warp_physics.py"
+      - "warp_tensor.py"
+      - "warp_reference_search.py"
+      - "test_warp_tensor.py"
   schedule:
     - cron: "23 */6 * * *"
   workflow_dispatch:
@@ -32,11 +35,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install pinned numerical dependency
+        run: python -m pip install numpy==2.3.3
+
       - name: Validate arena
         run: |
           set -euo pipefail
-          python -m py_compile arena_warp_propulsion.py warp_physics.py
-          python -m unittest -v test_arena_warp_propulsion.py test_warp_physics.py
+          python -m py_compile arena_warp_propulsion.py warp_physics.py warp_tensor.py warp_reference_search.py
+          python -m unittest -v test_arena_warp_propulsion.py test_warp_physics.py test_warp_tensor.py
 
       - name: Run bounded theoretical generation
         run: |
@@ -67,6 +73,20 @@ jobs:
               raise SystemExit("physical reference checks failed")
           if p.get("affects_fitness") is not False or p.get("affects_selection") is not False:
               raise SystemExit("reference diagnostics must remain observational")
+          research=r.get("fixed_target_research") or {}
+          if not research.get("tensor_benchmarks",{}).get("passed"):
+              raise SystemExit("full tensor benchmarks failed")
+          if research.get("physical_feasibility_established") is not False:
+              raise SystemExit("unsupported feasibility claim")
+          if research.get("affects_heuristic_selection") is not False:
+              raise SystemExit("reference track must remain isolated")
+          groups=research.get("groups") or []
+          if sorted(g.get("target_beta") for g in groups)!=[0.8,1.1]:
+              raise SystemExit("fixed velocity targets changed")
+          for group in groups:
+              for profile in group.get("profiles") or []:
+                  if profile.get("radius_over_L0")!=1.0 or profile.get("target_beta")!=group["target_beta"]:
+                      raise SystemExit("fixed comparison conditions changed")
           print(json.dumps({
               "generation":r.get("generation"),
               "population":r.get("population"),
