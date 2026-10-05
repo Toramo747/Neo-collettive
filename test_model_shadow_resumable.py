@@ -61,10 +61,25 @@ class ResumableBatchTests(unittest.TestCase):
             self.assertFalse(metrics["promotion_eligible"])
             self.assertTrue(resumable.import_status(private)["import_allowed"])
 
+    def test_changed_labeler_policy_rejudges_existing_labels(self):
+        with tempfile.TemporaryDirectory() as folder:
+            private, rows = self.archive(folder, 1)
+            labeled = dict(
+                rows[0],
+                _source_signature=resumable._source_signature(rows[0]),
+                _labeler_revision=0,
+            )
+            _write_jsonl_private(private / "train_labeled.jsonl", [labeled])
+            self.assertFalse(resumable.import_status(private)["import_allowed"])
+
     def test_changed_source_is_rejudged(self):
         with tempfile.TemporaryDirectory() as folder:
             private, rows = self.archive(folder, 1)
-            labeled = dict(rows[0], _source_signature=resumable._source_signature(rows[0]))
+            labeled = dict(
+                rows[0],
+                _source_signature=resumable._source_signature(rows[0]),
+                _labeler_revision=int(resumable.REGISTRY["consensus"]["policy_version"]),
+            )
             _write_jsonl_private(private / "train_labeled.jsonl", [labeled])
             self.assertTrue(resumable.import_status(private)["import_allowed"])
             rows[0]["normalized_text"] = "Changed synthetic example"

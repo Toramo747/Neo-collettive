@@ -34,7 +34,7 @@ from model_shadow_batch import (
 )
 
 STATE_FILE = "model_shadow_state.json"
-WRAPPER_VERSION = 2
+WRAPPER_VERSION = 3
 
 
 def _source_signature(row: dict) -> str:
@@ -80,6 +80,8 @@ def _load_valid_existing(private_dir: Path, train: list[dict]) -> dict[str, dict
         if not source:
             continue
         if str(row.get("_source_signature") or "") != _source_signature(source):
+            continue
+        if int(row.get("_labeler_revision") or 0) != int(REGISTRY["consensus"].get("policy_version",1)):
             continue
         valid[case_id] = row
     return valid
@@ -257,6 +259,7 @@ def main() -> int:
                     return
                 copy = dict(row)
                 copy["_source_signature"] = _source_signature(source)
+                copy["_labeler_revision"] = int(REGISTRY["consensus"].get("policy_version",1))
                 valid[case_id] = copy
                 ordered = [valid[str(r.get("id") or "")] for r in train
                            if str(r.get("id") or "") in valid]

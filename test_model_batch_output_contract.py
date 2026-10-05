@@ -21,11 +21,12 @@ class OutputContractTests(unittest.TestCase):
         llm=FakeLLM([
             {"proposed_label":"buyer_tool_search","confidence":0.01},
             {"proposed_label":"buyer_tool_search","confidence":0.99},
+            {"canonical_problem":"","target_user":"","current_workaround":"","quoted_price":"","writer_role":"","failed_attempt":False,"feasibility":"unknown"},
         ])
         vote,_=llm_judge(llm,"synthetic",{})
         self.assertEqual(vote["label"],"buyer_tool_search")
         self.assertEqual(vote["confidence"],1.0)
-        self.assertEqual(llm.calls,2)
+        self.assertEqual(llm.calls,3)
 
     def test_self_declared_confidence_is_ignored(self):
         llm=FakeLLM([
@@ -50,18 +51,20 @@ class OutputContractTests(unittest.TestCase):
         vote,_=llm_judge(llm,"synthetic",{})
         self.assertEqual(vote["confidence"],0.0)
 
-    def test_second_prompt_is_materially_different(self):
+    def test_second_prompt_is_semantically_equivalent_with_reordered_labels(self):
         llm=FakeLLM([
             {"proposed_label":"buyer_tool_search"},
             {"proposed_label":"buyer_tool_search"},
+            {},
         ])
         llm_judge(llm,"synthetic",{})
         first=llm.kwargs[0]["messages"][0]["content"]
         second=llm.kwargs[1]["messages"][0]["content"]
-        self.assertIn("Classifica il testo",first)
-        self.assertIn("Independently classify",second)
-        self.assertIn("other,job_posting,manual_recurring_work,vendor_offer,buyer_tool_search",second)
-        self.assertNotEqual(first,second)
+        first_order="buyer_tool_search,vendor_offer,manual_recurring_work,job_posting,other"
+        second_order="other,job_posting,manual_recurring_work,vendor_offer,buyer_tool_search"
+        self.assertIn(first_order,first)
+        self.assertIn(second_order,second)
+        self.assertEqual(first.replace(first_order,"<ORDER>"),second.replace(second_order,"<ORDER>"))
 
     def test_source_bucket_reuses_production_canonical_sources(self):
         cases={

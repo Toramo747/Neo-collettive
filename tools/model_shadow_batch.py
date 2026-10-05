@@ -38,6 +38,7 @@ from model_shadow import (
 )
 
 REGISTRY=json.loads((ROOT/"model_shadow_registry.json").read_text(encoding="utf-8"))
+LABELER_REVISION=int(REGISTRY["consensus"].get("policy_version",1))
 NLI_LABEL_MAP={'the writer is looking for a tool': 'buyer_tool_search', 'the writer is selling a product or service': 'vendor_offer', 'the writer describes recurring manual work': 'manual_recurring_work', 'a job posting': 'job_posting', 'a generic discussion unrelated to these needs': 'other'}
 PRIVATE_FILES={"train":"train.jsonl","public":"public.jsonl","hidden":"hidden.jsonl"}
 PUBLIC_METRIC_KEYS={
@@ -135,7 +136,7 @@ def _nli_pipeline():
 def nli_judge(pipe, text: str) -> dict:
     write_stage("nli_inference")
     labels=list(REGISTRY["judges"]["nli"]["labels"])
-    result=pipe(text,labels,multi_label=False,
+    result=pipe(text,labels,multi_label=True,
                 hypothesis_template=REGISTRY["judges"]["nli"]["hypothesis_template"])
     natural=str((result.get("labels") or [""])[0])
     score=float((result.get("scores") or [0.0])[0])
@@ -199,29 +200,34 @@ def _llm_json_call(llm, prompt: str, *, max_tokens: int=220, temperature: float=
 
 
 def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
-    prompt=(
-        "Classifica il testo senza inventare fatti. Rispondi SOLO JSON con chiavi: "
-        "canonical_problem,target_user,current_workaround,quoted_price,writer_role,"
-        "failed_attempt,feasibility,proposed_label. "
-        "proposed_label deve essere uno tra buyer_tool_search,vendor_offer,"
-        "manual_recurring_work,job_posting,other. feasibility: feasible|hard|unknown. "
-        "Testo:\n"+text[:1800]+"\nSegnali strutturali:"+json.dumps(signals,separators=(",",":"))[:1000]
+    label_definitions=(
+        "buyer_tool_search = the writer is seeking, comparing, replacing, or asking for a tool or service for their own need; "
+        "vendor_offer = the writer is selling, promoting, or offering a product or service; "
+        "manual_recurring_work = the writer describes repeated manual work or a recurring workaround without clearly asking for a tool; "
+        "job_posting = a hiring vacancy, recruitment post, or paid job opening; "
+        "other = none of the previous intents."
     )
-    data=_llm_json_call(llm,prompt,max_tokens=220)
-    raw_label=data.get("proposed_label")
+    signal_text=json.dumps(signals,separators=(",",":"))[:1000]
+    body=text[:1800]
+
+    def classify(order: str) -> dict:
+        prompt=(
+            "Classify only the writer's intent from the supplied text. Do not invent facts and do not use outside knowledge. "
+            +label_definitions+
+            " Return ONLY JSON with exactly one key, proposed_label. "
+            "Choose exactly one label from this order: "+order+". "
+            "Text:\n"+body+"\nStructural signals:"+signal_text
+        )
+        return _llm_json_call(llm,prompt,max_tokens=64,temperature=0.0)
+
+    first=classify("buyer_tool_search,vendor_offer,manual_recurring_work,job_posting,other")
+    raw_label=first.get("proposed_label")
     label=str(raw_label or "")
     first_valid=label in MODEL_LABELS
     if not first_valid:
         label="other"
 
-    verify_prompt=(
-        "Independently classify this text by the writer's intent. Return ONLY JSON with the key "
-        "proposed_label. Choose exactly one label from this deliberately reordered list: "
-        "other,job_posting,manual_recurring_work,vendor_offer,buyer_tool_search. "
-        "Do not infer facts that are not in the text or structural signals. "
-        "Text:\n"+text[:1800]+"\nStructural signals:"+json.dumps(signals,separators=(",",":"))[:1000]
-    )
-    verify=_llm_json_call(llm,verify_prompt,max_tokens=64,temperature=0.0)
+    verify=classify("other,job_posting,manual_recurring_work,vendor_offer,buyer_tool_search")
     verify_label=str(verify.get("proposed_label") or "")
     second_valid=verify_label in MODEL_LABELS
     if not first_valid:
@@ -234,6 +240,17 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         diagnostic="concordant"
     confidence=1.0 if diagnostic=="concordant" else 0.0
 
+    data={}
+    if diagnostic=="concordant":
+        extract_prompt=(
+            "Extract only facts explicitly present in the text. Return ONLY JSON with keys "
+            "canonical_problem,target_user,current_workaround,quoted_price,writer_role,failed_attempt,feasibility. "
+            "Use empty strings when absent. feasibility must be feasible, hard, or unknown. "
+            "Do not classify the text and do not add facts. "
+            "Text:\n"+body+"\nStructural signals:"+signal_text
+        )
+        data=_llm_json_call(llm,extract_prompt,max_tokens=180,temperature=0.0)
+
     extracted={
         "canonical_problem":" ".join(str(data.get("canonical_problem") or "").split())[:300],
         "target_user":" ".join(str(data.get("target_user") or "").split())[:160],
@@ -244,7 +261,6 @@ def llm_judge(llm, text: str, signals: dict) -> tuple[dict,dict]:
         "feasibility":str(data.get("feasibility") or "unknown") if str(data.get("feasibility") or "") in {"feasible","hard","unknown"} else "unknown",
     }
     return {"judge":"local_llm","label":label,"confidence":confidence,"diagnostic":diagnostic},extracted
-
 
 def _source_bucket(row: dict) -> str:
     source=canonical_source(str(row.get("source") or "unknown"))

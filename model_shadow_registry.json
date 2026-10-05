@@ -24,7 +24,8 @@
         "a job posting",
         "a generic discussion unrelated to these needs"
       ],
-      "hypothesis_template": "This text describes {}."
+      "hypothesis_template": "This text shows that {}.",
+      "inference_mode": "multi_label"
     },
     "local_llm": {
       "kind": "local_quantized_llm",
@@ -45,7 +46,7 @@
         "failed_attempt",
         "proposed_label"
       ],
-      "confidence_source": "dual_prompt_label_agreement",
+      "confidence_source": "dual_equivalent_classifier_prompt_agreement",
       "self_reported_confidence_used": false,
       "second_prompt_language": "en",
       "second_prompt_label_order": [
@@ -54,7 +55,8 @@
         "manual_recurring_work",
         "vendor_offer",
         "buyer_tool_search"
-      ]
+      ],
+      "prompt_version": 2
     },
     "embedding": {
       "kind": "semantic_embedding",
@@ -76,7 +78,7 @@
     "disagreement_action": "exclude_from_training",
     "outcome_labels_override_automatic": true,
     "lexicon_role": "comparison_only",
-    "policy_version": 3,
+    "policy_version": 4,
     "structural_abstention_pair_threshold": 0.85
   },
   "student": {
