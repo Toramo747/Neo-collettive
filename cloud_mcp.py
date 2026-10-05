@@ -5593,6 +5593,7 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
                     list(sector.get("terms") or []),
                     cls,
                     AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                    arena_profile=True,
                 ) or query
             except Exception:
                 pass
