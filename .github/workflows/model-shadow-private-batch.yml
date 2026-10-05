@@ -134,6 +134,7 @@ jobs:
         if: steps.training.outputs.ready == 'true'
         run: |
           set -euo pipefail
+          python -m pip install --disable-pip-version-check "torch==2.8.0" --index-url https://download.pytorch.org/whl/cpu
           python -m pip install --disable-pip-version-check "numpy==2.3.3" "transformers==4.57.1" "sentence-transformers==5.1.1" "huggingface-hub==0.35.3" "llama-cpp-python==0.3.16" "sentencepiece==0.2.1" "protobuf==6.33.0"
 
       - name: Run pinned multi-judge batch
@@ -145,12 +146,43 @@ jobs:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -euo pipefail
-          if ! python tools/model_shadow_resumable.py --private-dir private-labels --output-dir runtime/model-shadow --max-judge-cases 50 --review-sample > /tmp/model-shadow-metrics.json 2>/tmp/model-shadow-private-errors; then
+          git -C private-labels config user.name "NEO Private Label Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          batch_started_seconds=$SECONDS
+          # Catch up in bounded segments, preserving each segment remotely.
+          # Stop starting new work after 70 minutes, leaving room for evaluation
+          # and cleanup within the job's existing 120-minute timeout.
+          for segment in 1 2 3 4 5 6 7 8; do
+            if ! python tools/model_shadow_resumable.py --private-dir private-labels --output-dir runtime/model-shadow --max-judge-cases 50 --review-sample > /tmp/model-shadow-metrics.json 2>/tmp/model-shadow-private-errors; then
+              cat /tmp/model-shadow-metrics.json
+              exit 1
+            fi
+            python -m json.tool /tmp/model-shadow-metrics.json >/dev/null
             cat /tmp/model-shadow-metrics.json
-            exit 1
-          fi
-          python -m json.tool /tmp/model-shadow-metrics.json >/dev/null
-          cat /tmp/model-shadow-metrics.json
+            for file in train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl model_shadow_state.json; do
+              if [ -f "private-labels/$file" ]; then
+                git -C private-labels add "$file"
+              fi
+            done
+            if ! git -C private-labels diff --cached --quiet; then
+              git -C private-labels commit --quiet -m "checkpoint completed shadow batch segment"
+              git -C private-labels push --quiet
+            fi
+            if [ "$((SECONDS - batch_started_seconds))" -ge 4200 ]; then
+              break
+            fi
+            if ! python - <<'PYCODE'
+          import json
+          metrics=json.load(open('/tmp/model-shadow-metrics.json',encoding='utf-8'))
+          more=(metrics.get('batch_complete') is False
+                and int(metrics.get('batch_remaining') or 0)>0
+                and int(metrics.get('batch_processed') or 0)>0)
+          raise SystemExit(0 if more else 1)
+          PYCODE
+            then
+              break
+            fi
+          done
 
       - name: Privacy-check publicable outputs
         if: steps.training.outputs.ready == 'true'
