@@ -10,6 +10,7 @@ from unittest.mock import patch
 from tools import model_shadow_resumable as resumable
 from tools.model_shadow_batch import _write_jsonl_private, llm_judge
 from tools.model_shadow_privacy_check import check_value
+from tools.model_shadow_diagnostics import failure_payload, write_stage
 
 
 class ResumableBatchTests(unittest.TestCase):
@@ -118,6 +119,27 @@ class ResumableBatchTests(unittest.TestCase):
         self.assertEqual(vote["confidence"], 0.0)
         self.assertEqual(vote["diagnostic"], "first_invalid")
         self.assertEqual(fields["canonical_problem"], "")
+
+    def test_native_crash_reports_fixed_stage_and_exit_code(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "stage.json"
+            with patch.dict("os.environ", {"MODEL_SHADOW_STAGE_PATH": str(path)}):
+                write_stage("llm_inference")
+            safe = failure_payload(132, path)
+            check_value(safe)
+            self.assertEqual(safe["reason"], "ILLEGAL_CPU_INSTRUCTION")
+            self.assertEqual(safe["failure_stage"], "llm_inference")
+
+    def test_native_diagnostic_rejects_untrusted_stage_and_invalid_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "stage.json"
+            for content in ('{"stage":"https://private.example"}', '{"stage":[]}', '[]', 'invalid'):
+                path.write_text(content)
+                safe = failure_payload(132, path)
+                check_value(safe)
+                self.assertEqual(safe["failure_stage"], "unknown")
+            path.unlink()
+            self.assertEqual(failure_payload(132, path)["failure_stage"], "unknown")
 
 
 if __name__ == "__main__":

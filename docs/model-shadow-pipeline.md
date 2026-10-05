@@ -94,6 +94,11 @@ Completion, class coverage and both held-out quality checks still determine
 whether a student can be trained and published in shadow.
 The private batch pins PyTorch 2.8.0 from the official CPU wheel index, avoiding
 unneeded CUDA downloads on the CPU-only runner.
+The quantized LLM is built from source without native-host or AVX-512
+optimizations or llamafile kernels, and model downloads use the HTTP path rather
+than the optional native Xet client. Fixed stage markers survive native crashes;
+the workflow reports only the allowlisted stage and process exit code. Raw
+exceptions remain private and core dumps are disabled.
 
 ## Consensus diagnostics
 
