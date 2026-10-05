@@ -13,6 +13,19 @@ BUYER_SIGNAL_TERMS = (
     "time consuming","time-consuming","struggle","problem","pain",
 )
 
+RESEARCH_ARENA_PRODUCTION_GENOME = {
+    "source": "mycelix-research-algorithm:g56-elite-1",
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "compact",
+    "query_frame": "plain",
+    "term_order": "signal_first",
+    "source_scope": "all",
+}
+
 PAIN_PLUS_BUYER_FRAMES = (
     '("we manually" OR "I spend hours" OR "we are struggling" OR "looking for help")',
     '("need help" OR "need a tool" OR "any recommendations" OR "what do you use")',
@@ -79,15 +92,23 @@ def discovery_query(
     sector_terms: list[str] | tuple[str,...],
     query_class: str,
     evidence_rows: Iterable[dict] | None,
+    *,
+    arena_profile: bool = False,
 ) -> str:
-    """Prefer observed buyer language; fall back to the Arena-proven pain+buyer pattern."""
+    """Prefer observed buyer language; optionally apply the manually promoted Arena profile."""
     phrases=observed_buyer_phrases(evidence_rows,family,4)
     terms=[_clean(x,100) for x in (sector_terms or []) if _clean(x,100)]
     anchor=terms[0] if terms else str(family or "").replace("_"," ")
-    if phrases:
-        return _clean(f"{anchor} {phrases[0]}",220)
-    frame=PAIN_PLUS_BUYER_FRAMES[0 if query_class=="explore" else 3]
+    if arena_profile and terms:
+        anchor=min(terms,key=lambda x:(len(x.split()),len(x),x.lower()))
     community='(site:reddit.com OR site:stackoverflow.com OR site:news.ycombinator.com)'
+    if phrases:
+        if arena_profile:
+            return _clean(f"{phrases[0]} {anchor}",220)
+        return _clean(f"{anchor} {phrases[0]}",220)
+    frame=PAIN_PLUS_BUYER_FRAMES[0 if (arena_profile or query_class=="explore") else 3]
+    if arena_profile:
+        return _clean(f"{frame} {anchor} {community}",260)
     return _clean(f"{anchor} {frame} {community}",260)
 
 
