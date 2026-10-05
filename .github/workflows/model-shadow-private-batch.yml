@@ -179,7 +179,7 @@ jobs:
         run: python tools/model_shadow_publish_gate.py --metrics runtime/model-shadow/metrics.json --student runtime/model-shadow/student.json --github-output "$GITHUB_OUTPUT"
 
       - name: Publish eligible student to shadow runtime
-        if: steps.shadow_publish.outputs.publishable == 'true'
+        if: github.ref == 'refs/heads/main' && steps.shadow_publish.outputs.publishable == 'true'
         run: |
           set -euo pipefail
           git config user.name "NEO Model Shadow"
