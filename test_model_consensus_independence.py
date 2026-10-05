@@ -54,7 +54,8 @@ class IndependentConsensusTests(unittest.TestCase):
     def test_nli_has_neutral_and_coherent_template(self):
         def pipe(text, labels, **kwargs):
             self.assertIn('a generic discussion unrelated to these needs',labels)
-            self.assertEqual(kwargs['hypothesis_template'],'This text describes {}.')
+            self.assertTrue(kwargs['multi_label'])
+            self.assertEqual(kwargs['hypothesis_template'],'This text shows that {}.')
             return {'labels':['a generic discussion unrelated to these needs'],'scores':[.95]}
         self.assertEqual(nli_judge(pipe,'weather')['label'],'other')
 
