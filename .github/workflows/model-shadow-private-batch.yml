@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
       publish_student:
-        description: "Publish safe shadow student and aggregate metrics to main"
+        description: "Legacy input; eligible shadow students are published automatically, and this input cannot bypass quality gates"
         required: false
         type: boolean
         default: false
@@ -172,26 +172,27 @@ jobs:
             echo '{"private_archive_update":"published"}'
           fi
 
-      - name: Publish safe student after explicit manual request
-        if: steps.training.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.publish_student == true
+      - name: Check and publish eligible shadow student
+        id: shadow_publish
+        if: steps.training.outputs.ready == 'true'
+        run: python tools/model_shadow_publish_gate.py --metrics runtime/model-shadow/metrics.json --student runtime/model-shadow/student.json --github-output "$GITHUB_OUTPUT"
+
+      - name: Publish eligible student to shadow runtime
+        if: steps.shadow_publish.outputs.publishable == 'true'
         run: |
           set -euo pipefail
           git config user.name "NEO Model Shadow"
           git config user.email "actions@users.noreply.github.com"
-          if [ ! -f runtime/model-shadow/student.json ]; then
-            echo '{"student_available":false}'
-            exit 0
-          fi
           git add runtime/model-shadow/student.json runtime/model-shadow/metrics.json
           if git diff --cached --quiet; then
             echo '{"student_publish":"unchanged"}'
             exit 0
           fi
-          git commit -m "model-shadow: publish student and aggregate metrics"
+          git commit -m "model-shadow: publish evaluated shadow student"
           for attempt in 1 2 3; do
             git fetch origin main
             if git rebase origin/main && git push origin HEAD:main; then
-              echo '{"student_publish":"published"}'
+              echo '{"student_publish":"published","mode":"shadow","production_promotion":false}'
               exit 0
             fi
             git rebase --abort >/dev/null 2>&1 || true
