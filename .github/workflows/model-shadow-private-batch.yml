@@ -2,6 +2,7 @@ name: Model Shadow Private Batch
 
 on:
   push:
+    branches: [main]
     paths:
       - ".github/workflows/model-shadow-private-batch.yml"
       - "tools/model_shadow_resumable.py"
@@ -70,8 +71,13 @@ jobs:
           path: private-labels
           fetch-depth: 0
 
-      - name: Import real observations only into private archive
+      - name: Drain existing labels before importing another corpus
+        id: backlog
         if: steps.config.outputs.configured == 'true'
+        run: python tools/model_shadow_resumable.py --private-dir private-labels --check-import --github-output "$GITHUB_OUTPUT"
+
+      - name: Import real observations only into private archive
+        if: steps.config.outputs.configured == 'true' && (steps.backlog.outputs.import_allowed == 'true' || inputs.collect_only == true)
         env:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
@@ -131,6 +137,7 @@ jobs:
           python -m pip install --disable-pip-version-check "numpy==2.3.3" "transformers==4.57.1" "sentence-transformers==5.1.1" "huggingface-hub==0.35.3" "llama-cpp-python==0.3.16" "sentencepiece==0.2.1" "protobuf==6.33.0"
 
       - name: Run pinned multi-judge batch
+        id: judge
         if: steps.training.outputs.ready == 'true'
         env:
           HF_HOME: ${{ runner.temp }}/hf-cache
@@ -156,20 +163,23 @@ jobs:
               check_file(path)
           PYCODE
 
-      - name: Commit labels review and drift only to private repository
-        if: steps.training.outputs.ready == 'true'
+      - name: Preserve completed labels privately even when a later case fails
+        if: always() && steps.training.outputs.ready == 'true' && (steps.judge.conclusion == 'success' || steps.judge.conclusion == 'failure')
         working-directory: private-labels
         run: |
           set -euo pipefail
           git config user.name "NEO Private Label Bot"
           git config user.email "actions@users.noreply.github.com"
-          git add train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl
-          [ -f model_shadow_state.json ] && git add model_shadow_state.json || true
+          for file in train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl model_shadow_state.json; do
+            if [ -f "$file" ]; then
+              git add "$file"
+            fi
+          done
           if git diff --cached --quiet; then
             echo '{"private_archive_update":"unchanged"}'
           else
-            git commit -m "shadow labels and weekly review"
-            git push
+            git commit --quiet -m "shadow labels and weekly review"
+            git push --quiet
             echo '{"private_archive_update":"published"}'
           fi
 

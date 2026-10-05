@@ -71,6 +71,22 @@ The importer skips held-out IDs, deduplicates training IDs, and does not copy an
 four training cases skip heavy downloads. No raw evidence is cached or uploaded as
 public artifacts. Raw model errors remain in the temporary runner and are never printed.
 
+## Resumable batch recovery
+
+Each completed judge result is checkpointed atomically in the private archive.
+The workflow preserves that checkpoint even if a later case fails, so the next
+hourly batch resumes from the last completed case rather than repeating its chunk.
+While there are pending cases, ordinary training runs drain the current corpus
+before importing more observations. Explicit collect-only runs still collect.
+This keeps a growing intake from indefinitely postponing training and evaluation.
+
+The local LLM has a 4096-token context and reserves space for the chat template
+and response. Inputs that cannot fit produce an invalid vote and remain subject
+to the unchanged consensus rules. Model failures expose only fixed stage codes,
+allowlisted exception types and local source line numbers. Evaluation-set changes
+invalidate the completed-batch cache. Private batches triggered by code pushes
+run only on main, avoiding duplicate branch/main imports.
+
 ## Consensus diagnostics
 
 The private batch emits aggregate-only diagnostics for consensus path, NLI confidence bands, dual-prompt LLM validity/agreement, NLI x LLM label counts, and structural agreement state. The same counters are split by canonical source bucket. Weekly private review sampling includes discarded disagreements as well as accepted labels, prioritizing cases where the model judges agree but consensus still blocks training. No evidence text, URL, domain, or requester identifier is written to public logs or artifacts.

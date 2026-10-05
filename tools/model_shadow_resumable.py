@@ -5,9 +5,13 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
+import traceback
 from collections import Counter
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from model_shadow_batch import (
     MODEL_LABELS,
@@ -30,7 +34,7 @@ from model_shadow_batch import (
 )
 
 STATE_FILE = "model_shadow_state.json"
-WRAPPER_VERSION = 1
+WRAPPER_VERSION = 2
 
 
 def _source_signature(row: dict) -> str:
@@ -49,7 +53,7 @@ def _source_signature(row: dict) -> str:
     ).hexdigest()
 
 
-def _manifest_hash(rows: list[dict]) -> str:
+def _manifest_hash(rows: list[dict], private_dir: Path) -> str:
     registry_hash = hashlib.sha256(
         json.dumps(REGISTRY, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -57,6 +61,10 @@ def _manifest_hash(rows: list[dict]) -> str:
         "wrapper_version": WRAPPER_VERSION,
         "registry_sha256": registry_hash,
         "rows": sorted((str(r.get("id") or ""), _source_signature(r)) for r in rows),
+        "evaluation": {
+            split: hashlib.sha256((private_dir / PRIVATE_FILES[split]).read_bytes()).hexdigest()
+            for split in ("public", "hidden")
+        },
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -177,16 +185,57 @@ def _write_safe(output_dir: Path, metrics: dict) -> dict:
     return safe
 
 
+def import_status(private_dir: Path) -> dict:
+    """Drain the current real corpus before admitting another import."""
+    train = _read_jsonl(private_dir / PRIVATE_FILES["train"])
+    valid = _load_valid_existing(private_dir, train)
+    pending = len(train) - len(valid)
+    return {"import_allowed": pending == 0, "batch_total": len(train),
+            "batch_remaining": pending}
+
+
+def safe_failure(exc: Exception) -> dict:
+    """Never publish exception messages, case identifiers or arbitrary paths."""
+    allowed = {"ImportError", "ModuleNotFoundError", "ValueError", "RuntimeError",
+               "OSError", "TypeError", "KeyError", "MemoryError"}
+    kind = type(exc).__name__
+    frames = traceback.extract_tb(exc.__traceback__)
+    functions = {"_nli_pipeline": "nli_load", "nli_judge": "nli_inference",
+                 "_local_llm": "llm_load", "_llm_json_call": "llm_inference",
+                 "train_student": "student_training", "evaluate_student": "evaluation",
+                 "cluster_challenges": "clustering", "validate_archive": "archive_validation"}
+    stage = "batch"
+    lines = {"batch_lines": [], "resumable_lines": []}
+    for frame in frames:
+        path = Path(frame.filename).resolve()
+        if path == Path(__file__).resolve():
+            lines["resumable_lines"].append(frame.lineno)
+        elif path == Path(__file__).resolve().with_name("model_shadow_batch.py"):
+            lines["batch_lines"].append(frame.lineno)
+            stage = functions.get(frame.name, stage)
+    return {"ok": False, "reason": "PRIVATE_BATCH_FAILED", "failure_stage": stage,
+            "error_type": kind if kind in allowed else "MODEL_ERROR", **lines}
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--private-dir", default=os.getenv("MODEL_LABEL_PRIVATE_DIR", "private-labels"))
     p.add_argument("--output-dir", default="runtime/model-shadow")
     p.add_argument("--max-judge-cases", type=int, default=50)
     p.add_argument("--review-sample", action="store_true")
+    p.add_argument("--check-import", action="store_true")
+    p.add_argument("--github-output")
     args = p.parse_args()
 
     private_dir = Path(args.private_dir)
     output_dir = Path(args.output_dir)
+    if args.check_import:
+        status = import_status(private_dir)
+        if args.github_output:
+            with Path(args.github_output).open("a", encoding="utf-8") as output:
+                output.write("import_allowed=" + str(status["import_allowed"]).lower() + "\n")
+        print(json.dumps(status, sort_keys=True))
+        return 0
     archive = validate_archive(private_dir)
     train = _read_jsonl(private_dir / PRIVATE_FILES["train"])
     valid = _load_valid_existing(private_dir, train)
@@ -199,15 +248,21 @@ def main() -> int:
             _write_jsonl_private(tmpdir / PRIVATE_FILES["train"], chunk)
             _write_jsonl_private(tmpdir / PRIVATE_FILES["public"], [])
             _write_jsonl_private(tmpdir / PRIVATE_FILES["hidden"], [])
-            judge_private_archive(tmpdir, use_models=True)
-            for row in _read_jsonl(tmpdir / "train_labeled.jsonl"):
+            sources = {str(row.get("id") or ""): row for row in chunk}
+
+            def checkpoint(row: dict) -> None:
                 case_id = str(row.get("id") or "")
-                source = next((x for x in chunk if str(x.get("id") or "") == case_id), None)
+                source = sources.get(case_id)
                 if source is None:
-                    continue
+                    return
                 copy = dict(row)
                 copy["_source_signature"] = _source_signature(source)
                 valid[case_id] = copy
+                ordered = [valid[str(r.get("id") or "")] for r in train
+                           if str(r.get("id") or "") in valid]
+                _write_jsonl_private(private_dir / "train_labeled.jsonl", ordered)
+
+            judge_private_archive(tmpdir, use_models=True, on_labeled=checkpoint)
 
     ordered = [valid[str(r.get("id") or "")] for r in train if str(r.get("id") or "") in valid]
     _write_jsonl_private(private_dir / "train_labeled.jsonl", ordered)
@@ -234,7 +289,7 @@ def main() -> int:
         _write_safe(output_dir, base)
         return 0
 
-    manifest = _manifest_hash(train)
+    manifest = _manifest_hash(train, private_dir)
     state_path = private_dir / STATE_FILE
     state = {}
     if state_path.is_file():
@@ -297,4 +352,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(json.dumps(safe_failure(exc), sort_keys=True))
+        raise SystemExit(1)
