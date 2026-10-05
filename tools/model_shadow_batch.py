@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0,str(ROOT))
 
 from ingestion_diagnostics import canonical_source
+from tools.model_shadow_diagnostics import write_stage
 
 from model_judges import (
     MODEL_LABELS,
@@ -120,6 +121,7 @@ def validate_archive(private_dir: Path) -> dict:
 
 
 def _nli_pipeline():
+    write_stage("nli_load")
     cfg=REGISTRY["judges"]["nli"]
     from transformers import pipeline
     return pipeline(
@@ -131,6 +133,7 @@ def _nli_pipeline():
 
 
 def nli_judge(pipe, text: str) -> dict:
+    write_stage("nli_inference")
     labels=list(REGISTRY["judges"]["nli"]["labels"])
     result=pipe(text,labels,multi_label=False,
                 hypothesis_template=REGISTRY["judges"]["nli"]["hypothesis_template"])
@@ -156,6 +159,7 @@ def _verify_sha256(path: Path, expected: str) -> None:
 
 
 def _local_llm():
+    write_stage("llm_load")
     cfg=REGISTRY["judges"]["local_llm"]
     from huggingface_hub import hf_hub_download
     from llama_cpp import Llama
@@ -174,6 +178,7 @@ def _local_llm():
 
 
 def _llm_json_call(llm, prompt: str, *, max_tokens: int=220, temperature: float=0.0) -> dict:
+    write_stage("llm_inference")
     # Character limits do not bound tokens (URLs and multilingual text can be
     # particularly expensive). Reserve space for the chat template and output.
     if callable(getattr(llm, "tokenize", None)) and callable(getattr(llm, "n_ctx", None)):
@@ -426,6 +431,7 @@ def _student_training_selection(private_dir: Path) -> tuple[list[dict],dict]:
 
 
 def train_student(private_dir: Path, output: Path, *, feature_dim: int=32768, epochs: int=18, lr: float=0.18) -> dict:
+    write_stage("student_training")
     import numpy as np
     rows,selection_metrics=_student_training_selection(private_dir)
     if len(rows)<4 or int(selection_metrics["training_classes_used"])<2:
@@ -530,6 +536,7 @@ def _evaluation_metrics(rows: list[dict], prediction, prefix: str) -> dict:
 
 
 def evaluate_student(private_dir: Path, artifact: Path) -> dict:
+    write_stage("evaluation")
     payload=json.loads(artifact.read_text(encoding="utf-8"))
     result={}
     for split in ("public","hidden"):
@@ -577,6 +584,7 @@ def _embedder():
 
 
 def cluster_challenges(private_dir: Path, output: Path, *, threshold: float | None=None) -> dict:
+    write_stage("clustering")
     import numpy as np
     rows=[
         x for x in _read_jsonl(private_dir/"train_labeled.jsonl")
