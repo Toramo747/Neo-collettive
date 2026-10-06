@@ -431,7 +431,7 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
     if not url.startswith(("https://","http://")) or not domain:
         return None
     title=str(raw.get("title") or raw.get("source_title") or domain).strip()[:240]
-    text=str(raw.get("text") or raw.get("snippet") or raw.get("description") or title).strip()[:1600]
+    text=(" ".join([str(raw.get("text") or raw.get("snippet") or raw.get("description") or title),str(raw.get("page_text") or "")])).strip()[:300000]
     low=(title+" "+text).lower()
     signal_types=[]
     legacy_price_match=PRICE_RE.search(title+" "+text)
