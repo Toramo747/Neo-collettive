@@ -309,6 +309,14 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "rejected_answers": None,
                 "timeouts": None,
             },
+            "price_validation": [{
+                "family": None,
+                "validation_queries": None,
+                "pricing_pages_found": None,
+                "prices_extracted": None,
+                "strict_prices": None,
+                "competitors_with_price": None,
+            }],
         },
         "evidence_store_status": {
             "status": None,
@@ -848,6 +856,21 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         },
         "funnel": _project_funnel(ingestion.get("funnel")),
         "agent_probes": _project_agent_probes(ingestion.get("agent_probes")),
+        "price_validation": [
+            {
+                "family": _safe_code(family,48),
+                "validation_queries": max(0,int(stats.get("validation_queries") or 0)),
+                "pricing_pages_found": max(0,int(stats.get("pricing_pages_found") or 0)),
+                "prices_extracted": max(0,int(stats.get("prices_extracted") or 0)),
+                "strict_prices": max(0,int(stats.get("strict_prices") or 0)),
+                "competitors_with_price": max(0,int(stats.get("competitors_with_price") or 0)),
+            }
+            for family,stats in sorted(
+                (tool.get("price_validation") or {}).items()
+                if isinstance(tool.get("price_validation"),dict) else []
+            )
+            if isinstance(stats,dict)
+        ][:16],
     }
 
 

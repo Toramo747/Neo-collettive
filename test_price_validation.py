@@ -3,6 +3,7 @@ import unittest
 from price_validation import (
     buyer_voice_counts,
     extract_price,
+    marketplace_identity,
     price_validation_plan,
     product_pricing_page,
     summarize_validation,
@@ -75,6 +76,57 @@ class PriceValidationTests(unittest.TestCase):
         self.assertEqual(t["pricing_pages_found"],3)
         self.assertEqual(t["prices_extracted"],3)
         self.assertEqual(t["competitors_with_price"],2)
+
+    def test_marketplace_identity_counts_apps_not_host(self):
+        a=marketplace_identity("https://apps.shopify.com/app-a/pricing")
+        a2=marketplace_identity("https://apps.shopify.com/app-a/reviews")
+        b=marketplace_identity("https://apps.shopify.com/app-b")
+        self.assertEqual(a,a2)
+        self.assertNotEqual(a,b)
+        self.assertEqual(len({a,a2,b}),2)
+
+    def test_query_rotation_covers_all_nine_surfaces_in_three_cycles(self):
+        evidence=[{"family":"ai_tools","gate_eligible":True,"signal_types":["BUY_INTENT"]}]
+        executed=set()
+        for cycle in range(3):
+            plan=price_validation_plan(evidence,cycle=cycle,category_configs=CATEGORY_CONFIGS,budget=4)
+            executed.update(row["query"] for row in plan)
+        self.assertEqual(len(executed),9)
+
+    def test_fetched_page_price_is_strict_telemetry_and_source_counted(self):
+        plan=[{"query":"q","family":"ai_tools"}]
+        groups=[{"query":"q","results":[{
+            "title":"Agent A pricing",
+            "url":"https://a.example/pricing",
+            "snippet":"Plans for teams",
+            "page_fetched":True,
+            "page_text":"Pro plan USD 29 per month",
+        }]}]
+        row=validate_pricing_result(groups[0]["results"][0])
+        self.assertTrue(row["strict_price_verified"])
+        self.assertEqual(row["price_source"],"page")
+        stats=summarize_validation(plan,groups)["ai_tools"]
+        self.assertEqual(stats["pages_fetched"],1)
+        self.assertEqual(stats["prices_from_page"],1)
+        self.assertEqual(stats["prices_from_snippet"],0)
+        self.assertEqual(stats["strict_prices"],1)
+
+    def test_pre_177_gate_price_semantics_are_restored(self):
+        # Pre-#177 accepted recognized numeric price text on the covered pricing
+        # surface; the strict parser is now telemetry-only.
+        query='"ai agent tool" pricing subscription'
+        meta={query.lower():{"family":"ai_tools","role":"tool_pricing"}}
+        groups=[{"query":query,"results":[
+            {"title":"AI AgentPro pricing $29","url":"https://agentpro.example/pricing","snippet":"AI agent subscription pricing"},
+            {"title":"AI AgentCloud pricing $19","url":"https://agentcloud.example/pricing","snippet":"AI agent paid plan"},
+            {"title":"AI agent export limitation","url":"https://third.example/issues/1","snippet":"AI agent tool is too expensive and missing feature; looking for alternative."},
+        ]}]
+        result=analyze_tool_opportunities(groups,[],[],meta,"2026-09-26T12:00:00+00:00")
+        row=next(x for x in result["top5"] if x["family"]=="ai_tools")
+        self.assertTrue(row["gate_pass"])
+        self.assertEqual(len(row["existing_tools"]),2)
+        self.assertTrue(all(not x.get("strict_price_verified",False) for x in row["payment_signals"]))
+
 
     def test_gate_boolean_regression_price_requirement_only_changes_code(self):
         query='"ai agent tool" pricing subscription'

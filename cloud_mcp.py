@@ -85,7 +85,7 @@ from tool_opportunity import (
     seti_market_catalog,
 )
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
-from price_validation import PRICE_VALIDATION_QUERY_BUDGET, price_validation_plan, summarize_validation
+from price_validation import PRICE_VALIDATION_QUERY_BUDGET, extract_price, price_validation_plan, product_pricing_page, summarize_validation
 from query_builder import (
     RESEARCH_ARENA_PRODUCTION_GENOME,
     breakout_queries as build_breakout_queries,
@@ -9400,6 +9400,57 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         timeout_seconds=WEB_RESEARCH_TIMEOUT_SECONDS,
     )
 
+    async def _enrich_price_groups_from_pages(groups: list[dict], max_pages: int = 2) -> int:
+        fetched=0
+        for group in groups or []:
+            if fetched>=max_pages or not isinstance(group,dict):
+                break
+            for result in group.get("results") or []:
+                if fetched>=max_pages:
+                    break
+                if not isinstance(result,dict):
+                    continue
+                url=str(result.get("url") or "")
+                title=str(result.get("title") or "")
+                snippet=str(result.get("snippet") or result.get("text") or "")
+                if not product_pricing_page(url,title,snippet) or extract_price(title+" "+snippet):
+                    continue
+                parsed=urlparse(url)
+                host=(parsed.hostname or "").lower()
+                if parsed.scheme!="https" or not host or host=="localhost" or host.endswith(".local"):
+                    continue
+                try:
+                    literal=ipaddress.ip_address(host)
+                    if literal.is_private or literal.is_loopback or literal.is_link_local or literal.is_reserved:
+                        continue
+                except ValueError:
+                    pass
+                try:
+                    async with httpx.AsyncClient(timeout=8.0,follow_redirects=False) as client:
+                        async with client.stream("GET",url,headers={"User-Agent":"OSIXBAY-price-validation/1"}) as response:
+                            if response.status_code!=200:
+                                continue
+                            content_type=str(response.headers.get("content-type") or "").lower()
+                            if "text/html" not in content_type and "text/plain" not in content_type:
+                                continue
+                            raw=bytearray()
+                            async for chunk in response.aiter_bytes():
+                                if len(raw)+len(chunk)>300_000:
+                                    remain=max(0,300_000-len(raw))
+                                    raw.extend(chunk[:remain])
+                                    break
+                                raw.extend(chunk)
+                    page=raw.decode("utf-8","ignore")
+                    page=re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\\1>"," ",page)
+                    page=html.unescape(re.sub(r"(?s)<[^>]+>"," ",page))
+                    visible=" ".join(page.split())[:300_000]
+                    result["page_fetched"]=True
+                    result["page_text"]=visible
+                    fetched+=1
+                except Exception:
+                    continue
+        return fetched
+
     # Dedicated G5 validation phase. It has its own bounded query budget and
     # rotates only among families with persisted buyer voice. Discovery remains separate.
     price_plan=price_validation_plan(
@@ -9421,6 +9472,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
             timeout_seconds=MONEY_FIRST_TIMEOUT_SECONDS,
             deadline_code="price_validation_deadline_exceeded",
         )
+        await _enrich_price_groups_from_pages(price_groups,max_pages=2)
         web_research.extend(price_groups)
         query_meta.update(price_meta)
         search_strategy["price_validation_queries"]=price_plan
