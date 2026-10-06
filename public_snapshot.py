@@ -310,6 +310,12 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "timeouts": None,
             },
         },
+        "evidence_store_status": {
+            "status": None,
+            "active_count": None,
+            "pending_count": None,
+            "archive_count": None,
+        },
         "last_checkpoint": {
             "ok": None,
             "status": None,
@@ -856,6 +862,7 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     student_metrics = model_shadow.get("student_metrics") if isinstance(model_shadow.get("student_metrics"),dict) else {}
     cluster_map = model_shadow.get("challenge_cluster_map") if isinstance(model_shadow.get("challenge_cluster_map"),dict) else {}
     checkpoint = src.get("last_checkpoint") if isinstance(src.get("last_checkpoint"), dict) else {}
+    evidence_store_status = src.get("evidence_store_status") if isinstance(src.get("evidence_store_status"), dict) else {}
     compaction = checkpoint.get("compaction") if isinstance(checkpoint.get("compaction"), dict) else {}
 
     out = _copy_keys(src, (
@@ -911,6 +918,15 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
             "resolved":sum(1 for x in mapping if str(x.get("review_state") or "")=="RESOLVED"),
         },
         "promotion":{"mode":"manual_only","approved":False},
+    }
+    status_code=str(evidence_store_status.get("status") or "ok")
+    if status_code not in {"ok","degraded","recovered_previous_generation"}:
+        status_code="degraded"
+    out["evidence_store_status"]={
+        "status":status_code,
+        "active_count":max(0,int(evidence_store_status.get("active_count") or 0)),
+        "pending_count":max(0,int(evidence_store_status.get("pending_count") or 0)),
+        "archive_count":max(0,int(evidence_store_status.get("archive_count") or 0)),
     }
     out["last_checkpoint"] = {
         **_copy_keys(checkpoint, ("ok", "status", "raw_bytes", "stored_bytes", "limit_bytes")),
