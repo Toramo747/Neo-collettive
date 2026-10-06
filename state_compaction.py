@@ -10,24 +10,35 @@ STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_COMPACTION_TARGET_BYTES = 60_000
 STATE_COMPACTION_TRIGGER_RATIO = 0.90
 INBOUND_TRAFFIC_EVENT_LIMIT = 300
+INBOUND_TRAFFIC_EVENT_TIGHT_LIMIT = 160
 
-# These keys carry conversation continuity, admission/identity state, security
-# evidence, or the durable one-shot human-authorized reply receipt. Compaction
-# must leave their serialized values byte-for-byte unchanged.
+# Only durable receipts and compact identity/aggregate state are immutable.
+# High-volume event/message histories are continuity-bounded below instead of
+# being kept byte-identical forever.
 PROTECTED_STATE_KEYS = frozenset({
     "boundary_events",
-    "inbound_messages",
-    "agent_chat_events",
     "inbound_agent_stats",
-    "inbound_security_events",
     "inbound_security_stats",
-    "inbound_review_queue",
     "agent_chat_monitor",
     "agent_demand_observatory",
     "neo_dialect_peers",
-    "neo_dialect_events",
     "neo_dialect_seti_probe",
 })
+
+CONTINUITY_HISTORY_LIMITS = {
+    "inbound_messages": 32,
+    "agent_chat_events": 64,
+    "inbound_security_events": 48,
+    "inbound_review_queue": 40,
+    "neo_dialect_events": 64,
+}
+TIGHT_CONTINUITY_HISTORY_LIMITS = {
+    "inbound_messages": 12,
+    "agent_chat_events": 24,
+    "inbound_security_events": 16,
+    "inbound_review_queue": 16,
+    "neo_dialect_events": 24,
+}
 
 _HISTORY_TEXT_KEYS = frozenset({
     "excerpt", "snippet", "response_excerpt", "response", "text", "content",
@@ -220,6 +231,60 @@ def trim_inbound_traffic_events(payload: dict, limit: int = INBOUND_TRAFFIC_EVEN
     return out
 
 
+def _bounded_continuity_value(
+    value: Any,
+    *,
+    depth: int = 0,
+    text_limit: int = 2048,
+    nested_list_limit: int = 16,
+) -> Any:
+    if depth > 6:
+        return value
+    if isinstance(value, dict):
+        return {
+            key: _bounded_continuity_value(
+                item,
+                depth=depth + 1,
+                text_limit=text_limit,
+                nested_list_limit=nested_list_limit,
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _bounded_continuity_value(
+                item,
+                depth=depth + 1,
+                text_limit=text_limit,
+                nested_list_limit=nested_list_limit,
+            )
+            for item in value[-nested_list_limit:]
+        ]
+    if isinstance(value, str):
+        return value[:text_limit]
+    return value
+
+
+def compact_continuity_histories(
+    payload: dict,
+    *,
+    limits: dict[str, int] | None = None,
+    text_limit: int = 2048,
+) -> dict:
+    """Bound replayable A2A histories while keeping durable identity/receipt state."""
+    out = deepcopy(payload)
+    selected = limits or CONTINUITY_HISTORY_LIMITS
+    for key, limit in selected.items():
+        rows = out.get(key)
+        if not isinstance(rows, list):
+            continue
+        out[key] = [
+            _bounded_continuity_value(item, text_limit=text_limit)
+            for item in rows[-max(0, int(limit)):]
+        ]
+    return out
+
+
 def _bounded_history_value(value: Any, *, depth: int = 0) -> Any:
     if depth > 6:
         return value
@@ -329,7 +394,8 @@ def compact_state_payload(
         ("b_deduplicate", deduplicate_current_tool_opportunities),
         ("c_historical_transcripts", compact_historical_transcripts),
         ("d_inbound_traffic_events", trim_inbound_traffic_events),
-        ("e_residual_histories", compact_residual_histories),
+        ("e_continuity_histories", compact_continuity_histories),
+        ("f_residual_histories", compact_residual_histories),
     )
     for name, func in levels:
         current = func(current)
@@ -341,6 +407,27 @@ def compact_state_payload(
         })
         if encoded_bytes <= target_bytes:
             break
+
+    # If normal continuity retention is still too large, use a deterministic
+    # tighter replay window. Durable receipts, identity state and cumulative
+    # summaries remain protected and byte-identical.
+    current_raw, current_encoded = encoded_sizes(current)
+    if current_encoded > target_bytes:
+        current = compact_continuity_histories(
+            current,
+            limits=TIGHT_CONTINUITY_HISTORY_LIMITS,
+            text_limit=512,
+        )
+        current = trim_inbound_traffic_events(
+            current,
+            limit=INBOUND_TRAFFIC_EVENT_TIGHT_LIMIT,
+        )
+        current_raw, current_encoded = encoded_sizes(current)
+        meta["levels"].append({
+            "level": "g_tight_continuity",
+            "raw_bytes": current_raw,
+            "encoded_bytes": current_encoded,
+        })
 
     protected_after = protected_serialized_values(current)
     if protected_before != protected_after:
