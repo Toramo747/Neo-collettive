@@ -48,9 +48,20 @@ jobs:
           git remote add private-core "https://Toramo747:${GH_TOKEN}@github.com/${TARGET_REPO}.git"
           git push --mirror private-core
 
+      - name: Ensure private main branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push private-core refs/remotes/origin/main:refs/heads/main
+
       - name: Verify target is private and main exists
         shell: bash
         run: |
           set -euo pipefail
           gh api "repos/$TARGET_REPO" > /tmp/verify.json
-          python -c 'import json; d=json.load(open("/tmp/verify.json")); assert d.get("visibility")=="private" and d.get("private") is True, "private target verification failed"; assert d.get("default_branch")=="main", "private target default branch is not main"; print({"repository":d.get("full_name"),"visibility":d.get("visibility"),"default_branch":d.get("default_branch")})'
+          python -c 'import json; d=json.load(open("/tmp/verify.json")); assert d.get("visibility")=="private" and d.get("private") is True, "private target verification failed"; print({"repository":d.get("full_name"),"visibility":d.get("visibility"),"default_branch":d.get("default_branch")})'
+          src="$(git rev-parse refs/remotes/origin/main)"
+          dst="$(git ls-remote private-core refs/heads/main | awk '{print $1}')"
+          test -n "$dst" || { echo "private main missing"; exit 1; }
+          test "$src" = "$dst" || { echo "private main SHA mismatch"; exit 1; }
+          echo "private_main_sha=$dst"
