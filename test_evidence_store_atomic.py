@@ -104,6 +104,57 @@ class EvidenceStoreAtomicTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(hydrated["commercial_evidence_memory"],previous_rows)
         self.assertEqual(hydrated["commercial_evidence_store_reference"]["sha256"],previous_ref["sha256"])
 
+    def test_archive_recovers_previous_generation_and_reports_real_count(self):
+        active_rows=[{"evidence_id":"active","gate_eligible":True}]
+        archive_prev=[{"evidence_id":"arch-1","gate_eligible":False},{"evidence_id":"arch-2","gate_eligible":False}]
+        active_ref,active_chunks=encode_external_store(active_rows,chunk_bytes=1024,store="render_env_chunks_v2")
+        archive_prev_ref,archive_prev_chunks=encode_external_store(
+            archive_prev,chunk_bytes=1024,store="render_env_archive_v1"
+        )
+        archive_current_ref,archive_current_chunks=encode_external_store(
+            archive_prev+[{"evidence_id":"arch-3","gate_eligible":False}],
+            chunk_bytes=1024,
+            store="render_env_archive_v1",
+            previous_generation=archive_prev_ref,
+        )
+        env={}
+        for i,chunk in enumerate(active_chunks):
+            env[cloud_mcp._commercial_evidence_env_key(i,active_ref)]=chunk
+        for i,chunk in enumerate(archive_prev_chunks):
+            env[cloud_mcp._commercial_evidence_env_key(i,archive_prev_ref,archive=True)]=chunk
+        for i,chunk in enumerate(archive_current_chunks):
+            env[cloud_mcp._commercial_evidence_env_key(i,archive_current_ref,archive=True)]=("corrupt" if i==0 else chunk)
+        with patch.dict(os.environ,env,clear=False):
+            hydrated,meta=cloud_mcp._hydrate_external_commercial_evidence({
+                "commercial_evidence_memory":active_ref,
+                "commercial_evidence_archive_reference":archive_current_ref,
+            })
+        self.assertFalse(hydrated["evidence_store_degraded"])
+        self.assertEqual(hydrated["commercial_evidence_archive_rows"],archive_prev)
+        self.assertEqual(hydrated["evidence_store_status"]["active_count"],1)
+        self.assertEqual(hydrated["evidence_store_status"]["archive_count"],2)
+        self.assertEqual(meta["status"],"recovered_previous_archive_generation")
+
+    def test_degraded_store_reports_zero_loaded_active_and_bounds_pending(self):
+        rows=[{"evidence_id":f"expected-{i}","gate_eligible":True} for i in range(4)]
+        ref,chunks=encode_external_store(rows,chunk_bytes=1024,store="render_env_chunks_v2")
+        pending=[
+            {"evidence_id":f"pending-{i}","gate_eligible":False,"last_seen_epoch":i}
+            for i in range(cloud_mcp.COMMERCIAL_PENDING_EVIDENCE_LIMIT+25)
+        ]
+        env={cloud_mcp._commercial_evidence_env_key(0,ref):"corrupt"}
+        with patch.dict(os.environ,env,clear=False):
+            hydrated,meta=cloud_mcp._hydrate_external_commercial_evidence({
+                "commercial_evidence_memory":ref,
+                "pending_evidence":pending,
+            })
+        status=hydrated["evidence_store_status"]
+        self.assertEqual(status["active_count"],0)
+        self.assertEqual(status["expected_active_count"],4)
+        self.assertEqual(status["pending_count"],cloud_mcp.COMMERCIAL_PENDING_EVIDENCE_LIMIT)
+        self.assertEqual(status["pending_overflow_count"],25)
+        self.assertEqual(meta["evidence_count"],0)
+
     async def test_corrupt_store_without_previous_blocks_evidence_rewrite(self):
         rows=[{"evidence_id":"keep","gate_eligible":True}]
         ref,chunks=encode_external_store(rows,chunk_bytes=1024,store="render_env_chunks_v2")
