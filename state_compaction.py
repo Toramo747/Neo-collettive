@@ -7,8 +7,8 @@ import zlib
 from typing import Any
 
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
-STATE_COMPACTION_TARGET_BYTES = 60_000
-STATE_COMPACTION_TRIGGER_RATIO = 0.90
+STATE_COMPACTION_TARGET_BYTES = 55_000
+STATE_COMPACTION_TRIGGER_RATIO = 0.75
 INBOUND_TRAFFIC_EVENT_LIMIT = 300
 INBOUND_TRAFFIC_EVENT_TIGHT_LIMIT = 160
 
@@ -17,13 +17,32 @@ INBOUND_TRAFFIC_EVENT_TIGHT_LIMIT = 160
 # being kept byte-identical forever.
 PROTECTED_STATE_KEYS = frozenset({
     "boundary_events",
+})
+
+AGGREGATE_STATE_KEYS = (
     "inbound_agent_stats",
     "inbound_security_stats",
     "agent_chat_monitor",
     "agent_demand_observatory",
+    "a2a_discovery",
     "neo_dialect_peers",
     "neo_dialect_seti_probe",
-})
+    "search_provider_state",
+    "evidence_integrity",
+    "gate_stability",
+    "hidden_control",
+    "hidden_challenge_control",
+    "model_shadow",
+    "problem_performance",
+    "problem_cooldowns",
+    "query_execution",
+    "jarvis_runtime",
+    "venture_metrics",
+    "runtime_snapshot",
+    "outcome_control",
+    "seti",
+    "agent_trust",
+)
 
 CONTINUITY_HISTORY_LIMITS = {
     "inbound_messages": 32,
@@ -336,12 +355,27 @@ def compact_residual_histories(payload: dict) -> dict:
         "knowledge_ledger", "hypothesis_queue", "exploration_history",
         "jarvis_dialogue_history", "commercial_evidence_memory",
         "thesis_history", "venture_measurements", "outcome_history",
+        "trust_lab_evaluations", "observed_pain_candidates",
     )
     for key in candidates:
         if key in PROTECTED_STATE_KEYS:
             continue
         if key in out:
             out[key] = _bounded_history_value(out[key])
+    return out
+
+
+def compact_aggregate_state(payload: dict) -> dict:
+    """Bound regenerable aggregate/diagnostic state while preserving durable receipts."""
+    out = deepcopy(payload)
+    for key in AGGREGATE_STATE_KEYS:
+        value = out.get(key)
+        if value is None:
+            continue
+        if key in {"inbound_agent_stats", "neo_dialect_peers", "agent_trust"} and isinstance(value, dict):
+            # Dict insertion order tracks recent peer additions in runtime state.
+            value = dict(list(value.items())[-64:])
+        out[key] = _bounded_history_value(value)
     return out
 
 
@@ -396,6 +430,7 @@ def compact_state_payload(
         ("d_inbound_traffic_events", trim_inbound_traffic_events),
         ("e_continuity_histories", compact_continuity_histories),
         ("f_residual_histories", compact_residual_histories),
+        ("g_aggregate_state", compact_aggregate_state),
     )
     for name, func in levels:
         current = func(current)
@@ -424,7 +459,7 @@ def compact_state_payload(
         )
         current_raw, current_encoded = encoded_sizes(current)
         meta["levels"].append({
-            "level": "g_tight_continuity",
+            "level": "h_tight_continuity",
             "raw_bytes": current_raw,
             "encoded_bytes": current_encoded,
         })
