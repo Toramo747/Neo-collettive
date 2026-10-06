@@ -24,6 +24,7 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint
+from commercial_evidence_store import decode_external_store, encode_external_store, is_external_reference
 import ipaddress
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, quote_plus, parse_qs, urljoin
@@ -190,6 +191,8 @@ CYCLE_FLOOR_PATH = os.getenv("NEO_CYCLE_FLOOR_PATH", "neo_cycle_floor.json")
 CYCLE_FLOOR_URL = (os.getenv("NEO_CYCLE_FLOOR_URL") or "https://raw.githubusercontent.com/Toramo747/Neo-collettive/main/neo_cycle_floor.json").strip()
 CYCLE_FLOOR_TIMEOUT_SECONDS = max(1.0, min(8.0, float(os.getenv("NEO_CYCLE_FLOOR_TIMEOUT_SECONDS", "4"))))
 STATE_ENV_KEY = "NEO_STATE_JSON"
+COMMERCIAL_EVIDENCE_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
+COMMERCIAL_EVIDENCE_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_CHUNK_BYTES", "60000"))))
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
