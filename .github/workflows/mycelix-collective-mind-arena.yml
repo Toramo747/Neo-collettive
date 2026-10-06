@@ -5,12 +5,14 @@ on:
     paths:
       - ".github/collective-mind-trigger.txt"
       - ".github/workflows/mycelix-collective-mind-arena.yml"
+  schedule:
+    - cron: "7 */6 * * *"
   workflow_dispatch:
     inputs:
       mission:
         description: "Collective Mind mission"
         required: true
-        default: "Design and falsify a local LLM adapter for OSIXBAY A2A. Apply every work packet to this mission: separate Ollama/llama.cpp gateway, minimal untrusted A2A context, schema-validated bounded three-round dialogue, timeout/token/round caps, authenticated configured endpoint, no effectful tools or mandatory cloud keys. Compare baseline versus local reasoning by dialogue completion, relevance, latency, CPU/RAM and failure isolation. Test in Collective Mind Arena only; simulated 3/3 never counts as independent external peer proof. Propose smallest implementable change and rejection criteria; do not claim implementation or live endpoint availability. Preserve all production gates, privacy, zero paid API cost and no automatic promotion."
+        default: "Find and falsify improvements to MYCELIX commercial-signal discovery, research quality, A2A collaboration and computational efficiency. Use only bounded analysis and public HTTPS evidence. Do not execute tools, contact third parties beyond the assigned A2A exchange, request secrets or money, mutate production, change commercial or challenge gates, or claim implementation. Prefer concrete proposals with a reproducible method and explicit rejection criterion. Preserve privacy, zero paid API cost and manual-only promotion."
         type: string
       max_agents:
         description: "Maximum task-verified collaborators (1-6)"
@@ -30,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      MISSION: "${{ github.event_name == 'workflow_dispatch' && inputs.mission || 'Design and falsify a local LLM adapter for OSIXBAY A2A. Apply every work packet to this mission: separate Ollama/llama.cpp gateway, minimal untrusted A2A context, schema-validated bounded three-round dialogue, timeout/token/round caps, authenticated configured endpoint, no effectful tools or mandatory cloud keys. Compare baseline versus local reasoning by dialogue completion, relevance, latency, CPU/RAM and failure isolation. Test in Collective Mind Arena only; simulated 3/3 never counts as independent external peer proof. Propose smallest implementable change and rejection criteria; do not claim implementation or live endpoint availability. Preserve all production gates, privacy, zero paid API cost and no automatic promotion.' }}"
+      MISSION: "${{ github.event_name == 'workflow_dispatch' && inputs.mission || 'Find and falsify improvements to MYCELIX commercial-signal discovery, research quality, A2A collaboration and computational efficiency. Use only bounded analysis and public HTTPS evidence. Do not execute tools, contact third parties beyond the assigned A2A exchange, request secrets or money, mutate production, change commercial or challenge gates, or claim implementation. Prefer concrete proposals with a reproducible method and explicit rejection criterion. Preserve privacy, zero paid API cost and manual-only promotion.' }}"
       MAX_AGENTS: "${{ github.event_name == 'workflow_dispatch' && inputs.max_agents || '6' }}"
     steps:
       - uses: actions/checkout@v4
