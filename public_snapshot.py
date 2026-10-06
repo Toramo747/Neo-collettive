@@ -451,13 +451,12 @@ _HEX_COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}$")
 _VERSION_CODE_RE = re.compile(r"^(?:v?[0-9]+(?:\.[0-9]+){0,3})$")
 _CANDIDATE_MISSING_CODES = frozenset({
     "specific_tool_name_and_target_user",
-    "two_independent_real_price_competitors",
     "two_competitors_with_real_price",
     "dissatisfaction_signal",
     "documented_gap",
     "three_independent_source_domains",
-    "two_existing_paid_tools",
     "monetization_score_60",
+    "unknown_requirement",
 })
 _CHALLENGE_MISSING_CODES = frozenset({
     "three_independent_requesters",
