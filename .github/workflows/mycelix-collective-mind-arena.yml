@@ -84,6 +84,7 @@ jobs:
           print("Collective Mind production isolation verified")
           PY
       - name: Publish sanitized Collective Mind report
+        if: github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           git config user.name "MYCELIX Collective Mind"
