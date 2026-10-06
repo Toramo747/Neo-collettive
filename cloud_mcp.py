@@ -1009,14 +1009,20 @@ def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str
     return out
 
 
+def _bounded_pending_evidence(rows: list[dict[str, Any]] | None) -> tuple[list[dict[str, Any]],int]:
+    clean=_dedupe_evidence_rows(rows or [])
+    clean.sort(key=lambda row:float(row.get("last_seen_epoch") or 0),reverse=True)
+    bounded=clean[:COMMERCIAL_PENDING_EVIDENCE_LIMIT]
+    return bounded,max(0,len(clean)-len(bounded))
+
+
 def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | None, dict]:
     if not isinstance(payload, dict):
         return payload, {"store_mode":"inline","hydrated":False,"status":"ok"}
     out=dict(payload)
     value=payload.get("commercial_evidence_memory")
     pending_all=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
-    pending=pending_all[-COMMERCIAL_PENDING_EVIDENCE_LIMIT:]
-    pending_overflow=max(0,len(pending_all)-len(pending))
+    pending,pending_overflow=_bounded_pending_evidence(pending_all)
     archive_ref=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
     archive_rows=[]
     archive_recovered=False
@@ -1330,7 +1336,9 @@ async def _checkpoint_state_to_render() -> dict:
     original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
     previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
     evidence_rows=[x for x in (payload.get("commercial_evidence_memory") or []) if isinstance(x,dict)] if isinstance(payload.get("commercial_evidence_memory"),list) else [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
-    pending_rows=[x for x in (AUTOPILOT_STATE.get("pending_evidence") or []) if isinstance(x,dict)]
+    pending_rows,pending_overflow_count=_bounded_pending_evidence(
+        [x for x in (AUTOPILOT_STATE.get("pending_evidence") or []) if isinstance(x,dict)]
+    )
     archive_rows=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or []) if isinstance(x,dict)]
     evidence_count_before=len(evidence_rows)
     compaction_meta={
@@ -1355,8 +1363,10 @@ async def _checkpoint_state_to_render() -> dict:
             payload["evidence_store_degraded"]=True
             payload["evidence_store_status"]={
                 "status":"degraded",
-                "active_count":int(original_ref.get("evidence_count") or 0),
+                "active_count":len(evidence_rows),
+                "expected_active_count":int(original_ref.get("evidence_count") or 0),
                 "pending_count":len(pending_rows),
+                "pending_overflow_count":pending_overflow_count,
                 "archive_count":len(archive_rows),
             }
             compaction_meta["store_mode"]="external"
@@ -6934,10 +6944,16 @@ def _commercial_evidence_quality(
     # non-gate-eligible rows move to the separate compressed archive.
     memory.sort(key=lambda x:float(x.get("last_seen_epoch") or 0),reverse=True)
     if bool(AUTOPILOT_STATE.get("evidence_store_degraded")):
-        pending=_dedupe_evidence_rows(AUTOPILOT_STATE.get("pending_evidence") or [],memory)
+        pending_all=_dedupe_evidence_rows(AUTOPILOT_STATE.get("pending_evidence") or [],memory)
+        pending,pending_overflow=_bounded_pending_evidence(pending_all)
         AUTOPILOT_STATE["pending_evidence"]=pending
         current_status=dict(AUTOPILOT_STATE.get("evidence_store_status") or {})
-        current_status.update({"status":"degraded","pending_count":len(pending)})
+        current_status.update({
+            "status":"degraded",
+            "pending_count":len(pending),
+            "pending_overflow_count":pending_overflow,
+            "active_count":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
+        })
         AUTOPILOT_STATE["evidence_store_status"]=current_status
     else:
         active_rows,archive_new=split_active_archive(memory,active_limit=COMMERCIAL_EVIDENCE_ACTIVE_LIMIT)
