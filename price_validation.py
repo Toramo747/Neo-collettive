@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from typing import Any
 
 PRICE_VALIDATION_QUERY_BUDGET = 4
@@ -100,12 +100,47 @@ def product_pricing_page(url: str, title: str = "", text: str = "") -> bool:
     return any(marker in path for marker in ("/pricing","/plans","/price","/product","/products","/app","/apps"))
 
 
+def marketplace_identity(url: str, vendor: str | None = None) -> str:
+    vendor_key=str(vendor or "").strip().lower()
+    if vendor_key:
+        return "vendor:"+vendor_key
+    parsed=urlparse(str(url or ""))
+    host=(parsed.hostname or "").lower().removeprefix("www.")
+    if not host:
+        return ""
+    if host not in MARKETPLACE_HOSTS:
+        return "domain:"+host
+    parts=[p for p in (parsed.path or "").split("/") if p]
+    app_path=""
+    if host=="apps.shopify.com" and parts:
+        app_path="/"+parts[0]
+    elif host=="marketplace.atlassian.com" and len(parts)>=2 and parts[0]=="apps":
+        app_path="/apps/"+parts[1]
+    elif host=="chromewebstore.google.com" and parts:
+        app_path="/"+"/".join(parts[:3])
+    elif host=="ecosystem.hubspot.com" and parts:
+        app_path="/"+"/".join(parts[:4])
+    elif host=="zapier.com" and len(parts)>=2 and parts[0]=="apps":
+        app_path="/apps/"+parts[1]
+    elif host=="marketplace.visualstudio.com":
+        item=(parse_qs(parsed.query).get("itemName") or [""])[0].strip().lower()
+        if item:
+            app_path="/items/"+item
+        elif parts:
+            app_path="/"+"/".join(parts[:2])
+    elif parts:
+        app_path="/"+parts[0]
+    return "marketplace:"+host+app_path if app_path else "domain:"+host
+
+
 def validate_pricing_result(row: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(row,dict):
         return None
     url=str(row.get("url") or "")
     title=str(row.get("title") or "")
-    text=str(row.get("snippet") or row.get("text") or row.get("description") or "")
+    snippet=str(row.get("snippet") or row.get("text") or row.get("description") or "")
+    page_text=str(row.get("page_text") or "")
+    text=(snippet+" "+page_text).strip()
     if not product_pricing_page(url,title,text):
         return None
     price=extract_price(title+" "+text)
@@ -120,6 +155,9 @@ def validate_pricing_result(row: dict[str, Any]) -> dict[str, Any] | None:
         "title":title[:240],
         "price":price,
         "product_page":True,
+        "seller_key":marketplace_identity(url,row.get("vendor")),
+        "strict_price_verified":True,
+        "price_source":"page" if page_text and extract_price(title+" "+snippet) is None else "snippet",
     }
 
 
@@ -162,8 +200,11 @@ def price_validation_plan(
         (f'site:zapier.com/apps "{alias}" price',"marketplace"),
         (f'site:chromewebstore.google.com "{alias}" price',"marketplace"),
     ]
+    take=max(1,min(int(budget or 4),9))
+    start=(max(0,int(cycle or 0))*take) % len(queries)
+    selected=[queries[(start+i)%len(queries)] for i in range(take)]
     out=[]
-    for query,kind in queries[:max(1,min(int(budget or 4),9))]:
+    for query,kind in selected:
         out.append({
             "query":query,
             "class":"tool_market_validation",
@@ -190,7 +231,11 @@ def summarize_validation(
                 "validation_queries":0,
                 "pricing_pages_found":0,
                 "prices_extracted":0,
+                "strict_prices":0,
                 "competitors_with_price":0,
+                "pages_fetched":0,
+                "prices_from_snippet":0,
+                "prices_from_page":0,
             })["validation_queries"]+=1
     competitors={}
     for group in groups or []:
@@ -204,21 +249,33 @@ def summarize_validation(
             "validation_queries":0,
             "pricing_pages_found":0,
             "prices_extracted":0,
+            "strict_prices":0,
             "competitors_with_price":0,
+            "pages_fetched":0,
+            "prices_from_snippet":0,
+            "prices_from_page":0,
         })
         for result in group.get("results") or []:
             if not isinstance(result,dict):
                 continue
             url=str(result.get("url") or "")
             title=str(result.get("title") or "")
-            text=str(result.get("snippet") or result.get("text") or "")
-            if product_pricing_page(url,title,text):
+            snippet=str(result.get("snippet") or result.get("text") or "")
+            page_text=str(result.get("page_text") or "")
+            if product_pricing_page(url,title,snippet+" "+page_text):
                 stats["pricing_pages_found"]+=1
+            if bool(result.get("page_fetched")):
+                stats["pages_fetched"]+=1
             validated=validate_pricing_result(result)
             if not validated:
                 continue
             stats["prices_extracted"]+=1
-            competitors.setdefault(family,set()).add(validated["domain"])
-    for family,domains in competitors.items():
-        telemetry[family]["competitors_with_price"]=len(domains)
+            stats["strict_prices"]+=1
+            if validated["price_source"]=="page":
+                stats["prices_from_page"]+=1
+            else:
+                stats["prices_from_snippet"]+=1
+            competitors.setdefault(family,set()).add(validated["seller_key"])
+    for family,identities in competitors.items():
+        telemetry[family]["competitors_with_price"]=len({x for x in identities if x})
     return telemetry
