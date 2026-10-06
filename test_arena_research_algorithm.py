@@ -50,6 +50,16 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
         self.assertEqual(mutation["source_scope"], "stories")
         self.assertNotIn("forbidden", mutation)
 
+    def test_parse_mutation_accepts_compatibility_labeled_reply(self):
+        mutation = ara.parse_mutation({
+            "text": "query_mode=mixed; query_count=4; recency_days=30; min_relevance_tokens=1; suffix_family=core; topic_shape=compact; query_frame=plain; term_order=signal_first; source_scope=all"
+        })
+        self.assertEqual(mutation["query_mode"], "mixed")
+        self.assertEqual(mutation["query_count"], 4)
+        self.assertEqual(mutation["recency_days"], 30)
+        self.assertEqual(mutation["term_order"], "signal_first")
+        self.assertEqual(mutation["source_scope"], "all")
+
     def test_query_genetics_change_query_surface_only(self):
         base={"query_mode":"workaround","query_count":4,"recency_days":42,"min_relevance_tokens":1}
         legacy=ara.clamp_genome(base)
