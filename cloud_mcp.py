@@ -31,7 +31,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
-from state_compaction import compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
+from state_compaction import STATE_COMPACTION_TARGET_BYTES, compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
 from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
 from public_projection import project_a2a_discovery, project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
 from trust_lab import evaluate_agent_trust
@@ -1053,10 +1053,11 @@ async def _checkpoint_state_to_render() -> dict:
     compaction_meta={"applied":False}
     try:
         _raw_before,_encoded_before=encoded_sizes(payload)
-        if _encoded_before >= int(STATE_ENV_MAX_BYTES*0.90):
+        if _encoded_before > STATE_COMPACTION_TARGET_BYTES:
             payload,compaction_meta=compact_state_payload(
                 payload,
                 max_bytes=STATE_ENV_MAX_BYTES,
+                target_bytes=STATE_COMPACTION_TARGET_BYTES,
                 force=True,
             )
         value, raw_bytes, encoded_bytes = _encode_state_env(payload)
