@@ -24,7 +24,7 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint
-from commercial_evidence_store import decode_external_store, encode_external_store, is_external_reference
+from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, is_external_reference, split_active_archive
 import ipaddress
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, quote_plus, parse_qs, urljoin
@@ -194,8 +194,11 @@ CYCLE_FLOOR_PATH = os.getenv("NEO_CYCLE_FLOOR_PATH", "neo_cycle_floor.json")
 CYCLE_FLOOR_URL = (os.getenv("NEO_CYCLE_FLOOR_URL") or "https://raw.githubusercontent.com/Toramo747/Neo-collettive/main/neo_cycle_floor.json").strip()
 CYCLE_FLOOR_TIMEOUT_SECONDS = max(1.0, min(8.0, float(os.getenv("NEO_CYCLE_FLOOR_TIMEOUT_SECONDS", "4"))))
 STATE_ENV_KEY = "NEO_STATE_JSON"
-COMMERCIAL_EVIDENCE_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
+COMMERCIAL_EVIDENCE_ENV_PREFIX = "NEO_EVIDENCE_"
+COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
+COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX = "NEO_EVIDENCE_ARCHIVE_"
 COMMERCIAL_EVIDENCE_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_CHUNK_BYTES", "60000"))))
+COMMERCIAL_EVIDENCE_ACTIVE_LIMIT = max(100, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_ACTIVE_LIMIT", "3000")))
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
@@ -363,6 +366,11 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "pending_evidence": [],
+    "commercial_evidence_store_reference": None,
+    "commercial_evidence_archive_reference": None,
+    "evidence_store_degraded": False,
+    "evidence_store_status": {"status":"ok","active_count":0,"pending_count":0,"archive_count":0},
     "model_shadow_observations": [],
     "challenge_track": {
         "mode":"shadow",
@@ -495,6 +503,11 @@ def _state_payload() -> dict:
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
+        "pending_evidence": list(AUTOPILOT_STATE.get("pending_evidence") or []),
+        "commercial_evidence_store_reference": AUTOPILOT_STATE.get("commercial_evidence_store_reference"),
+        "commercial_evidence_archive_reference": AUTOPILOT_STATE.get("commercial_evidence_archive_reference"),
+        "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
+        "evidence_store_status": AUTOPILOT_STATE.get("evidence_store_status") or {},
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "model_shadow": AUTOPILOT_STATE.get("model_shadow") or {},
