@@ -208,6 +208,39 @@ class _FakeClient:
 
 
 class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_checkpoint_compacts_above_target_before_legacy_90_percent_threshold(self):
+        payload = {
+            "runtime_profile": {"profile_id": "mycelix-prod-main", "deployment_role": "production"},
+            "cycles_completed": 1,
+            "boundary_events": [],
+            "commercial_evidence_memory": [],
+        }
+        blocks = 400
+        while True:
+            payload["diagnostic_padding"] = _noise("mid-sized-checkpoint", blocks)
+            _raw, encoded = encoded_sizes(payload)
+            if 60_000 < encoded < 90_000:
+                break
+            if encoded >= 90_000:
+                self.fail("unable to construct checkpoint fixture below legacy 90 percent threshold")
+            blocks += 50
+
+        old_key = cloud_mcp.RENDER_API_KEY
+        old_service = cloud_mcp.RENDER_SERVICE_ID
+        try:
+            cloud_mcp.RENDER_API_KEY = "synthetic"
+            cloud_mcp.RENDER_SERVICE_ID = "synthetic"
+            with patch.object(cloud_mcp, "_state_payload", return_value=deepcopy(payload)), patch.object(
+                cloud_mcp, "compact_state_payload", wraps=cloud_mcp.compact_state_payload
+            ) as compact, patch.object(cloud_mcp.httpx, "AsyncClient", _FakeClient):
+                result = await cloud_mcp._checkpoint_state_to_render()
+            self.assertTrue(compact.called)
+            self.assertTrue(result["ok"])
+            self.assertLess(result["stored_bytes"], 60_000)
+        finally:
+            cloud_mcp.RENDER_API_KEY = old_key
+            cloud_mcp.RENDER_SERVICE_ID = old_service
+
     async def test_heavy_state_compacts_below_target_and_checkpoint_succeeds(self):
         payload = _heavy_payload()
         before_raw, before_encoded = encoded_sizes(payload)
