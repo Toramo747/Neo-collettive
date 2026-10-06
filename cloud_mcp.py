@@ -946,72 +946,181 @@ def _load_cycle_floor() -> tuple[dict | None, dict]:
 
 
 
-def _commercial_evidence_env_key(index: int) -> str:
-    return COMMERCIAL_EVIDENCE_ENV_PREFIX + str(max(0, int(index)))
+def _commercial_evidence_env_key(
+    index: int,
+    reference: dict[str, Any] | None = None,
+    *,
+    archive: bool = False,
+) -> str:
+    ref=reference if isinstance(reference,dict) else {}
+    if ref.get("store")=="render_env_chunks_v1" or not ref:
+        return COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX + str(max(0,int(index)))
+    prefix=COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX if archive or ref.get("store")=="render_env_archive_v1" else COMMERCIAL_EVIDENCE_ENV_PREFIX
+    return chunk_key(prefix,ref,index)
+
+
+def _evidence_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
+    ref=reference if isinstance(reference,dict) else {}
+    count=max(0,int(ref.get("chunk_count") or 0))
+    return [(os.getenv(_commercial_evidence_env_key(i,ref)) or "") for i in range(count)]
+
+
+def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    out=[]
+    seen=set()
+    for group in groups:
+        for row in group or []:
+            if not isinstance(row,dict):
+                continue
+            key=str(row.get("evidence_id") or row.get("fingerprint") or "")
+            if not key:
+                key=hashlib.sha256(json.dumps(row,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode("utf-8")).hexdigest()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+    return out
 
 
 def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | None, dict]:
     if not isinstance(payload, dict):
-        return payload, {"store_mode": "inline", "hydrated": False}
-    value = payload.get("commercial_evidence_memory")
+        return payload, {"store_mode":"inline","hydrated":False,"status":"ok"}
+    out=dict(payload)
+    value=payload.get("commercial_evidence_memory")
+    pending=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    archive_ref=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
+    archive_rows=[]
+    if archive_ref and is_external_reference(archive_ref):
+        archive_rows=decode_external_store(archive_ref,_evidence_chunks_from_env(archive_ref)) or []
+    out["commercial_evidence_archive_rows"]=archive_rows
+
     if not is_external_reference(value):
-        return payload, {
-            "store_mode": "inline",
-            "hydrated": False,
-            "evidence_count": len(value) if isinstance(value, list) else 0,
+        rows=[x for x in (value or []) if isinstance(x,dict)] if isinstance(value,list) else []
+        merged=_dedupe_evidence_rows(rows,pending)
+        out["commercial_evidence_memory"]=merged
+        out["pending_evidence"]=[]
+        out["evidence_store_degraded"]=False
+        out["commercial_evidence_store_reference"]=None
+        out["evidence_store_status"]={
+            "status":"ok","active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
         }
-    chunk_count = max(0, int(value.get("chunk_count") or 0))
-    chunks = [(os.getenv(_commercial_evidence_env_key(i)) or "") for i in range(chunk_count)]
-    rows = decode_external_store(value, chunks)
+        return out,{"store_mode":"inline","hydrated":False,"status":"ok","evidence_count":len(merged),"archive_count":len(archive_rows)}
+
+    original_ref=dict(value)
+    rows=decode_external_store(original_ref,_evidence_chunks_from_env(original_ref))
+    recovered=False
+    active_ref=original_ref
     if rows is None:
-        return payload, {
-            "store_mode": "external",
-            "hydrated": False,
-            "reason": "external_evidence_store_invalid",
-            "evidence_count": int(value.get("evidence_count") or 0),
+        previous=original_ref.get("previous_generation") if isinstance(original_ref.get("previous_generation"),dict) else None
+        if previous and is_external_reference(previous):
+            rows=decode_external_store(previous,_evidence_chunks_from_env(previous))
+            if rows is not None:
+                recovered=True
+                active_ref=previous
+    if rows is None:
+        out["commercial_evidence_memory"]=[]
+        out["commercial_evidence_store_reference"]=original_ref
+        out["pending_evidence"]=pending
+        out["evidence_store_degraded"]=True
+        out["evidence_store_status"]={
+            "status":"degraded",
+            "active_count":int(original_ref.get("evidence_count") or 0),
+            "pending_count":len(pending),
+            "archive_count":len(archive_rows),
         }
-    out = dict(payload)
-    out["commercial_evidence_memory"] = rows
-    return out, {
-        "store_mode": "external",
-        "hydrated": True,
-        "evidence_count": len(rows),
-        "sha256": str(value.get("sha256") or ""),
+        return out,{
+            "store_mode":"external","hydrated":False,"status":"degraded",
+            "reason":"external_evidence_store_invalid",
+            "evidence_count":int(original_ref.get("evidence_count") or 0),
+            "pending_count":len(pending),"archive_count":len(archive_rows),
+        }
+
+    merged=_dedupe_evidence_rows(rows,pending)
+    out["commercial_evidence_memory"]=merged
+    out["pending_evidence"]=[]
+    out["commercial_evidence_store_reference"]=active_ref
+    out["evidence_store_degraded"]=False
+    status="recovered_previous_generation" if recovered else "ok"
+    out["evidence_store_status"]={
+        "status":status,"active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+    }
+    return out,{
+        "store_mode":"external","hydrated":True,"status":status,
+        "evidence_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+        "sha256":str(active_ref.get("sha256") or ""),
     }
 
 
-async def _write_commercial_evidence_store(rows: list[dict[str, Any]]) -> dict:
+def _response_env_value(response: Any) -> str | None:
+    try:
+        body=response.json()
+    except Exception:
+        return None
+    if not isinstance(body,dict):
+        return None
+    candidates=[body,body.get("envVar"),body.get("env_var")]
+    for item in candidates:
+        if isinstance(item,dict) and isinstance(item.get("value"),str):
+            return item.get("value")
+    return None
+
+
+async def _write_commercial_evidence_store(
+    rows: list[dict[str, Any]],
+    *,
+    previous_reference: dict[str, Any] | None = None,
+    archive: bool = False,
+) -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
-        return {"ok": False, "reason": "render_api_not_configured"}
-    reference, chunks = encode_external_store(rows, chunk_bytes=COMMERCIAL_EVIDENCE_CHUNK_BYTES)
-    headers = {
-        "Authorization": f"Bearer {RENDER_API_KEY}",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
+        return {"ok":False,"reason":"render_api_not_configured"}
+    store="render_env_archive_v1" if archive else "render_env_chunks_v2"
+    reference,chunks=encode_external_store(
+        rows,
+        chunk_bytes=COMMERCIAL_EVIDENCE_CHUNK_BYTES,
+        store=store,
+        previous_generation=previous_reference,
+    )
+    headers={
+        "Authorization":f"Bearer {RENDER_API_KEY}",
+        "Accept":"application/json",
+        "Content-Type":"application/json",
     }
     try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
-            for index, chunk in enumerate(chunks):
-                response = await client.put(
-                    f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{_commercial_evidence_env_key(index)}",
-                    headers=headers,
-                    json={"value": chunk},
-                )
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            for index,chunk in enumerate(chunks):
+                key=_commercial_evidence_env_key(index,reference,archive=archive)
+                url=f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{key}"
+                response=await client.put(url,headers=headers,json={"value":chunk})
                 if not response.is_success:
-                    return {
-                        "ok": False,
-                        "reason": "render_evidence_store_write_failed",
-                        "status": response.status_code,
-                        "chunk_index": index,
-                    }
+                    return {"ok":False,"reason":"render_evidence_store_write_failed","status":response.status_code,"chunk_index":index}
+                verified=_response_env_value(response)
+                if verified is None:
+                    reread=await client.get(url,headers=headers)
+                    if not reread.is_success:
+                        return {"ok":False,"reason":"render_evidence_store_verify_failed","status":reread.status_code,"chunk_index":index}
+                    verified=_response_env_value(reread)
+                if verified!=chunk:
+                    return {"ok":False,"reason":"render_evidence_store_verify_mismatch","chunk_index":index}
     except Exception as exc:
-        return {"ok": False, "reason": type(exc).__name__ + ": " + str(exc)[:180]}
+        return {"ok":False,"reason":type(exc).__name__+":"+str(exc)[:180]}
     return {
-        "ok": True,
-        "reference": reference,
-        "evidence_count": len(rows),
-        "chunk_count": len(chunks),
+        "ok":True,"reference":reference,"evidence_count":len(rows),"chunk_count":len(chunks),
     }
+
+
+async def _delete_evidence_generation(reference: dict[str, Any] | None) -> None:
+    ref=reference if isinstance(reference,dict) else {}
+    if not is_external_reference(ref) or not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return
+    headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            for index in range(max(0,int(ref.get("chunk_count") or 0))):
+                key=_commercial_evidence_env_key(index,ref,archive=ref.get("store")=="render_env_archive_v1")
+                await client.delete(f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{key}",headers=headers)
+    except Exception:
+        return
+
 
 
 def _restore_state() -> str:
