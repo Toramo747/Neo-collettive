@@ -1160,7 +1160,24 @@ async def _checkpoint_state_to_render() -> dict:
             inner_meta["evidence_count_after_compaction"]=evidence_after
             inner_meta["store_mode"]=store_mode
             compaction_meta=inner_meta
+        checkpoint_utc=datetime.now(timezone.utc).isoformat()
+        durable_checkpoint={
+            "ok":True,
+            "checkpoint_utc":checkpoint_utc,
+            "status":200,
+            "limit_bytes":STATE_ENV_MAX_BYTES,
+            "compaction":dict(compaction_meta),
+        }
+        payload=dict(payload)
+        payload["last_checkpoint"]=durable_checkpoint
         value, raw_bytes, encoded_bytes = _encode_state_env(payload)
+        # Persist the final encoded size in the checkpoint metadata itself.
+        # Two bounded passes are enough to stabilize the byte-count digits.
+        for _ in range(2):
+            durable_checkpoint["raw_bytes"]=raw_bytes
+            durable_checkpoint["stored_bytes"]=encoded_bytes
+            payload["last_checkpoint"]=dict(durable_checkpoint)
+            value, raw_bytes, encoded_bytes = _encode_state_env(payload)
     except Exception as e:
         try:
             failed_payload=payload if isinstance(payload,dict) else {}
@@ -1195,7 +1212,7 @@ async def _checkpoint_state_to_render() -> dict:
             )
             result={
                 "ok": r.is_success,
-                "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
+                "checkpoint_utc":checkpoint_utc,
                 "status": r.status_code,
                 "encoding": value.split(":",1)[0],
                 "raw_bytes": raw_bytes,
