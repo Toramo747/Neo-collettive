@@ -45,7 +45,7 @@ def encode_external_store(
     rows: list[dict[str, Any]] | None,
     *,
     chunk_bytes: int = DEFAULT_CHUNK_BYTES,
-    store: str = "render_env_chunks_v2",
+    store: str = "render_env_chunks_v1",
     previous_generation: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     clean = _canonical_rows(rows)
