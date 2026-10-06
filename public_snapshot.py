@@ -198,6 +198,8 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "commit": None,
                 "first_cycle_after_deploy": None,
                 "seconds_since_first_raw_pass": None,
+                "new_domains_since_first_pass": None,
+                "confirmation_blockers": [None],
                 "tagger_version": None,
             }],
         },
@@ -656,6 +658,14 @@ def _project_candidate_telemetry(value: Any) -> list[dict]:
         }
         elapsed=raw.get("seconds_since_first_raw_pass")
         row["seconds_since_first_raw_pass"]=None if elapsed is None else max(0,int(elapsed or 0))
+        row["new_domains_since_first_pass"]=max(0,int(raw.get("new_domains_since_first_pass") or 0))
+        row["confirmation_blockers"]=[
+            str(code) for code in (raw.get("confirmation_blockers") or [])
+            if str(code) in {
+                "min_6_hours","min_2_research_cycles",
+                "evidence_fingerprint_unchanged","no_new_independent_domain",
+            }
+        ][:8]
         rows.append(row)
     return rows
 
