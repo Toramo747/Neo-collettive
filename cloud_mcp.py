@@ -73,6 +73,7 @@ from hidden_control_gate import evaluate_hidden_control
 from hidden_challenge_control_gate import evaluate_hidden_challenge_control
 from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
+    CATEGORY_CONFIGS,
     analyze_tool_opportunities,
     market_query_plan,
     workaround42_query_plan,
