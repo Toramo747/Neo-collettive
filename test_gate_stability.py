@@ -89,6 +89,39 @@ class GateStabilityTests(unittest.TestCase):
         self.assertTrue(s["context_reset"])
         self.assertFalse(rows[0]["stable_gate_pass"])
 
+
+    def test_single_confirmation_failure_is_tolerated_then_stabilizes(self):
+        s,rows=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        self.assertFalse(rows[0]["stable_gate_pass"])
+        s,rows=self._apply(s,self._row(False,30),2,"2026-10-06T01:00:00+00:00")
+        self.assertFalse(rows[0]["stable_gate_pass"])
+        self.assertEqual(rows[0]["gate_confirmation"]["tolerated_fail_cycles"],1)
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            3,"2026-10-06T07:00:00+00:00",
+        )
+        self.assertTrue(rows[0]["stable_gate_pass"])
+        self.assertEqual(rows[0]["gate_confirmation"]["tolerated_fail_cycles"],1)
+        self.assertGreaterEqual(rows[0]["gate_confirmation"]["pass_ratio_in_window"],0.60)
+
+    def test_three_consecutive_confirmation_failures_reset_series(self):
+        s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        for cycle,hour in ((2,1),(3,2),(4,3)):
+            s,rows=self._apply(s,self._row(False,30),cycle,f"2026-10-06T0{hour}:00:00+00:00")
+        key=rows[0]["gate_candidate_key"]
+        self.assertEqual(s["candidates"][key]["first_raw_pass_utc"],"")
+        self.assertEqual(s["candidates"][key]["pass_cycles"],[])
+        self.assertEqual(s["candidates"][key]["confirmation_fail_streak"],0)
+        self.assertEqual(s["candidates"][key]["tolerated_fail_cycles"],0)
+
+    def test_low_pass_ratio_after_six_hours_resets_confirmation(self):
+        s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        s,_=self._apply(s,self._row(False,30),2,"2026-10-06T01:00:00+00:00")
+        s,rows=self._apply(s,self._row(False,30),3,"2026-10-06T07:00:00+00:00")
+        key=rows[0]["gate_candidate_key"]
+        self.assertEqual(s["candidates"][key]["first_raw_pass_utc"],"")
+        self.assertFalse(rows[0]["stable_gate_pass"])
+
     def test_one_failure_does_not_drop_stable_gate_but_two_distinct_do(self):
         s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
         s,rows=self._apply(

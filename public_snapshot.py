@@ -199,6 +199,8 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "first_cycle_after_deploy": None,
                 "seconds_since_first_raw_pass": None,
                 "new_domains_since_first_pass": None,
+                "tolerated_fail_cycles": None,
+                "pass_ratio_in_window_ppm": None,
                 "confirmation_blockers": [None],
                 "tagger_version": None,
             }],
@@ -239,6 +241,8 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "first_cycle_after_deploy": None,
                 "seconds_since_first_raw_pass": None,
                 "new_domains_since_first_pass": None,
+                "tolerated_fail_cycles": None,
+                "pass_ratio_in_window_ppm": None,
                 "confirmation_blockers": [None],
                 "tagger_version": None,
             }],
@@ -675,11 +679,14 @@ def _project_candidate_telemetry(value: Any) -> list[dict]:
         elapsed=raw.get("seconds_since_first_raw_pass")
         row["seconds_since_first_raw_pass"]=None if elapsed is None else max(0,int(elapsed or 0))
         row["new_domains_since_first_pass"]=max(0,int(raw.get("new_domains_since_first_pass") or 0))
+        row["tolerated_fail_cycles"]=max(0,int(raw.get("tolerated_fail_cycles") or 0))
+        row["pass_ratio_in_window_ppm"]=max(0,min(1000000,int(raw.get("pass_ratio_in_window_ppm") or 0)))
         row["confirmation_blockers"]=[
             str(code) for code in (raw.get("confirmation_blockers") or [])
             if str(code) in {
                 "min_6_hours","min_2_research_cycles",
                 "evidence_fingerprint_unchanged","no_new_independent_domain",
+                "pass_ratio_below_60",
             }
         ][:8]
         rows.append(row)

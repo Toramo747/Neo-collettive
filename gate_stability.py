@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone
 
@@ -10,6 +11,8 @@ ENTER_STREAK=2
 EXIT_STREAK=2
 MIN_CONFIRM_SECONDS=6*60*60
 MIN_CONFIRM_CYCLES=2
+CONFIRM_FAIL_RESET=max(1,int(os.getenv("NEO_GATE_CONFIRM_FAIL_RESET","3")))
+CONFIRM_MIN_PASS_RATIO=max(0.0,min(1.0,float(os.getenv("NEO_GATE_CONFIRM_MIN_PASS_RATIO","0.60"))))
 MAX_FLIPS=80
 
 def _utc() -> str:
@@ -86,26 +89,117 @@ def _confirmation(
     fp=opportunity_fingerprint(row)
     domains=_domains(row)
 
-    first_raw_pass_utc=str(prev.get("first_raw_pass_utc") or "") if raw_pass else ""
-    first_fp=str(prev.get("first_fingerprint") or "") if raw_pass else ""
-    first_domains={str(x) for x in (prev.get("first_domains") or [])} if raw_pass else set()
-    pass_cycles={int(x) for x in (prev.get("pass_cycles") or []) if str(x).lstrip("-").isdigit()} if raw_pass else set()
+    first_raw_pass_utc=str(prev.get("first_raw_pass_utc") or "")
+    first_fp=str(prev.get("first_fingerprint") or "")
+    first_domains={str(x) for x in (prev.get("first_domains") or [])}
+    pass_cycles={int(x) for x in (prev.get("pass_cycles") or []) if str(x).lstrip("-").isdigit()}
+    observations=[
+        {
+            "cycle":int(x.get("cycle") or 0),
+            "passed":bool(x.get("passed")),
+            "observed_at_utc":str(x.get("observed_at_utc") or ""),
+        }
+        for x in (prev.get("confirmation_observations") or [])
+        if isinstance(x,dict)
+    ][-64:]
+    confirmation_fail_streak=max(0,int(prev.get("confirmation_fail_streak") or 0))
 
-    if raw_pass:
-        if not first_raw_pass_utc:
+    def reset_series() -> None:
+        nonlocal first_raw_pass_utc,first_fp,first_domains,pass_cycles,observations
+        nonlocal confirmation_fail_streak,pass_streak
+        first_raw_pass_utc=""
+        first_fp=""
+        first_domains=set()
+        pass_cycles=set()
+        observations=[]
+        confirmation_fail_streak=0
+        pass_streak=0
+
+    # Stable candidates retain the existing EXIT_STREAK behavior exactly.
+    if stable:
+        if raw_pass:
+            fail_streak=0
+            if distinct_cycle:
+                pass_streak=pass_streak+1 if prev_raw is True else 1
+        else:
+            if distinct_cycle:
+                fail_streak=fail_streak+1 if prev_raw is False else 1
+            pass_streak=0
+            if fail_streak>=EXIT_STREAK:
+                stable=False
+                reset_series()
+        meta={
+            "first_raw_pass_utc":first_raw_pass_utc,
+            "first_fingerprint":first_fp,
+            "first_domains":sorted(first_domains),
+            "pass_cycles":sorted(pass_cycles)[-16:],
+            "confirmation_observations":observations,
+            "confirmation_fail_streak":confirmation_fail_streak,
+            "last_fingerprint":fp,
+            "seconds_since_first_raw_pass":max(0,int(prev.get("seconds_since_first_raw_pass") or 0)),
+            "new_domains_since_first_pass":max(0,int(prev.get("new_domains_since_first_pass") or 0)),
+            "confirmation_blockers":[],
+            "tolerated_fail_cycles":0,
+            "pass_ratio_in_window":1.0 if raw_pass else 0.0,
+            "distinct_cycle":distinct_cycle,
+        }
+        return stable,pass_streak,fail_streak,meta
+
+    # Before the first passing observation there is no confirmation window.
+    if raw_pass and not first_raw_pass_utc:
+        first_raw_pass_utc=now
+        first_fp=fp
+        first_domains=set(domains)
+        pass_cycles=set()
+        observations=[]
+        confirmation_fail_streak=0
+
+    if first_raw_pass_utc and distinct_cycle:
+        observations.append({"cycle":cycle,"passed":raw_pass,"observed_at_utc":now})
+        observations=observations[-64:]
+        if raw_pass:
+            pass_cycles.add(cycle)
+            confirmation_fail_streak=0
+        else:
+            confirmation_fail_streak+=1
+
+    pass_streak=len(pass_cycles)
+    fail_streak=confirmation_fail_streak if first_raw_pass_utc else (fail_streak+1 if distinct_cycle and prev_raw is False else 1 if distinct_cycle and not raw_pass else 0)
+
+    first_dt=_parse_utc(first_raw_pass_utc)
+    now_dt=_parse_utc(now)
+    seconds=max(0,int((now_dt-first_dt).total_seconds())) if first_dt and now_dt else 0
+    observed_count=len(observations)
+    passed_count=sum(1 for x in observations if x.get("passed"))
+    ratio=(passed_count/observed_count) if observed_count else 0.0
+
+    reset_reason=""
+    if first_raw_pass_utc and confirmation_fail_streak>=CONFIRM_FAIL_RESET:
+        reset_reason="consecutive_failures"
+    elif first_raw_pass_utc and seconds>=MIN_CONFIRM_SECONDS and observed_count and ratio<CONFIRM_MIN_PASS_RATIO:
+        reset_reason="pass_ratio_below_60"
+
+    if reset_reason:
+        reset_series()
+        # A passing cycle that triggers a ratio reset is also the first
+        # observation of the new confirmation series.
+        if raw_pass:
             first_raw_pass_utc=now
             first_fp=fp
             first_domains=set(domains)
-            pass_cycles=set()
-        if distinct_cycle:
-            pass_cycles.add(cycle)
-            pass_streak=len(pass_cycles)
-        fail_streak=0
-        first_dt=_parse_utc(first_raw_pass_utc)
-        now_dt=_parse_utc(now)
-        seconds=max(0,int((now_dt-first_dt).total_seconds())) if first_dt and now_dt else 0
-        new_domains=sorted(domains-first_domains)
-        blockers=[]
+            pass_cycles={cycle}
+            observations=[{"cycle":cycle,"passed":True,"observed_at_utc":now}]
+            pass_streak=1
+            fail_streak=0
+            ratio=1.0
+        else:
+            fail_streak=0
+            ratio=0.0
+        seconds=0
+
+    new_domains=sorted(domains-first_domains) if first_raw_pass_utc else []
+    blockers=[]
+    if raw_pass and first_raw_pass_utc:
         if seconds<MIN_CONFIRM_SECONDS:
             blockers.append("min_6_hours")
         if len(pass_cycles)<MIN_CONFIRM_CYCLES:
@@ -114,34 +208,32 @@ def _confirmation(
             blockers.append("evidence_fingerprint_unchanged")
         if not new_domains:
             blockers.append("no_new_independent_domain")
-        if not stable and not blockers:
+        if seconds>=MIN_CONFIRM_SECONDS and ratio<CONFIRM_MIN_PASS_RATIO:
+            blockers.append("pass_ratio_below_60")
+        if not blockers:
             stable=True
-    else:
-        if distinct_cycle:
-            fail_streak=fail_streak+1 if prev_raw is False else 1
-        pass_streak=0
-        first_raw_pass_utc=""
-        first_fp=""
-        first_domains=set()
-        pass_cycles=set()
-        seconds=0
-        new_domains=[]
-        blockers=[]
-        if stable and fail_streak>=EXIT_STREAK:
-            stable=False
 
+    tolerated_fail_cycles=(
+        sum(1 for x in observations if not x.get("passed"))
+        if first_raw_pass_utc and confirmation_fail_streak<CONFIRM_FAIL_RESET else 0
+    )
     meta={
         "first_raw_pass_utc":first_raw_pass_utc,
         "first_fingerprint":first_fp,
         "first_domains":sorted(first_domains),
         "pass_cycles":sorted(pass_cycles)[-16:],
+        "confirmation_observations":observations,
+        "confirmation_fail_streak":confirmation_fail_streak,
         "last_fingerprint":fp,
         "seconds_since_first_raw_pass":seconds,
         "new_domains_since_first_pass":len(new_domains),
         "confirmation_blockers":blockers,
+        "tolerated_fail_cycles":tolerated_fail_cycles,
+        "pass_ratio_in_window":ratio,
         "distinct_cycle":distinct_cycle,
     }
     return stable,pass_streak,fail_streak,meta
+
 
 def apply_gate_hysteresis(
     state: dict | None,
@@ -239,10 +331,14 @@ def apply_gate_hysteresis(
             "first_fingerprint":meta["first_fingerprint"],
             "first_domains":meta["first_domains"],
             "pass_cycles":meta["pass_cycles"],
+            "confirmation_observations":meta["confirmation_observations"],
+            "confirmation_fail_streak":meta["confirmation_fail_streak"],
             "last_observed_cycle":cycle,
             "seconds_since_first_raw_pass":meta["seconds_since_first_raw_pass"],
             "new_domains_since_first_pass":meta["new_domains_since_first_pass"],
             "confirmation_blockers":meta["confirmation_blockers"],
+            "tolerated_fail_cycles":meta["tolerated_fail_cycles"],
+            "pass_ratio_in_window":meta["pass_ratio_in_window"],
             "last_commit":str(commit or "")[:64],
         }
         results[key]=(stable,pass_streak,fail_streak,meta)
@@ -254,14 +350,42 @@ def apply_gate_hysteresis(
         if int(prev.get("last_observed_cycle") or -1)!=cycle:
             absent=int(prev.get("absent_streak") or 0)+1
             prev["absent_streak"]=absent
-            prev["pass_streak"]=0
-            prev["first_raw_pass_utc"]=""
-            prev["first_fingerprint"]=""
-            prev["first_domains"]=[]
-            prev["pass_cycles"]=[]
-            if bool(prev.get("stable")) and absent>=EXIT_STREAK:
-                prev["stable"]=False
-                prev["fail_streak"]=max(EXIT_STREAK,int(prev.get("fail_streak") or 0))
+            if bool(prev.get("stable")):
+                prev["pass_streak"]=0
+                if absent>=EXIT_STREAK:
+                    prev["stable"]=False
+                    prev["fail_streak"]=max(EXIT_STREAK,int(prev.get("fail_streak") or 0))
+                    prev["first_raw_pass_utc"]=""
+                    prev["first_fingerprint"]=""
+                    prev["first_domains"]=[]
+                    prev["pass_cycles"]=[]
+                    prev["confirmation_observations"]=[]
+                    prev["confirmation_fail_streak"]=0
+            elif str(prev.get("first_raw_pass_utc") or ""):
+                obs=[x for x in (prev.get("confirmation_observations") or []) if isinstance(x,dict)][-63:]
+                obs.append({"cycle":cycle,"passed":False,"observed_at_utc":now})
+                prev["confirmation_observations"]=obs
+                consecutive=max(0,int(prev.get("confirmation_fail_streak") or 0))+1
+                prev["confirmation_fail_streak"]=consecutive
+                total=len(obs)
+                passed=sum(1 for x in obs if bool(x.get("passed")))
+                ratio=(passed/total) if total else 0.0
+                first_dt=_parse_utc(prev.get("first_raw_pass_utc"))
+                now_dt=_parse_utc(now)
+                elapsed=max(0,int((now_dt-first_dt).total_seconds())) if first_dt and now_dt else 0
+                prev["tolerated_fail_cycles"]=sum(1 for x in obs if not bool(x.get("passed")))
+                prev["pass_ratio_in_window"]=ratio
+                if consecutive>=CONFIRM_FAIL_RESET or (elapsed>=MIN_CONFIRM_SECONDS and ratio<CONFIRM_MIN_PASS_RATIO):
+                    prev["pass_streak"]=0
+                    prev["fail_streak"]=0
+                    prev["first_raw_pass_utc"]=""
+                    prev["first_fingerprint"]=""
+                    prev["first_domains"]=[]
+                    prev["pass_cycles"]=[]
+                    prev["confirmation_observations"]=[]
+                    prev["confirmation_fail_streak"]=0
+                    prev["tolerated_fail_cycles"]=0
+                    prev["pass_ratio_in_window"]=0.0
             prev["updated_at_utc"]=now
             prev["last_observed_cycle"]=cycle
             candidates[key]=prev
@@ -284,11 +408,13 @@ def apply_gate_hysteresis(
             "seconds_since_first_raw_pass":meta["seconds_since_first_raw_pass"],
             "new_domains_since_first_pass":meta["new_domains_since_first_pass"],
             "confirmation_blockers":meta["confirmation_blockers"],
+            "tolerated_fail_cycles":meta["tolerated_fail_cycles"],
+            "pass_ratio_in_window":meta["pass_ratio_in_window"],
         }
         out.append(row)
 
     return {
-        "schema_v":3,
+        "schema_v":4,
         "candidates":candidates,
         "flips":flips[-MAX_FLIPS:],
         "updated_at_utc":now,
