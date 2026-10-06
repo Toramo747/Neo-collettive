@@ -33,7 +33,7 @@ class AutopilotTimeoutGuardTests(unittest.TestCase):
     def test_money_first_research_is_bounded(self):
         s=self.source
         self.assertIn("MONEY_FIRST_TIMEOUT_SECONDS",s)
-        self.assertIn('"money_first_deadline_exceeded"',s)
+        self.assertIn('"price_validation_deadline_exceeded"',s)
 
     def test_pain_compact45_v3_is_integrated_with_v2_v1_fallback_without_gate_changes(self):
         s=self.source

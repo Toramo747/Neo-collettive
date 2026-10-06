@@ -164,7 +164,7 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
                         {
                             "gate_pass":False,
                             "monetization_score":72,
-                            "missing":["two_independent_real_price_competitors","documented gap"],
+                            "missing":["two_competitors_with_real_price","documented gap"],
                             "sources":[{"url":"https://private.example"}],
                         }
                     ],
@@ -194,7 +194,7 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(diag["qualified_candidates"],0)
         self.assertFalse(diag["top_gate_pass"])
         self.assertEqual(diag["top_monetization_score"],72)
-        self.assertIn("two_independent_real_price_competitors",diag["top_missing"])
+        self.assertIn("two_competitors_with_real_price",diag["top_missing"])
         self.assertIn("documented_gap",diag["top_missing"])
         self.assertEqual(diag["search_provider"]["calls_day"],149)
         self.assertEqual(diag["search_provider"]["configured_provider"],"brave")

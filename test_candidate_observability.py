@@ -78,7 +78,7 @@ class CandidateObservabilityTests(unittest.TestCase):
         row["gate_pass"]=False
         row["missing"]=["documented_gap","https://secret.example/x","free text"]
         telemetry=self._telemetry(row)
-        self.assertEqual(telemetry["missing_codes"],["documented_gap"])
+        self.assertEqual(telemetry["missing_codes"],["documented_gap","unknown_requirement"])
 
 
 if __name__=="__main__":

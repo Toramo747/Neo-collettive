@@ -11,13 +11,12 @@ from gate_stability import opportunity_fingerprint, opportunity_identity
 PUBLIC_ID_LENGTH = 16
 ALLOWED_MISSING_CODES = frozenset({
     "specific_tool_name_and_target_user",
-    "two_independent_real_price_competitors",
     "two_competitors_with_real_price",
     "dissatisfaction_signal",
     "documented_gap",
     "three_independent_source_domains",
-    "two_existing_paid_tools",
     "monetization_score_60",
+    "unknown_requirement",
 })
 
 
@@ -71,10 +70,11 @@ def build_candidate_telemetry(
             for x in source_rows
             if str(x.get("domain") or "").strip()
         }
-        missing_codes = [
-            str(code) for code in (row.get("missing") or [])
-            if str(code) in ALLOWED_MISSING_CODES
-        ]
+        missing_codes = []
+        for code in (row.get("missing") or []):
+            value=str(code)
+            missing_codes.append(value if value in ALLOWED_MISSING_CODES else "unknown_requirement")
+        missing_codes=list(dict.fromkeys(missing_codes))
         confirmation = row.get("gate_confirmation") if isinstance(row.get("gate_confirmation"), dict) else {}
         private_fp = opportunity_fingerprint(row)
         out.append({

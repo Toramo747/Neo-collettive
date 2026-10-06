@@ -40,7 +40,7 @@ class ToolOpportunityTests(unittest.TestCase):
         result=analyze_tool_opportunities(rows,[],[],meta,"2026-09-26T12:00:00+00:00")
         ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
         self.assertFalse(ai["gate_pass"])
-        self.assertIn("two_independent_real_price_competitors",ai["missing"])
+        self.assertIn("two_competitors_with_real_price",ai["missing"])
 
     def test_gate_passes_only_with_url_grounded_market_evidence(self):
         meta={
@@ -262,7 +262,7 @@ class ToolOpportunityTests(unittest.TestCase):
         ai=next(x for x in result["top5"] if x["family"]=="ai_tools")
         self.assertEqual(len(ai["existing_tools"]),0)
         self.assertFalse(ai["gate_pass"])
-        self.assertIn("two_independent_real_price_competitors",ai["missing"])
+        self.assertIn("two_competitors_with_real_price",ai["missing"])
 
     def test_github_bounty_price_is_not_a_paid_competitor(self):
         meta={'"analytics saas" pricing subscription':{"family":"analytics_tools","role":"tool_pricing"}}
@@ -368,7 +368,7 @@ class ToolOpportunityTests(unittest.TestCase):
             self.assertTrue(any(x.get("family")=="mcp_reliability" for x in market_query_plan(0,10)+market_query_plan(5,10)))
         else:
             self.assertFalse(rows[0]["gate_pass"])
-            self.assertIn("two_independent_real_price_competitors",rows[0]["missing"])
+            self.assertIn("two_competitors_with_real_price",rows[0]["missing"])
 
     def test_free_usage_evidence_never_changes_score_or_gate(self):
         query='"MCP server monitoring" pricing subscription'

@@ -73,6 +73,7 @@ from hidden_control_gate import evaluate_hidden_control
 from hidden_challenge_control_gate import evaluate_hidden_challenge_control
 from tool_opportunity import (
     TOOL_OPPORTUNITY_SCHEMA_VERSION,
+    CATEGORY_CONFIGS,
     analyze_tool_opportunities,
     market_query_plan,
     workaround42_query_plan,
@@ -84,6 +85,7 @@ from tool_opportunity import (
     seti_market_catalog,
 )
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
+from price_validation import PRICE_VALIDATION_QUERY_BUDGET, price_validation_plan, summarize_validation
 from query_builder import (
     breakout_queries as build_breakout_queries,
     discovery_query as build_discovery_query,
@@ -9186,27 +9188,33 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         timeout_seconds=WEB_RESEARCH_TIMEOUT_SECONDS,
     )
 
-    # v0.99.28 money-first second pass: use the remaining public-search budget
-    # only on theses still missing two independent real-price competitors.
-    prior_top5=((AUTOPILOT_STATE.get("tool_opportunities") or {}).get("top5") or [])
-    money_plan=competitor_money_first_plan(prior_top5,6)
-    if money_plan:
-        money_meta={
+    # Dedicated G5 validation phase. It has its own bounded query budget and
+    # rotates only among families with persisted buyer voice. Discovery remains separate.
+    price_plan=price_validation_plan(
+        AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+        cycle=cycle_no,
+        category_configs=CATEGORY_CONFIGS,
+        budget=PRICE_VALIDATION_QUERY_BUDGET,
+    )
+    price_groups=[]
+    if price_plan:
+        price_meta={
             " ".join(str(x.get("query") or "").split()).lower():x
-            for x in money_plan if isinstance(x,dict) and str(x.get("query") or "").strip()
+            for x in price_plan if isinstance(x,dict) and str(x.get("query") or "").strip()
         }
-        money_groups=await _free_web_research(
-            [x["query"] for x in money_plan],
-            per_query=6, query_meta=money_meta,
+        price_groups=await _free_web_research(
+            [x["query"] for x in price_plan],
+            per_query=6,
+            query_meta=price_meta,
             timeout_seconds=MONEY_FIRST_TIMEOUT_SECONDS,
-            deadline_code="money_first_deadline_exceeded",
+            deadline_code="price_validation_deadline_exceeded",
         )
-        web_research.extend(money_groups)
-        query_meta.update(money_meta)
-        search_strategy["money_first_queries"]=money_plan
-        search_strategy["queries"].extend([x["query"] for x in money_plan])
-        search_strategy["planned_query_count"]=len(search_strategy["queries"])
-        search_strategy["policy"]="money-first: verify real competitor pricing before broader market activity; no login scraping; no payment"
+        web_research.extend(price_groups)
+        query_meta.update(price_meta)
+        search_strategy["price_validation_queries"]=price_plan
+        search_strategy["price_validation_query_budget"]=PRICE_VALIDATION_QUERY_BUDGET
+        search_strategy["policy"]="separate price validation: product pages and public marketplaces only; no login scraping; no payment"
+    price_validation_telemetry=summarize_validation(price_plan,price_groups)
 
     source_diagnostics=dict(AUTOPILOT_STATE.get("market_source_diagnostics") or {})
     for key in ("pricing_pages","product_hunt","extension_marketplaces"):
@@ -9432,6 +9440,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         query_meta,
         source_diagnostics=source_diagnostics,
         usage_evidence=endpoint_verifier.usage_metrics_snapshot(),
+    )
+    market_analysis["price_validation"]=price_validation_telemetry
+    market_analysis["candidate_telemetry_status"]=(
+        "enabled" if CANDIDATE_TELEMETRY_HMAC_KEY else "telemetry_disabled_no_secret"
     )
     previous_gate_state=AUTOPILOT_STATE.get("gate_stability") or {}
     first_cycle_after_deploy=bool(
