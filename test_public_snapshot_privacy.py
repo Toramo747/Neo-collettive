@@ -486,6 +486,18 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_public_snapshot(bad)
 
+    def test_evaluator_contract_snapshot_is_numeric_only(self):
+        raw={"autopilot":{"evaluator_contracts":{
+            "commercial":{"benchmark_ok":True,"robustness_ok":True,"control_ok":True,"best_fitness":61.5,"promotion_ready":False,"secret":"x"},
+            "challenge":{"benchmark_ok":True,"robustness_ok":True,"control_ok":False,"best_fitness":100.0,"promotion_ready":False},
+            "warp":{"benchmark_ok":True,"robustness_ok":False,"control_ok":False,"best_fitness":0.0,"promotion_ready":False},
+        }}}
+        public=sanitize_public_snapshot(raw)
+        rows=public["autopilot"]["evaluator_contracts"]
+        self.assertEqual(rows["commercial"]["best_fitness"],61.5)
+        self.assertNotIn("secret",json.dumps(rows))
+        validate_public_snapshot(public)
+
     def test_evidence_store_status_uses_restored_runtime_counts(self):
         raw={
             "autopilot":{
