@@ -12,6 +12,8 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from price_validation import CANONICAL_PRICE_REQUIREMENT, extract_price, product_pricing_page
+
 TOOL_OPPORTUNITY_SCHEMA_VERSION = 2
 
 CATEGORY_CONFIGS = {
@@ -317,7 +319,7 @@ def competitor_money_first_plan(opportunities: list[dict] | None, count: int = 6
     """
     rows=[]
     seen=set()
-    blockers={"two_independent_real_price_competitors","two_competitors_with_real_price","two_existing_paid_tools"}
+    blockers={CANONICAL_PRICE_REQUIREMENT}
     for opp in opportunities or []:
         if not isinstance(opp,dict):
             continue
@@ -432,9 +434,16 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
     text=str(raw.get("text") or raw.get("snippet") or raw.get("description") or title).strip()[:1600]
     low=(title+" "+text).lower()
     signal_types=[]
-    price_match=PRICE_RE.search(title+" "+text)
+    legacy_price_match=PRICE_RE.search(title+" "+text)
     explicit_payment_required=("payment_required" in low or "payment required" in low)
-    if price_match or explicit_payment_required:
+    coverage_source=str(raw.get("coverage_source") or "").strip()[:80] or None
+    parsed_price=extract_price(title+" "+text)
+    strict_product_price=bool(
+        parsed_price
+        and coverage_source in {"pricing_pages","extension_marketplaces"}
+        and product_pricing_page(url,title,text)
+    )
+    if legacy_price_match or explicit_payment_required or strict_product_price:
         signal_types.append("PAYMENT")
     if any(x in low for x in DISSATISFACTION_MARKERS):
         signal_types.extend(["DISSATISFACTION","GAP"])
@@ -457,11 +466,18 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         "title":title,
         "excerpt":text[:500],
         "signal_types":sorted(set(signal_types)),
-        "price":price_match.group(0)[:80] if price_match else ("PAYMENT_REQUIRED" if explicit_payment_required else None),
-        "real_price":bool(price_match),
-        "payment_required":bool(explicit_payment_required and not price_match),
+        "price":(
+            (str(parsed_price.get("currency"))+" "+str(parsed_price.get("amount"))+"/"+str(parsed_price.get("period")))
+            if strict_product_price else
+            (legacy_price_match.group(0)[:80] if legacy_price_match else ("PAYMENT_REQUIRED" if explicit_payment_required else None))
+        ),
+        "price_currency":parsed_price.get("currency") if strict_product_price else None,
+        "price_amount":parsed_price.get("amount") if strict_product_price else None,
+        "price_period":parsed_price.get("period") if strict_product_price else None,
+        "real_price":strict_product_price,
+        "payment_required":bool(explicit_payment_required and not strict_product_price),
         "vendor":str(raw.get("vendor") or "").strip()[:120] or None,
-        "coverage_source":str(raw.get("coverage_source") or "").strip()[:80] or None,
+        "coverage_source":coverage_source,
     }
 
 
@@ -498,7 +514,13 @@ def analyze_tool_opportunities(
                 continue
             chosen=family or _family_from_text(str(item.get("title") or "")+" "+str(item.get("snippet") or ""))
             role=str(meta.get("role") or "")
-            coverage_source=("pricing_pages" if role=="tool_pricing" else "product_hunt" if role=="product_hunt" else "extension_marketplaces" if role=="extension_marketplace" else "")
+            validation_kind=str(meta.get("validation_kind") or "")
+            coverage_source=(
+                "pricing_pages" if role in {"tool_pricing","competitor_pricing"} or (role=="price_validation" and validation_kind!="marketplace")
+                else "product_hunt" if role=="product_hunt"
+                else "extension_marketplaces" if role=="extension_marketplace" or (role=="price_validation" and validation_kind=="marketplace")
+                else ""
+            )
             enriched=dict(item)
             enriched["coverage_source"]=coverage_source
             row=_source_row(enriched,chosen,observed_at)
@@ -632,12 +654,10 @@ def analyze_tool_opportunities(
         )
         missing=[]
         if not thesis_specific: missing.append("specific_tool_name_and_target_user")
-        if len(real_payment_keys)<2: missing.append("two_independent_real_price_competitors")
-        if len(existing_tools)<2: missing.append("two_competitors_with_real_price")
+        if len(real_payment_keys)<2 or len(existing_tools)<2: missing.append(CANONICAL_PRICE_REQUIREMENT)
         if len(dissatisfaction_domains)<1: missing.append("dissatisfaction_signal")
         if len(gap_domains)<1: missing.append("documented_gap")
         if len(source_domains)<3: missing.append("three_independent_source_domains")
-        if len(existing_tools)<2: missing.append("two_existing_paid_tools")
         if score<60: missing.append("monetization_score_60")
 
         opportunity={
