@@ -173,6 +173,50 @@ def _summarize_labeled(rows: list[dict]) -> dict:
     return metrics
 
 
+def _write_private_batch_report(private_dir: Path, base: dict, labeled_rows: list[dict]) -> dict:
+    summary = _summarize_labeled(labeled_rows)
+    report = {
+        "schema_v": 1,
+        "batch_total": int(base.get("batch_total") or 0),
+        "batch_processed": int(base.get("batch_processed") or 0),
+        "batch_remaining": int(base.get("batch_remaining") or 0),
+        "processed": int(summary.get("processed") or 0),
+        "eligible": int(summary.get("eligible") or 0),
+        "discarded_disagreement": int(summary.get("discarded_disagreement") or 0),
+        "judge_agreement_rate_ppm": int(summary.get("judge_agreement_rate_ppm") or 0),
+        "consensus_path": {
+            "pair": int(summary.get("consensus_path_count_pair") or 0),
+            "triple": int(summary.get("consensus_path_count_triple") or 0),
+        },
+        "nli_bands": {
+            "lt_050": int(summary.get("nli_band_count_lt_050") or 0),
+            "050_070": int(summary.get("nli_band_count_050_070") or 0),
+            "070_085": int(summary.get("nli_band_count_070_085") or 0),
+            "gte_085": int(summary.get("nli_band_count_gte_085") or 0),
+        },
+        "double_prompt": {
+            key.removeprefix("llm_state_count_"): int(value or 0)
+            for key, value in summary.items()
+            if key.startswith("llm_state_count_")
+        },
+        "labels_by_class": {
+            key.removeprefix("label_count_"): int(value or 0)
+            for key, value in summary.items()
+            if key.startswith("label_count_")
+        },
+        "labels_by_source_bucket": {
+            key.removeprefix("label_source_count_"): int(value or 0)
+            for key, value in summary.items()
+            if key.startswith("label_source_count_")
+        },
+    }
+    (private_dir / "private_batch_report.json").write_text(
+        json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
 def _write_safe(output_dir: Path, metrics: dict) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     safe = _safe_metrics(metrics)
@@ -289,6 +333,7 @@ def main() -> int:
             "promotion_eligible": False,
             "promotion_requires_manual_approval": True,
         })
+        _write_private_batch_report(private_dir, base, ordered)
         _write_safe(output_dir, base)
         return 0
 
@@ -321,6 +366,7 @@ def main() -> int:
     metrics = dict(base)
     metrics["batch_idle"] = False
     metrics.update(_summarize_labeled(ordered))
+    _write_private_batch_report(private_dir, base, ordered)
     metrics.update(update_private_drift_history(private_dir, metrics))
     selected_rows, selection_metrics = _student_training_selection(private_dir)
     metrics.update(selection_metrics)
