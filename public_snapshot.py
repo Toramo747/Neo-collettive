@@ -238,6 +238,8 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "commit": None,
                 "first_cycle_after_deploy": None,
                 "seconds_since_first_raw_pass": None,
+                "new_domains_since_first_pass": None,
+                "confirmation_blockers": [None],
                 "tagger_version": None,
             }],
             "rejection_reasons": [{
