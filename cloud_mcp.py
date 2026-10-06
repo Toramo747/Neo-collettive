@@ -1014,24 +1014,49 @@ def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | 
         return payload, {"store_mode":"inline","hydrated":False,"status":"ok"}
     out=dict(payload)
     value=payload.get("commercial_evidence_memory")
-    pending=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    pending_all=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    pending=pending_all[-COMMERCIAL_PENDING_EVIDENCE_LIMIT:]
+    pending_overflow=max(0,len(pending_all)-len(pending))
     archive_ref=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
     archive_rows=[]
+    archive_recovered=False
+    archive_invalid=False
+    active_archive_ref=archive_ref
     if archive_ref and is_external_reference(archive_ref):
-        archive_rows=decode_external_store(archive_ref,_evidence_chunks_from_env(archive_ref)) or []
+        archive_rows=decode_external_store(archive_ref,_evidence_chunks_from_env(archive_ref))
+        if archive_rows is None:
+            previous_archive=archive_ref.get("previous_generation") if isinstance(archive_ref.get("previous_generation"),dict) else None
+            if previous_archive and is_external_reference(previous_archive):
+                archive_rows=decode_external_store(previous_archive,_evidence_chunks_from_env(previous_archive))
+                if archive_rows is not None:
+                    archive_recovered=True
+                    active_archive_ref=previous_archive
+            if archive_rows is None:
+                archive_rows=[]
+                archive_invalid=True
     out["commercial_evidence_archive_rows"]=archive_rows
+    out["commercial_evidence_archive_reference"]=active_archive_ref
 
     if not is_external_reference(value):
         rows=[x for x in (value or []) if isinstance(x,dict)] if isinstance(value,list) else []
         merged=_dedupe_evidence_rows(rows,pending)
         out["commercial_evidence_memory"]=merged
         out["pending_evidence"]=[]
-        out["evidence_store_degraded"]=False
+        out["evidence_store_degraded"]=bool(archive_invalid)
         out["commercial_evidence_store_reference"]=None
+        status="degraded_archive" if archive_invalid else "recovered_previous_archive_generation" if archive_recovered else "ok"
         out["evidence_store_status"]={
-            "status":"ok","active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+            "status":status,
+            "active_count":len(merged),
+            "pending_count":0,
+            "archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
         }
-        return out,{"store_mode":"inline","hydrated":False,"status":"ok","evidence_count":len(merged),"archive_count":len(archive_rows)}
+        return out,{
+            "store_mode":"inline","hydrated":False,"status":status,
+            "evidence_count":len(merged),"archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
+        }
 
     original_ref=dict(value)
     rows=decode_external_store(original_ref,_evidence_chunks_from_env(original_ref))
@@ -1051,29 +1076,47 @@ def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | 
         out["evidence_store_degraded"]=True
         out["evidence_store_status"]={
             "status":"degraded",
-            "active_count":int(original_ref.get("evidence_count") or 0),
+            "active_count":0,
+            "expected_active_count":int(original_ref.get("evidence_count") or 0),
             "pending_count":len(pending),
             "archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
         }
         return out,{
             "store_mode":"external","hydrated":False,"status":"degraded",
             "reason":"external_evidence_store_invalid",
-            "evidence_count":int(original_ref.get("evidence_count") or 0),
+            "evidence_count":0,
+            "expected_evidence_count":int(original_ref.get("evidence_count") or 0),
             "pending_count":len(pending),"archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
         }
 
     merged=_dedupe_evidence_rows(rows,pending)
     out["commercial_evidence_memory"]=merged
     out["pending_evidence"]=[]
     out["commercial_evidence_store_reference"]=active_ref
-    out["evidence_store_degraded"]=False
-    status="recovered_previous_generation" if recovered else "ok"
+    out["evidence_store_degraded"]=bool(archive_invalid)
+    if archive_invalid:
+        status="degraded_archive"
+    elif recovered and archive_recovered:
+        status="recovered_previous_generations"
+    elif recovered:
+        status="recovered_previous_generation"
+    elif archive_recovered:
+        status="recovered_previous_archive_generation"
+    else:
+        status="ok"
     out["evidence_store_status"]={
-        "status":status,"active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+        "status":status,
+        "active_count":len(merged),
+        "pending_count":0,
+        "archive_count":len(archive_rows),
+        "pending_overflow_count":pending_overflow,
     }
     return out,{
         "store_mode":"external","hydrated":True,"status":status,
         "evidence_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+        "pending_overflow_count":pending_overflow,
         "sha256":str(active_ref.get("sha256") or ""),
     }
 
