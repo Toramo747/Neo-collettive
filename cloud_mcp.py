@@ -87,6 +87,7 @@ from tool_opportunity import (
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
 from price_validation import PRICE_VALIDATION_QUERY_BUDGET, price_validation_plan, summarize_validation
 from query_builder import (
+    RESEARCH_ARENA_PRODUCTION_GENOME,
     breakout_queries as build_breakout_queries,
     discovery_query as build_discovery_query,
     scout_queries as build_scout_queries,
@@ -9456,6 +9457,9 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         version=VERSION,
         commit=DEPLOY_COMMIT,
         observed_at_utc=market_analysis.get("generated_at_utc"),
+        cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
+        tagger_version=TAGGER_VERSION,
+        genome_id=str(RESEARCH_ARENA_PRODUCTION_GENOME.get("source") or ""),
     )
     AUTOPILOT_STATE["gate_stability"]=gate_state
     if stable_rows:
