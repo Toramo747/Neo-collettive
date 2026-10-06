@@ -264,8 +264,9 @@ def persisted_price_groups(rows: list[dict[str,Any]] | None) -> list[dict[str,An
         by_family.setdefault(family,[]).append({
             "url":url,
             "title":str(row.get("domain") or "")[:120],
-            "snippet":str(row.get("price_context") or "")[:160],
-            "page_text":"",
+            "snippet":"",
+            "page_text":str(row.get("price_context") or "")[:160],
+            "page_fetched":True,
             "source":"persisted-price-validation",
             "vendor":None,
         })
