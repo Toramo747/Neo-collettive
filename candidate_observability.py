@@ -92,6 +92,7 @@ def build_candidate_telemetry(
             "cycle": max(0, int(cycle or 0)),
             "commit": str(commit or "")[:64],
             "first_cycle_after_deploy": bool(first_cycle_after_deploy),
+            "post_deploy_pass_ignored": bool(confirmation.get("post_deploy_pass_ignored")),
             "seconds_since_first_raw_pass": (
                 max(0, int(confirmation.get("seconds_since_first_raw_pass") or 0))
                 if first_pass else None
@@ -104,7 +105,7 @@ def build_candidate_telemetry(
                 if str(x) in {
                     "min_6_hours","min_2_research_cycles",
                     "evidence_fingerprint_unchanged","no_new_independent_domain",
-                    "pass_ratio_below_60",
+                    "pass_ratio_below_60","post_deploy_pass_ignored",
                 }
             ][:8],
             "tagger_version": str(tagger_version or "")[:48],

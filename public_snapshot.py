@@ -197,6 +197,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "cycle": None,
                 "commit": None,
                 "first_cycle_after_deploy": None,
+                "post_deploy_pass_ignored": None,
                 "seconds_since_first_raw_pass": None,
                 "new_domains_since_first_pass": None,
                 "tolerated_fail_cycles": None,
@@ -223,6 +224,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "qualified_candidates": None,
             "top_gate_pass": None,
             "top_monetization_score": None,
+            "post_deploy_pass_ignored": None,
             "top_missing": [None],
             "candidates": [{
                 "candidate_id": None,
@@ -239,6 +241,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "cycle": None,
                 "commit": None,
                 "first_cycle_after_deploy": None,
+                "post_deploy_pass_ignored": None,
                 "seconds_since_first_raw_pass": None,
                 "new_domains_since_first_pass": None,
                 "tolerated_fail_cycles": None,
@@ -321,11 +324,20 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "strict_prices": None,
                 "competitors_with_price": None,
             }],
+            "price_query_telemetry": [{
+                "query_index": None,
+                "results_received": None,
+                "discarded_article": None,
+                "discarded_non_product": None,
+                "accepted": None,
+            }],
         },
         "evidence_store_status": {
             "status": None,
             "active_count": None,
+            "expected_active_count": None,
             "pending_count": None,
+            "pending_overflow_count": None,
             "archive_count": None,
         },
         "last_checkpoint": {
@@ -674,6 +686,7 @@ def _project_candidate_telemetry(value: Any) -> list[dict]:
             "cycle":max(0,int(raw.get("cycle") or 0)),
             "commit":commit,
             "first_cycle_after_deploy":bool(raw.get("first_cycle_after_deploy")),
+            "post_deploy_pass_ignored":bool(raw.get("post_deploy_pass_ignored")),
             "tagger_version":tagger_version,
         }
         elapsed=raw.get("seconds_since_first_raw_pass")
@@ -686,7 +699,7 @@ def _project_candidate_telemetry(value: Any) -> list[dict]:
             if str(code) in {
                 "min_6_hours","min_2_research_cycles",
                 "evidence_fingerprint_unchanged","no_new_independent_domain",
-                "pass_ratio_below_60",
+                "pass_ratio_below_60","post_deploy_pass_ignored",
             }
         ][:8]
         rows.append(row)
@@ -845,6 +858,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "qualified_candidates": max(0, int(candidate_counts.get("qualified_candidates") or 0)),
         "top_gate_pass": bool(top.get("gate_pass")),
         "top_monetization_score": max(0, int(top.get("monetization_score") or 0)),
+        "post_deploy_pass_ignored": max(0,int(tool.get("post_deploy_pass_ignored") or 0)),
         "top_missing": missing[:12],
         "candidates": _project_candidate_telemetry(tool.get("candidate_telemetry")),
         "rejection_reasons": _project_reason_counts(ingestion.get("rejected_by_reason")),
@@ -877,6 +891,20 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
                 if isinstance(tool.get("price_validation"),dict) else []
             )
             if isinstance(stats,dict)
+        ][:16],
+        "price_query_telemetry":[
+            {
+                "query_index":max(0,int(row.get("query_index") or 0)),
+                "results_received":max(0,int(row.get("results_received") or 0)),
+                "discarded_article":max(0,int(row.get("discarded_article") or 0)),
+                "discarded_non_product":max(0,int(row.get("discarded_non_product") or 0)),
+                "accepted":max(0,int(row.get("accepted") or 0)),
+            }
+            for row in (
+                ((tool.get("price_validation") or {}).get("_query_telemetry") or [])
+                if isinstance(tool.get("price_validation"),dict) else []
+            )
+            if isinstance(row,dict)
         ][:16],
     }
 

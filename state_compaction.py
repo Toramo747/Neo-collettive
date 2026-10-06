@@ -18,6 +18,10 @@ INBOUND_TRAFFIC_EVENT_TIGHT_LIMIT = 160
 PROTECTED_STATE_KEYS = frozenset({
     "boundary_events",
     "commercial_evidence_memory",
+    "commercial_evidence_store_reference",
+    "commercial_evidence_archive_reference",
+    "commercial_price_evidence",
+    "pending_evidence",
     "challenge_track",
     "gate_stability",
     "gate_stability_state",

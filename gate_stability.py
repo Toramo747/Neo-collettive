@@ -79,6 +79,7 @@ def _confirmation(
     raw_pass: bool,
     now: str,
     cycle: int,
+    post_deploy_pass_ignored: bool = False,
 ) -> tuple[bool,int,int,dict]:
     stable=bool(prev.get("stable"))
     prev_raw=prev.get("last_raw")
@@ -142,8 +143,36 @@ def _confirmation(
             "tolerated_fail_cycles":0,
             "pass_ratio_in_window":1.0 if raw_pass else 0.0,
             "distinct_cycle":distinct_cycle,
+            "post_deploy_pass_ignored":False,
         }
         return stable,pass_streak,fail_streak,meta
+
+    # A raw pass from the first cycle after a deploy is diagnostic only.
+    # It neither opens nor advances the confirmation window.
+    if post_deploy_pass_ignored and raw_pass:
+        first_dt=_parse_utc(first_raw_pass_utc)
+        now_dt=_parse_utc(now)
+        seconds=max(0,int((now_dt-first_dt).total_seconds())) if first_dt and now_dt else 0
+        observed_count=len(observations)
+        passed_count=sum(1 for x in observations if x.get("passed"))
+        ratio=(passed_count/observed_count) if observed_count else 0.0
+        meta={
+            "first_raw_pass_utc":first_raw_pass_utc,
+            "first_fingerprint":first_fp,
+            "first_domains":sorted(first_domains),
+            "pass_cycles":sorted(pass_cycles)[-16:],
+            "confirmation_observations":observations,
+            "confirmation_fail_streak":confirmation_fail_streak,
+            "last_fingerprint":fp,
+            "seconds_since_first_raw_pass":seconds,
+            "new_domains_since_first_pass":max(0,int(prev.get("new_domains_since_first_pass") or 0)),
+            "confirmation_blockers":["post_deploy_pass_ignored"],
+            "tolerated_fail_cycles":sum(1 for x in observations if not x.get("passed")),
+            "pass_ratio_in_window":ratio,
+            "distinct_cycle":False,
+            "post_deploy_pass_ignored":True,
+        }
+        return False,len(pass_cycles),fail_streak,meta
 
     # Before the first passing observation there is no confirmation window.
     if raw_pass and not first_raw_pass_utc:
@@ -231,6 +260,7 @@ def _confirmation(
         "tolerated_fail_cycles":tolerated_fail_cycles,
         "pass_ratio_in_window":ratio,
         "distinct_cycle":distinct_cycle,
+        "post_deploy_pass_ignored":False,
     }
     return stable,pass_streak,fail_streak,meta
 
@@ -245,6 +275,7 @@ def apply_gate_hysteresis(
     cycle: int=0,
     tagger_version: str="",
     genome_id: str="",
+    first_cycle_after_deploy: bool=False,
 ) -> tuple[dict,list[dict]]:
     src=state if isinstance(state,dict) else {}
     current_context={
@@ -294,7 +325,8 @@ def apply_gate_hysteresis(
         prev=dict(candidates.get(key) or {})
         raw_pass=bool(row.get("gate_pass"))
         stable,pass_streak,fail_streak,meta=_confirmation(
-            prev,row,raw_pass=raw_pass,now=now,cycle=cycle
+            prev,row,raw_pass=raw_pass,now=now,cycle=cycle,
+            post_deploy_pass_ignored=bool(first_cycle_after_deploy and raw_pass and not bool(prev.get("stable"))),
         )
         fp=meta["last_fingerprint"]
         if prev.get("last_raw") is not None and bool(prev.get("last_raw"))!=raw_pass:
@@ -339,6 +371,7 @@ def apply_gate_hysteresis(
             "confirmation_blockers":meta["confirmation_blockers"],
             "tolerated_fail_cycles":meta["tolerated_fail_cycles"],
             "pass_ratio_in_window":meta["pass_ratio_in_window"],
+            "post_deploy_pass_ignored":bool(meta.get("post_deploy_pass_ignored")),
             "last_commit":str(commit or "")[:64],
         }
         results[key]=(stable,pass_streak,fail_streak,meta)
@@ -410,6 +443,7 @@ def apply_gate_hysteresis(
             "confirmation_blockers":meta["confirmation_blockers"],
             "tolerated_fail_cycles":meta["tolerated_fail_cycles"],
             "pass_ratio_in_window":meta["pass_ratio_in_window"],
+            "post_deploy_pass_ignored":bool(meta.get("post_deploy_pass_ignored")),
         }
         out.append(row)
 
@@ -421,4 +455,8 @@ def apply_gate_hysteresis(
         "last_observed_commit":str(commit or "")[:64],
         "confirmation_context":current_context,
         "context_reset":context_changed,
+        "post_deploy_pass_ignored":sum(
+            1 for _stable,_pass,_fail,meta in results.values()
+            if bool(meta.get("post_deploy_pass_ignored"))
+        ),
     },out

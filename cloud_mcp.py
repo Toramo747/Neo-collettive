@@ -85,7 +85,15 @@ from tool_opportunity import (
     seti_market_catalog,
 )
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
-from price_validation import PRICE_VALIDATION_QUERY_BUDGET, extract_price, price_validation_plan, product_pricing_page, summarize_validation
+from price_validation import (
+    PRICE_VALIDATION_QUERY_BUDGET,
+    compact_price_evidence,
+    extract_price,
+    persisted_price_groups,
+    price_validation_plan,
+    product_pricing_page,
+    summarize_validation,
+)
 from query_builder import (
     RESEARCH_ARENA_PRODUCTION_GENOME,
     breakout_queries as build_breakout_queries,
@@ -174,7 +182,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.52"  # shadow model judges and student observability
+VERSION = "0.99.53"  # phase0 credibility: deploy-edge confirmation and durable strict prices
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -199,6 +207,8 @@ COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
 COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX = "NEO_EVIDENCE_ARCHIVE_"
 COMMERCIAL_EVIDENCE_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_CHUNK_BYTES", "60000"))))
 COMMERCIAL_EVIDENCE_ACTIVE_LIMIT = max(100, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_ACTIVE_LIMIT", "3000")))
+COMMERCIAL_PENDING_EVIDENCE_LIMIT = max(100, min(5000, int(os.getenv("NEO_COMMERCIAL_PENDING_EVIDENCE_LIMIT", "1000"))))
+COMMERCIAL_PRICE_EVIDENCE_LIMIT = max(20, min(500, int(os.getenv("NEO_COMMERCIAL_PRICE_EVIDENCE_LIMIT", "120"))))
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
@@ -366,6 +376,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "commercial_price_evidence": [],
     "pending_evidence": [],
     "commercial_evidence_store_reference": None,
     "commercial_evidence_archive_reference": None,
@@ -504,7 +515,8 @@ def _state_payload() -> dict:
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
-        "pending_evidence": list(AUTOPILOT_STATE.get("pending_evidence") or []),
+        "commercial_price_evidence": list(AUTOPILOT_STATE.get("commercial_price_evidence") or [])[-COMMERCIAL_PRICE_EVIDENCE_LIMIT:],
+        "pending_evidence": list(AUTOPILOT_STATE.get("pending_evidence") or [])[-COMMERCIAL_PENDING_EVIDENCE_LIMIT:],
         "commercial_evidence_store_reference": AUTOPILOT_STATE.get("commercial_evidence_store_reference"),
         "commercial_evidence_archive_reference": AUTOPILOT_STATE.get("commercial_evidence_archive_reference"),
         "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
@@ -645,7 +657,14 @@ def _merge_state_payload(payload: dict | None) -> bool:
     migration_changed = False
     if isinstance(payload.get("search_provider_state"), dict):
         AUTOPILOT_STATE["search_provider_state"] = dict(payload.get("search_provider_state") or {})
-    AUTOPILOT_STATE["pending_evidence"]=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    AUTOPILOT_STATE["commercial_price_evidence"]=[
+        x for x in (payload.get("commercial_price_evidence") or [])
+        if isinstance(x,dict)
+    ][-COMMERCIAL_PRICE_EVIDENCE_LIMIT:]
+    AUTOPILOT_STATE["pending_evidence"]=[
+        x for x in (payload.get("pending_evidence") or [])
+        if isinstance(x,dict)
+    ][-COMMERCIAL_PENDING_EVIDENCE_LIMIT:]
     AUTOPILOT_STATE["commercial_evidence_store_reference"]=payload.get("commercial_evidence_store_reference") if isinstance(payload.get("commercial_evidence_store_reference"),dict) else None
     AUTOPILOT_STATE["commercial_evidence_archive_reference"]=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
     AUTOPILOT_STATE["commercial_evidence_archive_rows"]=[x for x in (payload.get("commercial_evidence_archive_rows") or []) if isinstance(x,dict)]
@@ -990,29 +1009,60 @@ def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str
     return out
 
 
+def _bounded_pending_evidence(rows: list[dict[str, Any]] | None) -> tuple[list[dict[str, Any]],int]:
+    clean=_dedupe_evidence_rows(rows or [])
+    clean.sort(key=lambda row:float(row.get("last_seen_epoch") or 0),reverse=True)
+    bounded=clean[:COMMERCIAL_PENDING_EVIDENCE_LIMIT]
+    return bounded,max(0,len(clean)-len(bounded))
+
+
 def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | None, dict]:
     if not isinstance(payload, dict):
         return payload, {"store_mode":"inline","hydrated":False,"status":"ok"}
     out=dict(payload)
     value=payload.get("commercial_evidence_memory")
-    pending=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    pending_all=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    pending,pending_overflow=_bounded_pending_evidence(pending_all)
     archive_ref=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
     archive_rows=[]
+    archive_recovered=False
+    archive_invalid=False
+    active_archive_ref=archive_ref
     if archive_ref and is_external_reference(archive_ref):
-        archive_rows=decode_external_store(archive_ref,_evidence_chunks_from_env(archive_ref)) or []
+        archive_rows=decode_external_store(archive_ref,_evidence_chunks_from_env(archive_ref))
+        if archive_rows is None:
+            previous_archive=archive_ref.get("previous_generation") if isinstance(archive_ref.get("previous_generation"),dict) else None
+            if previous_archive and is_external_reference(previous_archive):
+                archive_rows=decode_external_store(previous_archive,_evidence_chunks_from_env(previous_archive))
+                if archive_rows is not None:
+                    archive_recovered=True
+                    active_archive_ref=previous_archive
+            if archive_rows is None:
+                archive_rows=[]
+                archive_invalid=True
     out["commercial_evidence_archive_rows"]=archive_rows
+    out["commercial_evidence_archive_reference"]=active_archive_ref
 
     if not is_external_reference(value):
         rows=[x for x in (value or []) if isinstance(x,dict)] if isinstance(value,list) else []
         merged=_dedupe_evidence_rows(rows,pending)
         out["commercial_evidence_memory"]=merged
         out["pending_evidence"]=[]
-        out["evidence_store_degraded"]=False
+        out["evidence_store_degraded"]=bool(archive_invalid)
         out["commercial_evidence_store_reference"]=None
+        status="degraded_archive" if archive_invalid else "recovered_previous_archive_generation" if archive_recovered else "ok"
         out["evidence_store_status"]={
-            "status":"ok","active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+            "status":status,
+            "active_count":len(merged),
+            "pending_count":0,
+            "archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
         }
-        return out,{"store_mode":"inline","hydrated":False,"status":"ok","evidence_count":len(merged),"archive_count":len(archive_rows)}
+        return out,{
+            "store_mode":"inline","hydrated":False,"status":status,
+            "evidence_count":len(merged),"archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
+        }
 
     original_ref=dict(value)
     rows=decode_external_store(original_ref,_evidence_chunks_from_env(original_ref))
@@ -1032,29 +1082,47 @@ def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | 
         out["evidence_store_degraded"]=True
         out["evidence_store_status"]={
             "status":"degraded",
-            "active_count":int(original_ref.get("evidence_count") or 0),
+            "active_count":0,
+            "expected_active_count":int(original_ref.get("evidence_count") or 0),
             "pending_count":len(pending),
             "archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
         }
         return out,{
             "store_mode":"external","hydrated":False,"status":"degraded",
             "reason":"external_evidence_store_invalid",
-            "evidence_count":int(original_ref.get("evidence_count") or 0),
+            "evidence_count":0,
+            "expected_evidence_count":int(original_ref.get("evidence_count") or 0),
             "pending_count":len(pending),"archive_count":len(archive_rows),
+            "pending_overflow_count":pending_overflow,
         }
 
     merged=_dedupe_evidence_rows(rows,pending)
     out["commercial_evidence_memory"]=merged
     out["pending_evidence"]=[]
     out["commercial_evidence_store_reference"]=active_ref
-    out["evidence_store_degraded"]=False
-    status="recovered_previous_generation" if recovered else "ok"
+    out["evidence_store_degraded"]=bool(archive_invalid)
+    if archive_invalid:
+        status="degraded_archive"
+    elif recovered and archive_recovered:
+        status="recovered_previous_generations"
+    elif recovered:
+        status="recovered_previous_generation"
+    elif archive_recovered:
+        status="recovered_previous_archive_generation"
+    else:
+        status="ok"
     out["evidence_store_status"]={
-        "status":status,"active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+        "status":status,
+        "active_count":len(merged),
+        "pending_count":0,
+        "archive_count":len(archive_rows),
+        "pending_overflow_count":pending_overflow,
     }
     return out,{
         "store_mode":"external","hydrated":True,"status":status,
         "evidence_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+        "pending_overflow_count":pending_overflow,
         "sha256":str(active_ref.get("sha256") or ""),
     }
 
@@ -1268,7 +1336,9 @@ async def _checkpoint_state_to_render() -> dict:
     original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
     previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
     evidence_rows=[x for x in (payload.get("commercial_evidence_memory") or []) if isinstance(x,dict)] if isinstance(payload.get("commercial_evidence_memory"),list) else [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
-    pending_rows=[x for x in (AUTOPILOT_STATE.get("pending_evidence") or []) if isinstance(x,dict)]
+    pending_rows,pending_overflow_count=_bounded_pending_evidence(
+        [x for x in (AUTOPILOT_STATE.get("pending_evidence") or []) if isinstance(x,dict)]
+    )
     archive_rows=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or []) if isinstance(x,dict)]
     evidence_count_before=len(evidence_rows)
     compaction_meta={
@@ -1293,8 +1363,10 @@ async def _checkpoint_state_to_render() -> dict:
             payload["evidence_store_degraded"]=True
             payload["evidence_store_status"]={
                 "status":"degraded",
-                "active_count":int(original_ref.get("evidence_count") or 0),
+                "active_count":len(evidence_rows),
+                "expected_active_count":int(original_ref.get("evidence_count") or 0),
                 "pending_count":len(pending_rows),
+                "pending_overflow_count":pending_overflow_count,
                 "archive_count":len(archive_rows),
             }
             compaction_meta["store_mode"]="external"
@@ -6872,10 +6944,16 @@ def _commercial_evidence_quality(
     # non-gate-eligible rows move to the separate compressed archive.
     memory.sort(key=lambda x:float(x.get("last_seen_epoch") or 0),reverse=True)
     if bool(AUTOPILOT_STATE.get("evidence_store_degraded")):
-        pending=_dedupe_evidence_rows(AUTOPILOT_STATE.get("pending_evidence") or [],memory)
+        pending_all=_dedupe_evidence_rows(AUTOPILOT_STATE.get("pending_evidence") or [],memory)
+        pending,pending_overflow=_bounded_pending_evidence(pending_all)
         AUTOPILOT_STATE["pending_evidence"]=pending
         current_status=dict(AUTOPILOT_STATE.get("evidence_store_status") or {})
-        current_status.update({"status":"degraded","pending_count":len(pending)})
+        current_status.update({
+            "status":"degraded",
+            "pending_count":len(pending),
+            "pending_overflow_count":pending_overflow,
+            "active_count":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
+        })
         AUTOPILOT_STATE["evidence_store_status"]=current_status
     else:
         active_rows,archive_new=split_active_archive(memory,active_limit=COMMERCIAL_EVIDENCE_ACTIVE_LIMIT)
@@ -9441,7 +9519,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                                     break
                                 raw.extend(chunk)
                     page=raw.decode("utf-8","ignore")
-                    page=re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\\1>"," ",page)
+                    page=re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>"," ",page)
                     page=html.unescape(re.sub(r"(?s)<[^>]+>"," ",page))
                     visible=" ".join(page.split())[:300_000]
                     result["page_fetched"]=True
@@ -9450,6 +9528,23 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 except Exception:
                     continue
         return fetched
+
+    # Reuse only compact, strict-parser-verified price evidence from prior cycles.
+    persisted_groups=persisted_price_groups(AUTOPILOT_STATE.get("commercial_price_evidence") or [])
+    for group in persisted_groups:
+        family=str(group.get("_persisted_price_family") or "")
+        query=str(group.get("query") or "")
+        if not family or not query:
+            continue
+        query_meta[" ".join(query.split()).lower()]={
+            "query":query,
+            "class":"tool_market_validation",
+            "role":"price_validation",
+            "family":family,
+            "query_intent":"persisted_verified_competitor_price",
+            "validation_kind":"persisted_strict",
+        }
+        web_research.append(group)
 
     # Dedicated G5 validation phase. It has its own bounded query budget and
     # rotates only among families with persisted buyer voice. Discovery remains separate.
@@ -9479,6 +9574,24 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         search_strategy["price_validation_query_budget"]=PRICE_VALIDATION_QUERY_BUDGET
         search_strategy["policy"]="separate price validation: product pages and public marketplaces only; no login scraping; no payment"
     price_validation_telemetry=summarize_validation(price_plan,price_groups)
+    current_price_evidence=compact_price_evidence(
+        price_plan,price_groups,max_rows=COMMERCIAL_PRICE_EVIDENCE_LIMIT
+    )
+    price_index={}
+    for row in (AUTOPILOT_STATE.get("commercial_price_evidence") or [])+current_price_evidence:
+        if not isinstance(row,dict):
+            continue
+        key="|".join((
+            str(row.get("family") or ""),
+            str(row.get("seller_key") or ""),
+            str(row.get("url") or ""),
+        ))
+        if not key.strip("|"):
+            continue
+        stable=dict(row)
+        stable["last_seen_cycle"]=cycle_no
+        price_index[key]=stable
+    AUTOPILOT_STATE["commercial_price_evidence"]=list(price_index.values())[-COMMERCIAL_PRICE_EVIDENCE_LIMIT:]
 
     source_diagnostics=dict(AUTOPILOT_STATE.get("market_source_diagnostics") or {})
     for key in ("pricing_pages","product_hunt","extension_marketplaces"):
@@ -9723,8 +9836,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
         tagger_version=TAGGER_VERSION,
         genome_id=str(RESEARCH_ARENA_PRODUCTION_GENOME.get("source") or ""),
+        first_cycle_after_deploy=first_cycle_after_deploy,
     )
     AUTOPILOT_STATE["gate_stability"]=gate_state
+    market_analysis["post_deploy_pass_ignored"]=int(gate_state.get("post_deploy_pass_ignored") or 0)
     if stable_rows:
         market_analysis["top5"]=stable_rows
         market_analysis["top_gate_pass"]=bool(stable_rows[0].get("stable_gate_pass"))

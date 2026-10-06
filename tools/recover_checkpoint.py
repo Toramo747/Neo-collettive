@@ -45,7 +45,9 @@ def export(folder):
     tree=ast.parse(Path('cloud_mcp.py').read_text())
     node=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=='_state_payload')
     scope={'AUTOPILOT_STATE':state,'RUNTIME_IDENTITY':snapshot['runtime_profile'],
-           'datetime':datetime,'timezone':timezone}
+           'datetime':datetime,'timezone':timezone,
+           'COMMERCIAL_PRICE_EVIDENCE_LIMIT':120,
+           'COMMERCIAL_PENDING_EVIDENCE_LIMIT':1000}
     exec(compile(ast.Module(body=[node],type_ignores=[]),'payload_builder','exec'),scope)
     original=scope['_state_payload']()
     compacted,_=compact_state_payload(original,max_bytes=100000,force=True)

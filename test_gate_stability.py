@@ -90,6 +90,29 @@ class GateStabilityTests(unittest.TestCase):
         self.assertFalse(rows[0]["stable_gate_pass"])
 
 
+    def test_first_post_deploy_raw_pass_is_ignored_for_confirmation(self):
+        row=self._row(True)
+        state,rows=apply_gate_hysteresis(
+            {},[row],cycle=2545,observed_at_utc="2026-10-06T18:47:00+00:00",
+            tagger_version="3",genome_id="g62",commit="newdeploy",
+            first_cycle_after_deploy=True,
+        )
+        key=rows[0]["gate_candidate_key"]
+        self.assertTrue(rows[0]["raw_gate_pass"])
+        self.assertFalse(rows[0]["stable_gate_pass"])
+        self.assertTrue(rows[0]["gate_confirmation"]["post_deploy_pass_ignored"])
+        self.assertEqual(rows[0]["gate_confirmation"]["pass_streak"],0)
+        self.assertEqual(state["candidates"][key]["first_raw_pass_utc"],"")
+        self.assertEqual(state["post_deploy_pass_ignored"],1)
+
+        state,rows=apply_gate_hysteresis(
+            state,[row],cycle=2546,observed_at_utc="2026-10-06T19:02:00+00:00",
+            tagger_version="3",genome_id="g62",commit="newdeploy",
+            first_cycle_after_deploy=False,
+        )
+        self.assertEqual(rows[0]["gate_confirmation"]["pass_streak"],1)
+        self.assertTrue(state["candidates"][key]["first_raw_pass_utc"])
+
     def test_single_confirmation_failure_is_tolerated_then_stabilizes(self):
         s,rows=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
         self.assertFalse(rows[0]["stable_gate_pass"])
