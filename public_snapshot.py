@@ -978,13 +978,33 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
         "promotion":{"mode":"manual_only","approved":False},
     }
     status_code=str(evidence_store_status.get("status") or "ok")
-    if status_code not in {"ok","degraded","recovered_previous_generation"}:
+    if status_code not in {
+        "ok","degraded","degraded_archive","recovered_previous_generation",
+        "recovered_previous_archive_generation","recovered_previous_generations",
+    }:
         status_code="degraded"
+    actual_active=(
+        len(src.get("commercial_evidence_memory") or [])
+        if isinstance(src.get("commercial_evidence_memory"),list)
+        else max(0,int(evidence_store_status.get("active_count") or 0))
+    )
+    actual_pending=(
+        len(src.get("pending_evidence") or [])
+        if isinstance(src.get("pending_evidence"),list)
+        else max(0,int(evidence_store_status.get("pending_count") or 0))
+    )
+    actual_archive=(
+        len(src.get("commercial_evidence_archive_rows") or [])
+        if isinstance(src.get("commercial_evidence_archive_rows"),list)
+        else max(0,int(evidence_store_status.get("archive_count") or 0))
+    )
     out["evidence_store_status"]={
         "status":status_code,
-        "active_count":max(0,int(evidence_store_status.get("active_count") or 0)),
-        "pending_count":max(0,int(evidence_store_status.get("pending_count") or 0)),
-        "archive_count":max(0,int(evidence_store_status.get("archive_count") or 0)),
+        "active_count":actual_active,
+        "expected_active_count":max(0,int(evidence_store_status.get("expected_active_count") or 0)),
+        "pending_count":actual_pending,
+        "pending_overflow_count":max(0,int(evidence_store_status.get("pending_overflow_count") or 0)),
+        "archive_count":actual_archive,
     }
     out["last_checkpoint"] = {
         **_copy_keys(checkpoint, ("ok", "status", "raw_bytes", "stored_bytes", "limit_bytes")),

@@ -486,6 +486,24 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_public_snapshot(bad)
 
+    def test_evidence_store_status_uses_restored_runtime_counts(self):
+        raw={
+            "autopilot":{
+                "commercial_evidence_memory":[{"id":1},{"id":2},{"id":3}],
+                "pending_evidence":[{"id":4}],
+                "commercial_evidence_archive_rows":[{"id":5},{"id":6}],
+                "evidence_store_status":{
+                    "status":"ok","active_count":0,"pending_count":0,"archive_count":0,
+                },
+            },
+        }
+        public=sanitize_public_snapshot(raw)
+        status=public["autopilot"]["evidence_store_status"]
+        self.assertEqual(status["active_count"],3)
+        self.assertEqual(status["pending_count"],1)
+        self.assertEqual(status["archive_count"],2)
+        validate_public_snapshot(public)
+
     def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
         raw={
             "autopilot":{
