@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
-      SOURCE_REPO: Toramo747/Neo-collettive
       TARGET_REPO: Toramo747/Oxibay-core
     steps:
       - name: Checkout source
@@ -35,14 +34,10 @@ jobs:
         run: |
           set -euo pipefail
           if gh api "repos/$TARGET_REPO" >/tmp/target.json 2>/dev/null; then
-            visibility="$(python - <<'PY'
-import json
-print(json.load(open("/tmp/target.json"))["visibility"])
-PY
-)"
+            visibility="$(python -c 'import json; print(json.load(open("/tmp/target.json"))["visibility"])')"
             test "$visibility" = "private" || { echo "Target exists but is not private"; exit 1; }
           else
-            gh api user/repos               -f name='Oxibay-core'               -f private=true               -f description='Private core runtime and research engine for Oxibay/MYCELIX'               -f has_issues=true               -f has_projects=false               -f has_wiki=false               >/tmp/target.json
+            gh api user/repos               -f name='Oxibay-core'               -F private=true               -f description='Private core runtime and research engine for Oxibay/MYCELIX'               -F has_issues=true               -F has_projects=false               -F has_wiki=false               >/tmp/target.json
           fi
 
       - name: Mirror source into private core
@@ -57,16 +52,4 @@ PY
         run: |
           set -euo pipefail
           gh api "repos/$TARGET_REPO" > /tmp/verify.json
-          python - <<'PY'
-import json
-d=json.load(open("/tmp/verify.json"))
-if d.get("visibility") != "private" or d.get("private") is not True:
-    raise SystemExit("private target verification failed")
-if d.get("default_branch") != "main":
-    raise SystemExit("private target default branch is not main")
-print({
-    "repository": d.get("full_name"),
-    "visibility": d.get("visibility"),
-    "default_branch": d.get("default_branch"),
-})
-PY
+          python -c 'import json; d=json.load(open("/tmp/verify.json")); assert d.get("visibility")=="private" and d.get("private") is True, "private target verification failed"; assert d.get("default_branch")=="main", "private target default branch is not main"; print({"repository":d.get("full_name"),"visibility":d.get("visibility"),"default_branch":d.get("default_branch")})'
