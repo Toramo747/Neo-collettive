@@ -74,15 +74,19 @@ def _protected_payload() -> dict:
         ],
         "inbound_messages": [
             {
-                "message_id": "m1",
-                "thread_id": "thread-1",
-                "text": "synthetic protected inbound",
+                "message_id": f"m{i}",
+                "thread_id": f"thread-{i % 5}",
+                "text": _noise(f"inbound-{i}", 8),
                 "admission_status": "ANONYMOUS",
                 "dialogue_status": "PENDING_IDENTITY",
                 "identity_status": "anonymous",
             }
+            for i in range(96)
         ],
-        "agent_chat_events": [{"event_id": "e1", "text": "synthetic chat event"}],
+        "agent_chat_events": [
+            {"event_id": f"e{i}", "thread_id": f"thread-{i % 5}", "text": _noise(f"chat-{i}", 8)}
+            for i in range(260)
+        ],
         "inbound_agent_stats": {
             "peer-1": {
                 "status": "ANONYMOUS",
@@ -90,13 +94,22 @@ def _protected_payload() -> dict:
                 "identity_status": "anonymous",
             }
         },
-        "inbound_security_events": [{"event_id": "s1", "traffic_class": "UNKNOWN"}],
+        "inbound_security_events": [
+            {"event_id": f"s{i}", "traffic_class": "UNKNOWN", "detail": _noise(f"sec-{i}", 6)}
+            for i in range(96)
+        ],
         "inbound_security_stats": {"blocked_total": 1},
-        "inbound_review_queue": [{"thread_id": "thread-1", "claim_excerpt": "synthetic"}],
+        "inbound_review_queue": [
+            {"thread_id": f"thread-{i}", "claim_excerpt": _noise(f"review-{i}", 5)}
+            for i in range(96)
+        ],
         "agent_chat_monitor": {"thread_count": 1, "threads": [{"thread_id": "thread-1"}]},
         "agent_demand_observatory": {"messages_observed": 1},
         "neo_dialect_peers": {"peer-1": {"state": "NEW"}},
-        "neo_dialect_events": [{"event": "HELLO"}],
+        "neo_dialect_events": [
+            {"event": "HELLO", "peer": f"peer-{i % 7}", "payload": _noise(f"dialect-{i}", 5)}
+            for i in range(180)
+        ],
         "neo_dialect_seti_probe": {"status": "IDLE"},
     }
 
@@ -233,6 +246,31 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
         compacted, _ = compact_state_payload(payload, max_bytes=100_000, force=True)
         after = {key: _bytes(compacted[key]) for key in PROTECTED_STATE_KEYS if key in compacted}
         self.assertEqual(before, after)
+
+    def test_continuity_histories_are_bounded_but_latest_rows_survive(self):
+        payload = _heavy_payload()
+        latest_message = deepcopy(payload["inbound_messages"][-1])
+        latest_chat = deepcopy(payload["agent_chat_events"][-1])
+        latest_security = deepcopy(payload["inbound_security_events"][-1])
+        latest_review = deepcopy(payload["inbound_review_queue"][-1])
+        latest_dialect = deepcopy(payload["neo_dialect_events"][-1])
+
+        compacted, meta = compact_state_payload(payload, max_bytes=100_000, force=True)
+
+        self.assertLessEqual(len(compacted["inbound_messages"]), 32)
+        self.assertLessEqual(len(compacted["agent_chat_events"]), 64)
+        self.assertLessEqual(len(compacted["inbound_security_events"]), 48)
+        self.assertLessEqual(len(compacted["inbound_review_queue"]), 40)
+        self.assertLessEqual(len(compacted["neo_dialect_events"]), 64)
+        self.assertEqual(compacted["inbound_messages"][-1]["message_id"], latest_message["message_id"])
+        self.assertEqual(compacted["agent_chat_events"][-1]["event_id"], latest_chat["event_id"])
+        self.assertEqual(compacted["inbound_security_events"][-1]["event_id"], latest_security["event_id"])
+        self.assertEqual(compacted["inbound_review_queue"][-1]["thread_id"], latest_review["thread_id"])
+        self.assertEqual(compacted["neo_dialect_events"][-1]["peer"], latest_dialect["peer"])
+        self.assertIn(
+            "e_continuity_histories",
+            [row["level"] for row in meta["levels"]],
+        )
 
     def test_compaction_is_idempotent(self):
         payload = _heavy_payload()
