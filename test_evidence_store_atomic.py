@@ -1,4 +1,5 @@
 import os
+import hashlib
 import unittest
 from copy import deepcopy
 from unittest.mock import patch
@@ -61,7 +62,7 @@ class EvidenceStoreAtomicTests(unittest.IsolatedAsyncioTestCase):
             cloud_mcp._commercial_evidence_env_key(i,old_ref):chunk
             for i,chunk in enumerate(old_chunks)
         }
-        new_rows=old_rows+[{"evidence_id":f"new-{i}","gate_eligible":False,"blob":"y"*1200} for i in range(20)]
+        new_rows=old_rows+[{"evidence_id":f"new-{i}","gate_eligible":False,"blob":"".join(hashlib.sha256(f"{i}:{n}".encode()).hexdigest() for n in range(60))} for i in range(20)]
         old_key=cloud_mcp.RENDER_API_KEY
         old_service=cloud_mcp.RENDER_SERVICE_ID
         old_chunk=cloud_mcp.COMMERCIAL_EVIDENCE_CHUNK_BYTES
