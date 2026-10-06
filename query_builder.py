@@ -14,7 +14,7 @@ BUYER_SIGNAL_TERMS = (
 )
 
 RESEARCH_ARENA_PRODUCTION_GENOME = {
-    "source": "mycelix-research-algorithm:g56-elite-1",
+    "source": "mycelix-research-algorithm:g60-elite-1",
     "query_mode": "mixed",
     "query_count": 4,
     "recency_days": 45,
