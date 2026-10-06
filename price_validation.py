@@ -210,13 +210,6 @@ def compact_price_evidence(
         family=str((meta.get(key) or {}).get("family") or "")
         if not family:
             continue
-        qstat={
-            "query_index":query_index,
-            "results_received":0,
-            "discarded_article":0,
-            "discarded_non_product":0,
-            "accepted":0,
-        }
         for result in group.get("results") or []:
             if not isinstance(result,dict):
                 continue
@@ -367,6 +360,13 @@ def summarize_validation(
             "prices_from_snippet":0,
             "prices_from_page":0,
         })
+        qstat={
+            "query_index":query_index,
+            "results_received":0,
+            "discarded_article":0,
+            "discarded_non_product":0,
+            "accepted":0,
+        }
         for result in group.get("results") or []:
             if not isinstance(result,dict):
                 continue
