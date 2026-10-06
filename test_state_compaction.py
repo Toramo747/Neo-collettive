@@ -214,16 +214,20 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
             "cycles_completed": 1,
             "boundary_events": [],
             "commercial_evidence_memory": [],
+            "runtime_snapshot": {"history": []},
         }
-        blocks = 400
+        blocks = 40
         while True:
-            payload["diagnostic_padding"] = _noise("mid-sized-checkpoint", blocks)
+            payload["runtime_snapshot"]["history"] = [
+                {"status": "ok", "detail": _noise(f"mid-sized-checkpoint-{i}", 8)}
+                for i in range(blocks)
+            ]
             _raw, encoded = encoded_sizes(payload)
             if 60_000 < encoded < 90_000:
                 break
             if encoded >= 90_000:
                 self.fail("unable to construct checkpoint fixture below legacy 90 percent threshold")
-            blocks += 50
+            blocks += 10
 
         old_key = cloud_mcp.RENDER_API_KEY
         old_service = cloud_mcp.RENDER_SERVICE_ID
