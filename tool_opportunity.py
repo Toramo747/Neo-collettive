@@ -12,7 +12,7 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
-from price_validation import CANONICAL_PRICE_REQUIREMENT, extract_price, product_pricing_page
+from price_validation import CANONICAL_PRICE_REQUIREMENT, extract_price, marketplace_identity, product_pricing_page
 
 TOOL_OPPORTUNITY_SCHEMA_VERSION = 2
 
@@ -443,7 +443,10 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         and coverage_source in {"pricing_pages","extension_marketplaces"}
         and product_pricing_page(url,title,text)
     )
-    if legacy_price_match or explicit_payment_required or strict_product_price:
+    # Gate semantics intentionally remain pre-#177: any recognized numeric
+    # price on a covered, family-relevant row can set real_price. The stricter
+    # parser is telemetry only unless a future opt-in flag is introduced.
+    if legacy_price_match or explicit_payment_required:
         signal_types.append("PAYMENT")
     if any(x in low for x in DISSATISFACTION_MARKERS):
         signal_types.extend(["DISSATISFACTION","GAP"])
@@ -466,16 +469,13 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         "title":title,
         "excerpt":text[:500],
         "signal_types":sorted(set(signal_types)),
-        "price":(
-            (str(parsed_price.get("currency"))+" "+str(parsed_price.get("amount"))+"/"+str(parsed_price.get("period")))
-            if strict_product_price else
-            (legacy_price_match.group(0)[:80] if legacy_price_match else ("PAYMENT_REQUIRED" if explicit_payment_required else None))
-        ),
+        "price":legacy_price_match.group(0)[:80] if legacy_price_match else ("PAYMENT_REQUIRED" if explicit_payment_required else None),
         "price_currency":parsed_price.get("currency") if strict_product_price else None,
         "price_amount":parsed_price.get("amount") if strict_product_price else None,
         "price_period":parsed_price.get("period") if strict_product_price else None,
-        "real_price":strict_product_price,
-        "payment_required":bool(explicit_payment_required and not strict_product_price),
+        "strict_price_verified":strict_product_price,
+        "real_price":bool(legacy_price_match),
+        "payment_required":bool(explicit_payment_required and not legacy_price_match),
         "vendor":str(raw.get("vendor") or "").strip()[:120] or None,
         "coverage_source":coverage_source,
     }
@@ -584,8 +584,7 @@ def analyze_tool_opportunities(
         counters=[x for x in sources if "COUNTER" in x["signal_types"]]
 
         def seller_key(row: dict) -> str:
-            vendor=str(row.get("vendor") or "").strip().lower()
-            return ("vendor:"+vendor) if vendor else ("domain:"+str(row.get("domain") or "").strip().lower())
+            return marketplace_identity(str(row.get("url") or ""),row.get("vendor"))
         payment_keys=sorted({seller_key(x) for x in payments if seller_key(x)})
         real_payment_keys=sorted({seller_key(x) for x in real_payments if seller_key(x)})
         payment_domains=sorted({x["domain"] for x in payments})
