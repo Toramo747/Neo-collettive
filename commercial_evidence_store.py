@@ -6,9 +6,10 @@ import json
 import lzma
 from typing import Any
 
-STORE_SCHEMA_V = 1
+STORE_SCHEMA_V = 2
 STORE_PREFIX = "xz64:"
 DEFAULT_CHUNK_BYTES = 60_000
+DEFAULT_ACTIVE_LIMIT = 3000
 
 
 def _canonical_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -28,13 +29,28 @@ def evidence_hash(rows: list[dict[str, Any]] | None) -> str:
     return hashlib.sha256(_raw_bytes(rows)).hexdigest()
 
 
+def generation_id(reference: dict[str, Any] | None) -> str:
+    ref=reference if isinstance(reference,dict) else {}
+    return str(ref.get("generation") or str(ref.get("sha256") or "")[:12])
+
+
+def chunk_key(prefix: str, reference: dict[str, Any], index: int) -> str:
+    generation=generation_id(reference)
+    if generation:
+        return f"{prefix}{generation}_{max(0,int(index))}"
+    return f"{prefix}{max(0,int(index))}"
+
+
 def encode_external_store(
     rows: list[dict[str, Any]] | None,
     *,
     chunk_bytes: int = DEFAULT_CHUNK_BYTES,
+    store: str = "render_env_chunks_v1",
+    previous_generation: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     clean = _canonical_rows(rows)
     raw = _raw_bytes(clean)
+    sha = hashlib.sha256(raw).hexdigest()
     packed = lzma.compress(raw, preset=3)
     encoded = STORE_PREFIX + base64.b64encode(packed).decode("ascii")
     size = max(1024, int(chunk_bytes))
@@ -42,12 +58,26 @@ def encode_external_store(
     ref = {
         "schema_v": STORE_SCHEMA_V,
         "store_mode": "external",
-        "store": "render_env_chunks_v1",
-        "sha256": hashlib.sha256(raw).hexdigest(),
+        "store": store,
+        "sha256": sha,
+        "generation": sha[:12],
         "evidence_count": len(clean),
         "chunk_count": len(chunks),
         "raw_bytes": len(raw),
     }
+    if isinstance(previous_generation,dict) and previous_generation:
+        ref["previous_generation"]={
+            key:previous_generation.get(key)
+            for key in ("schema_v","store_mode","store","sha256","generation","evidence_count","chunk_count","raw_bytes")
+            if previous_generation.get(key) is not None
+        }
+        older=previous_generation.get("previous_generation")
+        if isinstance(older,dict) and older:
+            ref["previous_generation"]["previous_generation"]={
+                key:older.get(key)
+                for key in ("schema_v","store_mode","store","sha256","generation","evidence_count","chunk_count","raw_bytes")
+                if older.get(key) is not None
+            }
     return ref, chunks
 
 
@@ -56,7 +86,7 @@ def decode_external_store(
     chunks: list[str] | None,
 ) -> list[dict[str, Any]] | None:
     ref = reference if isinstance(reference, dict) else {}
-    if ref.get("store_mode") != "external" or ref.get("store") != "render_env_chunks_v1":
+    if ref.get("store_mode") != "external" or ref.get("store") not in {"render_env_chunks_v1","render_env_chunks_v2","render_env_archive_v1"}:
         return None
     expected_chunks = max(0, int(ref.get("chunk_count") or 0))
     values = list(chunks or [])
@@ -83,5 +113,25 @@ def is_external_reference(value: Any) -> bool:
     return (
         isinstance(value, dict)
         and value.get("store_mode") == "external"
-        and value.get("store") == "render_env_chunks_v1"
+        and value.get("store") in {"render_env_chunks_v1","render_env_chunks_v2","render_env_archive_v1"}
     )
+
+
+def split_active_archive(
+    rows: list[dict[str, Any]] | None,
+    *,
+    active_limit: int = DEFAULT_ACTIVE_LIMIT,
+) -> tuple[list[dict[str, Any]],list[dict[str, Any]]]:
+    clean=_canonical_rows(rows)
+    limit=max(1,int(active_limit))
+    if len(clean)<=limit:
+        return clean,[]
+    eligible=[row for row in clean if bool(row.get("gate_eligible"))]
+    ineligible=[row for row in clean if not bool(row.get("gate_eligible"))]
+    keep_ineligible=max(0,limit-len(eligible))
+    # Rows are expected newest-first in runtime memory. Archive only the oldest
+    # non-gate-eligible rows and never evict a gate-eligible row.
+    active=eligible+ineligible[:keep_ineligible]
+    active_ids={id(row) for row in active}
+    archive=[row for row in clean if id(row) not in active_ids]
+    return active,archive

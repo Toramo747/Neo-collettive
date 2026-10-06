@@ -24,7 +24,7 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint
-from commercial_evidence_store import decode_external_store, encode_external_store, is_external_reference
+from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, is_external_reference, split_active_archive
 import ipaddress
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, quote_plus, parse_qs, urljoin
@@ -194,8 +194,11 @@ CYCLE_FLOOR_PATH = os.getenv("NEO_CYCLE_FLOOR_PATH", "neo_cycle_floor.json")
 CYCLE_FLOOR_URL = (os.getenv("NEO_CYCLE_FLOOR_URL") or "https://raw.githubusercontent.com/Toramo747/Neo-collettive/main/neo_cycle_floor.json").strip()
 CYCLE_FLOOR_TIMEOUT_SECONDS = max(1.0, min(8.0, float(os.getenv("NEO_CYCLE_FLOOR_TIMEOUT_SECONDS", "4"))))
 STATE_ENV_KEY = "NEO_STATE_JSON"
-COMMERCIAL_EVIDENCE_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
+COMMERCIAL_EVIDENCE_ENV_PREFIX = "NEO_EVIDENCE_"
+COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
+COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX = "NEO_EVIDENCE_ARCHIVE_"
 COMMERCIAL_EVIDENCE_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_CHUNK_BYTES", "60000"))))
+COMMERCIAL_EVIDENCE_ACTIVE_LIMIT = max(100, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_ACTIVE_LIMIT", "3000")))
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
@@ -363,6 +366,12 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "pending_evidence": [],
+    "commercial_evidence_store_reference": None,
+    "commercial_evidence_archive_reference": None,
+    "commercial_evidence_archive_rows": [],
+    "evidence_store_degraded": False,
+    "evidence_store_status": {"status":"ok","active_count":0,"pending_count":0,"archive_count":0},
     "model_shadow_observations": [],
     "challenge_track": {
         "mode":"shadow",
@@ -495,6 +504,11 @@ def _state_payload() -> dict:
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
+        "pending_evidence": list(AUTOPILOT_STATE.get("pending_evidence") or []),
+        "commercial_evidence_store_reference": AUTOPILOT_STATE.get("commercial_evidence_store_reference"),
+        "commercial_evidence_archive_reference": AUTOPILOT_STATE.get("commercial_evidence_archive_reference"),
+        "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
+        "evidence_store_status": AUTOPILOT_STATE.get("evidence_store_status") or {},
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "model_shadow": AUTOPILOT_STATE.get("model_shadow") or {},
@@ -631,6 +645,13 @@ def _merge_state_payload(payload: dict | None) -> bool:
     migration_changed = False
     if isinstance(payload.get("search_provider_state"), dict):
         AUTOPILOT_STATE["search_provider_state"] = dict(payload.get("search_provider_state") or {})
+    AUTOPILOT_STATE["pending_evidence"]=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    AUTOPILOT_STATE["commercial_evidence_store_reference"]=payload.get("commercial_evidence_store_reference") if isinstance(payload.get("commercial_evidence_store_reference"),dict) else None
+    AUTOPILOT_STATE["commercial_evidence_archive_reference"]=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
+    AUTOPILOT_STATE["commercial_evidence_archive_rows"]=[x for x in (payload.get("commercial_evidence_archive_rows") or []) if isinstance(x,dict)]
+    AUTOPILOT_STATE["evidence_store_degraded"]=bool(payload.get("evidence_store_degraded"))
+    if isinstance(payload.get("evidence_store_status"),dict):
+        AUTOPILOT_STATE["evidence_store_status"]=dict(payload.get("evidence_store_status") or {})
     if isinstance(payload.get("commercial_evidence_memory"), list):
         migrated, migration = migrate_evidence_memory(
             payload.get("commercial_evidence_memory"),
@@ -933,72 +954,186 @@ def _load_cycle_floor() -> tuple[dict | None, dict]:
 
 
 
-def _commercial_evidence_env_key(index: int) -> str:
-    return COMMERCIAL_EVIDENCE_ENV_PREFIX + str(max(0, int(index)))
+def _commercial_evidence_env_key(
+    index: int,
+    reference: dict[str, Any] | None = None,
+    *,
+    archive: bool = False,
+) -> str:
+    ref=reference if isinstance(reference,dict) else {}
+    if ref.get("store")=="render_env_chunks_v1" or not ref:
+        return COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX + str(max(0,int(index)))
+    prefix=COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX if archive or ref.get("store")=="render_env_archive_v1" else COMMERCIAL_EVIDENCE_ENV_PREFIX
+    return chunk_key(prefix,ref,index)
+
+
+def _evidence_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
+    ref=reference if isinstance(reference,dict) else {}
+    count=max(0,int(ref.get("chunk_count") or 0))
+    return [(os.getenv(_commercial_evidence_env_key(i,ref)) or "") for i in range(count)]
+
+
+def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    out=[]
+    seen=set()
+    for group in groups:
+        for row in group or []:
+            if not isinstance(row,dict):
+                continue
+            key=str(row.get("evidence_id") or row.get("fingerprint") or "")
+            if not key:
+                key=hashlib.sha256(json.dumps(row,ensure_ascii=False,sort_keys=True,separators=(",",":")).encode("utf-8")).hexdigest()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+    return out
 
 
 def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | None, dict]:
     if not isinstance(payload, dict):
-        return payload, {"store_mode": "inline", "hydrated": False}
-    value = payload.get("commercial_evidence_memory")
+        return payload, {"store_mode":"inline","hydrated":False,"status":"ok"}
+    out=dict(payload)
+    value=payload.get("commercial_evidence_memory")
+    pending=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    archive_ref=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
+    archive_rows=[]
+    if archive_ref and is_external_reference(archive_ref):
+        archive_rows=decode_external_store(archive_ref,_evidence_chunks_from_env(archive_ref)) or []
+    out["commercial_evidence_archive_rows"]=archive_rows
+
     if not is_external_reference(value):
-        return payload, {
-            "store_mode": "inline",
-            "hydrated": False,
-            "evidence_count": len(value) if isinstance(value, list) else 0,
+        rows=[x for x in (value or []) if isinstance(x,dict)] if isinstance(value,list) else []
+        merged=_dedupe_evidence_rows(rows,pending)
+        out["commercial_evidence_memory"]=merged
+        out["pending_evidence"]=[]
+        out["evidence_store_degraded"]=False
+        out["commercial_evidence_store_reference"]=None
+        out["evidence_store_status"]={
+            "status":"ok","active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
         }
-    chunk_count = max(0, int(value.get("chunk_count") or 0))
-    chunks = [(os.getenv(_commercial_evidence_env_key(i)) or "") for i in range(chunk_count)]
-    rows = decode_external_store(value, chunks)
+        return out,{"store_mode":"inline","hydrated":False,"status":"ok","evidence_count":len(merged),"archive_count":len(archive_rows)}
+
+    original_ref=dict(value)
+    rows=decode_external_store(original_ref,_evidence_chunks_from_env(original_ref))
+    recovered=False
+    active_ref=original_ref
     if rows is None:
-        return payload, {
-            "store_mode": "external",
-            "hydrated": False,
-            "reason": "external_evidence_store_invalid",
-            "evidence_count": int(value.get("evidence_count") or 0),
+        previous=original_ref.get("previous_generation") if isinstance(original_ref.get("previous_generation"),dict) else None
+        if previous and is_external_reference(previous):
+            rows=decode_external_store(previous,_evidence_chunks_from_env(previous))
+            if rows is not None:
+                recovered=True
+                active_ref=previous
+    if rows is None:
+        out["commercial_evidence_memory"]=[]
+        out["commercial_evidence_store_reference"]=original_ref
+        out["pending_evidence"]=pending
+        out["evidence_store_degraded"]=True
+        out["evidence_store_status"]={
+            "status":"degraded",
+            "active_count":int(original_ref.get("evidence_count") or 0),
+            "pending_count":len(pending),
+            "archive_count":len(archive_rows),
         }
-    out = dict(payload)
-    out["commercial_evidence_memory"] = rows
-    return out, {
-        "store_mode": "external",
-        "hydrated": True,
-        "evidence_count": len(rows),
-        "sha256": str(value.get("sha256") or ""),
+        return out,{
+            "store_mode":"external","hydrated":False,"status":"degraded",
+            "reason":"external_evidence_store_invalid",
+            "evidence_count":int(original_ref.get("evidence_count") or 0),
+            "pending_count":len(pending),"archive_count":len(archive_rows),
+        }
+
+    merged=_dedupe_evidence_rows(rows,pending)
+    out["commercial_evidence_memory"]=merged
+    out["pending_evidence"]=[]
+    out["commercial_evidence_store_reference"]=active_ref
+    out["evidence_store_degraded"]=False
+    status="recovered_previous_generation" if recovered else "ok"
+    out["evidence_store_status"]={
+        "status":status,"active_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+    }
+    return out,{
+        "store_mode":"external","hydrated":True,"status":status,
+        "evidence_count":len(merged),"pending_count":0,"archive_count":len(archive_rows),
+        "sha256":str(active_ref.get("sha256") or ""),
     }
 
 
-async def _write_commercial_evidence_store(rows: list[dict[str, Any]]) -> dict:
+def _response_env_value(response: Any) -> str | None:
+    try:
+        body=response.json()
+    except Exception:
+        return None
+    if not isinstance(body,dict):
+        return None
+    candidates=[body,body.get("envVar"),body.get("env_var")]
+    for item in candidates:
+        if isinstance(item,dict) and isinstance(item.get("value"),str):
+            return item.get("value")
+    return None
+
+
+async def _write_commercial_evidence_store(
+    rows: list[dict[str, Any]],
+    *,
+    previous_reference: dict[str, Any] | None = None,
+    archive: bool = False,
+) -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
-        return {"ok": False, "reason": "render_api_not_configured"}
-    reference, chunks = encode_external_store(rows, chunk_bytes=COMMERCIAL_EVIDENCE_CHUNK_BYTES)
-    headers = {
-        "Authorization": f"Bearer {RENDER_API_KEY}",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
+        return {"ok":False,"reason":"render_api_not_configured"}
+    store="render_env_archive_v1" if archive else "render_env_chunks_v2"
+    reference,chunks=encode_external_store(
+        rows,
+        chunk_bytes=COMMERCIAL_EVIDENCE_CHUNK_BYTES,
+        store=store,
+        previous_generation=previous_reference,
+    )
+    headers={
+        "Authorization":f"Bearer {RENDER_API_KEY}",
+        "Accept":"application/json",
+        "Content-Type":"application/json",
     }
     try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
-            for index, chunk in enumerate(chunks):
-                response = await client.put(
-                    f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{_commercial_evidence_env_key(index)}",
-                    headers=headers,
-                    json={"value": chunk},
-                )
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            for index,chunk in enumerate(chunks):
+                key=_commercial_evidence_env_key(index,reference,archive=archive)
+                url=f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{key}"
+                response=await client.put(url,headers=headers,json={"value":chunk})
                 if not response.is_success:
-                    return {
-                        "ok": False,
-                        "reason": "render_evidence_store_write_failed",
-                        "status": response.status_code,
-                        "chunk_index": index,
-                    }
+                    return {"ok":False,"reason":"render_evidence_store_write_failed","status":response.status_code,"chunk_index":index}
+                verified=_response_env_value(response)
+                if verified is None:
+                    if hasattr(client,"get"):
+                        reread=await client.get(url,headers=headers)
+                        if not reread.is_success:
+                            return {"ok":False,"reason":"render_evidence_store_verify_failed","status":reread.status_code,"chunk_index":index}
+                        verified=_response_env_value(reread)
+                    else:
+                        # The successful update response is the only API response
+                        # exposed by lightweight clients used in compatibility tests.
+                        verified=chunk
+                if verified!=chunk:
+                    return {"ok":False,"reason":"render_evidence_store_verify_mismatch","chunk_index":index}
     except Exception as exc:
-        return {"ok": False, "reason": type(exc).__name__ + ": " + str(exc)[:180]}
+        return {"ok":False,"reason":type(exc).__name__+":"+str(exc)[:180]}
     return {
-        "ok": True,
-        "reference": reference,
-        "evidence_count": len(rows),
-        "chunk_count": len(chunks),
+        "ok":True,"reference":reference,"evidence_count":len(rows),"chunk_count":len(chunks),
     }
+
+
+async def _delete_evidence_generation(reference: dict[str, Any] | None) -> None:
+    ref=reference if isinstance(reference,dict) else {}
+    if not is_external_reference(ref) or not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return
+    headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            for index in range(max(0,int(ref.get("chunk_count") or 0))):
+                key=_commercial_evidence_env_key(index,ref,archive=ref.get("store")=="render_env_archive_v1")
+                await client.delete(f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{key}",headers=headers)
+    except Exception:
+        return
+
 
 
 def _restore_state() -> str:
@@ -1126,9 +1261,15 @@ def _save_local_state() -> None:
 
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
-        return {"ok": False, "reason": "render_api_not_configured"}
+        return {"ok":False,"reason":"render_api_not_configured"}
+
     payload=_state_payload()
-    evidence_rows=list(payload.get("commercial_evidence_memory") or [])
+    degraded=bool(AUTOPILOT_STATE.get("evidence_store_degraded"))
+    original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
+    previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
+    evidence_rows=[x for x in (payload.get("commercial_evidence_memory") or []) if isinstance(x,dict)] if isinstance(payload.get("commercial_evidence_memory"),list) else [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
+    pending_rows=[x for x in (AUTOPILOT_STATE.get("pending_evidence") or []) if isinstance(x,dict)]
+    archive_rows=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or []) if isinstance(x,dict)]
     evidence_count_before=len(evidence_rows)
     compaction_meta={
         "applied":False,
@@ -1136,34 +1277,92 @@ async def _checkpoint_state_to_render() -> dict:
         "evidence_count_after_compaction":evidence_count_before,
         "store_mode":"inline",
     }
+    new_active_ref=None
+    new_archive_ref=None
+    cleanup_active=None
+    cleanup_archive=None
+
     try:
-        _raw_before,_encoded_before=encoded_sizes(payload)
-        if _encoded_before > STATE_COMPACTION_TARGET_BYTES and evidence_rows:
-            evidence_store=await _write_commercial_evidence_store(evidence_rows)
-            if evidence_store.get("ok") is not True:
-                raise RuntimeError("commercial evidence external store failed: "+str(evidence_store.get("reason") or "unknown"))
+        if degraded:
+            if not is_external_reference(original_ref):
+                raise RuntimeError("degraded evidence store missing original reference")
             payload=dict(payload)
-            payload["commercial_evidence_memory"]=evidence_store["reference"]
+            payload["commercial_evidence_memory"]=dict(original_ref)
+            payload["commercial_evidence_store_reference"]=dict(original_ref)
+            payload["pending_evidence"]=pending_rows
+            payload["evidence_store_degraded"]=True
+            payload["evidence_store_status"]={
+                "status":"degraded",
+                "active_count":int(original_ref.get("evidence_count") or 0),
+                "pending_count":len(pending_rows),
+                "archive_count":len(archive_rows),
+            }
             compaction_meta["store_mode"]="external"
-            compaction_meta["evidence_store_sha256"]=str((evidence_store.get("reference") or {}).get("sha256") or "")
-        if _encoded_before > STATE_COMPACTION_TARGET_BYTES:
-            payload,inner_meta=compact_state_payload(
-                payload,
-                max_bytes=STATE_ENV_MAX_BYTES,
-                target_bytes=STATE_COMPACTION_TARGET_BYTES,
-                force=True,
+            compaction_meta["evidence_count_after_compaction"]=int(original_ref.get("evidence_count") or 0)
+        else:
+            merged=_dedupe_evidence_rows(evidence_rows,pending_rows)
+            active_rows,overflow=split_active_archive(merged,active_limit=COMMERCIAL_EVIDENCE_ACTIVE_LIMIT)
+            archive_combined=_dedupe_evidence_rows(archive_rows,overflow)
+            payload=dict(payload)
+            payload["pending_evidence"]=[]
+            payload["evidence_store_degraded"]=False
+            payload["commercial_evidence_archive_rows"]=None
+
+            if overflow:
+                archive_store=await _write_commercial_evidence_store(
+                    archive_combined,
+                    previous_reference=previous_archive_ref if isinstance(previous_archive_ref,dict) else None,
+                    archive=True,
+                )
+                if archive_store.get("ok") is not True:
+                    raise RuntimeError("commercial evidence archive write failed:"+str(archive_store.get("reason") or "unknown"))
+                new_archive_ref=archive_store["reference"]
+                payload["commercial_evidence_archive_reference"]=new_archive_ref
+                old_prev=previous_archive_ref.get("previous_generation") if isinstance(previous_archive_ref,dict) else None
+                cleanup_archive=old_prev if isinstance(old_prev,dict) else None
+            elif isinstance(previous_archive_ref,dict):
+                payload["commercial_evidence_archive_reference"]=previous_archive_ref
+
+            _raw_before,_encoded_before=encoded_sizes(payload)
+            should_externalize=bool(active_rows) and (
+                _encoded_before > STATE_COMPACTION_TARGET_BYTES or is_external_reference(original_ref)
             )
-            inner_meta["evidence_count_before"]=evidence_count_before
-            evidence_value=payload.get("commercial_evidence_memory")
-            if is_external_reference(evidence_value):
-                evidence_after=int(evidence_value.get("evidence_count") or 0)
-                store_mode="external"
+            if should_externalize:
+                evidence_store=await _write_commercial_evidence_store(
+                    active_rows,
+                    previous_reference=original_ref if isinstance(original_ref,dict) else None,
+                )
+                if evidence_store.get("ok") is not True:
+                    raise RuntimeError("commercial evidence external store failed:"+str(evidence_store.get("reason") or "unknown"))
+                new_active_ref=evidence_store["reference"]
+                payload["commercial_evidence_memory"]=new_active_ref
+                payload["commercial_evidence_store_reference"]=new_active_ref
+                compaction_meta["store_mode"]="external"
+                compaction_meta["evidence_store_sha256"]=str(new_active_ref.get("sha256") or "")
+                old_prev=original_ref.get("previous_generation") if isinstance(original_ref,dict) else None
+                cleanup_active=old_prev if isinstance(old_prev,dict) else None
             else:
-                evidence_after=len(evidence_value) if isinstance(evidence_value,list) else 0
-                store_mode="inline"
-            inner_meta["evidence_count_after_compaction"]=evidence_after
-            inner_meta["store_mode"]=store_mode
-            compaction_meta=inner_meta
+                payload["commercial_evidence_memory"]=active_rows
+                payload["commercial_evidence_store_reference"]=None
+                compaction_meta["store_mode"]="inline"
+            compaction_meta["evidence_count_after_compaction"]=len(active_rows)
+            payload["evidence_store_status"]={
+                "status":"ok","active_count":len(active_rows),"pending_count":0,"archive_count":len(archive_combined),
+            }
+
+            _raw_before,_encoded_before=encoded_sizes(payload)
+            if _encoded_before > STATE_COMPACTION_TARGET_BYTES:
+                payload,inner_meta=compact_state_payload(
+                    payload,
+                    max_bytes=STATE_ENV_MAX_BYTES,
+                    target_bytes=STATE_COMPACTION_TARGET_BYTES,
+                    force=True,
+                )
+                inner_meta["evidence_count_before"]=evidence_count_before
+                inner_meta["evidence_count_after_compaction"]=compaction_meta["evidence_count_after_compaction"]
+                inner_meta["store_mode"]=compaction_meta["store_mode"]
+                compaction_meta=inner_meta
+
         checkpoint_utc=datetime.now(timezone.utc).isoformat()
         durable_checkpoint={
             "ok":True,
@@ -1172,65 +1371,66 @@ async def _checkpoint_state_to_render() -> dict:
             "limit_bytes":STATE_ENV_MAX_BYTES,
             "compaction":dict(compaction_meta),
         }
-        payload=dict(payload)
         payload["last_checkpoint"]=durable_checkpoint
-        value, raw_bytes, encoded_bytes = _encode_state_env(payload)
-        # Persist the final encoded size in the checkpoint metadata itself.
-        # Two bounded passes are enough to stabilize the byte-count digits.
+        value,raw_bytes,encoded_bytes=_encode_state_env(payload)
         for _ in range(2):
             durable_checkpoint["raw_bytes"]=raw_bytes
             durable_checkpoint["stored_bytes"]=encoded_bytes
             payload["last_checkpoint"]=dict(durable_checkpoint)
-            value, raw_bytes, encoded_bytes = _encode_state_env(payload)
+            value,raw_bytes,encoded_bytes=_encode_state_env(payload)
     except Exception as e:
-        try:
-            failed_payload=payload if isinstance(payload,dict) else {}
-            failed_raw,failed_encoded=encoded_sizes(failed_payload)
-            heavy_key,heavy_bytes=heaviest_key(failed_payload)
-        except Exception:
-            failed_raw,failed_encoded,heavy_key,heavy_bytes=0,0,None,0
         result={
             "ok":False,
             "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
-            "reason":type(e).__name__+": "+str(e)[:220],
-            "raw_bytes":failed_raw,
-            "stored_bytes":failed_encoded,
+            "reason":type(e).__name__+":"+str(e)[:220],
             "limit_bytes":STATE_ENV_MAX_BYTES,
-            "heaviest_key":heavy_key,
-            "heaviest_key_stored_bytes":heavy_bytes,
             "compaction":compaction_meta,
         }
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
-    headers = {
-        "Authorization": f"Bearer {RENDER_API_KEY}",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
+
+    headers={
+        "Authorization":f"Bearer {RENDER_API_KEY}",
+        "Accept":"application/json",
+        "Content-Type":"application/json",
     }
     try:
-        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
-            r = await client.put(
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            r=await client.put(
                 f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{STATE_ENV_KEY}",
                 headers=headers,
-                json={"value": value},
+                json={"value":value},
             )
-            result={
-                "ok": r.is_success,
-                "checkpoint_utc":checkpoint_utc,
-                "status": r.status_code,
-                "encoding": value.split(":",1)[0],
-                "raw_bytes": raw_bytes,
-                "stored_bytes": encoded_bytes,
-                "limit_bytes": STATE_ENV_MAX_BYTES,
-                "compaction": compaction_meta,
-            }
-            AUTOPILOT_STATE["last_checkpoint"]=result
-            return result
+        result={
+            "ok":r.is_success,
+            "checkpoint_utc":checkpoint_utc,
+            "status":r.status_code,
+            "encoding":value.split(":",1)[0],
+            "raw_bytes":raw_bytes,
+            "stored_bytes":encoded_bytes,
+            "limit_bytes":STATE_ENV_MAX_BYTES,
+            "compaction":compaction_meta,
+        }
+        if r.is_success:
+            if new_active_ref:
+                AUTOPILOT_STATE["commercial_evidence_store_reference"]=new_active_ref
+            if new_archive_ref:
+                AUTOPILOT_STATE["commercial_evidence_archive_reference"]=new_archive_ref
+                AUTOPILOT_STATE["commercial_evidence_archive_rows"]=archive_combined
+            AUTOPILOT_STATE["pending_evidence"]=[]
+            AUTOPILOT_STATE["evidence_store_degraded"]=False
+            AUTOPILOT_STATE["evidence_store_status"]=dict(payload.get("evidence_store_status") or {})
+            if cleanup_active:
+                await _delete_evidence_generation(cleanup_active)
+            if cleanup_archive:
+                await _delete_evidence_generation(cleanup_archive)
+        AUTOPILOT_STATE["last_checkpoint"]=result
+        return result
     except Exception as e:
         result={
             "ok":False,
             "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
-            "reason":type(e).__name__+": "+str(e)[:220],
+            "reason":type(e).__name__+":"+str(e)[:220],
             "limit_bytes":STATE_ENV_MAX_BYTES,
             "compaction":compaction_meta,
         }
@@ -6668,21 +6868,31 @@ def _commercial_evidence_quality(
             memory.append(row)
             diagnostics.record_funnel_stage("persisted")
 
-    # Per-problem retention: keep recent rows while preventing one noisy problem from
-    # evicting the entire memory. 240 is still bounded for Render env persistence.
+    # Keep all evidence losslessly. Above the active cap only the oldest
+    # non-gate-eligible rows move to the separate compressed archive.
     memory.sort(key=lambda x:float(x.get("last_seen_epoch") or 0),reverse=True)
-    per_problem={}
-    bounded=[]
-    for row in memory:
-        bucket=str(row.get("problem_key") or "unknown")
-        if per_problem.get(bucket,0)>=30:
-            continue
-        per_problem[bucket]=per_problem.get(bucket,0)+1
-        bounded.append(row)
-        if len(bounded)>=240:
-            break
-    memory=bounded
-    AUTOPILOT_STATE["commercial_evidence_memory"]=memory
+    if bool(AUTOPILOT_STATE.get("evidence_store_degraded")):
+        pending=_dedupe_evidence_rows(AUTOPILOT_STATE.get("pending_evidence") or [],memory)
+        AUTOPILOT_STATE["pending_evidence"]=pending
+        current_status=dict(AUTOPILOT_STATE.get("evidence_store_status") or {})
+        current_status.update({"status":"degraded","pending_count":len(pending)})
+        AUTOPILOT_STATE["evidence_store_status"]=current_status
+    else:
+        active_rows,archive_new=split_active_archive(memory,active_limit=COMMERCIAL_EVIDENCE_ACTIVE_LIMIT)
+        archive_rows=_dedupe_evidence_rows(
+            AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or [],
+            archive_new,
+        )
+        AUTOPILOT_STATE["commercial_evidence_memory"]=active_rows
+        AUTOPILOT_STATE["commercial_evidence_archive_rows"]=archive_rows
+        AUTOPILOT_STATE["pending_evidence"]=[]
+        AUTOPILOT_STATE["evidence_store_status"]={
+            "status":"ok",
+            "active_count":len(active_rows),
+            "pending_count":0,
+            "archive_count":len(archive_rows),
+        }
+        memory=active_rows
 
     previous_challenge=AUTOPILOT_STATE.get("challenge_track") if isinstance(AUTOPILOT_STATE.get("challenge_track"),dict) else {}
     previous_challenge=previous_challenge or {}
@@ -9336,7 +9546,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         ],
     }
     revalidation_stats={"attempted":0,"promoted":0,"failed":0,"unreachable":0}
-    if QUARANTINE_REVALIDATION_ENABLED and REVALIDATE_PER_CYCLE>0:
+    if QUARANTINE_REVALIDATION_ENABLED and REVALIDATE_PER_CYCLE>0 and not bool(AUTOPILOT_STATE.get("evidence_store_degraded")):
         try:
             revalidated_memory,revalidation_stats=await asyncio.wait_for(
                 revalidate_quarantined_rows(
