@@ -51,11 +51,14 @@ def _hidden_cases_from_render(secret: str) -> list[dict]:
 
 def main() -> int:
     target=Path(sys.argv[1])
+    hidden_target=Path(sys.argv[2]) if len(sys.argv)>2 else Path(
+        os.environ.get("MODEL_SHADOW_HIDDEN_EVAL_PATH") or target/"hidden.jsonl"
+    )
     public_rows=_public_cases()
     _write_jsonl(target/"public.jsonl",public_rows)
     secret=os.environ.get("NEO_HEARTBEAT_TOKEN","").strip()
     hidden_rows=_hidden_cases_from_render(secret) if secret else []
-    _write_jsonl(target/"hidden.jsonl",hidden_rows)
+    _write_jsonl(hidden_target,hidden_rows)
     print(json.dumps({
         "public_cases":len(public_rows),
         "hidden_cases":len(hidden_rows),
