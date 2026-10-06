@@ -9503,7 +9503,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                                     break
                                 raw.extend(chunk)
                     page=raw.decode("utf-8","ignore")
-                    page=re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\\1>"," ",page)
+                    page=re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>"," ",page)
                     page=html.unescape(re.sub(r"(?s)<[^>]+>"," ",page))
                     visible=" ".join(page.split())[:300_000]
                     result["page_fetched"]=True
@@ -9512,6 +9512,23 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 except Exception:
                     continue
         return fetched
+
+    # Reuse only compact, strict-parser-verified price evidence from prior cycles.
+    persisted_groups=persisted_price_groups(AUTOPILOT_STATE.get("commercial_price_evidence") or [])
+    for group in persisted_groups:
+        family=str(group.get("_persisted_price_family") or "")
+        query=str(group.get("query") or "")
+        if not family or not query:
+            continue
+        query_meta[" ".join(query.split()).lower()]={
+            "query":query,
+            "class":"tool_market_validation",
+            "role":"price_validation",
+            "family":family,
+            "query_intent":"persisted_verified_competitor_price",
+            "validation_kind":"persisted_strict",
+        }
+        web_research.append(group)
 
     # Dedicated G5 validation phase. It has its own bounded query budget and
     # rotates only among families with persisted buyer voice. Discovery remains separate.
@@ -9541,6 +9558,24 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         search_strategy["price_validation_query_budget"]=PRICE_VALIDATION_QUERY_BUDGET
         search_strategy["policy"]="separate price validation: product pages and public marketplaces only; no login scraping; no payment"
     price_validation_telemetry=summarize_validation(price_plan,price_groups)
+    current_price_evidence=compact_price_evidence(
+        price_plan,price_groups,max_rows=COMMERCIAL_PRICE_EVIDENCE_LIMIT
+    )
+    price_index={}
+    for row in (AUTOPILOT_STATE.get("commercial_price_evidence") or [])+current_price_evidence:
+        if not isinstance(row,dict):
+            continue
+        key="|".join((
+            str(row.get("family") or ""),
+            str(row.get("seller_key") or ""),
+            str(row.get("url") or ""),
+        ))
+        if not key.strip("|"):
+            continue
+        stable=dict(row)
+        stable["last_seen_cycle"]=cycle_no
+        price_index[key]=stable
+    AUTOPILOT_STATE["commercial_price_evidence"]=list(price_index.values())[-COMMERCIAL_PRICE_EVIDENCE_LIMIT:]
 
     source_diagnostics=dict(AUTOPILOT_STATE.get("market_source_diagnostics") or {})
     for key in ("pricing_pages","product_hunt","extension_marketplaces"):
@@ -9785,8 +9820,10 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
         tagger_version=TAGGER_VERSION,
         genome_id=str(RESEARCH_ARENA_PRODUCTION_GENOME.get("source") or ""),
+        first_cycle_after_deploy=first_cycle_after_deploy,
     )
     AUTOPILOT_STATE["gate_stability"]=gate_state
+    market_analysis["post_deploy_pass_ignored"]=int(gate_state.get("post_deploy_pass_ignored") or 0)
     if stable_rows:
         market_analysis["top5"]=stable_rows
         market_analysis["top_gate_pass"]=bool(stable_rows[0].get("stable_gate_pass"))
