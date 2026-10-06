@@ -669,7 +669,13 @@ jobs:
           set -euo pipefail
           livez_code="$(curl --silent --show-error --output /tmp/release-livez.json --max-time 45 --write-out '%{http_code}' "https://neo-collettive.onrender.com/livez")"
           mcp_payload='{"jsonrpc":"2.0","id":"release-smoke-init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-release-smoke","version":"1"}}}'
-          mcp_code="$(curl --silent --show-error --output /tmp/release-mcp.json --max-time 45 --write-out '%{http_code}'             -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"             -H "X-MYCELIX-Self-Traffic: github-actions-deploy"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-deploy)"             --data "$mcp_payload" "https://neo-collettive.onrender.com/mcp")"
+          mcp_code="000"
+          for attempt in $(seq 1 6); do
+            mcp_code="$(curl --silent --show-error --output /tmp/release-mcp.json --max-time 45 --write-out '%{http_code}'               -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"               -H "X-MYCELIX-Self-Traffic: github-actions-deploy"               -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-deploy)"               --data "$mcp_payload" "https://neo-collettive.onrender.com/mcp")"
+            [ "$mcp_code" = "200" ] && break
+            echo "MCP initialize warm-up attempt $attempt returned HTTP $mcp_code"
+            sleep 5
+          done
           heartbeat_code="$(curl --silent --show-error --output /tmp/release-heartbeat.json --max-time 45 --write-out '%{http_code}'             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)"             "https://neo-collettive.onrender.com/api/heartbeat")"
           echo "livez_http=$livez_code"
           echo "mcp_initialize_http=$mcp_code"
