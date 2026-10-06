@@ -626,6 +626,7 @@ def analyze_tool_opportunities(
                 "url":x["url"],"date":x["date"],"domain":x["domain"],"price":x.get("price"),
                 "source":x["source"],"coverage_source":x.get("coverage_source"),
                 "real_competitor_price":_competitor_price_row(x,family),
+                "strict_price_verified":bool(x.get("strict_price_verified")),
             }
             for x in payments[:8]
         ]
