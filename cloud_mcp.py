@@ -928,6 +928,75 @@ def _load_cycle_floor() -> tuple[dict | None, dict]:
     return payload,meta
 
 
+
+def _commercial_evidence_env_key(index: int) -> str:
+    return COMMERCIAL_EVIDENCE_ENV_PREFIX + str(max(0, int(index)))
+
+
+def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | None, dict]:
+    if not isinstance(payload, dict):
+        return payload, {"store_mode": "inline", "hydrated": False}
+    value = payload.get("commercial_evidence_memory")
+    if not is_external_reference(value):
+        return payload, {
+            "store_mode": "inline",
+            "hydrated": False,
+            "evidence_count": len(value) if isinstance(value, list) else 0,
+        }
+    chunk_count = max(0, int(value.get("chunk_count") or 0))
+    chunks = [(os.getenv(_commercial_evidence_env_key(i)) or "") for i in range(chunk_count)]
+    rows = decode_external_store(value, chunks)
+    if rows is None:
+        return payload, {
+            "store_mode": "external",
+            "hydrated": False,
+            "reason": "external_evidence_store_invalid",
+            "evidence_count": int(value.get("evidence_count") or 0),
+        }
+    out = dict(payload)
+    out["commercial_evidence_memory"] = rows
+    return out, {
+        "store_mode": "external",
+        "hydrated": True,
+        "evidence_count": len(rows),
+        "sha256": str(value.get("sha256") or ""),
+    }
+
+
+async def _write_commercial_evidence_store(rows: list[dict[str, Any]]) -> dict:
+    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return {"ok": False, "reason": "render_api_not_configured"}
+    reference, chunks = encode_external_store(rows, chunk_bytes=COMMERCIAL_EVIDENCE_CHUNK_BYTES)
+    headers = {
+        "Authorization": f"Bearer {RENDER_API_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT, 12), follow_redirects=False) as client:
+            for index, chunk in enumerate(chunks):
+                response = await client.put(
+                    f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{_commercial_evidence_env_key(index)}",
+                    headers=headers,
+                    json={"value": chunk},
+                )
+                if not response.is_success:
+                    return {
+                        "ok": False,
+                        "reason": "render_evidence_store_write_failed",
+                        "status": response.status_code,
+                        "chunk_index": index,
+                    }
+    except Exception as exc:
+        return {"ok": False, "reason": type(exc).__name__ + ": " + str(exc)[:180]}
+    return {
+        "ok": True,
+        "reference": reference,
+        "evidence_count": len(rows),
+        "chunk_count": len(chunks),
+    }
+
+
 def _restore_state() -> str:
     candidates=[]
 
