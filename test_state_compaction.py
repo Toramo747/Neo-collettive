@@ -5,6 +5,7 @@ from copy import deepcopy
 from unittest.mock import AsyncMock, patch
 
 import cloud_mcp
+from commercial_evidence_store import encode_external_store
 from state_compaction import (
     PROTECTED_STATE_KEYS,
     compact_state_payload,
@@ -376,7 +377,7 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(merged["last_real_contact_utc"], original["last_real_contact_utc"])
         self.assertEqual(merged["counts"]["last_24h"], recent["counts"]["last_24h"])
 
-    def test_challenge_track_compaction_is_bounded_and_separate(self):
+    def test_challenge_and_gate_state_are_lossless_under_compaction(self):
         payload=_heavy_payload()
         payload["challenge_track"]={
             "mode":"shadow",
@@ -400,12 +401,68 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
             },
             "latest":{"status":"CHALLENGE_SELECT"},
         }
+        payload["gate_stability"]={"families":{"x":{"pass_streak":4}},"flips":[{"n":i} for i in range(90)]}
+        before_challenge=_bytes(payload["challenge_track"])
+        before_gate=_bytes(payload["gate_stability"])
         compacted,_=compact_state_payload(payload,max_bytes=100_000,target_bytes=60_000,force=True)
-        challenge=compacted["challenge_track"]
-        self.assertLessEqual(len(challenge["memory"]),180)
-        self.assertLessEqual(len(challenge["gate_state"]["candidates"]),60)
-        self.assertLessEqual(len(challenge["gate_state"]["flips"]),40)
+        self.assertEqual(_bytes(compacted["challenge_track"]),before_challenge)
+        self.assertEqual(_bytes(compacted["gate_stability"]),before_gate)
         self.assertEqual(compacted["commercial_evidence_memory"],payload["commercial_evidence_memory"])
+
+    def test_500_evidence_rows_survive_compaction_with_sources_and_domains(self):
+        payload=_heavy_payload()
+        rows=[]
+        for i in range(500):
+            rows.append({
+                "evidence_id":f"ev-{i}",
+                "domain":f"buyer-{i % 73}.example",
+                "sources":[
+                    {"url":f"https://buyer-{i % 73}.example/source/{i}/{n}","domain":f"buyer-{i % 73}.example"}
+                    for n in range(5)
+                ],
+                "excerpt":_noise(f"evidence-{i}",4),
+                "gate_eligible":True,
+            })
+        payload["commercial_evidence_memory"]=deepcopy(rows)
+        before_sources=[len(row["sources"]) for row in rows]
+        before_domains={row["domain"] for row in rows}
+        compacted,_=compact_state_payload(payload,max_bytes=100_000,target_bytes=60_000,force=True)
+        after=compacted["commercial_evidence_memory"]
+        self.assertEqual(len(after),500)
+        self.assertEqual([len(row["sources"]) for row in after],before_sources)
+        self.assertEqual({row["domain"] for row in after},before_domains)
+        self.assertEqual(_bytes(after),_bytes(rows))
+
+    def test_500_evidence_rows_survive_external_store_compaction_and_restore(self):
+        rows=[
+            {
+                "evidence_id":f"ev-{i}",
+                "domain":f"d-{i % 101}.example",
+                "sources":[
+                    {"url":f"https://d-{i % 101}.example/{i}/{n}","domain":f"d-{i % 101}.example"}
+                    for n in range(4)
+                ],
+                "excerpt":_noise(f"external-{i}",6),
+                "gate_eligible":True,
+            }
+            for i in range(500)
+        ]
+        reference,chunks=encode_external_store(rows,chunk_bytes=4096)
+        payload=_heavy_payload()
+        payload["commercial_evidence_memory"]=reference
+        compacted,_=compact_state_payload(payload,max_bytes=100_000,target_bytes=60_000,force=True)
+        env={cloud_mcp._commercial_evidence_env_key(i):chunk for i,chunk in enumerate(chunks)}
+        with patch.dict(cloud_mcp.os.environ,env,clear=False):
+            hydrated,meta=cloud_mcp._hydrate_external_commercial_evidence(compacted)
+        self.assertTrue(meta["hydrated"])
+        self.assertEqual(meta["store_mode"],"external")
+        restored=hydrated["commercial_evidence_memory"]
+        self.assertEqual(len(restored),500)
+        self.assertEqual(_bytes(restored),_bytes(rows))
+        self.assertEqual(
+            {row["domain"] for row in restored},
+            {row["domain"] for row in rows},
+        )
 
     def test_key_weight_report_names_only(self):
         payload = _heavy_payload()
