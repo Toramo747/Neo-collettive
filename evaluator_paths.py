@@ -223,3 +223,26 @@ CONTRACTS={
     "challenge":CHALLENGE_CONTRACT,
     "warp":WARP_CONTRACT,
 }
+
+
+def contract_snapshot() -> dict[str,dict[str,Any]]:
+    from evaluator_contract import numeric_telemetry, run_evaluator_contract
+    genomes={
+        "commercial":{
+            "query_mode":"mixed","query_count":4,"recency_days":45,"min_relevance_tokens":1,
+            "suffix_family":"core","topic_shape":"compact","query_frame":"plain",
+            "term_order":"signal_first","source_scope":"all",
+        },
+        "challenge":{
+            "min_requesters":3,"min_domains":2,"min_age_days":60,
+            "require_workaround":True,"hard_blocks":True,
+        },
+        "warp":{
+            "family":"positive_energy_subluminal","wall_thickness":0.5,"bubble_radius":1.0,
+            "effective_beta":0.75,"shear_control":0.65,"lapse_modulation":0.04,
+        },
+    }
+    return {
+        name:numeric_telemetry(run_evaluator_contract(CONTRACTS[name],genome))
+        for name,genome in genomes.items()
+    }
