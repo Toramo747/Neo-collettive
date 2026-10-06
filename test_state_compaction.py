@@ -259,7 +259,7 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
         after_raw, after_encoded = encoded_sizes(compacted)
         self.assertLess(after_encoded, 60_000)
         self.assertTrue(meta["applied"])
-        self.assertIn("a_council_history", [x["level"] for x in meta["levels"]])
+        self.assertIn("a_drop_ephemeral", [x["level"] for x in meta["levels"]])
 
         old_key = cloud_mcp.RENDER_API_KEY
         old_service = cloud_mcp.RENDER_SERVICE_ID
@@ -305,9 +305,20 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(compacted["inbound_review_queue"][-1]["thread_id"], latest_review["thread_id"])
         self.assertEqual(compacted["neo_dialect_events"][-1]["peer"], latest_dialect["peer"])
         self.assertIn(
-            "e_continuity_histories",
+            "d_continuity_histories",
             [row["level"] for row in meta["levels"]],
         )
+
+    def test_ephemeral_checkpoint_state_is_dropped(self):
+        payload = _heavy_payload()
+        payload["tool_opportunities"] = {"top5": [{"sources": [_noise("source", 30)]}]}
+        payload["council_history"] = [{"transcripts": [{"text": _noise("council", 30)}]}]
+        payload["runtime_snapshot"] = {"history": [{"detail": _noise("snapshot", 30)}]}
+        compacted, meta = compact_state_payload(payload, max_bytes=100_000, force=True)
+        self.assertNotIn("tool_opportunities", compacted)
+        self.assertNotIn("council_history", compacted)
+        self.assertNotIn("runtime_snapshot", compacted)
+        self.assertIn("a_drop_ephemeral", [row["level"] for row in meta["levels"]])
 
     def test_compaction_is_idempotent(self):
         payload = _heavy_payload()
