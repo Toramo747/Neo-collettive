@@ -93,8 +93,17 @@ def build_candidate_telemetry(
             "commit": str(commit or "")[:64],
             "first_cycle_after_deploy": bool(first_cycle_after_deploy),
             "seconds_since_first_raw_pass": (
-                max(0, int((now - first_pass).total_seconds())) if first_pass else None
+                max(0, int(confirmation.get("seconds_since_first_raw_pass") or 0))
+                if first_pass else None
             ),
+            "new_domains_since_first_pass":max(0,int(confirmation.get("new_domains_since_first_pass") or 0)),
+            "confirmation_blockers":[
+                str(x) for x in (confirmation.get("confirmation_blockers") or [])
+                if str(x) in {
+                    "min_6_hours","min_2_research_cycles",
+                    "evidence_fingerprint_unchanged","no_new_independent_domain",
+                }
+            ][:8],
             "tagger_version": str(tagger_version or "")[:48],
         })
     return out
