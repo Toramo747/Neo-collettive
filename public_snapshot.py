@@ -321,6 +321,9 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "target_bytes": None,
                 "trigger_bytes": None,
                 "limit_bytes": None,
+                "evidence_count_before": None,
+                "evidence_count_after_compaction": None,
+                "store_mode": None,
             },
         },
     },
@@ -905,7 +908,8 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
             (
                 "applied", "before_raw_bytes", "before_encoded_bytes",
                 "after_raw_bytes", "after_encoded_bytes", "target_bytes",
-                "trigger_bytes", "limit_bytes",
+                "trigger_bytes", "limit_bytes", "evidence_count_before",
+                "evidence_count_after_compaction", "store_mode",
             ),
         ),
     }
