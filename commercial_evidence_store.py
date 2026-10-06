@@ -20,7 +20,7 @@ def _raw_bytes(rows: list[dict[str, Any]] | None) -> bytes:
         _canonical_rows(rows),
         ensure_ascii=False,
         separators=(",", ":"),
-        sort_keys=True,
+        sort_keys=False,
     ).encode("utf-8")
 
 
