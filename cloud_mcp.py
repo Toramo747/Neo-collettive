@@ -85,7 +85,15 @@ from tool_opportunity import (
     seti_market_catalog,
 )
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
-from price_validation import PRICE_VALIDATION_QUERY_BUDGET, extract_price, price_validation_plan, product_pricing_page, summarize_validation
+from price_validation import (
+    PRICE_VALIDATION_QUERY_BUDGET,
+    compact_price_evidence,
+    extract_price,
+    persisted_price_groups,
+    price_validation_plan,
+    product_pricing_page,
+    summarize_validation,
+)
 from query_builder import (
     RESEARCH_ARENA_PRODUCTION_GENOME,
     breakout_queries as build_breakout_queries,
@@ -199,6 +207,8 @@ COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
 COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX = "NEO_EVIDENCE_ARCHIVE_"
 COMMERCIAL_EVIDENCE_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_CHUNK_BYTES", "60000"))))
 COMMERCIAL_EVIDENCE_ACTIVE_LIMIT = max(100, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_ACTIVE_LIMIT", "3000")))
+COMMERCIAL_PENDING_EVIDENCE_LIMIT = max(100, min(5000, int(os.getenv("NEO_COMMERCIAL_PENDING_EVIDENCE_LIMIT", "1000"))))
+COMMERCIAL_PRICE_EVIDENCE_LIMIT = max(20, min(500, int(os.getenv("NEO_COMMERCIAL_PRICE_EVIDENCE_LIMIT", "120"))))
 SETI_PRIVATE_ENV_KEY = "NEO_SETI_PRIVATE_JSON"
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
 STATE_ENV_MAX_BYTES = max(32768, int(os.getenv("NEO_STATE_ENV_MAX_BYTES", "100000")))
@@ -366,6 +376,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     },
     "jarvis_dialogue_history": [],
     "commercial_evidence_memory": [],
+    "commercial_price_evidence": [],
     "pending_evidence": [],
     "commercial_evidence_store_reference": None,
     "commercial_evidence_archive_reference": None,
@@ -504,7 +515,8 @@ def _state_payload() -> dict:
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
         "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
-        "pending_evidence": list(AUTOPILOT_STATE.get("pending_evidence") or []),
+        "commercial_price_evidence": list(AUTOPILOT_STATE.get("commercial_price_evidence") or [])[-COMMERCIAL_PRICE_EVIDENCE_LIMIT:],
+        "pending_evidence": list(AUTOPILOT_STATE.get("pending_evidence") or [])[-COMMERCIAL_PENDING_EVIDENCE_LIMIT:],
         "commercial_evidence_store_reference": AUTOPILOT_STATE.get("commercial_evidence_store_reference"),
         "commercial_evidence_archive_reference": AUTOPILOT_STATE.get("commercial_evidence_archive_reference"),
         "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
@@ -645,7 +657,14 @@ def _merge_state_payload(payload: dict | None) -> bool:
     migration_changed = False
     if isinstance(payload.get("search_provider_state"), dict):
         AUTOPILOT_STATE["search_provider_state"] = dict(payload.get("search_provider_state") or {})
-    AUTOPILOT_STATE["pending_evidence"]=[x for x in (payload.get("pending_evidence") or []) if isinstance(x,dict)]
+    AUTOPILOT_STATE["commercial_price_evidence"]=[
+        x for x in (payload.get("commercial_price_evidence") or [])
+        if isinstance(x,dict)
+    ][-COMMERCIAL_PRICE_EVIDENCE_LIMIT:]
+    AUTOPILOT_STATE["pending_evidence"]=[
+        x for x in (payload.get("pending_evidence") or [])
+        if isinstance(x,dict)
+    ][-COMMERCIAL_PENDING_EVIDENCE_LIMIT:]
     AUTOPILOT_STATE["commercial_evidence_store_reference"]=payload.get("commercial_evidence_store_reference") if isinstance(payload.get("commercial_evidence_store_reference"),dict) else None
     AUTOPILOT_STATE["commercial_evidence_archive_reference"]=payload.get("commercial_evidence_archive_reference") if isinstance(payload.get("commercial_evidence_archive_reference"),dict) else None
     AUTOPILOT_STATE["commercial_evidence_archive_rows"]=[x for x in (payload.get("commercial_evidence_archive_rows") or []) if isinstance(x,dict)]
