@@ -382,6 +382,8 @@ def compact_aggregate_state(payload: dict) -> dict:
     """Bound regenerable aggregate/diagnostic state while preserving durable receipts."""
     out = deepcopy(payload)
     for key in AGGREGATE_STATE_KEYS:
+        if key in PROTECTED_STATE_KEYS:
+            continue
         value = out.get(key)
         if value is None:
             continue
