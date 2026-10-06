@@ -195,6 +195,8 @@ class _FakeResponse:
 
 
 class _FakeClient:
+    captured_puts = []
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -205,6 +207,7 @@ class _FakeClient:
         return False
 
     async def put(self, *args, **kwargs):
+        type(self).captured_puts.append({"args":args,"kwargs":kwargs})
         return _FakeResponse()
 
 
@@ -242,6 +245,35 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(compact.called)
             self.assertTrue(result["ok"])
             self.assertLess(result["stored_bytes"], 60_000)
+        finally:
+            cloud_mcp.RENDER_API_KEY = old_key
+            cloud_mcp.RENDER_SERVICE_ID = old_service
+
+    async def test_checkpoint_persists_compaction_telemetry_in_durable_payload(self):
+        payload = _heavy_payload()
+        old_key = cloud_mcp.RENDER_API_KEY
+        old_service = cloud_mcp.RENDER_SERVICE_ID
+        _FakeClient.captured_puts = []
+        try:
+            cloud_mcp.RENDER_API_KEY = "synthetic"
+            cloud_mcp.RENDER_SERVICE_ID = "synthetic"
+            with patch.object(cloud_mcp, "_state_payload", return_value=deepcopy(payload)), patch.object(
+                cloud_mcp.httpx, "AsyncClient", _FakeClient
+            ):
+                result = await cloud_mcp._checkpoint_state_to_render()
+            self.assertTrue(result["ok"])
+            state_puts=[
+                row for row in _FakeClient.captured_puts
+                if str((row["args"] or [""])[0]).endswith("/env-vars/"+cloud_mcp.STATE_ENV_KEY)
+            ]
+            self.assertEqual(len(state_puts),1)
+            encoded=state_puts[0]["kwargs"]["json"]["value"]
+            durable=cloud_mcp._decode_state_env(encoded)
+            meta=(durable.get("last_checkpoint") or {}).get("compaction") or {}
+            self.assertEqual(meta.get("evidence_count_before"),len(payload["commercial_evidence_memory"]))
+            self.assertEqual(meta.get("evidence_count_after_compaction"),len(payload["commercial_evidence_memory"]))
+            self.assertIn(meta.get("store_mode"),{"inline","external"})
+            self.assertGreater(int((durable.get("last_checkpoint") or {}).get("stored_bytes") or 0),0)
         finally:
             cloud_mcp.RENDER_API_KEY = old_key
             cloud_mcp.RENDER_SERVICE_ID = old_service
