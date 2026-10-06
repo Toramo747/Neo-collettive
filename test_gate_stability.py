@@ -1,44 +1,123 @@
 import unittest
+
 from gate_stability import apply_gate_hysteresis, opportunity_identity
 
+
 class GateStabilityTests(unittest.TestCase):
-    def _row(self, passed, score=90, tool="X", family="finance_ops"):
+    def _row(self, passed, score=90, tool="X", family="finance_ops", domains=("a.example",)):
         return {
-            "family":family,"tool_name":tool,"target_user":"ops","problem":"manual reconciliation",
-            "gate_pass":passed,"monetization_score":score,"missing":[],
-            "sources":[{"domain":"a.example"}],
+            "family":family,
+            "tool_name":tool,
+            "target_user":"ops",
+            "problem":"manual reconciliation",
+            "gate_pass":passed,
+            "monetization_score":score,
+            "missing":[],
+            "sources":[{"domain":d,"signal_types":["PAYMENT"]} for d in domains],
         }
 
-    def test_requires_two_passes_to_enter(self):
-        s,rows=apply_gate_hysteresis({},[self._row(True)])
-        self.assertFalse(rows[0]["stable_gate_pass"])
-        s,rows=apply_gate_hysteresis(s,[self._row(True)])
-        self.assertTrue(rows[0]["stable_gate_pass"])
+    def _apply(self,state,row,cycle,when,tagger="3",genome="g60"):
+        return apply_gate_hysteresis(
+            state,[row],cycle=cycle,observed_at_utc=when,
+            tagger_version=tagger,genome_id=genome,
+        )
 
-    def test_two_rows_same_candidate_cannot_promote_in_one_cycle(self):
+    def test_requires_six_hours_two_cycles_and_new_domain(self):
+        s,rows=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        self.assertFalse(rows[0]["stable_gate_pass"])
+        self.assertIn("min_6_hours",rows[0]["gate_confirmation"]["confirmation_blockers"])
+        self.assertIn("min_2_research_cycles",rows[0]["gate_confirmation"]["confirmation_blockers"])
+
+        s,rows=self._apply(s,self._row(True),2,"2026-10-06T00:05:00+00:00")
+        self.assertFalse(rows[0]["stable_gate_pass"])
+        self.assertIn("evidence_fingerprint_unchanged",rows[0]["gate_confirmation"]["confirmation_blockers"])
+        self.assertIn("no_new_independent_domain",rows[0]["gate_confirmation"]["confirmation_blockers"])
+
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            3,"2026-10-06T06:01:00+00:00",
+        )
+        self.assertTrue(rows[0]["stable_gate_pass"])
+        self.assertEqual(rows[0]["gate_confirmation"]["confirmation_blockers"],[])
+        self.assertEqual(rows[0]["gate_confirmation"]["new_domains_since_first_pass"],1)
+        self.assertGreaterEqual(rows[0]["gate_confirmation"]["seconds_since_first_raw_pass"],21600)
+
+    def test_repeated_director_run_same_cycle_does_not_advance_series(self):
+        s,_=self._apply({},self._row(True),7,"2026-10-06T00:00:00+00:00")
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            7,"2026-10-06T07:00:00+00:00",
+        )
+        self.assertFalse(rows[0]["stable_gate_pass"])
+        self.assertEqual(rows[0]["gate_confirmation"]["pass_streak"],1)
+        self.assertIn("min_2_research_cycles",rows[0]["gate_confirmation"]["confirmation_blockers"])
+
+    def test_two_rows_same_candidate_cannot_advance_twice(self):
         row=self._row(True)
         duplicate=dict(row)
         duplicate["monetization_score"]=95
-        s,rows=apply_gate_hysteresis({},[row,duplicate])
+        s,rows=apply_gate_hysteresis(
+            {},[row,duplicate],cycle=1,observed_at_utc="2026-10-06T00:00:00+00:00",
+            tagger_version="3",genome_id="g60",
+        )
         self.assertFalse(rows[0]["stable_gate_pass"])
         self.assertFalse(rows[1]["stable_gate_pass"])
         key=rows[0]["gate_candidate_key"]
         self.assertEqual(s["candidates"][key]["pass_streak"],1)
 
-    def test_two_candidates_same_family_keep_independent_streaks(self):
-        s,rows=apply_gate_hysteresis({},[
-            self._row(True,tool="Invoice X"),
-            self._row(True,tool="Invoice Y"),
-        ])
+    def test_context_change_resets_confirmation_series(self):
+        s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            2,"2026-10-06T07:00:00+00:00",
+        )
+        self.assertTrue(rows[0]["stable_gate_pass"])
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example","c.example")),
+            3,"2026-10-06T08:00:00+00:00",tagger="4",
+        )
+        self.assertTrue(s["context_reset"])
         self.assertFalse(rows[0]["stable_gate_pass"])
-        self.assertFalse(rows[1]["stable_gate_pass"])
-        self.assertNotEqual(rows[0]["gate_candidate_key"],rows[1]["gate_candidate_key"])
+        self.assertEqual(rows[0]["gate_confirmation"]["pass_streak"],1)
+
+    def test_genome_change_resets_confirmation_series(self):
+        s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            2,"2026-10-06T07:00:00+00:00",genome="g61",
+        )
+        self.assertTrue(s["context_reset"])
+        self.assertFalse(rows[0]["stable_gate_pass"])
+
+    def test_one_failure_does_not_drop_stable_gate_but_two_distinct_do(self):
+        s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            2,"2026-10-06T07:00:00+00:00",
+        )
+        self.assertTrue(rows[0]["stable_gate_pass"])
+        s,rows=self._apply(s,self._row(False,30),3,"2026-10-06T08:00:00+00:00")
+        self.assertTrue(rows[0]["stable_gate_pass"])
+        s,rows=self._apply(s,self._row(False,30),4,"2026-10-06T09:00:00+00:00")
+        self.assertFalse(rows[0]["stable_gate_pass"])
+
+    def test_absent_candidate_decays_after_two_distinct_cycles(self):
+        s,_=self._apply({},self._row(True),1,"2026-10-06T00:00:00+00:00")
+        s,rows=self._apply(
+            s,self._row(True,domains=("a.example","b.example")),
+            2,"2026-10-06T07:00:00+00:00",
+        )
+        key=rows[0]["gate_candidate_key"]
+        self.assertTrue(s["candidates"][key]["stable"])
+        s,_=apply_gate_hysteresis(s,[],cycle=3,observed_at_utc="2026-10-06T08:00:00+00:00",tagger_version="3",genome_id="g60")
+        self.assertTrue(s["candidates"][key]["stable"])
+        s,_=apply_gate_hysteresis(s,[],cycle=4,observed_at_utc="2026-10-06T09:00:00+00:00",tagger_version="3",genome_id="g60")
+        self.assertFalse(s["candidates"][key]["stable"])
 
     def test_identity_ignores_source_order_title_and_generated_text(self):
-        a=self._row(True,tool="Invoice X")
+        a=self._row(True,tool="Invoice X",domains=("a.example","b.example"))
         a["title"]="Original title"
         a["trend"]="Generated wording A"
-        a["sources"]=[{"domain":"a.example"},{"domain":"b.example"}]
         b=dict(a)
         b["title"]="Completely reformulated title"
         b["trend"]="Generated wording B"
@@ -51,38 +130,6 @@ class GateStabilityTests(unittest.TestCase):
             opportunity_identity(self._row(True,tool="Invoice Y")),
         )
 
-    def test_one_failure_does_not_drop_stable_gate(self):
-        s,_=apply_gate_hysteresis({},[self._row(True)])
-        s,rows=apply_gate_hysteresis(s,[self._row(True)])
-        self.assertTrue(rows[0]["stable_gate_pass"])
-        s,rows=apply_gate_hysteresis(s,[self._row(False,30)])
-        self.assertTrue(rows[0]["stable_gate_pass"])
-        s,rows=apply_gate_hysteresis(s,[self._row(False,30)])
-        self.assertFalse(rows[0]["stable_gate_pass"])
-
-    def test_absent_candidate_decays_after_two_cycles(self):
-        s,_=apply_gate_hysteresis({},[self._row(True)])
-        s,rows=apply_gate_hysteresis(s,[self._row(True)])
-        key=rows[0]["gate_candidate_key"]
-        self.assertTrue(s["candidates"][key]["stable"])
-        s,_=apply_gate_hysteresis(s,[])
-        self.assertTrue(s["candidates"][key]["stable"])
-        s,_=apply_gate_hysteresis(s,[])
-        self.assertFalse(s["candidates"][key]["stable"])
-
-    def test_flip_records_only_private_metadata(self):
-        s,_=apply_gate_hysteresis({},[self._row(False,30)],version="1",commit="abc")
-        s,_=apply_gate_hysteresis(s,[self._row(True,90)],version="2",commit="def")
-        self.assertEqual(len(s["flips"]),1)
-        f=s["flips"][0]
-        self.assertEqual(f["from_raw"],False)
-        self.assertEqual(f["to_raw"],True)
-        self.assertTrue(f["evidence_unchanged"])
-        self.assertEqual(f["previous_score"],30)
-        self.assertEqual(f["current_score"],90)
-        self.assertIn("previous_fingerprint",f)
-        self.assertIn("current_fingerprint",f)
-        self.assertNotIn("sources",f)
 
 if __name__=="__main__":
     unittest.main()
