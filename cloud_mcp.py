@@ -6863,21 +6863,31 @@ def _commercial_evidence_quality(
             memory.append(row)
             diagnostics.record_funnel_stage("persisted")
 
-    # Per-problem retention: keep recent rows while preventing one noisy problem from
-    # evicting the entire memory. 240 is still bounded for Render env persistence.
+    # Keep all evidence losslessly. Above the active cap only the oldest
+    # non-gate-eligible rows move to the separate compressed archive.
     memory.sort(key=lambda x:float(x.get("last_seen_epoch") or 0),reverse=True)
-    per_problem={}
-    bounded=[]
-    for row in memory:
-        bucket=str(row.get("problem_key") or "unknown")
-        if per_problem.get(bucket,0)>=30:
-            continue
-        per_problem[bucket]=per_problem.get(bucket,0)+1
-        bounded.append(row)
-        if len(bounded)>=240:
-            break
-    memory=bounded
-    AUTOPILOT_STATE["commercial_evidence_memory"]=memory
+    if bool(AUTOPILOT_STATE.get("evidence_store_degraded")):
+        pending=_dedupe_evidence_rows(AUTOPILOT_STATE.get("pending_evidence") or [],memory)
+        AUTOPILOT_STATE["pending_evidence"]=pending
+        current_status=dict(AUTOPILOT_STATE.get("evidence_store_status") or {})
+        current_status.update({"status":"degraded","pending_count":len(pending)})
+        AUTOPILOT_STATE["evidence_store_status"]=current_status
+    else:
+        active_rows,archive_new=split_active_archive(memory,active_limit=COMMERCIAL_EVIDENCE_ACTIVE_LIMIT)
+        archive_rows=_dedupe_evidence_rows(
+            AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or [],
+            archive_new,
+        )
+        AUTOPILOT_STATE["commercial_evidence_memory"]=active_rows
+        AUTOPILOT_STATE["commercial_evidence_archive_rows"]=archive_rows
+        AUTOPILOT_STATE["pending_evidence"]=[]
+        AUTOPILOT_STATE["evidence_store_status"]={
+            "status":"ok",
+            "active_count":len(active_rows),
+            "pending_count":0,
+            "archive_count":len(archive_rows),
+        }
+        memory=active_rows
 
     previous_challenge=AUTOPILOT_STATE.get("challenge_track") if isinstance(AUTOPILOT_STATE.get("challenge_track"),dict) else {}
     previous_challenge=previous_challenge or {}
@@ -9531,7 +9541,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         ],
     }
     revalidation_stats={"attempted":0,"promoted":0,"failed":0,"unreachable":0}
-    if QUARANTINE_REVALIDATION_ENABLED and REVALIDATE_PER_CYCLE>0:
+    if QUARANTINE_REVALIDATION_ENABLED and REVALIDATE_PER_CYCLE>0 and not bool(AUTOPILOT_STATE.get("evidence_store_degraded")):
         try:
             revalidated_memory,revalidation_stats=await asyncio.wait_for(
                 revalidate_quarantined_rows(
