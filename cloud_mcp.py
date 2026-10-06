@@ -419,6 +419,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "council_history": [],
     "gate_stability": {"schema_v":1,"families":{},"flips":[]},
     "hidden_control": {"required":False,"cases":0,"correct":0,"ok":True},
+    "evaluator_contracts": {},
     "problem_performance": {},
     "problem_cooldowns": {},
     "query_execution": {
@@ -532,6 +533,7 @@ def _state_payload() -> dict:
         "council_history": list(AUTOPILOT_STATE.get("council_history") or [])[-20:],
         "gate_stability": AUTOPILOT_STATE.get("gate_stability") or {},
         "hidden_control": AUTOPILOT_STATE.get("hidden_control") or {},
+        "evaluator_contracts": AUTOPILOT_STATE.get("evaluator_contracts") or {},
         "problem_performance": AUTOPILOT_STATE.get("problem_performance") or {},
         "problem_cooldowns": AUTOPILOT_STATE.get("problem_cooldowns") or {},
         "query_execution": AUTOPILOT_STATE.get("query_execution") or {},
@@ -764,6 +766,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["model_shadow"]=restored_model
     if isinstance(payload.get("hidden_control"), dict):
         AUTOPILOT_STATE["hidden_control"] = payload.get("hidden_control") or {}
+    if isinstance(payload.get("evaluator_contracts"), dict):
+        AUTOPILOT_STATE["evaluator_contracts"] = payload.get("evaluator_contracts") or {}
     if not migration_changed and isinstance(payload.get("problem_performance"), dict):
         AUTOPILOT_STATE["problem_performance"] = payload.get("problem_performance") or {}
     if not migration_changed and isinstance(payload.get("problem_cooldowns"), dict):
@@ -12579,8 +12583,31 @@ async def api_checkpoint_status(request: Request):
     })
 
 
+def _evaluator_contract_telemetry() -> dict:
+    try:
+        from evaluator_paths import contract_snapshot
+        report=contract_snapshot()
+        clean={}
+        for name,row in report.items():
+            if not isinstance(row,dict):
+                continue
+            clean[str(name)[:32]]={
+                "benchmark_ok":bool(row.get("benchmark_ok")),
+                "robustness_ok":bool(row.get("robustness_ok")),
+                "control_ok":bool(row.get("control_ok")),
+                "best_fitness":float(row.get("best_fitness") or 0.0),
+                "promotion_ready":bool(row.get("promotion_ready")),
+            }
+        AUTOPILOT_STATE["evaluator_contracts"]=clean
+        return clean
+    except Exception:
+        return AUTOPILOT_STATE.get("evaluator_contracts") or {}
+
+
 async def api_autopilot_status(request: Request):
     _hidden_control_telemetry()
+    _hidden_challenge_control_telemetry()
+    _evaluator_contract_telemetry()
     state = dict(AUTOPILOT_STATE)
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
