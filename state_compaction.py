@@ -154,6 +154,15 @@ def _summarize_transcript(raw: Any) -> dict[str, Any]:
     }
 
 
+def drop_ephemeral_checkpoint_state(payload: dict) -> dict:
+    """Remove state that is never consumed by _merge_state_payload after restart."""
+    out = deepcopy(payload)
+    out.pop("tool_opportunities", None)
+    out.pop("council_history", None)
+    out.pop("runtime_snapshot", None)
+    return out
+
+
 def compact_council_history(payload: dict) -> dict:
     out = deepcopy(payload)
     history = out.get("council_history")
@@ -424,13 +433,12 @@ def compact_state_payload(
     # when another compaction level alone reaches the target.
     current = compact_challenge_track(source)
     levels = (
-        ("a_council_history", compact_council_history),
-        ("b_deduplicate", deduplicate_current_tool_opportunities),
-        ("c_historical_transcripts", compact_historical_transcripts),
-        ("d_inbound_traffic_events", trim_inbound_traffic_events),
-        ("e_continuity_histories", compact_continuity_histories),
-        ("f_residual_histories", compact_residual_histories),
-        ("g_aggregate_state", compact_aggregate_state),
+        ("a_drop_ephemeral", drop_ephemeral_checkpoint_state),
+        ("b_historical_transcripts", compact_historical_transcripts),
+        ("c_inbound_traffic_events", trim_inbound_traffic_events),
+        ("d_continuity_histories", compact_continuity_histories),
+        ("e_residual_histories", compact_residual_histories),
+        ("f_aggregate_state", compact_aggregate_state),
     )
     for name, func in levels:
         current = func(current)
@@ -459,7 +467,7 @@ def compact_state_payload(
         )
         current_raw, current_encoded = encoded_sizes(current)
         meta["levels"].append({
-            "level": "h_tight_continuity",
+            "level": "g_tight_continuity",
             "raw_bytes": current_raw,
             "encoded_bytes": current_encoded,
         })
