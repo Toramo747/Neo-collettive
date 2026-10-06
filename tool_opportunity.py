@@ -431,10 +431,14 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
     if not url.startswith(("https://","http://")) or not domain:
         return None
     title=str(raw.get("title") or raw.get("source_title") or domain).strip()[:240]
-    text=(" ".join([str(raw.get("text") or raw.get("snippet") or raw.get("description") or title),str(raw.get("page_text") or "")])).strip()[:300000]
+    snippet_text=str(raw.get("text") or raw.get("snippet") or raw.get("description") or title)
+    page_text=str(raw.get("page_text") or "")
+    text=(" ".join([snippet_text,page_text])).strip()[:300000]
     low=(title+" "+text).lower()
     signal_types=[]
-    legacy_price_match=PRICE_RE.search(title+" "+text)
+    # Legacy numeric-price semantics remain valid for covered search snippets.
+    # Fetched page text is stricter: only the canonical parser may authorize it.
+    legacy_price_match=PRICE_RE.search(title+" "+snippet_text)
     explicit_payment_required=("payment_required" in low or "payment required" in low)
     coverage_source=str(raw.get("coverage_source") or "").strip()[:80] or None
     parsed_price=extract_price(title+" "+text)
@@ -443,10 +447,8 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         and coverage_source in {"pricing_pages","extension_marketplaces"}
         and product_pricing_page(url,title,text)
     )
-    # Gate semantics intentionally remain pre-#177: any recognized numeric
-    # price on a covered, family-relevant row can set real_price. The stricter
-    # parser is telemetry only unless a future opt-in flag is introduced.
-    if legacy_price_match or explicit_payment_required:
+    real_price=bool(legacy_price_match or (page_text and strict_product_price))
+    if real_price or explicit_payment_required:
         signal_types.append("PAYMENT")
     if any(x in low for x in DISSATISFACTION_MARKERS):
         signal_types.extend(["DISSATISFACTION","GAP"])
@@ -469,12 +471,18 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         "title":title,
         "excerpt":text[:500],
         "signal_types":sorted(set(signal_types)),
-        "price":legacy_price_match.group(0)[:80] if legacy_price_match else ("PAYMENT_REQUIRED" if explicit_payment_required else None),
+        "price":(
+            legacy_price_match.group(0)[:80]
+            if legacy_price_match
+            else str((parsed_price or {}).get("raw") or "")[:80]
+            if real_price
+            else "PAYMENT_REQUIRED" if explicit_payment_required else None
+        ),
         "price_currency":parsed_price.get("currency") if strict_product_price else None,
         "price_amount":parsed_price.get("amount") if strict_product_price else None,
         "price_period":parsed_price.get("period") if strict_product_price else None,
         "strict_price_verified":strict_product_price,
-        "real_price":bool(legacy_price_match),
+        "real_price":real_price,
         "payment_required":bool(explicit_payment_required and not legacy_price_match),
         "vendor":str(raw.get("vendor") or "").strip()[:120] or None,
         "coverage_source":coverage_source,
