@@ -559,6 +559,10 @@ def parse_mutation(value: Any) -> dict[str, Any] | None:
     candidates: list[Any] = []
     if isinstance(value, dict):
         candidates.append(value)
+    mutation_keys = (
+        "query_mode", "query_count", "recency_days", "min_relevance_tokens",
+        "suffix_family", "topic_shape", "query_frame", "term_order", "source_scope",
+    )
     for text in recursive_text(value):
         text = text.strip()
         if len(text) > 4000:
@@ -572,6 +576,13 @@ def parse_mutation(value: Any) -> dict[str, Any] | None:
                     candidates.append(json.loads(match.group(0)))
                 except Exception:
                     pass
+            labeled: dict[str, Any] = {}
+            for key in mutation_keys:
+                m = re.search(rf"\b{re.escape(key)}\s*[:=]\s*([A-Za-z0-9_-]+)", text, re.I)
+                if m:
+                    labeled[key] = m.group(1).lower()
+            if labeled:
+                candidates.append({"mutation": labeled})
     for row in candidates:
         if not isinstance(row, dict):
             continue
@@ -707,11 +718,30 @@ async def collaborator_mutations(
             )
             payload = response.json() if "json" in response.headers.get("content-type", "").lower() else {"text": response.text[:4000]}
             mutation = parse_mutation(payload) if response.is_success else None
+            retry_used = False
+            if response.is_success and not mutation:
+                retry_used = True
+                retry_prompt = (
+                    "MYCELIX bounded mutation retry. Do not execute tools or external actions. "
+                    "Reply with ONE line containing one or more allowed fields only, for example: "
+                    "query_mode=mixed; query_count=4; recency_days=30; min_relevance_tokens=1; "
+                    "suffix_family=core; topic_shape=compact; query_frame=plain; "
+                    "term_order=signal_first; source_scope=all. "
+                    "Use only the documented enum values and numeric bounds."
+                )
+                retry = await client.post(
+                    f"{A2A_REGISTRY}/api/agents/{aid}/chat",
+                    json={"message": retry_prompt},
+                    timeout=12.0,
+                )
+                retry_payload = retry.json() if "json" in retry.headers.get("content-type", "").lower() else {"text": retry.text[:4000]}
+                mutation = parse_mutation(retry_payload) if retry.is_success else None
             out.append({
                 "agent_id": aid[:160],
                 "agent": name,
                 "accepted": bool(mutation),
                 "reason": "bounded_mutation_accepted" if mutation else f"no_valid_mutation_http_{response.status_code}",
+                "retry_used": retry_used,
                 "mutation": mutation,
             })
         except Exception as exc:
