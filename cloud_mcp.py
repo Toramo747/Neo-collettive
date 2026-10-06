@@ -490,7 +490,7 @@ def _state_payload() -> dict:
         "neo_dialect_events": list(AUTOPILOT_STATE.get("neo_dialect_events") or [])[-160:],
         "neo_dialect_seti_probe": AUTOPILOT_STATE.get("neo_dialect_seti_probe") or {},
         "jarvis_dialogue_history": list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-12:],
-        "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])[-240:],
+        "commercial_evidence_memory": list(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "model_shadow": AUTOPILOT_STATE.get("model_shadow") or {},
@@ -629,7 +629,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["search_provider_state"] = dict(payload.get("search_provider_state") or {})
     if isinstance(payload.get("commercial_evidence_memory"), list):
         migrated, migration = migrate_evidence_memory(
-            payload.get("commercial_evidence_memory")[-240:],
+            payload.get("commercial_evidence_memory"),
             enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
             strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
             seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
@@ -1052,6 +1052,8 @@ def _restore_state() -> str:
 
     source,payload,meta=select_freshest_state(compatible_candidates)
     payload=merge_supplementary_state(payload,compatible_candidates)
+    payload,evidence_store_restore=_hydrate_external_commercial_evidence(payload)
+    meta["commercial_evidence_store"]=evidence_store_restore
     cycle_floor,cycle_floor_load=_load_cycle_floor()
     payload,cycle_floor_meta=apply_monotonic_cycle_floor(payload,cycle_floor)
     cycle_floor_meta["load"]=cycle_floor_load
@@ -1122,16 +1124,42 @@ async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return {"ok": False, "reason": "render_api_not_configured"}
     payload=_state_payload()
-    compaction_meta={"applied":False}
+    evidence_rows=list(payload.get("commercial_evidence_memory") or [])
+    evidence_count_before=len(evidence_rows)
+    compaction_meta={
+        "applied":False,
+        "evidence_count_before":evidence_count_before,
+        "evidence_count_after_compaction":evidence_count_before,
+        "store_mode":"inline",
+    }
     try:
         _raw_before,_encoded_before=encoded_sizes(payload)
+        if _encoded_before > STATE_COMPACTION_TARGET_BYTES and evidence_rows:
+            evidence_store=await _write_commercial_evidence_store(evidence_rows)
+            if evidence_store.get("ok") is not True:
+                raise RuntimeError("commercial evidence external store failed: "+str(evidence_store.get("reason") or "unknown"))
+            payload=dict(payload)
+            payload["commercial_evidence_memory"]=evidence_store["reference"]
+            compaction_meta["store_mode"]="external"
+            compaction_meta["evidence_store_sha256"]=str((evidence_store.get("reference") or {}).get("sha256") or "")
         if _encoded_before > STATE_COMPACTION_TARGET_BYTES:
-            payload,compaction_meta=compact_state_payload(
+            payload,inner_meta=compact_state_payload(
                 payload,
                 max_bytes=STATE_ENV_MAX_BYTES,
                 target_bytes=STATE_COMPACTION_TARGET_BYTES,
                 force=True,
             )
+            inner_meta["evidence_count_before"]=evidence_count_before
+            evidence_value=payload.get("commercial_evidence_memory")
+            if is_external_reference(evidence_value):
+                evidence_after=int(evidence_value.get("evidence_count") or 0)
+                store_mode="external"
+            else:
+                evidence_after=len(evidence_value) if isinstance(evidence_value,list) else 0
+                store_mode="inline"
+            inner_meta["evidence_count_after_compaction"]=evidence_after
+            inner_meta["store_mode"]=store_mode
+            compaction_meta=inner_meta
         value, raw_bytes, encoded_bytes = _encode_state_env(payload)
     except Exception as e:
         try:
