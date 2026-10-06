@@ -215,6 +215,7 @@ AUTOPILOT_INTERVAL_SECONDS = max(300, int(os.getenv("NEO_AUTOPILOT_INTERVAL_SECO
 AUTOPILOT_ENABLED = (os.getenv("NEO_AUTOPILOT_ENABLED", "true").strip().lower() in {"1","true","yes","on"})
 INGESTION_DIAGNOSTICS_ENABLED = (os.getenv("NEO_INGESTION_DIAGNOSTICS", "1").strip().lower() in {"1","true","yes","on"})
 QUERY_BUILDER_V2_ENABLED = (os.getenv("NEO_QUERY_BUILDER_V2", "1").strip().lower() in {"1","true","yes","on"})
+RESEARCH_PROFILE_ENABLED = (os.getenv("NEO_RESEARCH_PROFILE_ENABLED", "1").strip().lower() in {"1","true","yes","on"})
 ATTRIBUTION_FAMILY_GUARD_ENABLED = (os.getenv("NEO_ATTRIBUTION_FAMILY_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 STRONG_PAIN_GUARD_ENABLED = (os.getenv("NEO_STRONG_PAIN_GUARD", "1").strip().lower() in {"1","true","yes","on"})
 SELF_CONTAMINATION_GUARD_ENABLED = (os.getenv("NEO_SELF_CONTAMINATION_GUARD", "1").strip().lower() in {"1","true","yes","on"})
@@ -5714,7 +5715,7 @@ def _entropy_search_strategy(goal: str, count: int = 8) -> dict:
                     list(sector.get("terms") or []),
                     cls,
                     AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
-                    arena_profile=True,
+                    arena_profile=RESEARCH_PROFILE_ENABLED,
                 ) or query
             except Exception:
                 pass

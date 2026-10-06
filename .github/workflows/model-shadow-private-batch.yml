@@ -86,19 +86,40 @@ jobs:
           python tools/model_archive_import.py private-labels
           git -C private-labels config user.name "NEO Private Label Bot"
           git -C private-labels config user.email "actions@users.noreply.github.com"
-          git -C private-labels add train.jsonl public.jsonl hidden.jsonl ARCHIVE_GUIDE.md
+          git -C private-labels add train.jsonl public.jsonl ARCHIVE_GUIDE.md
           if ! git -C private-labels diff --cached --quiet; then
             git -C private-labels commit --quiet -m "import real shadow observations and archive contract"
             git -C private-labels push --quiet
           fi
 
-      - name: Sync public and hidden evaluation sets
+      - name: Remove tracked hidden set from private archive
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          git -C private-labels config user.name "NEO Private Label Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          if git -C private-labels ls-files --error-unmatch hidden.jsonl >/dev/null 2>&1; then
+            git -C private-labels rm --cached -f hidden.jsonl
+            rm -f private-labels/hidden.jsonl
+            git -C private-labels commit --quiet -m "remove hidden evaluation set from version control"
+            git -C private-labels push --quiet
+          else
+            rm -f private-labels/hidden.jsonl
+          fi
+
+      - name: Sync public and temporary hidden evaluation sets
         if: steps.config.outputs.configured == 'true'
         env:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -euo pipefail
-          python tools/model_eval_sync.py private-labels
+          mkdir -p "$RUNNER_TEMP/model-shadow-eval"
+          python tools/model_eval_sync.py private-labels "$RUNNER_TEMP/model-shadow-eval/hidden.jsonl"
+          ln -s "$RUNNER_TEMP/model-shadow-eval/hidden.jsonl" private-labels/hidden.jsonl
+          if git -C private-labels ls-files --error-unmatch hidden.jsonl >/dev/null 2>&1; then
+            echo "hidden.jsonl must never be tracked" >&2
+            exit 1
+          fi
 
       - name: Check training prerequisites before heavy downloads
         id: training
@@ -171,7 +192,7 @@ jobs:
             fi
             python -m json.tool /tmp/model-shadow-metrics.json >/dev/null
             cat /tmp/model-shadow-metrics.json
-            for file in train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl model_shadow_state.json; do
+            for file in train_labeled.jsonl weekly_review_queue.jsonl weekly_review.html drift_history.jsonl model_shadow_state.json private_batch_report.json; do
               if [ -f "private-labels/$file" ]; then
                 git -C private-labels add "$file"
               fi
