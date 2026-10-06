@@ -241,6 +241,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "cycle": None,
                 "commit": None,
                 "first_cycle_after_deploy": None,
+                "post_deploy_pass_ignored": None,
                 "seconds_since_first_raw_pass": None,
                 "new_domains_since_first_pass": None,
                 "tolerated_fail_cycles": None,
