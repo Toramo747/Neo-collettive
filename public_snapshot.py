@@ -154,6 +154,29 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "approved": None
             }
         },
+        "evaluator_contracts": {
+            "commercial": {
+                "benchmark_ok": None,
+                "robustness_ok": None,
+                "control_ok": None,
+                "best_fitness": None,
+                "promotion_ready": None,
+            },
+            "challenge": {
+                "benchmark_ok": None,
+                "robustness_ok": None,
+                "control_ok": None,
+                "best_fitness": None,
+                "promotion_ready": None,
+            },
+            "warp": {
+                "benchmark_ok": None,
+                "robustness_ok": None,
+                "control_ok": None,
+                "best_fitness": None,
+                "promotion_ready": None,
+            },
+        },
         "challenge_diagnostics": {
             "mode": None,
             "status": None,
@@ -977,6 +1000,17 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
         },
         "promotion":{"mode":"manual_only","approved":False},
     }
+    contracts=src.get("evaluator_contracts") if isinstance(src.get("evaluator_contracts"),dict) else {}
+    out["evaluator_contracts"]={}
+    for name in ("commercial","challenge","warp"):
+        row=contracts.get(name) if isinstance(contracts.get(name),dict) else {}
+        out["evaluator_contracts"][name]={
+            "benchmark_ok":bool(row.get("benchmark_ok")),
+            "robustness_ok":bool(row.get("robustness_ok")),
+            "control_ok":bool(row.get("control_ok")),
+            "best_fitness":float(row.get("best_fitness") or 0.0),
+            "promotion_ready":bool(row.get("promotion_ready")),
+        }
     status_code=str(evidence_store_status.get("status") or "ok")
     if status_code not in {
         "ok","degraded","degraded_archive","recovered_previous_generation",
