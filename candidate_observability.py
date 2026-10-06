@@ -97,11 +97,14 @@ def build_candidate_telemetry(
                 if first_pass else None
             ),
             "new_domains_since_first_pass":max(0,int(confirmation.get("new_domains_since_first_pass") or 0)),
+            "tolerated_fail_cycles":max(0,int(confirmation.get("tolerated_fail_cycles") or 0)),
+            "pass_ratio_in_window_ppm":max(0,min(1000000,int(float(confirmation.get("pass_ratio_in_window") or 0.0)*1000000))),
             "confirmation_blockers":[
                 str(x) for x in (confirmation.get("confirmation_blockers") or [])
                 if str(x) in {
                     "min_6_hours","min_2_research_cycles",
                     "evidence_fingerprint_unchanged","no_new_independent_domain",
+                    "pass_ratio_below_60",
                 }
             ][:8],
             "tagger_version": str(tagger_version or "")[:48],
