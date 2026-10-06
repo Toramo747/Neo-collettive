@@ -35,19 +35,45 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pinned numerical dependency
-        run: python -m pip install numpy==2.3.3
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
 
       - name: Validate arena
         run: |
           set -euo pipefail
-          python -m py_compile arena_warp_propulsion.py warp_physics.py warp_tensor.py warp_reference_search.py
-          python -m unittest -v test_arena_warp_propulsion.py test_warp_physics.py test_warp_tensor.py
+          python -m py_compile arena_warp_propulsion.py warp_physics.py warp_tensor.py warp_reference_search.py arena_collective_mind.py
+          python -m unittest -v test_arena_warp_propulsion.py test_warp_physics.py test_warp_tensor.py test_arena_collective_mind.py
 
       - name: Run bounded theoretical generation
         run: |
           set -euo pipefail
           python arena_warp_propulsion.py --data-dir data/arena/warp-propulsion --population 48 --seed ${{ github.run_number }} | tee /tmp/warp-arena.json
+
+      - name: Ask bounded external scientific critics
+        run: |
+          set -euo pipefail
+          python arena_collective_mind.py             --mission "Act only as a scientific critic of the MYCELIX theoretical warp-propulsion research arena. Identify falsifiable mathematical or numerical checks, missing literature comparisons, tensor/energy-condition validation ideas, or reasons to reject a candidate. Do not claim physical feasibility, do not propose construction or experiments involving hazardous energy or materials, do not execute tools or external actions, and do not change the arena fitness. Return bounded analytical proposals with public HTTPS evidence where available."             --max-agents 2             --data-dir data/arena/warp-propulsion/external             | tee /tmp/warp-external-advisory.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          warp=Path("data/arena/warp-propulsion/latest.json")
+          advisory=Path("data/arena/warp-propulsion/external/collective-mind/latest.json")
+          r=json.loads(warp.read_text(encoding="utf-8"))
+          a=json.loads(advisory.read_text(encoding="utf-8")) if advisory.is_file() else {}
+          r["external_advisory"]={
+              "status":a.get("status","NO_REPORT"),
+              "agents_discovered":int(a.get("agents_discovered") or 0),
+              "agents_contacted":int(a.get("agents_contacted") or 0),
+              "valid_proposals":int(a.get("round1_valid_proposals") or 0),
+              "valid_critiques":int(a.get("round2_valid_critiques") or 0),
+              "top_proposals":(a.get("ranked_proposals") or [])[:3],
+              "trust":"UNTRUSTED_STRUCTURED_PROPOSALS_ONLY",
+              "affects_fitness":False,
+              "affects_selection":False,
+              "automatic_physical_claims":False,
+          }
+          warp.write_text(json.dumps(r,indent=2,sort_keys=True)+"\n",encoding="utf-8")
+          PY
 
       - name: Assert isolation and scientific boundary
         run: |
@@ -73,6 +99,11 @@ jobs:
               raise SystemExit("physical reference checks failed")
           if p.get("affects_fitness") is not False or p.get("affects_selection") is not False:
               raise SystemExit("reference diagnostics must remain observational")
+          advisory=r.get("external_advisory") or {}
+          if advisory.get("affects_fitness") is not False or advisory.get("affects_selection") is not False:
+              raise SystemExit("external advisory must remain observational")
+          if advisory.get("automatic_physical_claims") is not False:
+              raise SystemExit("external advisory cannot establish physical claims")
           research=r.get("fixed_target_research") or {}
           if not research.get("tensor_benchmarks",{}).get("passed"):
               raise SystemExit("full tensor benchmarks failed")
