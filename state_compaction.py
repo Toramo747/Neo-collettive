@@ -17,6 +17,10 @@ INBOUND_TRAFFIC_EVENT_TIGHT_LIMIT = 160
 # being kept byte-identical forever.
 PROTECTED_STATE_KEYS = frozenset({
     "boundary_events",
+    "commercial_evidence_memory",
+    "challenge_track",
+    "gate_stability",
+    "gate_stability_state",
 })
 
 AGGREGATE_STATE_KEYS = (
@@ -362,7 +366,7 @@ def compact_residual_histories(payload: dict) -> dict:
     candidates = (
         "build_history", "measurement_history", "dialogue_history",
         "knowledge_ledger", "hypothesis_queue", "exploration_history",
-        "jarvis_dialogue_history", "commercial_evidence_memory",
+        "jarvis_dialogue_history",
         "thesis_history", "venture_measurements", "outcome_history",
         "trust_lab_evaluations", "observed_pain_candidates",
     )
@@ -428,10 +432,7 @@ def compact_state_payload(
         return source, meta
 
     protected_before = protected_serialized_values(source)
-    # Challenge state is independently bounded whenever compaction runs. Apply it
-    # before size-based early exits so the shadow track cannot grow unbounded even
-    # when another compaction level alone reaches the target.
-    current = compact_challenge_track(source)
+    current = deepcopy(source)
     levels = (
         ("a_drop_ephemeral", drop_ephemeral_checkpoint_state),
         ("b_historical_transcripts", compact_historical_transcripts),
@@ -474,7 +475,7 @@ def compact_state_payload(
 
     protected_after = protected_serialized_values(current)
     if protected_before != protected_after:
-        raise ValueError("state compaction modified protected A2A state")
+        raise ValueError("state compaction modified protected durable state")
 
     after_raw, after_encoded = encoded_sizes(current)
     heavy_key, heavy_bytes = heaviest_key(current)
