@@ -1,6 +1,6 @@
 import unittest
 
-from query_builder import breakout_queries, discovery_query, observed_buyer_phrases, scout_queries, desire_experiment_entries
+from query_builder import RESEARCH_ARENA_PRODUCTION_GENOME, breakout_queries, discovery_query, observed_buyer_phrases, scout_queries, desire_experiment_entries
 
 
 class QueryBuilderTests(unittest.TestCase):
@@ -96,6 +96,21 @@ class QueryBuilderTests(unittest.TestCase):
         q=discovery_query("manual_data_entry",["manual data entry"],"explore",[])
         self.assertIn('"we manually"',q)
         self.assertIn('"looking for help"',q)
+
+    def test_generation_60_genome_is_manually_promoted(self):
+        self.assertEqual(
+            RESEARCH_ARENA_PRODUCTION_GENOME["source"],
+            "mycelix-research-algorithm:g60-elite-1",
+        )
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["query_mode"], "mixed")
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["query_count"], 4)
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["recency_days"], 45)
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["min_relevance_tokens"], 1)
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["suffix_family"], "core")
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["topic_shape"], "compact")
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["query_frame"], "plain")
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["term_order"], "signal_first")
+        self.assertEqual(RESEARCH_ARENA_PRODUCTION_GENOME["source_scope"], "all")
 
     def test_promoted_arena_profile_is_signal_first_and_compact(self):
         q=discovery_query(
