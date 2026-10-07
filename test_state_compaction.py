@@ -496,6 +496,81 @@ class StateCompactionTests(unittest.IsolatedAsyncioTestCase):
             {row["domain"] for row in rows},
         )
 
+
+    async def test_checkpoint_externalizes_protected_challenge_track_losslessly(self):
+        payload=_heavy_payload()
+        challenge={
+            "mode":"shadow",
+            "memory":[
+                {
+                    "track":"challenge",
+                    "fingerprint":hashlib.sha256(f"challenge-external-{i}".encode()).hexdigest()[:24],
+                    "challenge_key":hashlib.sha256(f"challenge-key-{i}".encode()).hexdigest()[:24],
+                    "requester_key":f"requester-{i}",
+                    "domain":"example.invalid",
+                    "updated_at_utc":f"2026-10-07T12:{i%60:02d}:00+00:00",
+                    "detail":_noise(f"challenge-detail-{i}",8),
+                }
+                for i in range(260)
+            ],
+            "gate_state":{
+                "schema_v":1,
+                "candidates":{
+                    f"k-{i}":{"updated_at_utc":f"2026-10-07T12:{i%60:02d}:00+00:00","receipt":_noise(f"gate-{i}",4)}
+                    for i in range(100)
+                },
+                "flips":[{"n":i,"detail":_noise(f"flip-{i}",2)} for i in range(90)],
+            },
+            "latest":{"status":"CHALLENGE_SELECT","funnel":{"seen":260},"candidates":[]},
+        }
+        payload["challenge_track"]=deepcopy(challenge)
+        previous=deepcopy(cloud_mcp.AUTOPILOT_STATE)
+        old_key=cloud_mcp.RENDER_API_KEY
+        old_service=cloud_mcp.RENDER_SERVICE_ID
+        _FakeClient.captured_puts=[]
+        try:
+            cloud_mcp.RENDER_API_KEY="synthetic"
+            cloud_mcp.RENDER_SERVICE_ID="synthetic"
+            cloud_mcp.AUTOPILOT_STATE["challenge_track"]=deepcopy(challenge)
+            cloud_mcp.AUTOPILOT_STATE["challenge_track_store_reference"]=None
+            with patch.object(cloud_mcp,"_state_payload",return_value=deepcopy(payload)), patch.object(
+                cloud_mcp.httpx,"AsyncClient",_FakeClient
+            ):
+                result=await cloud_mcp._checkpoint_state_to_render()
+            self.assertTrue(result["ok"])
+            self.assertLess(result["stored_bytes"],100_000)
+            challenge_puts=[
+                row for row in _FakeClient.captured_puts
+                if "/env-vars/"+cloud_mcp.CHALLENGE_TRACK_ENV_PREFIX in str((row["args"] or [""])[0])
+            ]
+            self.assertTrue(challenge_puts)
+            state_puts=[
+                row for row in _FakeClient.captured_puts
+                if str((row["args"] or [""])[0]).endswith("/env-vars/"+cloud_mcp.STATE_ENV_KEY)
+            ]
+            self.assertEqual(len(state_puts),1)
+            durable=cloud_mcp._decode_state_env(state_puts[0]["kwargs"]["json"]["value"])
+            ref=durable.get("challenge_track_store_reference")
+            self.assertTrue(ref)
+            self.assertEqual(durable.get("challenge_track"),{"mode":"shadow","externalized":True})
+            chunks_by_key={
+                str((row["args"] or [""])[0]).rsplit("/",1)[-1]:row["kwargs"]["json"]["value"]
+                for row in challenge_puts
+            }
+            env={
+                cloud_mcp._challenge_track_env_key(i,ref):chunks_by_key[cloud_mcp._challenge_track_env_key(i,ref)]
+                for i in range(int(ref.get("chunk_count") or 0))
+            }
+            with patch.dict(cloud_mcp.os.environ,env,clear=False):
+                hydrated,meta=cloud_mcp._hydrate_external_challenge_track(durable)
+            self.assertTrue(meta["hydrated"])
+            self.assertEqual(_bytes(hydrated["challenge_track"]),_bytes(challenge))
+        finally:
+            cloud_mcp.AUTOPILOT_STATE.clear()
+            cloud_mcp.AUTOPILOT_STATE.update(previous)
+            cloud_mcp.RENDER_API_KEY=old_key
+            cloud_mcp.RENDER_SERVICE_ID=old_service
+
     def test_key_weight_report_names_only(self):
         payload = _heavy_payload()
         compacted, _ = compact_state_payload(payload, max_bytes=100_000, force=True)
