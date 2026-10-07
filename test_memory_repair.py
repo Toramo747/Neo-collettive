@@ -169,6 +169,25 @@ class MemoryRepairTests(unittest.TestCase):
         self.assertEqual(offenders,[])
         self.assertEqual(allowed,["replace_evidence_memory"])
 
+    def test_backup_manifest_rows_seed_recovery_telemetry_only(self):
+        manifest=json.dumps({"checkpoint":{"rows":94}})
+        with patch.dict(os.environ,{"BACKUP_20261007T023646Z_MANIFEST":manifest},clear=False):
+            self.assertTrue(cloud_mcp._backup_manifest_present())
+            self.assertEqual(cloud_mcp._backup_manifest_recovery_rows(),94)
+
+    def test_state_payload_persists_memory_telemetry(self):
+        old=deepcopy(cloud_mcp.AUTOPILOT_STATE)
+        try:
+            cloud_mcp.AUTOPILOT_STATE["evidence_memory_telemetry"]={
+                "evidence_in":94,"evidence_out":94,"recovered_rows":94,"backup_ok":True,
+            }
+            payload=cloud_mcp._state_payload()
+            self.assertEqual(payload["evidence_memory_telemetry"]["recovered_rows"],94)
+            self.assertTrue(payload["evidence_memory_telemetry"]["backup_ok"])
+        finally:
+            cloud_mcp.AUTOPILOT_STATE.clear()
+            cloud_mcp.AUTOPILOT_STATE.update(old)
+
     def test_public_memory_telemetry_is_aggregate_only(self):
         out=sanitize_public_autopilot({
             "evidence_memory_telemetry":{
