@@ -4,8 +4,8 @@ The canonical workflow is `.github/workflows/mycelix-heartbeat-v3.yml`.
 
 ## GitHub Actions cadence
 
-The workflow requests a 30-minute cadence with the cron expression `*/30 * * * *`.
-GitHub Actions does not guarantee that scheduled workflows start exactly on time; scheduled runs can be delayed or skipped during periods of load.
+The workflow requests a 30-minute cadence with the cron expression `17,47 * * * *`.
+GitHub Actions does not guarantee that scheduled workflows start exactly on time; scheduled runs can be delayed or skipped during periods of load. The offsets are intentionally kept away from the top of the hour.
 
 For this reason, GitHub Actions is not the mechanism that guarantees that the Render service remains awake.
 The keep-awake role is assigned to an external uptime monitor that performs a lightweight HTTP GET against the production health endpoint during the configured operating window.
