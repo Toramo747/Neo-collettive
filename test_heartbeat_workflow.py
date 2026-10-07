@@ -62,7 +62,7 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         w=Path(".github/workflows/mycelix-heartbeat-watchdog-v2.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "2,12,22,32,42,52 * * * *"',w)
         self.assertIn("mycelix-heartbeat-watchdog",w)
-        self.assertIn("cancel-in-progress: false",w)
+        self.assertIn("cancel-in-progress: true",self.workflow)
         self.assertIn("actions/workflows/mycelix-heartbeat-v3.yml/dispatches",w)
 
     def test_runtime_snapshot_persists_inbound_audit_streams(self):
