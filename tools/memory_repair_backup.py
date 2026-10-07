@@ -15,10 +15,12 @@ import lzma
 import os
 import re
 import sys
+from pathlib import Path
 import urllib.parse
 import urllib.request
 import zlib
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from state_codec import decode_checkpoint
 
 API = "https://api.render.com/v1"
