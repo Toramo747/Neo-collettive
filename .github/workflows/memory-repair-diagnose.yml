@@ -1,8 +1,7 @@
 name: Commercial Evidence Memory Repair Diagnosis
 on:
   push:
-    branches:
-      - fix/commercial-evidence-memory-repair
+    branches: [fix/commercial-evidence-memory-repair]
     paths:
       - tools/memory_repair_diagnose.py
       - .github/workflows/memory-repair-diagnose.yml
@@ -12,15 +11,37 @@ permissions:
 concurrency:
   group: commercial-evidence-memory-repair-diagnosis
   cancel-in-progress: false
-
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Diagnose aggregate evidence timestamp loss
+      - name: Back up current memory before repair
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
           RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
-        run: python tools/memory_repair_diagnose.py
+        run: python tools/memory_repair_backup.py
+      - name: Diagnose checkpoint with aggregate output only
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from state_compaction import compact_state_payload, key_weight_report
+          from state_codec import encode_checkpoint
+          req=urllib.request.Request("https://neo-collettive.onrender.com/api/autopilot/status",headers={"Authorization":"Bearer "+os.environ["NEO_ADMIN_TOKEN"]})
+          with urllib.request.urlopen(req,timeout=45) as r:
+              state=json.load(r)["autopilot"]
+          checkpoint=state.get("last_checkpoint") or {}
+          print(json.dumps({"cycles":state.get("cycles_completed"),"evidence_items":len(state.get("commercial_evidence_memory") or []),"checkpoint":checkpoint},separators=(",",":")))
+          state["commercial_evidence_memory"]={"store_mode":"external","evidence_count":len(state.get("commercial_evidence_memory") or [])}
+          compact,meta=compact_state_payload(state,max_bytes=100000,force=True)
+          print(json.dumps({"heaviest_keys":key_weight_report(compact)[:10],"compaction":meta},separators=(",",":")))
+          try:
+              _,raw,size=encode_checkpoint(compact,100000)
+              print(json.dumps({"codec_ok":True,"raw_bytes":raw,"encoded_bytes":size}))
+          except ValueError as exc:
+              print(json.dumps({"codec_ok":False,"reason":str(exc)}))
+          PY
