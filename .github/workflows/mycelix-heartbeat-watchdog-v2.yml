@@ -83,6 +83,32 @@ jobs:
           })
           PY
 
+      - name: Fail if runtime snapshot is older than 90 minutes
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          try:
+              d=json.load(open("/tmp/runtime-health.json",encoding="utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"runtime snapshot freshness check failed: health unavailable: {type(exc).__name__}")
+
+          snapshot=d.get("runtime_snapshot") if isinstance(d.get("runtime_snapshot"),dict) else {}
+          last=snapshot.get("last_published_utc")
+          if not last:
+              raise SystemExit("runtime snapshot stale for more than 90 minutes: last_published_utc is missing")
+          try:
+              dt=datetime.fromisoformat(str(last).replace("Z","+00:00")).astimezone(timezone.utc)
+          except Exception:
+              raise SystemExit("runtime snapshot stale for more than 90 minutes: invalid last_published_utc")
+          age=(datetime.now(timezone.utc)-dt).total_seconds()/60
+          if age>90:
+              raise SystemExit(f"runtime snapshot stale for more than 90 minutes: age_minutes={age:.1f}")
+          print({"runtime_snapshot_last_published_utc":last,"runtime_snapshot_age_minutes":round(age,1),"runtime_snapshot_within_90m":True})
+          PY
+
       - name: Check published snapshot freshness
         env:
           GH_TOKEN: ${{ github.token }}
