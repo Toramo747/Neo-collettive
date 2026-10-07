@@ -307,7 +307,10 @@ jobs:
           PY
           elif [ "${code}" = "200" ]; then
             cat /tmp/predeploy-checkpoint.json
-            python - <<'PY'
+            git fetch --quiet --depth=1 origin main:refs/remotes/origin/main
+          git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
+          git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
+          python - <<'PY'
           import json
           from datetime import datetime,timezone
 
@@ -334,8 +337,8 @@ jobs:
           if not (explicit_overflow or legacy_overflow_bootstrap):
               raise SystemExit("pre-deploy checkpoint failed for non-overflow reason")
 
-          snapshot=json.load(open("neo_latest_result.json",encoding="utf-8"))
-          floor=json.load(open("neo_cycle_floor.json",encoding="utf-8"))
+          snapshot=json.load(open("/tmp/predeploy-public-snapshot.json",encoding="utf-8"))
+          floor=json.load(open("/tmp/predeploy-cycle-floor.json",encoding="utf-8"))
           snapshot_cycles=int((snapshot.get("autopilot") or {}).get("cycles_completed") or 0)
           floor_cycles=int(floor.get("cycles_completed") or 0)
           diag=(snapshot.get("autopilot") or {}).get("select_diagnostics") or {}
