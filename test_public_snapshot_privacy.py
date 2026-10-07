@@ -516,6 +516,46 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         self.assertEqual(status["archive_count"],2)
         validate_public_snapshot(public)
 
+    def test_memory_telemetry_matches_persistent_evidence_without_leaking_rows(self):
+        raw={
+            "latest_result":{
+                "status":"SELECT",
+                "persistent_evidence_items":3,
+                "tool_opportunities":{"top5":[],"candidate_counts":{}},
+            },
+            "autopilot":{
+                "commercial_evidence_memory":[
+                    {"url":"https://secret.example/a","title":"PRIVATE A"},
+                    {"url":"https://secret.example/b","title":"PRIVATE B"},
+                    {"url":"https://secret.example/c","title":"PRIVATE C"},
+                ],
+                "evidence_memory_telemetry":{
+                    "evidence_in":3,"evidence_out":3,"dropped_retention":0,
+                    "archived":0,"merged_duplicate":0,"timestamp_repaired":0,
+                    "evidence_regression_blocked":0,"recovered_rows":3,"backup_ok":True,
+                    "reason":"PRIVATE REASON",
+                },
+                "evidence_store_status":{
+                    "status":"ok","active_count":0,"expected_active_count":3,
+                    "pending_count":0,"pending_overflow_count":0,"archive_count":0,
+                },
+            },
+        }
+        public=sanitize_public_snapshot(raw)
+        diag=public["autopilot"]["select_diagnostics"]
+        memory=public["autopilot"]["evidence_memory"]
+        store=public["autopilot"]["evidence_store_status"]
+        self.assertEqual(diag["persistent_evidence_items"],3)
+        self.assertEqual(memory["evidence_in"],3)
+        self.assertEqual(memory["evidence_out"],3)
+        self.assertEqual(memory["recovered_rows"],3)
+        self.assertTrue(memory["backup_ok"])
+        self.assertEqual(store["active_count"],3)
+        encoded=json.dumps(public,sort_keys=True)
+        for forbidden in ("secret.example","PRIVATE A","PRIVATE B","PRIVATE C","PRIVATE REASON","https://"):
+            self.assertNotIn(forbidden,encoded)
+        validate_public_snapshot(public)
+
     def test_public_checkpoint_telemetry_is_bounded_and_numeric(self):
         raw={
             "autopilot":{
