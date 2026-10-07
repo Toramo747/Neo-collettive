@@ -78,14 +78,10 @@ def _distinct_previous_generation(
             return None
         seen.add(marker)
         if sha and sha != current_sha256:
-            chosen=_reference_copy(current)
-            older=_distinct_previous_generation(
-                current.get("previous_generation") if isinstance(current.get("previous_generation"),dict) else None,
-                sha,
-            )
-            if chosen is not None and older is not None:
-                chosen["previous_generation"]=older
-            return chosen
+            # Keep exactly one verified predecessor. Older ancestry is not
+            # required for failover and recursively embedding it makes every
+            # checkpoint grow without bound.
+            return _reference_copy(current)
         current=current.get("previous_generation") if isinstance(current.get("previous_generation"),dict) else None
     return None
 

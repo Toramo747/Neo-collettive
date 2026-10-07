@@ -85,6 +85,34 @@ class EvidenceStoreAtomicTests(unittest.IsolatedAsyncioTestCase):
             cloud_mcp.RENDER_SERVICE_ID=old_service
             cloud_mcp.COMMERCIAL_EVIDENCE_CHUNK_BYTES=old_chunk
 
+    def test_external_store_reference_keeps_only_one_previous_generation(self):
+        rows_a=[{"evidence_id":"a","gate_eligible":True}]
+        rows_b=rows_a+[{"evidence_id":"b","gate_eligible":True}]
+        rows_c=rows_b+[{"evidence_id":"c","gate_eligible":True}]
+        rows_d=rows_c+[{"evidence_id":"d","gate_eligible":True}]
+        ref_a,_=encode_external_store(rows_a,chunk_bytes=1024,store="render_env_chunks_v2")
+        ref_b,_=encode_external_store(
+            rows_b,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=ref_a
+        )
+        ref_c,_=encode_external_store(
+            rows_c,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=ref_b
+        )
+        ref_d,_=encode_external_store(
+            rows_d,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=ref_c
+        )
+        previous=ref_d.get("previous_generation")
+        self.assertIsInstance(previous,dict)
+        self.assertEqual(previous.get("sha256"),ref_c.get("sha256"))
+        self.assertNotIn("previous_generation",previous)
+
+        same_ref,_=encode_external_store(
+            rows_d,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=ref_d
+        )
+        same_previous=same_ref.get("previous_generation")
+        self.assertIsInstance(same_previous,dict)
+        self.assertEqual(same_previous.get("sha256"),ref_c.get("sha256"))
+        self.assertNotIn("previous_generation",same_previous)
+
     def test_corrupt_current_generation_recovers_previous_before_degrading(self):
         previous_rows=[{"evidence_id":f"p-{i}","gate_eligible":True} for i in range(5)]
         previous_ref,previous_chunks=encode_external_store(previous_rows,chunk_bytes=1024,store="render_env_chunks_v2")
