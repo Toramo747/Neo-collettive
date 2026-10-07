@@ -83,32 +83,6 @@ jobs:
           })
           PY
 
-      - name: Fail if runtime snapshot is older than 90 minutes
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          from datetime import datetime, timezone
-
-          try:
-              d=json.load(open("/tmp/runtime-health.json",encoding="utf-8"))
-          except Exception as exc:
-              raise SystemExit(f"runtime snapshot freshness check failed: health unavailable: {type(exc).__name__}")
-
-          snapshot=d.get("runtime_snapshot") if isinstance(d.get("runtime_snapshot"),dict) else {}
-          last=snapshot.get("last_published_utc")
-          if not last:
-              raise SystemExit("runtime snapshot stale for more than 90 minutes: last_published_utc is missing")
-          try:
-              dt=datetime.fromisoformat(str(last).replace("Z","+00:00")).astimezone(timezone.utc)
-          except Exception:
-              raise SystemExit("runtime snapshot stale for more than 90 minutes: invalid last_published_utc")
-          age=(datetime.now(timezone.utc)-dt).total_seconds()/60
-          if age>90:
-              raise SystemExit(f"runtime snapshot stale for more than 90 minutes: age_minutes={age:.1f}")
-          print({"runtime_snapshot_last_published_utc":last,"runtime_snapshot_age_minutes":round(age,1),"runtime_snapshot_within_90m":True})
-          PY
-
       - name: Check published snapshot freshness
         env:
           GH_TOKEN: ${{ github.token }}
@@ -157,6 +131,31 @@ jobs:
             exit 0
           fi
 
+          # Do not cancel a primary run that can still finish normally.
+          curl --fail --show-error --silent --max-time 30 \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/actions/workflows/mycelix-heartbeat-v3.yml/runs?branch=main&per_page=20" > /tmp/primary-runs.json
+          python - <<'PYRUN'
+          import json
+          from datetime import datetime, timezone
+          runs=json.load(open("/tmp/primary-runs.json",encoding="utf-8"))["workflow_runs"]
+          now=datetime.now(timezone.utc)
+          active=[]
+          for run in runs:
+              if run.get("status") not in {"queued","in_progress","waiting","pending","requested"}:
+                  continue
+              ts=datetime.fromisoformat(str(run.get("run_started_at") or run["created_at"]).replace("Z","+00:00"))
+              if 0 <= (now-ts).total_seconds() <= 20*60:
+                  active.append(run["id"])
+          open("/tmp/primary-active","w").write("1" if active else "0")
+          print({"primary_active_count":len(active),"dispatch_deferred":bool(active)})
+          PYRUN
+          if [ "$(cat /tmp/primary-active)" = "1" ]; then
+            echo "Primary heartbeat is active; allowing its publication to finish."
+            exit 0
+          fi
+
           curl --fail --show-error --silent \
             -X POST \
             -H "Accept: application/vnd.github+json" \
@@ -166,3 +165,32 @@ jobs:
             -d '{"ref":"main"}'
 
           echo "Canonical MYCELIX heartbeat v3 dispatched. runtime_stale=$runtime_stale snapshot_stale=$snapshot_stale"
+
+      - name: Fail if runtime snapshot is older than 90 minutes
+        if: always()
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+
+          try:
+              d=json.load(open("/tmp/snapshot.json",encoding="utf-8"))
+          except Exception as exc:
+              raise SystemExit(f"runtime snapshot freshness check failed: published snapshot unavailable: {type(exc).__name__}")
+          last=d.get("captured_at_utc")
+          if not last:
+              raise SystemExit("runtime snapshot publication cannot be verified: captured_at_utc is missing")
+          try:
+              dt=datetime.fromisoformat(str(last).replace("Z","+00:00"))
+              if dt.tzinfo is None:
+                  raise ValueError("timezone required")
+              age=(datetime.now(timezone.utc)-dt.astimezone(timezone.utc)).total_seconds()/60
+          except Exception:
+              raise SystemExit("runtime snapshot publication cannot be verified: invalid captured_at_utc")
+          if age < 0:
+              raise SystemExit("runtime snapshot publication cannot be verified: timestamp is in the future")
+          if age>90:
+              raise SystemExit(f"no runtime snapshot published for more than 90 minutes: age_minutes={age:.1f}; recovery dispatch attempted or deferred to active heartbeat")
+          print({"published_snapshot_utc":last,"published_snapshot_age_minutes":round(age,1),"published_snapshot_within_90m":True})
+          PY

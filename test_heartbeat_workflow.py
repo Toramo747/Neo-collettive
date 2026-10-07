@@ -62,8 +62,8 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         w=Path(".github/workflows/mycelix-heartbeat-watchdog-v2.yml").read_text(encoding="utf-8")
         self.assertIn("Fail if runtime snapshot is older than 90 minutes",w)
         self.assertIn("age>90",w)
-        self.assertIn("runtime snapshot stale for more than 90 minutes",w)
-        self.assertIn("last_published_utc",w)
+        self.assertIn("no runtime snapshot published for more than 90 minutes",w)
+        self.assertIn("captured_at_utc",w)
 
     def test_watchdog_schedule_is_resilient_and_dispatches_primary(self):
         w=Path(".github/workflows/mycelix-heartbeat-watchdog-v2.yml").read_text(encoding="utf-8")
