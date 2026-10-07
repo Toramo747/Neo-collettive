@@ -123,6 +123,8 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         w=self.workflow
         self.assertIn("https://neo-collettive.onrender.com/api/autopilot/status",w)
         self.assertNotIn("https://neo-collettive.onrender.com/api/autonomy/status",w)
+        self.assertIn("ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}",w)
+        self.assertIn('Authorization: Bearer ${ADMIN_TOKEN}',w)
         self.assertIn('"evidence_memory_telemetry": ap.get("evidence_memory_telemetry") or {}',w)
         self.assertIn('"evidence_store_status": ap.get("evidence_store_status") or {}',w)
         self.assertIn('"last_checkpoint": ap.get("last_checkpoint") or {}',w)
