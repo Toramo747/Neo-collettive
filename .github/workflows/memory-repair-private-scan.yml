@@ -1,0 +1,36 @@
+name: Commercial Evidence Memory Repair Private Scan
+on:
+  push:
+    branches:
+      - fix/commercial-evidence-memory-repair
+    paths:
+      - tools/memory_repair_private_scan.py
+      - .github/workflows/memory-repair-private-scan.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: commercial-evidence-memory-repair-private-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require private archive access
+        env:
+          PRIVATE: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          REPO: ${{ vars.MODEL_LABEL_REPO }}
+        run: |
+          test -n "$PRIVATE"
+          test -n "$REPO"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+          fetch-depth: 0
+      - name: Scan checkpoint history aggregates
+        run: python tools/memory_repair_private_scan.py private-labels
