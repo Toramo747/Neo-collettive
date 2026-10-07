@@ -1,0 +1,51 @@
+name: Commercial Evidence Memory Repair CI
+on:
+  push:
+    branches:
+      - fix/commercial-evidence-memory-repair
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: commercial-evidence-memory-repair-ci
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile repair surface
+        run: |
+          python -m py_compile cloud_mcp.py evidence_memory_guard.py commercial_evidence_store.py public_snapshot.py
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run mandatory memory and gate regressions
+        run: |
+          python -m unittest -v \
+            test_memory_repair.py \
+            test_evidence_store_atomic.py \
+            test_evidence_integrity.py \
+            test_quarantine_revalidation.py \
+            test_state_compaction.py \
+            test_state_recovery.py \
+            test_public_snapshot_privacy.py \
+            test_commercial_gate_non_regression.py \
+            test_hidden_control_gate.py \
+            test_hidden_challenge_control_gate.py
+      - name: Validate public commercial controls
+        run: |
+          python - <<'PY'
+          import json
+          from arena_research_algorithm import evaluate_control_cases
+          data=json.load(open("data/arena/research-algorithm/control_cases.json",encoding="utf-8"))
+          result=evaluate_control_cases(data.get("cases") or [])
+          cases=int(result.get("cases") or 0)
+          correct=int(result.get("correct") or 0)
+          family_cases=int(result.get("family_cases") or 0)
+          family_correct=int(result.get("family_correct") or 0)
+          print(json.dumps({"cases":cases,"correct":correct,"family_cases":family_cases,"family_correct":family_correct}))
+          if cases < 6 or correct != cases or family_correct != family_cases:
+              raise SystemExit("commercial controls failed")
+          PY
