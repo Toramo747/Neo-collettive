@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BUSL-1.1
-"""Read first, then create an immutable Render-side backup for memory repair.
+"""Read first, then create an immutable Render-side backup for memory repair.\n\nTrigger note: this file is intentionally branch-only until backup_ok is confirmed.
 
 The script never mutates NEO_STATE_JSON or any NEO_EVIDENCE_* key. It snapshots
 all current evidence generations plus the authenticated runtime state into new
