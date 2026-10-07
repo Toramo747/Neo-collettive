@@ -338,7 +338,7 @@ jobs:
           PY
           elif [ "${code}" = "200" ]; then
             cat /tmp/predeploy-checkpoint.json
-            git fetch --quiet --depth=1 origin main:refs/remotes/origin/main
+            git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main
             git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
             if python - <<'PY'
           import json
@@ -368,7 +368,7 @@ jobs:
             then
               echo "Healthy durable checkpoint confirmed; memory integrity passed without publication freshness dependency."
             else
-              git fetch --quiet --depth=1 origin main:refs/remotes/origin/main
+              git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main
               git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
               git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
               python - <<'PY'
