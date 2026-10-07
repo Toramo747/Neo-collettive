@@ -252,10 +252,10 @@ jobs:
         run: |
           set -euo pipefail
           docker rm -f neo-ci-runtime >/dev/null 2>&1 || true
-          docker run -d --name neo-ci-runtime -p 127.0.0.1:10000:10000 -e PORT=10000 neo-ci >/tmp/neo-ci-container-id
+          docker run -d --name neo-ci-runtime --network none -e PORT=10000 -e NEO_AUTOPILOT_ENABLED=false neo-ci >/tmp/neo-ci-container-id
           ready=0
           for i in $(seq 1 30); do
-            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:10000/livez >/tmp/neo-ci-livez.json; then
+            if docker exec neo-ci-runtime python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:10000/livez",timeout=2).read().decode())' >/tmp/neo-ci-livez.json 2>/dev/null; then
               ready=1
               break
             fi
@@ -396,6 +396,10 @@ jobs:
           if publication_lag < 0 or floor_lag < 0:
               raise SystemExit(
                   f"overflow bootstrap runtime behind published state: runtime={cycles} snapshot={snapshot_cycles} floor={floor_cycles}"
+              )
+          if floor_cycles < snapshot_cycles:
+              raise SystemExit(
+                  f"overflow bootstrap cycle floor behind published snapshot: floor={floor_cycles} snapshot={snapshot_cycles}"
               )
           if current_evidence < evidence or current_evidence < 108:
               raise SystemExit(
@@ -882,7 +886,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh workflow run mycelix-heartbeat-v3.yml --ref main
+          dispatched=0
+          for attempt in $(seq 1 5); do
+            if gh workflow run mycelix-heartbeat-v3.yml --ref main; then
+              dispatched=1
+              break
+            fi
+            echo "Heartbeat dispatch attempt ${attempt}/5 failed; retrying" >&2
+            sleep 5
+          done
+          if [ "${dispatched}" != "1" ]; then
+            echo "Post-deploy heartbeat dispatch failed after 5 attempts" >&2
+            exit 22
+          fi
           echo "Post-deploy heartbeat snapshot workflow dispatched"
 
       - name: Verify post-deploy SETI readiness
