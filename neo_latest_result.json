@@ -1,7 +1,7 @@
 {
-  "captured_at_utc": "2026-10-07T01:00:10.078994+00:00",
+  "captured_at_utc": "2026-10-07T07:10:18.387235+00:00",
   "snapshot_schema": 7,
-  "neo_version": "0.99.53",
+  "neo_version": "0.99.54",
   "runtime_profile": {
     "profile_id": "mycelix-prod-main",
     "deployment_role": "production",
@@ -15,60 +15,60 @@
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 206.500639,
-    "cycles_completed": 2610,
-    "last_started_utc": "2026-10-07T00:56:40.976232+00:00",
-    "last_finished_utc": "2026-10-07T00:57:55.371607+00:00",
+    "last_started_age_seconds": 72.587762,
+    "cycles_completed": 2629,
+    "last_started_utc": "2026-10-07T07:09:02.789099+00:00",
+    "last_finished_utc": "2026-10-07T07:09:48.366386+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-07T01:00:09.962314+00:00",
+    "captured_at_utc": "2026-10-07T07:10:18.146699+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-07T01:00:05.628Z",
+        "timestamp_utc": "2026-10-07T07:10:13.640Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 1056.29,
+        "latency_ms": 1041.48,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-07T01:00:06.434Z",
+        "timestamp_utc": "2026-10-07T07:10:14.530Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 762.65,
+        "latency_ms": 850.11,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-07T01:00:09.141Z",
+        "timestamp_utc": "2026-10-07T07:10:16.826Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 1098.82,
+        "latency_ms": 693.2,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-07T01:00:09.943Z",
+        "timestamp_utc": "2026-10-07T07:10:18.127Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 758.34,
+        "latency_ms": 1261.81,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "90a827e261473552f263d73b19eec56090f0fc8a",
+    "source_commit": "130f33a283621ab2d104e588838964592d463f33",
     "runtime_contract_verified": true,
     "hidden_control": {
       "required": true,
@@ -80,9 +80,9 @@
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 2610,
-    "last_started_utc": "2026-10-07T00:56:40.976232+00:00",
-    "last_finished_utc": "2026-10-07T00:57:55.371607+00:00",
+    "cycles_completed": 2629,
+    "last_started_utc": "2026-10-07T07:09:02.789099+00:00",
+    "last_finished_utc": "2026-10-07T07:09:48.366386+00:00",
     "last_status": "SELECT",
     "recent_sectors": [],
     "family_performance": [],
@@ -172,6 +172,17 @@
         "promotion_ready": false
       }
     },
+    "evidence_memory": {
+      "evidence_in": 0,
+      "evidence_out": 0,
+      "dropped_retention": 0,
+      "archived": 0,
+      "merged_duplicate": 0,
+      "timestamp_repaired": 0,
+      "evidence_regression_blocked": 0,
+      "recovered_rows": 0,
+      "backup_ok": false
+    },
     "evidence_store_status": {
       "status": "ok",
       "active_count": 0,
@@ -194,67 +205,41 @@
         "min_age_days": 60
       },
       "funnel": {
-        "collected": 74,
-        "routed": 23,
-        "independent_requesters": 7,
-        "age_qualified": 4,
-        "workarounds": 7,
-        "feasibility_checked": 23,
+        "collected": 104,
+        "routed": 20,
+        "independent_requesters": 8,
+        "age_qualified": 2,
+        "workarounds": 4,
+        "feasibility_checked": 20,
         "ready": 0
       },
       "candidate_counts": {
-        "observed": 291,
+        "observed": 297,
         "ready": 0
       },
       "candidates": [
         {
-          "candidate_id": "e20fedbefbeeb0c6",
-          "evidence_fingerprint": "c1eb68d78c50f6be",
+          "candidate_id": "80f537c3e5e5544e",
+          "evidence_fingerprint": "0c86769e1ced3028",
           "id_key_version": "v1",
           "score": 65,
-          "source_count": 1,
+          "source_count": 2,
           "independent_domain_count": 1,
           "independent_requester_count": 1,
-          "age_days": 89,
-          "workaround_count": 1,
+          "age_days": 61,
+          "workaround_count": 2,
           "feasibility_code": "unknown",
           "reward_signal_count": 0,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 1,
+          "fail_streak": 265,
           "missing_codes": [
             "three_independent_requesters",
             "two_independent_domains"
           ],
-          "cycle": 2610,
-          "commit": "520db03797bf9592052fb20e1f7a22b35e45a1d4",
-          "first_cycle_after_deploy": false,
-          "tagger_version": "1",
-          "seconds_since_first_raw_pass": null
-        },
-        {
-          "candidate_id": "0fc7e15f77f907df",
-          "evidence_fingerprint": "7918558c79a2955e",
-          "id_key_version": "v1",
-          "score": 65,
-          "source_count": 1,
-          "independent_domain_count": 1,
-          "independent_requester_count": 1,
-          "age_days": 71,
-          "workaround_count": 1,
-          "feasibility_code": "unknown",
-          "reward_signal_count": 0,
-          "raw_gate_pass": false,
-          "stable_gate_pass": false,
-          "pass_streak": 0,
-          "fail_streak": 2,
-          "missing_codes": [
-            "three_independent_requesters",
-            "two_independent_domains"
-          ],
-          "cycle": 2610,
-          "commit": "520db03797bf9592052fb20e1f7a22b35e45a1d4",
+          "cycle": 2629,
+          "commit": "678f8e302237f3e9c6b403f80c2930aab860a3c3",
           "first_cycle_after_deploy": false,
           "tagger_version": "1",
           "seconds_since_first_raw_pass": null
@@ -274,13 +259,39 @@
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 58,
+          "fail_streak": 62,
           "missing_codes": [
             "three_independent_requesters",
             "two_independent_domains"
           ],
-          "cycle": 2610,
-          "commit": "520db03797bf9592052fb20e1f7a22b35e45a1d4",
+          "cycle": 2629,
+          "commit": "678f8e302237f3e9c6b403f80c2930aab860a3c3",
+          "first_cycle_after_deploy": false,
+          "tagger_version": "1",
+          "seconds_since_first_raw_pass": null
+        },
+        {
+          "candidate_id": "a0d9c3b6d8fa3304",
+          "evidence_fingerprint": "f2824824cd90ba93",
+          "id_key_version": "v1",
+          "score": 65,
+          "source_count": 1,
+          "independent_domain_count": 1,
+          "independent_requester_count": 1,
+          "age_days": 1264,
+          "workaround_count": 1,
+          "feasibility_code": "unknown",
+          "reward_signal_count": 0,
+          "raw_gate_pass": false,
+          "stable_gate_pass": false,
+          "pass_streak": 0,
+          "fail_streak": 39,
+          "missing_codes": [
+            "three_independent_requesters",
+            "two_independent_domains"
+          ],
+          "cycle": 2629,
+          "commit": "678f8e302237f3e9c6b403f80c2930aab860a3c3",
           "first_cycle_after_deploy": false,
           "tagger_version": "1",
           "seconds_since_first_raw_pass": null
@@ -290,70 +301,71 @@
     "select_diagnostics": {
       "status": "SELECT",
       "ingestion_enabled": true,
-      "raw_results": 110,
-      "relevance_pass": 77,
-      "useful_results": 2,
-      "persistent_evidence_items": 2,
-      "quarantined_evidence_items": 0,
+      "raw_results": 144,
+      "relevance_pass": 110,
+      "useful_results": 3,
+      "persistent_evidence_items": 100,
+      "quarantined_evidence_items": 66,
       "rejected_current_count": 40,
-      "new_signal_rows": 2,
-      "problem_cluster_count": 2,
+      "new_signal_rows": 0,
+      "problem_cluster_count": 32,
       "qualified_problem_count": 0,
       "configured_categories": 9,
-      "evidenced_candidates": 5,
-      "gate_eligible_candidates": 5,
+      "evidenced_candidates": 6,
+      "gate_eligible_candidates": 6,
       "qualified_candidates": 0,
       "top_gate_pass": false,
-      "top_monetization_score": 30,
+      "top_monetization_score": 90,
       "post_deploy_pass_ignored": 0,
-      "top_missing": [
-        "two_competitors_with_real_price",
-        "monetization_score_60"
-      ],
+      "top_missing": [],
       "candidates": [
         {
-          "candidate_id": "1cccbce253ede4f8",
-          "evidence_fingerprint": "ab824a4c6a4d5501",
+          "candidate_id": "fcd986b2d09b3548",
+          "evidence_fingerprint": "dcdd6a847e3a9609",
           "id_key_version": "v1",
-          "score": 30,
-          "source_count": 7,
-          "independent_domain_count": 6,
-          "raw_gate_pass": false,
+          "score": 90,
+          "source_count": 16,
+          "independent_domain_count": 12,
+          "raw_gate_pass": true,
           "stable_gate_pass": false,
-          "pass_streak": 0,
-          "fail_streak": 287,
-          "missing_codes": [
-            "two_competitors_with_real_price",
-            "monetization_score_60"
-          ],
-          "cycle": 2610,
-          "commit": "520db03797bf9592052fb20e1f7a22b35e45a1d4",
+          "pass_streak": 1,
+          "fail_streak": 0,
+          "missing_codes": [],
+          "cycle": 2629,
+          "commit": "678f8e302237f3e9c6b403f80c2930aab860a3c3",
           "first_cycle_after_deploy": false,
           "post_deploy_pass_ignored": false,
           "tagger_version": "3",
-          "seconds_since_first_raw_pass": null,
+          "seconds_since_first_raw_pass": 0,
           "new_domains_since_first_pass": 0,
           "tolerated_fail_cycles": 0,
-          "pass_ratio_in_window_ppm": 0,
-          "confirmation_blockers": []
+          "pass_ratio_in_window_ppm": 1000000,
+          "confirmation_blockers": [
+            "min_6_hours",
+            "min_2_research_cycles",
+            "evidence_fingerprint_unchanged",
+            "no_new_independent_domain"
+          ]
         },
         {
-          "candidate_id": "fcd986b2d09b3548",
-          "evidence_fingerprint": "3e08c8060d7ab392",
+          "candidate_id": "af6f6d5978c65d0c",
+          "evidence_fingerprint": "fdee1b5a506398d4",
           "id_key_version": "v1",
-          "score": 30,
-          "source_count": 10,
-          "independent_domain_count": 5,
+          "score": 0,
+          "source_count": 13,
+          "independent_domain_count": 13,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 29,
+          "fail_streak": 34,
           "missing_codes": [
             "two_competitors_with_real_price",
+            "dissatisfaction_signal",
+            "documented_gap",
             "monetization_score_60"
           ],
-          "cycle": 2610,
-          "commit": "520db03797bf9592052fb20e1f7a22b35e45a1d4",
+          "cycle": 2629,
+          "commit": "678f8e302237f3e9c6b403f80c2930aab860a3c3",
           "first_cycle_after_deploy": false,
           "post_deploy_pass_ignored": false,
           "tagger_version": "3",
@@ -365,21 +377,23 @@
         },
         {
           "candidate_id": "2b51898ca2519673",
-          "evidence_fingerprint": "7ba1e6db73907f97",
+          "evidence_fingerprint": "ef7493980f76cf85",
           "id_key_version": "v1",
-          "score": 25,
+          "score": 0,
           "source_count": 9,
           "independent_domain_count": 7,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 36,
+          "fail_streak": 19,
           "missing_codes": [
             "two_competitors_with_real_price",
+            "dissatisfaction_signal",
+            "documented_gap",
             "monetization_score_60"
           ],
-          "cycle": 2610,
-          "commit": "520db03797bf9592052fb20e1f7a22b35e45a1d4",
+          "cycle": 2629,
+          "commit": "678f8e302237f3e9c6b403f80c2930aab860a3c3",
           "first_cycle_after_deploy": false,
           "post_deploy_pass_ignored": false,
           "tagger_version": "3",
@@ -392,44 +406,48 @@
       ],
       "rejection_reasons": [
         {
+          "reason": "no_demand_signal",
+          "count": 37
+        },
+        {
           "reason": "no_family",
           "count": 21
         },
         {
-          "reason": "noise_domain",
-          "count": 18
-        },
-        {
           "reason": "weak_family_relevance",
-          "count": 11
+          "count": 12
         },
         {
-          "reason": "no_demand_signal",
-          "count": 10
+          "reason": "noise_domain",
+          "count": 9
         },
         {
           "reason": "github_no_buyer_problem_context",
-          "count": 8
+          "count": 6
         },
         {
           "reason": "github_noise",
-          "count": 4
+          "count": 6
+        },
+        {
+          "reason": "query_irrelevant",
+          "count": 1
         }
       ],
       "search_sources": [
         {
           "source": "bing-rss",
-          "attempts": 10,
+          "attempts": 14,
           "empty": 0,
           "errors": 0,
-          "raw_results": 60,
-          "relevance_pass": 45
+          "raw_results": 84,
+          "relevance_pass": 67
         },
         {
           "source": "brave",
-          "attempts": 10,
+          "attempts": 14,
           "empty": 0,
-          "errors": 10,
+          "errors": 14,
           "raw_results": 0,
           "relevance_pass": 0
         },
@@ -443,11 +461,11 @@
         },
         {
           "source": "hn",
-          "attempts": 10,
+          "attempts": 14,
           "empty": 0,
           "errors": 0,
-          "raw_results": 30,
-          "relevance_pass": 24
+          "raw_results": 40,
+          "relevance_pass": 35
         },
         {
           "source": "stackexchange",
@@ -461,11 +479,15 @@
       "buyer_voice_by_source": [
         {
           "source": "github",
-          "count": 4
+          "count": 5
         },
         {
           "source": "bing-rss",
-          "count": 1
+          "count": 2
+        },
+        {
+          "source": "hn",
+          "count": 2
         }
       ],
       "search_provider": {
@@ -474,72 +496,76 @@
         "provider_key_present": true,
         "fallback_used": true,
         "calls_cycle": 0,
-        "calls_day": 7,
+        "calls_day": 46,
         "errors": 0,
-        "fallbacks": 10,
+        "fallbacks": 14,
         "fallback_reasons": [
           {
             "reason": "budget_paced",
-            "count": 10
+            "count": 14
           }
         ]
       },
       "funnel": {
-        "queries_planned": 10,
-        "queries_executed": 10,
+        "queries_planned": 14,
+        "queries_executed": 14,
         "queries_skipped_by_reason": [],
         "calls_by_source": [
           {
             "source": "bing-rss",
-            "count": 10
+            "count": 14
           },
           {
             "source": "brave",
-            "count": 10
+            "count": 14
           },
           {
             "source": "hn",
-            "count": 10
+            "count": 14
           }
         ],
         "errors_by_source": [
           {
             "source": "brave",
             "error": "budget_paced",
-            "count": 10
+            "count": 14
           }
         ],
-        "raw_received": 110,
-        "deduped": 109,
-        "query_relevant": 77,
-        "family_matched": 23,
-        "buyer_voice": 5,
-        "commercial_signal": 2,
-        "persisted": 2,
+        "raw_received": 144,
+        "deduped": 143,
+        "query_relevant": 110,
+        "family_matched": 52,
+        "buyer_voice": 9,
+        "commercial_signal": 3,
+        "persisted": 3,
         "discarded_by_reason": [
+          {
+            "reason": "no_demand_signal",
+            "count": 37
+          },
           {
             "reason": "no_family",
             "count": 21
           },
           {
-            "reason": "noise_domain",
-            "count": 18
-          },
-          {
             "reason": "weak_family_relevance",
-            "count": 11
+            "count": 12
           },
           {
-            "reason": "no_demand_signal",
-            "count": 10
+            "reason": "noise_domain",
+            "count": 9
           },
           {
             "reason": "github_no_buyer_problem_context",
-            "count": 8
+            "count": 6
           },
           {
             "reason": "github_noise",
-            "count": 4
+            "count": 6
+          },
+          {
+            "reason": "query_irrelevant",
+            "count": 1
           }
         ],
         "monotonicity_warnings": []
@@ -548,12 +574,50 @@
         "probes_attempted": 8,
         "agents_reached": 2,
         "answers_received": 16,
-        "valid_answers": 9,
+        "valid_answers": 2,
         "rejected_answers": 0,
         "timeouts": 0
       },
-      "price_validation": [],
-      "price_query_telemetry": []
+      "price_validation": [
+        {
+          "family": "developer_tools",
+          "validation_queries": 4,
+          "pricing_pages_found": 0,
+          "prices_extracted": 0,
+          "strict_prices": 0,
+          "competitors_with_price": 0
+        }
+      ],
+      "price_query_telemetry": [
+        {
+          "query_index": 0,
+          "results_received": 6,
+          "discarded_article": 0,
+          "discarded_non_product": 6,
+          "accepted": 0
+        },
+        {
+          "query_index": 1,
+          "results_received": 5,
+          "discarded_article": 0,
+          "discarded_non_product": 5,
+          "accepted": 0
+        },
+        {
+          "query_index": 2,
+          "results_received": 3,
+          "discarded_article": 0,
+          "discarded_non_product": 3,
+          "accepted": 0
+        },
+        {
+          "query_index": 3,
+          "results_received": 1,
+          "discarded_article": 0,
+          "discarded_non_product": 1,
+          "accepted": 0
+        }
+      ]
     }
   }
 }
