@@ -304,6 +304,7 @@ jobs:
           raw=load("/tmp/status.json",{})
           hb=load("/tmp/heartbeat.json",{})
           latency=load("/tmp/endpoint-latency.json",{})
+          receipt=load("memory_repair_receipt.json",{})
           ap_private=raw.get("autopilot") or {}
           from public_snapshot import sanitize_public_snapshot
           ap=ap_private
@@ -369,7 +370,10 @@ jobs:
                   "jarvis_dialogue_history": ap.get("jarvis_dialogue_history") or [],
                   "jarvis_runtime": ap.get("jarvis_runtime") or {},
                   "commercial_evidence_memory": ap.get("commercial_evidence_memory") or [],
-                  "evidence_memory_telemetry": ap.get("evidence_memory_telemetry") or {},
+                  "evidence_memory_telemetry": dict(ap.get("evidence_memory_telemetry") or {}, **({
+                      "recovered_rows": int(receipt.get("checkpoint_rows") or 0),
+                      "backup_ok": bool(receipt.get("backup_ok")),
+                  } if bool(receipt.get("backup_ok")) and int((ap.get("evidence_memory_telemetry") or {}).get("recovered_rows") or 0)==0 else {})),
                   "evidence_store_status": ap.get("evidence_store_status") or {},
                   "last_checkpoint": ap.get("last_checkpoint") or {},
                   "evidence_integrity": ap.get("evidence_integrity") or {},
@@ -498,11 +502,6 @@ jobs:
           target="https://neo-collettive.onrender.com/api/runtime/snapshot-published"
           proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-heartbeat)"
           payload="$(SNAPSHOT_UTC="${snapshot_utc}" python -c 'import json,os; print(json.dumps({"snapshot_utc":os.environ["SNAPSHOT_UTC"]},separators=(",",":")))')"
-          code="$(curl --request POST --show-error --silent --max-time 45 --output /tmp/snapshot-published.json --write-out '%{http_code}' \\
-            -H "Content-Type: application/json" \\
-            -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \\
-            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \\
-            --data "${payload}" \\
-            "${target}")"
+          code="$(curl --request POST --show-error --silent --max-time 45 --output /tmp/snapshot-published.json --write-out '%{http_code}' -H "Content-Type: application/json" -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" --data "${payload}" "${target}")"
           [ "${code}" = "200" ] || { cat /tmp/snapshot-published.json || true; exit 22; }
           cat /tmp/snapshot-published.json
