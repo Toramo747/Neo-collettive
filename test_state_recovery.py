@@ -234,6 +234,8 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertIn("persistent_evidence_items",block)
         self.assertIn("evidence_regression_blocked",block)
         self.assertIn("timestamp_repaired",block)
+        self.assertIn("publication_lag > 1",block)
+        self.assertIn("current evidence regressed",block)
         self.assertNotIn("one_time_memory_repair_bootstrap_authorized",block)
         self.assertNotIn('source_version=="0.99.53"',block)
         self.assertNotIn('source_commit=="520db03797bf9592052fb20e1f7a22b35e45a1d4"',block)
