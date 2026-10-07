@@ -1,29 +1,26 @@
 name: Commercial Evidence Memory Repair Diagnosis
 on:
   push:
-    branches: [fix/commercial-evidence-memory-repair]
-    paths: [.github/workflows/memory-repair-diagnose.yml]
+    branches:
+      - fix/commercial-evidence-memory-repair
+    paths:
+      - tools/memory_repair_diagnose.py
+      - .github/workflows/memory-repair-diagnose.yml
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: commercial-evidence-memory-repair-diagnosis
+  cancel-in-progress: false
+
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     steps:
-      - name: Read checkpoint failure counters only
+      - uses: actions/checkout@v4
+      - name: Diagnose aggregate evidence timestamp loss
         env:
-          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
-        run: |
-          python - <<'PY'
-          import json, os, re, urllib.request
-          req=urllib.request.Request("https://neo-collettive.onrender.com/api/autopilot/status",headers={"Authorization":"Bearer "+os.environ["NEO_ADMIN_TOKEN"]})
-          with urllib.request.urlopen(req,timeout=45) as r:
-              state=json.load(r)["autopilot"]
-          checkpoint=state.get("last_checkpoint") or {}
-          reason=str(checkpoint.get("reason") or "")
-          overflow=re.fullmatch(r"ValueError:compressed state exceeds safe env limit: (\d+)>(\d+)",reason)
-          code="checkpoint_size_overflow" if overflow else reason.split(":",1)[0] if re.match(r"^[A-Za-z]+:",reason) else "unknown"
-          c=checkpoint.get("compaction") or {}
-          print(json.dumps({"cycles":state.get("cycles_completed"),"evidence_items":len(state.get("commercial_evidence_memory") or []),"checkpoint_ok":checkpoint.get("ok"),"error_code":code,"overflow_bytes":int(overflow.group(1)) if overflow else None,"limit_bytes":checkpoint.get("limit_bytes"),"compacted_bytes":c.get("after_encoded_bytes"),"heaviest_key":c.get("heaviest_key"),"heaviest_key_bytes":c.get("heaviest_key_encoded_bytes")},separators=(",",":")))
-          PY
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+        run: python tools/memory_repair_diagnose.py
