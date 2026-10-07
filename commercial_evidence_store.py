@@ -148,6 +148,41 @@ def decode_external_store(
     return rows
 
 
+
+def recover_external_store_generation(
+    chunks: list[str] | None,
+    *,
+    store: str = "render_env_chunks_v2",
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    """Recover an orphan generation from its chunk values without trusting a stale reference."""
+    values=list(chunks or [])
+    if not values or any(not isinstance(value,str) for value in values):
+        return None
+    encoded="".join(values)
+    if not encoded.startswith(STORE_PREFIX):
+        return None
+    try:
+        packed=base64.b64decode(encoded[len(STORE_PREFIX):],validate=True)
+        raw=lzma.decompress(packed)
+        decoded=json.loads(raw.decode("utf-8"))
+    except (ValueError,TypeError,UnicodeError,lzma.LZMAError,json.JSONDecodeError):
+        return None
+    rows=_canonical_rows(decoded if isinstance(decoded,list) else None)
+    if not isinstance(decoded,list) or len(rows)!=len(decoded):
+        return None
+    sha=hashlib.sha256(raw).hexdigest()
+    ref={
+        "schema_v":STORE_SCHEMA_V,
+        "store_mode":"external",
+        "store":store,
+        "sha256":sha,
+        "generation":sha[:12],
+        "evidence_count":len(rows),
+        "chunk_count":len(values),
+        "raw_bytes":len(raw),
+    }
+    return ref,rows
+
 def is_external_reference(value: Any) -> bool:
     return (
         isinstance(value, dict)
