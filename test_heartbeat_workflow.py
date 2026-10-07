@@ -58,6 +58,13 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn("GitHub Actions does not guarantee",doc)
         self.assertIn("external uptime monitor",doc)
 
+    def test_watchdog_fails_if_runtime_snapshot_exceeds_90_minutes(self):
+        w=Path(".github/workflows/mycelix-heartbeat-watchdog-v2.yml").read_text(encoding="utf-8")
+        self.assertIn("Fail if runtime snapshot is older than 90 minutes",w)
+        self.assertIn("age>90",w)
+        self.assertIn("runtime snapshot stale for more than 90 minutes",w)
+        self.assertIn("last_published_utc",w)
+
     def test_watchdog_schedule_is_resilient_and_dispatches_primary(self):
         w=Path(".github/workflows/mycelix-heartbeat-watchdog-v2.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "9,19,29,39,49,59 * * * *"',w)

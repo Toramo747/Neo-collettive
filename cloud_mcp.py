@@ -11417,6 +11417,7 @@ def _iso_age_seconds(value: str | None) -> float | None:
         return None
 
 
+# Memory-repair deployment marker: runtime snapshot freshness/telemetry is production-authorized.
 def _runtime_snapshot_freshness() -> dict:
     raw=dict(AUTOPILOT_STATE.get("runtime_snapshot") or {})
     last=str(raw.get("last_published_utc") or "").strip()
