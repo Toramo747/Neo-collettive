@@ -224,6 +224,12 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertIn('d.get("ok") is not True',block)
         self.assertIn('code}" = "404"',block)
         self.assertIn("checkpoint too old",block)
+        self.assertIn("one_time_memory_repair_bootstrap_authorized",block)
+        self.assertIn('source_version=="0.99.53"',block)
+        self.assertIn('expected=="0.99.54"',block)
+        self.assertIn("evidence_items==0",block)
+        self.assertIn("Verify repaired commercial evidence memory",w)
+        self.assertIn("post-repair evidence recovery below verified floor",w)
 
     def test_thesis_cycles_match_completed_age_before_final_budget_cycle(self):
         restored,meta=reconcile_thesis_cycles(
