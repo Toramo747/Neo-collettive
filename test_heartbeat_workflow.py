@@ -145,14 +145,13 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn("github-actions-heartbeat",w)
         self.assertLess(w.index("git push origin HEAD:main"),w.index("/api/runtime/snapshot-published"))
 
-    def test_snapshot_commit_is_outside_deploy_and_pr_freeze_paths(self):
+    def test_snapshot_commit_is_outside_deploy_paths_and_repair_freeze_is_removed(self):
         deploy=Path(".github/workflows/neo-render-deploy.yml").read_text(encoding="utf-8")
         deploy_trigger=deploy.split("permissions:",1)[0]
-        freeze=Path(".github/workflows/memory-repair-freeze.yml").read_text(encoding="utf-8")
+        freeze=Path(".github/workflows/memory-repair-freeze.yml")
         self.assertNotIn('"neo_latest_result.json"',deploy_trigger)
         self.assertNotIn('"neo_cycle_floor.json"',deploy_trigger)
-        self.assertIn("pull_request:",freeze)
-        self.assertNotIn("\n  push:",freeze)
+        self.assertFalse(freeze.exists())
         self.assertIn('git commit -m "MYCELIX runtime snapshot [skip render]"',self.workflow)
 
     def test_deploy_has_no_one_time_memory_repair_bootstrap(self):
