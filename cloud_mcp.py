@@ -1473,6 +1473,31 @@ async def _delete_evidence_generation(reference: dict[str, Any] | None) -> None:
 
 
 
+def _discarded_ancestor_generations(
+    previous_reference: dict[str, Any] | None,
+    new_reference: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    old=previous_reference if isinstance(previous_reference,dict) else {}
+    new=new_reference if isinstance(new_reference,dict) else {}
+    retained=new.get("previous_generation") if isinstance(new.get("previous_generation"),dict) else None
+    retained_marker=(str((retained or {}).get("sha256") or ""),generation_id(retained))
+    current=old.get("previous_generation") if isinstance(old.get("previous_generation"),dict) else None
+    out=[]
+    seen=set()
+    while isinstance(current,dict) and current:
+        marker=(str(current.get("sha256") or ""),generation_id(current))
+        if marker in seen:
+            break
+        seen.add(marker)
+        nxt=current.get("previous_generation") if isinstance(current.get("previous_generation"),dict) else None
+        if marker != retained_marker:
+            ref={k:v for k,v in current.items() if k!="previous_generation"}
+            if is_external_reference(ref):
+                out.append(ref)
+        current=nxt
+    return out
+
+
 async def _delete_challenge_track_generation(reference: dict[str, Any] | None) -> None:
     ref=reference if isinstance(reference,dict) else {}
     if not is_external_reference(ref) or not RENDER_API_KEY or not RENDER_SERVICE_ID:
@@ -1640,6 +1665,9 @@ async def _checkpoint_state_to_render() -> dict:
     cleanup_active=None
     cleanup_archive=None
     cleanup_challenge=None
+    cleanup_active_ancestors=[]
+    cleanup_archive_ancestors=[]
+    cleanup_challenge_ancestors=[]
 
     try:
         challenge_track=payload.get("challenge_track") if isinstance(payload.get("challenge_track"),dict) else {}
@@ -1656,6 +1684,7 @@ async def _checkpoint_state_to_render() -> dict:
             payload["challenge_track"]={"mode":"shadow","externalized":True}
             old_prev=previous_challenge_ref.get("previous_generation") if isinstance(previous_challenge_ref,dict) else None
             cleanup_challenge=old_prev if isinstance(old_prev,dict) else None
+            cleanup_challenge_ancestors=_discarded_ancestor_generations(previous_challenge_ref,new_challenge_ref)
 
         if degraded:
             if not is_external_reference(original_ref):
@@ -1696,6 +1725,7 @@ async def _checkpoint_state_to_render() -> dict:
                 payload["commercial_evidence_archive_reference"]=new_archive_ref
                 old_prev=previous_archive_ref.get("previous_generation") if isinstance(previous_archive_ref,dict) else None
                 cleanup_archive=old_prev if isinstance(old_prev,dict) else None
+                cleanup_archive_ancestors=_discarded_ancestor_generations(previous_archive_ref,new_archive_ref)
             elif isinstance(previous_archive_ref,dict):
                 payload["commercial_evidence_archive_reference"]=previous_archive_ref
 
@@ -1717,6 +1747,7 @@ async def _checkpoint_state_to_render() -> dict:
                 compaction_meta["evidence_store_sha256"]=str(new_active_ref.get("sha256") or "")
                 old_prev=original_ref.get("previous_generation") if isinstance(original_ref,dict) else None
                 cleanup_active=old_prev if isinstance(old_prev,dict) else None
+                cleanup_active_ancestors=_discarded_ancestor_generations(original_ref,new_active_ref)
             else:
                 payload["commercial_evidence_memory"]=active_rows
                 payload["commercial_evidence_store_reference"]=None
@@ -1810,6 +1841,18 @@ async def _checkpoint_state_to_render() -> dict:
                 cleanup_generation=generation_id(cleanup_challenge)
                 if cleanup_generation and not _reference_contains_generation(new_challenge_ref,cleanup_generation):
                     await _delete_challenge_track_generation(cleanup_challenge)
+            for stale_ref in cleanup_active_ancestors:
+                stale_generation=generation_id(stale_ref)
+                if stale_generation and not _reference_contains_generation(new_active_ref,stale_generation):
+                    await _delete_evidence_generation(stale_ref)
+            for stale_ref in cleanup_archive_ancestors:
+                stale_generation=generation_id(stale_ref)
+                if stale_generation and not _reference_contains_generation(new_archive_ref,stale_generation):
+                    await _delete_evidence_generation(stale_ref)
+            for stale_ref in cleanup_challenge_ancestors:
+                stale_generation=generation_id(stale_ref)
+                if stale_generation and not _reference_contains_generation(new_challenge_ref,stale_generation):
+                    await _delete_challenge_track_generation(stale_ref)
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
     except Exception as e:

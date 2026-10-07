@@ -113,6 +113,27 @@ class EvidenceStoreAtomicTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(same_previous.get("sha256"),ref_c.get("sha256"))
         self.assertNotIn("previous_generation",same_previous)
 
+    def test_discarded_ancestor_generations_returns_only_tail_beyond_retained_predecessor(self):
+        rows_a=[{"evidence_id":"a","gate_eligible":True}]
+        rows_b=rows_a+[{"evidence_id":"b","gate_eligible":True}]
+        rows_c=rows_b+[{"evidence_id":"c","gate_eligible":True}]
+        rows_d=rows_c+[{"evidence_id":"d","gate_eligible":True}]
+        rows_e=rows_d+[{"evidence_id":"e","gate_eligible":True}]
+        ref_a,_=encode_external_store(rows_a,chunk_bytes=1024,store="render_env_chunks_v2")
+        ref_b,_=encode_external_store(rows_b,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=ref_a)
+        legacy_c=dict(encode_external_store(rows_c,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=ref_b)[0])
+        legacy_c["previous_generation"]=ref_b
+        legacy_d=dict(encode_external_store(rows_d,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=legacy_c)[0])
+        legacy_d["previous_generation"]=legacy_c
+        new_ref,_=encode_external_store(rows_e,chunk_bytes=1024,store="render_env_chunks_v2",previous_generation=legacy_d)
+        self.assertEqual((new_ref.get("previous_generation") or {}).get("sha256"),legacy_d.get("sha256"))
+        stale=cloud_mcp._discarded_ancestor_generations(legacy_d,new_ref)
+        self.assertEqual(
+            [row.get("sha256") for row in stale],
+            [legacy_c.get("sha256"),ref_b.get("sha256"),ref_a.get("sha256")],
+        )
+        self.assertTrue(all("previous_generation" not in row for row in stale))
+
     def test_corrupt_current_generation_recovers_previous_before_degrading(self):
         previous_rows=[{"evidence_id":f"p-{i}","gate_eligible":True} for i in range(5)]
         previous_ref,previous_chunks=encode_external_store(previous_rows,chunk_bytes=1024,store="render_env_chunks_v2")
