@@ -524,6 +524,7 @@ def _state_payload() -> dict:
         "commercial_evidence_archive_reference": AUTOPILOT_STATE.get("commercial_evidence_archive_reference"),
         "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
         "evidence_store_status": AUTOPILOT_STATE.get("evidence_store_status") or {},
+        "evidence_memory_telemetry": AUTOPILOT_STATE.get("evidence_memory_telemetry") or {},
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "model_shadow": AUTOPILOT_STATE.get("model_shadow") or {},
@@ -675,6 +676,12 @@ def _merge_state_payload(payload: dict | None) -> bool:
     AUTOPILOT_STATE["evidence_store_degraded"]=bool(payload.get("evidence_store_degraded"))
     if isinstance(payload.get("evidence_store_status"),dict):
         AUTOPILOT_STATE["evidence_store_status"]=dict(payload.get("evidence_store_status") or {})
+    persisted_memory_telemetry=(
+        dict(payload.get("evidence_memory_telemetry") or {})
+        if isinstance(payload.get("evidence_memory_telemetry"),dict) else {}
+    )
+    if persisted_memory_telemetry:
+        AUTOPILOT_STATE["evidence_memory_telemetry"]=persisted_memory_telemetry
     if isinstance(payload.get("commercial_evidence_memory"), list):
         migrated, migration = migrate_evidence_memory(
             payload.get("commercial_evidence_memory"),
@@ -687,13 +694,22 @@ def _merge_state_payload(payload: dict | None) -> bool:
             query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
         )
         recovery=payload.get("evidence_memory_recovery") if isinstance(payload.get("evidence_memory_recovery"),dict) else {}
+        recovered_rows=max(
+            max(0,int(recovery.get("recovered_rows") or 0)),
+            max(0,int(persisted_memory_telemetry.get("recovered_rows") or 0)),
+            _backup_manifest_recovery_rows() if not persisted_memory_telemetry else 0,
+        )
         replace_evidence_memory(
             AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
             migrated,
             "restore_migration",
             checkpoint_epoch=_state_saved_epoch(payload),
-            recovered_rows=int(recovery.get("recovered_rows") or 0),
-            backup_ok=bool(recovery.get("backup_ok")) or _backup_manifest_present(),
+            recovered_rows=recovered_rows,
+            backup_ok=(
+                bool(recovery.get("backup_ok"))
+                or bool(persisted_memory_telemetry.get("backup_ok"))
+                or _backup_manifest_present()
+            ),
         )
         AUTOPILOT_STATE["evidence_integrity"] = migration
         migration_changed = bool(int(migration.get("changed") or 0) > 0)
@@ -1044,6 +1060,20 @@ def _state_saved_epoch(payload: dict | None) -> float | None:
         return datetime.fromisoformat(raw.replace("Z","+00:00")).timestamp()
     except Exception:
         return None
+
+
+def _backup_manifest_recovery_rows() -> int:
+    rows=0
+    for key,value in os.environ.items():
+        if not (key.startswith("BACKUP_") and key.endswith("_MANIFEST")):
+            continue
+        try:
+            manifest=json.loads(value)
+            checkpoint=manifest.get("checkpoint") if isinstance(manifest,dict) else {}
+            rows=max(rows,max(0,int((checkpoint or {}).get("rows") or 0)))
+        except Exception:
+            continue
+    return rows
 
 
 def _backup_manifest_present() -> bool:
