@@ -24,7 +24,7 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint
-from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, is_external_reference, split_active_archive
+from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, generation_id, is_external_reference, recover_external_store_generation, split_active_archive
 import ipaddress
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse, quote_plus, parse_qs, urljoin
@@ -102,6 +102,7 @@ from query_builder import (
     desire_experiment_entries as build_desire_experiment_entries,
 )
 from quarantine_revalidation import revalidate_quarantined_rows
+from evidence_memory_guard import repair_evidence_timestamps, replace_evidence_memory_rows
 from search_providers import (
     begin_cycle as begin_search_provider_cycle,
     configured_provider,
@@ -182,7 +183,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.53"  # phase0 credibility: deploy-edge confirmation and durable strict prices
+VERSION = "0.99.54"  # commercial evidence memory repair and recovery
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -383,6 +384,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "commercial_evidence_archive_rows": [],
     "evidence_store_degraded": False,
     "evidence_store_status": {"status":"ok","active_count":0,"pending_count":0,"archive_count":0},
+    "evidence_memory_telemetry": {"evidence_in":0,"evidence_out":0,"dropped_retention":0,"archived":0,"merged_duplicate":0,"timestamp_repaired":0,"evidence_regression_blocked":0,"recovered_rows":0,"backup_ok":False},
     "model_shadow_observations": [],
     "challenge_track": {
         "mode":"shadow",
@@ -684,7 +686,15 @@ def _merge_state_payload(payload: dict | None) -> bool:
             supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
             query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
         )
-        AUTOPILOT_STATE["commercial_evidence_memory"] = migrated
+        recovery=payload.get("evidence_memory_recovery") if isinstance(payload.get("evidence_memory_recovery"),dict) else {}
+        replace_evidence_memory(
+            AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+            migrated,
+            "restore_migration",
+            checkpoint_epoch=_state_saved_epoch(payload),
+            recovered_rows=int(recovery.get("recovered_rows") or 0),
+            backup_ok=bool(recovery.get("backup_ok")) or _backup_manifest_present(),
+        )
         AUTOPILOT_STATE["evidence_integrity"] = migration
         migration_changed = bool(int(migration.get("changed") or 0) > 0)
         if migration_changed:
@@ -1013,6 +1023,115 @@ def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str
     return out
 
 
+
+def _evidence_memory_key(row: dict[str, Any]) -> str:
+    url=canonical_url(str(row.get("url") or ""))
+    if url:
+        return "url:"+url
+    key=str(row.get("evidence_id") or row.get("fingerprint") or "").strip()
+    if key:
+        return "id:"+key
+    return "fallback:"+str(row.get("domain") or "").strip().lower()+"|"+str(row.get("title") or "")[:160].strip().lower()
+
+
+def _state_saved_epoch(payload: dict | None) -> float | None:
+    if not isinstance(payload,dict):
+        return None
+    raw=str(payload.get("state_saved_at_utc") or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z","+00:00")).timestamp()
+    except Exception:
+        return None
+
+
+def _backup_manifest_present() -> bool:
+    return any(key.startswith("BACKUP_") and key.endswith("_MANIFEST") for key in os.environ)
+
+
+def replace_evidence_memory(
+    old: list[dict[str, Any]] | None,
+    new: list[dict[str, Any]] | None,
+    reason: str,
+    *,
+    archived_rows: list[dict[str, Any]] | None = None,
+    checkpoint_epoch: float | None = None,
+    now_epoch: float | None = None,
+    retention_seconds: float = 21*86400,
+    recovered_rows: int = 0,
+    backup_ok: bool | None = None,
+) -> list[dict[str, Any]]:
+    rows,telemetry=replace_evidence_memory_rows(
+        old,new,reason,
+        archived_rows=archived_rows,
+        checkpoint_epoch=checkpoint_epoch,
+        now_epoch=now_epoch,
+        retention_seconds=retention_seconds,
+        key_fn=_evidence_memory_key,
+        recovered_rows=recovered_rows,
+        backup_ok=_backup_manifest_present() if backup_ok is None else bool(backup_ok),
+    )
+    cycle=max(0,int(AUTOPILOT_STATE.get("cycles_completed") or 0))+1
+    previous=AUTOPILOT_STATE.get("evidence_memory_telemetry")
+    if isinstance(previous,dict) and int(previous.get("cycle") or -1)==cycle:
+        telemetry["evidence_in"]=int(previous.get("evidence_in") or telemetry.get("evidence_in") or 0)
+        for name in ("dropped_retention","archived","merged_duplicate","timestamp_repaired","evidence_regression_blocked"):
+            telemetry[name]=int(previous.get(name) or 0)+int(telemetry.get(name) or 0)
+        telemetry["recovered_rows"]=max(int(previous.get("recovered_rows") or 0),int(telemetry.get("recovered_rows") or 0))
+        telemetry["backup_ok"]=bool(previous.get("backup_ok")) or bool(telemetry.get("backup_ok"))
+    telemetry["cycle"]=cycle
+    AUTOPILOT_STATE["commercial_evidence_memory"] = rows
+    AUTOPILOT_STATE["evidence_memory_telemetry"]=telemetry
+    if int(telemetry.get("evidence_regression_blocked") or 0):
+        status=dict(AUTOPILOT_STATE.get("evidence_store_status") or {})
+        status["status"]="regression_blocked"
+        status["active_count"]=len(rows)
+        AUTOPILOT_STATE["evidence_store_status"]=status
+    return rows
+
+
+def _recover_best_orphan_generation() -> tuple[list[dict[str, Any]] | None,dict[str, Any] | None]:
+    groups={}
+    pattern=re.compile(r"^NEO_EVIDENCE_([0-9a-f]{12})_([0-9]+)$")
+    for key,value in os.environ.items():
+        match=pattern.match(str(key))
+        if not match:
+            continue
+        groups.setdefault(match.group(1),{})[int(match.group(2))]=value
+    candidates=[]
+    for generation,indexed in groups.items():
+        indexes=sorted(indexed)
+        if indexes != list(range(len(indexes))):
+            continue
+        recovered=recover_external_store_generation([indexed[index] for index in indexes],store="render_env_chunks_v2")
+        if recovered is None:
+            continue
+        ref,rows=recovered
+        if generation_id(ref)!=generation:
+            continue
+        max_seen=max([float(row.get("last_seen_epoch") or 0) for row in rows if isinstance(row,dict)] or [0.0])
+        candidates.append((len(rows),max_seen,str(ref.get("sha256") or ""),ref,rows))
+    if not candidates:
+        return None,None
+    _count,_seen,_sha,ref,rows=max(candidates,key=lambda item:(item[0],item[1],item[2]))
+    return rows,ref
+
+
+def _reference_contains_generation(reference: dict[str, Any] | None, generation: str) -> bool:
+    current=reference if isinstance(reference,dict) else None
+    seen=set()
+    while isinstance(current,dict) and current:
+        current_generation=generation_id(current)
+        if current_generation==generation:
+            return True
+        marker=(current_generation,str(current.get("sha256") or ""))
+        if marker in seen:
+            break
+        seen.add(marker)
+        current=current.get("previous_generation") if isinstance(current.get("previous_generation"),dict) else None
+    return False
+
 def _bounded_pending_evidence(rows: list[dict[str, Any]] | None) -> tuple[list[dict[str, Any]],int]:
     clean=_dedupe_evidence_rows(rows or [])
     clean.sort(key=lambda row:float(row.get("last_seen_epoch") or 0),reverse=True)
@@ -1079,14 +1198,22 @@ def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | 
             if rows is not None:
                 recovered=True
                 active_ref=previous
+    orphan_recovered=False
     if rows is None:
-        out["commercial_evidence_memory"]=[]
+        orphan_rows,orphan_ref=_recover_best_orphan_generation()
+        if orphan_rows is not None and orphan_ref is not None:
+            rows=orphan_rows
+            active_ref=orphan_ref
+            recovered=True
+            orphan_recovered=True
+    if rows is None:
+        out["commercial_evidence_memory"]=original_ref
         out["commercial_evidence_store_reference"]=original_ref
         out["pending_evidence"]=pending
         out["evidence_store_degraded"]=True
         out["evidence_store_status"]={
             "status":"degraded",
-            "active_count":0,
+            "active_count":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
             "expected_active_count":int(original_ref.get("evidence_count") or 0),
             "pending_count":len(pending),
             "archive_count":len(archive_rows),
@@ -1095,19 +1222,22 @@ def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | 
         return out,{
             "store_mode":"external","hydrated":False,"status":"degraded",
             "reason":"external_evidence_store_invalid",
-            "evidence_count":0,
+            "evidence_count":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or []),
             "expected_evidence_count":int(original_ref.get("evidence_count") or 0),
             "pending_count":len(pending),"archive_count":len(archive_rows),
             "pending_overflow_count":pending_overflow,
         }
 
     merged=_dedupe_evidence_rows(rows,pending)
+    out["evidence_memory_recovery"]={"recovered_rows":len(rows) if orphan_recovered else 0,"backup_ok":_backup_manifest_present()}
     out["commercial_evidence_memory"]=merged
     out["pending_evidence"]=[]
     out["commercial_evidence_store_reference"]=active_ref
     out["evidence_store_degraded"]=bool(archive_invalid)
     if archive_invalid:
         status="degraded_archive"
+    elif orphan_recovered:
+        status="recovered_orphan_generation"
     elif recovered and archive_recovered:
         status="recovered_previous_generations"
     elif recovered:
@@ -1497,9 +1627,13 @@ async def _checkpoint_state_to_render() -> dict:
             AUTOPILOT_STATE["evidence_store_degraded"]=False
             AUTOPILOT_STATE["evidence_store_status"]=dict(payload.get("evidence_store_status") or {})
             if cleanup_active:
-                await _delete_evidence_generation(cleanup_active)
+                cleanup_generation=generation_id(cleanup_active)
+                if cleanup_generation and not _reference_contains_generation(new_active_ref,cleanup_generation):
+                    await _delete_evidence_generation(cleanup_active)
             if cleanup_archive:
-                await _delete_evidence_generation(cleanup_archive)
+                cleanup_generation=generation_id(cleanup_archive)
+                if cleanup_generation and not _reference_contains_generation(new_archive_ref,cleanup_generation):
+                    await _delete_evidence_generation(cleanup_archive)
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
     except Exception as e:
@@ -6861,12 +6995,12 @@ def _commercial_evidence_quality(
 
     # Migrate legacy rows idempotently. v1 rows remain discovery-visible but are
     # quarantined from the gate until re-observed and re-tagged by v2.
-    memory,migration=migrate_evidence_memory(
-        [
-            dict(x) for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or [])
-            if isinstance(x,dict) and float(x.get("last_seen_epoch") or 0)
-            and now_epoch-float(x.get("last_seen_epoch") or 0)<=retention_seconds
-        ],
+    source_memory,_timestamp_repairs=repair_evidence_timestamps(
+        [dict(x) for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)],
+        now_epoch=now_epoch,
+    )
+    migrated_all,migration=migrate_evidence_memory(
+        source_memory,
         enforce_family_match=ATTRIBUTION_FAMILY_GUARD_ENABLED,
         strong_pain_only=STRONG_PAIN_GUARD_ENABLED,
         seller_launch_guard=SELLER_LAUNCH_GUARD_ENABLED,
@@ -6874,6 +7008,11 @@ def _commercial_evidence_quality(
         web_buyer_voice_guard=WEB_BUYER_VOICE_GUARD_ENABLED,
         supply_offer_guard=SUPPLY_OFFER_GUARD_ENABLED,
         query_echo_guard=QUERY_ECHO_GUARD_ENABLED,
+    )
+    retained_memory=[row for row in migrated_all if now_epoch-float(row.get("last_seen_epoch") or now_epoch)<=retention_seconds]
+    memory=replace_evidence_memory(
+        source_memory,retained_memory,"retention_and_migration",
+        now_epoch=now_epoch,retention_seconds=retention_seconds,
     )
 
     for row in memory:
@@ -6965,7 +7104,14 @@ def _commercial_evidence_quality(
             AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or [],
             archive_new,
         )
-        AUTOPILOT_STATE["commercial_evidence_memory"]=active_rows
+        active_rows=replace_evidence_memory(
+            AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+            active_rows,
+            "active_archive_split",
+            archived_rows=archive_new,
+            now_epoch=now_epoch,
+            retention_seconds=retention_seconds,
+        )
         AUTOPILOT_STATE["commercial_evidence_archive_rows"]=archive_rows
         AUTOPILOT_STATE["pending_evidence"]=[]
         AUTOPILOT_STATE["evidence_store_status"]={
@@ -9734,7 +9880,11 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
                 ),
                 timeout=REVALIDATION_TIMEOUT_SECONDS,
             )
-            AUTOPILOT_STATE["commercial_evidence_memory"]=revalidated_memory
+            replace_evidence_memory(
+                AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
+                revalidated_memory,
+                "quarantine_revalidation",
+            )
         except Exception:
             # Revalidation is opportunistic maintenance and must never abort a cycle.
             revalidation_stats={"attempted":0,"promoted":0,"failed":0,"unreachable":0}

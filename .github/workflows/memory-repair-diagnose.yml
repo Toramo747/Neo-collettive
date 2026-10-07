@@ -1,0 +1,26 @@
+name: Commercial Evidence Memory Repair Diagnosis
+on:
+  push:
+    branches:
+      - fix/commercial-evidence-memory-repair
+    paths:
+      - tools/memory_repair_diagnose.py
+      - .github/workflows/memory-repair-diagnose.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: commercial-evidence-memory-repair-diagnosis
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose aggregate evidence timestamp loss
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+        run: python tools/memory_repair_diagnose.py

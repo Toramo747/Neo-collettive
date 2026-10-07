@@ -1,0 +1,34 @@
+name: Commercial Evidence Memory Repair Backup
+on:
+  push:
+    branches:
+      - fix/commercial-evidence-memory-repair
+    paths:
+      - tools/memory_repair_backup.py
+      - .github/workflows/memory-repair-backup.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: commercial-evidence-memory-repair-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require existing production backup credentials
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          test -n "$RENDER_API_KEY"
+          test -n "$NEO_ADMIN_TOKEN"
+      - name: Create immutable Render backup
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+        run: python tools/memory_repair_backup.py

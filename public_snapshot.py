@@ -355,6 +355,17 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "accepted": None,
             }],
         },
+        "evidence_memory": {
+            "evidence_in": None,
+            "evidence_out": None,
+            "dropped_retention": None,
+            "archived": None,
+            "merged_duplicate": None,
+            "timestamp_repaired": None,
+            "evidence_regression_blocked": None,
+            "recovered_rows": None,
+            "backup_ok": None,
+        },
         "evidence_store_status": {
             "status": None,
             "active_count": None,
@@ -944,6 +955,7 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     cluster_map = model_shadow.get("challenge_cluster_map") if isinstance(model_shadow.get("challenge_cluster_map"),dict) else {}
     checkpoint = src.get("last_checkpoint") if isinstance(src.get("last_checkpoint"), dict) else {}
     evidence_store_status = src.get("evidence_store_status") if isinstance(src.get("evidence_store_status"), dict) else {}
+    evidence_memory = src.get("evidence_memory_telemetry") if isinstance(src.get("evidence_memory_telemetry"), dict) else {}
     compaction = checkpoint.get("compaction") if isinstance(checkpoint.get("compaction"), dict) else {}
 
     out = _copy_keys(src, (
@@ -1015,6 +1027,7 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
     if status_code not in {
         "ok","degraded","degraded_archive","recovered_previous_generation",
         "recovered_previous_archive_generation","recovered_previous_generations",
+        "recovered_orphan_generation","regression_blocked",
     }:
         status_code="degraded"
     actual_active=(
@@ -1032,6 +1045,17 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
         if isinstance(src.get("commercial_evidence_archive_rows"),list)
         else max(0,int(evidence_store_status.get("archive_count") or 0))
     )
+    out["evidence_memory"]={
+        "evidence_in":max(0,int(evidence_memory.get("evidence_in") or 0)),
+        "evidence_out":max(0,int(evidence_memory.get("evidence_out") or 0)),
+        "dropped_retention":max(0,int(evidence_memory.get("dropped_retention") or 0)),
+        "archived":max(0,int(evidence_memory.get("archived") or 0)),
+        "merged_duplicate":max(0,int(evidence_memory.get("merged_duplicate") or 0)),
+        "timestamp_repaired":max(0,int(evidence_memory.get("timestamp_repaired") or 0)),
+        "evidence_regression_blocked":max(0,int(evidence_memory.get("evidence_regression_blocked") or 0)),
+        "recovered_rows":max(0,int(evidence_memory.get("recovered_rows") or 0)),
+        "backup_ok":bool(evidence_memory.get("backup_ok")),
+    }
     out["evidence_store_status"]={
         "status":status_code,
         "active_count":actual_active,

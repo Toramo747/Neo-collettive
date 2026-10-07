@@ -41,6 +41,55 @@ def chunk_key(prefix: str, reference: dict[str, Any], index: int) -> str:
     return f"{prefix}{max(0,int(index))}"
 
 
+
+_REFERENCE_KEYS = (
+    "schema_v","store_mode","store","sha256","generation",
+    "evidence_count","chunk_count","raw_bytes",
+)
+
+
+def _reference_copy(reference: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(reference,dict):
+        return None
+    out={
+        key:reference.get(key)
+        for key in _REFERENCE_KEYS
+        if reference.get(key) is not None
+    }
+    return out or None
+
+
+def _distinct_previous_generation(
+    previous_generation: dict[str, Any] | None,
+    current_sha256: str,
+) -> dict[str, Any] | None:
+    """Return the first older generation with a different hash.
+
+    Historical self-referential chains are skipped so an unchanged checkpoint
+    can never nominate its own active generation for later cleanup.
+    """
+    seen=set()
+    current=previous_generation if isinstance(previous_generation,dict) else None
+    while isinstance(current,dict) and current:
+        sha=str(current.get("sha256") or "")
+        generation=generation_id(current)
+        marker=(sha,generation)
+        if marker in seen:
+            return None
+        seen.add(marker)
+        if sha and sha != current_sha256:
+            chosen=_reference_copy(current)
+            older=_distinct_previous_generation(
+                current.get("previous_generation") if isinstance(current.get("previous_generation"),dict) else None,
+                sha,
+            )
+            if chosen is not None and older is not None:
+                chosen["previous_generation"]=older
+            return chosen
+        current=current.get("previous_generation") if isinstance(current.get("previous_generation"),dict) else None
+    return None
+
+
 def encode_external_store(
     rows: list[dict[str, Any]] | None,
     *,
@@ -65,19 +114,9 @@ def encode_external_store(
         "chunk_count": len(chunks),
         "raw_bytes": len(raw),
     }
-    if isinstance(previous_generation,dict) and previous_generation:
-        ref["previous_generation"]={
-            key:previous_generation.get(key)
-            for key in ("schema_v","store_mode","store","sha256","generation","evidence_count","chunk_count","raw_bytes")
-            if previous_generation.get(key) is not None
-        }
-        older=previous_generation.get("previous_generation")
-        if isinstance(older,dict) and older:
-            ref["previous_generation"]["previous_generation"]={
-                key:older.get(key)
-                for key in ("schema_v","store_mode","store","sha256","generation","evidence_count","chunk_count","raw_bytes")
-                if older.get(key) is not None
-            }
+    previous=_distinct_previous_generation(previous_generation,sha)
+    if previous is not None:
+        ref["previous_generation"]=previous
     return ref, chunks
 
 
@@ -108,6 +147,41 @@ def decode_external_store(
         return None
     return rows
 
+
+
+def recover_external_store_generation(
+    chunks: list[str] | None,
+    *,
+    store: str = "render_env_chunks_v2",
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    """Recover an orphan generation from its chunk values without trusting a stale reference."""
+    values=list(chunks or [])
+    if not values or any(not isinstance(value,str) for value in values):
+        return None
+    encoded="".join(values)
+    if not encoded.startswith(STORE_PREFIX):
+        return None
+    try:
+        packed=base64.b64decode(encoded[len(STORE_PREFIX):],validate=True)
+        raw=lzma.decompress(packed)
+        decoded=json.loads(raw.decode("utf-8"))
+    except (ValueError,TypeError,UnicodeError,lzma.LZMAError,json.JSONDecodeError):
+        return None
+    rows=_canonical_rows(decoded if isinstance(decoded,list) else None)
+    if not isinstance(decoded,list) or len(rows)!=len(decoded):
+        return None
+    sha=hashlib.sha256(raw).hexdigest()
+    ref={
+        "schema_v":STORE_SCHEMA_V,
+        "store_mode":"external",
+        "store":store,
+        "sha256":sha,
+        "generation":sha[:12],
+        "evidence_count":len(rows),
+        "chunk_count":len(values),
+        "raw_bytes":len(raw),
+    }
+    return ref,rows
 
 def is_external_reference(value: Any) -> bool:
     return (
