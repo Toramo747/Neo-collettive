@@ -136,11 +136,30 @@ def main() -> int:
             except Exception:
                 pass
 
+    def ref_summary(ref):
+        if not isinstance(ref,dict):
+            return None
+        out={
+            "store_mode":ref.get("store_mode"),
+            "store":ref.get("store"),
+            "generation":ref.get("generation"),
+            "sha256":ref.get("sha256"),
+            "evidence_count":int(ref.get("evidence_count") or 0),
+            "chunk_count":int(ref.get("chunk_count") or 0),
+        }
+        previous=ref.get("previous_generation")
+        if isinstance(previous,dict):
+            out["previous_generation"]=ref_summary(previous)
+        return out
+
     report={
         "checkpoint":{
             "kind":checkpoint_kind,
             "rows_declared":len(checkpoint_rows) if checkpoint_kind=="list" else int((memory or {}).get("evidence_count") or 0) if isinstance(memory,dict) else 0,
             **(stats(checkpoint_rows) if checkpoint_rows else {}),
+            "reference":ref_summary(memory) if isinstance(memory,dict) else None,
+            "store_reference":ref_summary(checkpoint.get("commercial_evidence_store_reference")) if isinstance(checkpoint,dict) else None,
+            "archive_reference":ref_summary(checkpoint.get("commercial_evidence_archive_reference")) if isinstance(checkpoint,dict) else None,
             "cycles_completed":int(checkpoint.get("cycles_completed") or 0) if isinstance(checkpoint,dict) else 0,
             "state_saved_at_utc":checkpoint.get("state_saved_at_utc") if isinstance(checkpoint,dict) else None,
         },
