@@ -226,6 +226,7 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertIn("checkpoint too old",block)
         self.assertIn("pre-deploy checkpoint failed for non-overflow reason",block)
         self.assertIn("overflow_bootstrap_authorized",block)
+        self.assertIn("Healthy durable checkpoint confirmed; legacy bootstrap validation not required.",block)
         self.assertIn("git fetch --quiet --depth=1 origin main:refs/remotes/origin/main",block)
         self.assertIn("/tmp/predeploy-public-snapshot.json",block)
         self.assertIn("/tmp/predeploy-cycle-floor.json",block)

@@ -333,22 +333,33 @@ jobs:
           PY
           elif [ "${code}" = "200" ]; then
             cat /tmp/predeploy-checkpoint.json
-            git fetch --quiet --depth=1 origin main:refs/remotes/origin/main
-          git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
-          git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
-          python - <<'PY'
+            if python - <<'PY'
           import json
-          from datetime import datetime,timezone
-
           d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))
           cycles=int(d.get("cycles_completed") or 0)
           if cycles < 1:
-              raise SystemExit("pre-deploy checkpoint missing cycle state")
+              raise SystemExit(2)
           if d.get("ok") is True:
               print("checkpoint_cycles="+str(cycles))
               print("checkpoint_evidence_items="+str(d.get("commercial_evidence_items")))
               raise SystemExit(0)
-
+          raise SystemExit(1)
+          PY
+            then
+              echo "Healthy durable checkpoint confirmed; legacy bootstrap validation not required."
+            else
+              git fetch --quiet --depth=1 origin main:refs/remotes/origin/main
+              git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
+              git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
+              python - <<'PY'
+          import json
+          from datetime import datetime,timezone
+          
+          d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))
+          cycles=int(d.get("cycles_completed") or 0)
+          if cycles < 1:
+              raise SystemExit("pre-deploy checkpoint missing cycle state")
+          
           stored_raw=d.get("stored_bytes")
           stored=int(stored_raw or 0)
           limit=int(d.get("limit_bytes") or 0)
@@ -362,7 +373,7 @@ jobs:
           explicit_overflow=(limit > 0 and stored > limit)
           if not (explicit_overflow or legacy_overflow_bootstrap):
               raise SystemExit("pre-deploy checkpoint failed for non-overflow reason")
-
+          
           snapshot=json.load(open("/tmp/predeploy-public-snapshot.json",encoding="utf-8"))
           floor=json.load(open("/tmp/predeploy-cycle-floor.json",encoding="utf-8"))
           snapshot_cycles=int((snapshot.get("autopilot") or {}).get("cycles_completed") or 0)
@@ -427,7 +438,9 @@ jobs:
               f"legacy={legacy_overflow_bootstrap} evidence={evidence} "
               f"current_evidence={current_evidence} publication_lag={publication_lag}"
           )
+          
           PY
+            fi
           else
             cat /tmp/predeploy-checkpoint.json || true
             echo "pre-deploy checkpoint HTTP ${code}" >&2
