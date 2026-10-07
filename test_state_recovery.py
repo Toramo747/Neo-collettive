@@ -239,6 +239,9 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertNotIn("one_time_memory_repair_bootstrap_authorized",block)
         self.assertNotIn('source_version=="0.99.53"',block)
         self.assertNotIn('source_commit=="520db03797bf9592052fb20e1f7a22b35e45a1d4"',block)
+        self.assertIn("Smoke test production container startup",w)
+        self.assertIn("docker run -d --name neo-ci-runtime",w)
+        self.assertIn("production container failed startup smoke",w)
         self.assertIn("Verify repaired commercial evidence memory",w)
         self.assertIn("post-repair evidence recovery below verified floor",w)
 
