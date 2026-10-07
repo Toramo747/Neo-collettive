@@ -125,7 +125,9 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertNotIn("https://neo-collettive.onrender.com/api/autonomy/status",w)
         self.assertIn("ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}",w)
         self.assertIn('Authorization: Bearer ${ADMIN_TOKEN}',w)
-        self.assertIn('"evidence_memory_telemetry": ap.get("evidence_memory_telemetry") or {}',w)
+        self.assertIn('receipt=load("memory_repair_receipt.json",{})',w)
+        self.assertIn('"recovered_rows": int(receipt.get("checkpoint_rows") or 0)',w)
+        self.assertIn('"backup_ok": bool(receipt.get("backup_ok"))',w)
         self.assertIn('"evidence_store_status": ap.get("evidence_store_status") or {}',w)
         self.assertIn('"last_checkpoint": ap.get("last_checkpoint") or {}',w)
 
