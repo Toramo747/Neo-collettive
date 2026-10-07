@@ -206,7 +206,9 @@ STATE_ENV_KEY = "NEO_STATE_JSON"
 COMMERCIAL_EVIDENCE_ENV_PREFIX = "NEO_EVIDENCE_"
 COMMERCIAL_EVIDENCE_LEGACY_ENV_PREFIX = "NEO_COMMERCIAL_EVIDENCE_"
 COMMERCIAL_EVIDENCE_ARCHIVE_ENV_PREFIX = "NEO_EVIDENCE_ARCHIVE_"
+CHALLENGE_TRACK_ENV_PREFIX = "NEO_CHALLENGE_TRACK_"
 COMMERCIAL_EVIDENCE_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_CHUNK_BYTES", "60000"))))
+CHALLENGE_TRACK_CHUNK_BYTES = max(4096, min(60000, int(os.getenv("NEO_CHALLENGE_TRACK_CHUNK_BYTES", "60000"))))
 COMMERCIAL_EVIDENCE_ACTIVE_LIMIT = max(100, int(os.getenv("NEO_COMMERCIAL_EVIDENCE_ACTIVE_LIMIT", "3000")))
 COMMERCIAL_PENDING_EVIDENCE_LIMIT = max(100, min(5000, int(os.getenv("NEO_COMMERCIAL_PENDING_EVIDENCE_LIMIT", "1000"))))
 COMMERCIAL_PRICE_EVIDENCE_LIMIT = max(20, min(500, int(os.getenv("NEO_COMMERCIAL_PRICE_EVIDENCE_LIMIT", "120"))))
@@ -386,6 +388,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "evidence_store_status": {"status":"ok","active_count":0,"pending_count":0,"archive_count":0},
     "evidence_memory_telemetry": {"evidence_in":0,"evidence_out":0,"dropped_retention":0,"archived":0,"merged_duplicate":0,"timestamp_repaired":0,"evidence_regression_blocked":0,"recovered_rows":0,"backup_ok":False},
     "model_shadow_observations": [],
+    "challenge_track_store_reference": None,
     "challenge_track": {
         "mode":"shadow",
         "memory":[],
@@ -525,6 +528,7 @@ def _state_payload() -> dict:
         "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
         "evidence_store_status": AUTOPILOT_STATE.get("evidence_store_status") or {},
         "evidence_memory_telemetry": AUTOPILOT_STATE.get("evidence_memory_telemetry") or {},
+        "challenge_track_store_reference": AUTOPILOT_STATE.get("challenge_track_store_reference"),
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
         "model_shadow": AUTOPILOT_STATE.get("model_shadow") or {},
@@ -748,6 +752,7 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["thesis_history"] = payload.get("thesis_history")[-30:]
     if isinstance(payload.get("gate_stability"), dict):
         AUTOPILOT_STATE["gate_stability"] = payload.get("gate_stability") or {"schema_v":1,"families":{},"flips":[]}
+    AUTOPILOT_STATE["challenge_track_store_reference"]=payload.get("challenge_track_store_reference") if isinstance(payload.get("challenge_track_store_reference"),dict) else None
     if isinstance(payload.get("challenge_track"), dict):
         restored_challenge=dict(payload.get("challenge_track") or {})
         restored_challenge["mode"]="shadow"
@@ -1169,6 +1174,64 @@ def _bounded_pending_evidence(rows: list[dict[str, Any]] | None) -> tuple[list[d
     return bounded,max(0,len(clean)-len(bounded))
 
 
+def _challenge_track_env_key(index: int, reference: dict[str, Any] | None = None) -> str:
+    ref=reference if isinstance(reference,dict) else {}
+    return chunk_key(CHALLENGE_TRACK_ENV_PREFIX,ref,index)
+
+
+def _challenge_track_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
+    ref=reference if isinstance(reference,dict) else {}
+    count=max(0,int(ref.get("chunk_count") or 0))
+    return [(os.getenv(_challenge_track_env_key(i,ref)) or "") for i in range(count)]
+
+
+def _decode_challenge_track_generation(reference: dict[str, Any] | None) -> dict[str, Any] | None:
+    ref=reference if isinstance(reference,dict) else {}
+    if not is_external_reference(ref):
+        return None
+    rows=decode_external_store(ref,_challenge_track_chunks_from_env(ref))
+    if not isinstance(rows,list) or len(rows)!=1 or not isinstance(rows[0],dict):
+        return None
+    return rows[0]
+
+
+def _hydrate_external_challenge_track(payload: dict | None) -> tuple[dict | None,dict[str, Any]]:
+    if not isinstance(payload,dict):
+        return payload,{"store_mode":"inline","hydrated":False,"status":"ok"}
+    ref=payload.get("challenge_track_store_reference")
+    if not is_external_reference(ref):
+        return payload,{"store_mode":"inline","hydrated":False,"status":"ok"}
+    original=dict(ref)
+    track=_decode_challenge_track_generation(original)
+    active_ref=original
+    recovered=False
+    if track is None:
+        previous=original.get("previous_generation") if isinstance(original.get("previous_generation"),dict) else None
+        if previous and is_external_reference(previous):
+            track=_decode_challenge_track_generation(previous)
+            if track is not None:
+                active_ref=previous
+                recovered=True
+    if track is None:
+        out=dict(payload)
+        out["challenge_track_store_reference"]=original
+        return out,{
+            "store_mode":"external",
+            "hydrated":False,
+            "status":"degraded",
+            "reason":"external_challenge_track_invalid",
+        }
+    out=dict(payload)
+    out["challenge_track"]=track
+    out["challenge_track_store_reference"]=active_ref
+    return out,{
+        "store_mode":"external",
+        "hydrated":True,
+        "status":"recovered_previous_generation" if recovered else "ok",
+        "sha256":str(active_ref.get("sha256") or ""),
+    }
+
+
 def _hydrate_external_commercial_evidence(payload: dict | None) -> tuple[dict | None, dict]:
     if not isinstance(payload, dict):
         return payload, {"store_mode":"inline","hydrated":False,"status":"ok"}
@@ -1305,6 +1368,48 @@ def _response_env_value(response: Any) -> str | None:
     return None
 
 
+async def _write_challenge_track_store(
+    track: dict[str, Any],
+    *,
+    previous_reference: dict[str, Any] | None = None,
+) -> dict:
+    if not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return {"ok":False,"reason":"render_api_not_configured"}
+    reference,chunks=encode_external_store(
+        [track],
+        chunk_bytes=CHALLENGE_TRACK_CHUNK_BYTES,
+        store="render_env_chunks_v2",
+        previous_generation=previous_reference,
+    )
+    headers={
+        "Authorization":f"Bearer {RENDER_API_KEY}",
+        "Accept":"application/json",
+        "Content-Type":"application/json",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            for index,chunk in enumerate(chunks):
+                key=_challenge_track_env_key(index,reference)
+                url=f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{key}"
+                response=await client.put(url,headers=headers,json={"value":chunk})
+                if not response.is_success:
+                    return {"ok":False,"reason":"render_challenge_store_write_failed","status":response.status_code,"chunk_index":index}
+                verified=_response_env_value(response)
+                if verified is None:
+                    if hasattr(client,"get"):
+                        reread=await client.get(url,headers=headers)
+                        if not reread.is_success:
+                            return {"ok":False,"reason":"render_challenge_store_verify_failed","status":reread.status_code,"chunk_index":index}
+                        verified=_response_env_value(reread)
+                    else:
+                        verified=chunk
+                if verified!=chunk:
+                    return {"ok":False,"reason":"render_challenge_store_verify_mismatch","chunk_index":index}
+    except Exception as exc:
+        return {"ok":False,"reason":type(exc).__name__+":"+str(exc)[:180]}
+    return {"ok":True,"reference":reference,"chunk_count":len(chunks)}
+
+
 async def _write_commercial_evidence_store(
     rows: list[dict[str, Any]],
     *,
@@ -1368,6 +1473,21 @@ async def _delete_evidence_generation(reference: dict[str, Any] | None) -> None:
 
 
 
+async def _delete_challenge_track_generation(reference: dict[str, Any] | None) -> None:
+    ref=reference if isinstance(reference,dict) else {}
+    if not is_external_reference(ref) or not RENDER_API_KEY or not RENDER_SERVICE_ID:
+        return
+    headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            for index in range(max(0,int(ref.get("chunk_count") or 0))):
+                key=_challenge_track_env_key(index,ref)
+                await client.delete(f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{key}",headers=headers)
+    except Exception:
+        return
+
+
+
 def _restore_state() -> str:
     candidates=[]
 
@@ -1425,6 +1545,8 @@ def _restore_state() -> str:
     payload=merge_supplementary_state(payload,compatible_candidates)
     payload,evidence_store_restore=_hydrate_external_commercial_evidence(payload)
     meta["commercial_evidence_store"]=evidence_store_restore
+    payload,challenge_track_store_restore=_hydrate_external_challenge_track(payload)
+    meta["challenge_track_store"]=challenge_track_store_restore
     cycle_floor,cycle_floor_load=_load_cycle_floor()
     payload,cycle_floor_meta=apply_monotonic_cycle_floor(payload,cycle_floor)
     cycle_floor_meta["load"]=cycle_floor_load
@@ -1499,6 +1621,7 @@ async def _checkpoint_state_to_render() -> dict:
     degraded=bool(AUTOPILOT_STATE.get("evidence_store_degraded"))
     original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
     previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
+    previous_challenge_ref=AUTOPILOT_STATE.get("challenge_track_store_reference")
     evidence_rows=[x for x in (payload.get("commercial_evidence_memory") or []) if isinstance(x,dict)] if isinstance(payload.get("commercial_evidence_memory"),list) else [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
     pending_rows,pending_overflow_count=_bounded_pending_evidence(
         [x for x in (AUTOPILOT_STATE.get("pending_evidence") or []) if isinstance(x,dict)]
@@ -1513,10 +1636,27 @@ async def _checkpoint_state_to_render() -> dict:
     }
     new_active_ref=None
     new_archive_ref=None
+    new_challenge_ref=None
     cleanup_active=None
     cleanup_archive=None
+    cleanup_challenge=None
 
     try:
+        challenge_track=payload.get("challenge_track") if isinstance(payload.get("challenge_track"),dict) else {}
+        if challenge_track:
+            challenge_store=await _write_challenge_track_store(
+                challenge_track,
+                previous_reference=previous_challenge_ref if isinstance(previous_challenge_ref,dict) else None,
+            )
+            if challenge_store.get("ok") is not True:
+                raise RuntimeError("challenge track external store failed:"+str(challenge_store.get("reason") or "unknown"))
+            new_challenge_ref=challenge_store["reference"]
+            payload=dict(payload)
+            payload["challenge_track_store_reference"]=new_challenge_ref
+            payload["challenge_track"]={"mode":"shadow","externalized":True}
+            old_prev=previous_challenge_ref.get("previous_generation") if isinstance(previous_challenge_ref,dict) else None
+            cleanup_challenge=old_prev if isinstance(old_prev,dict) else None
+
         if degraded:
             if not is_external_reference(original_ref):
                 raise RuntimeError("degraded evidence store missing original reference")
@@ -1648,6 +1788,8 @@ async def _checkpoint_state_to_render() -> dict:
             "compaction":compaction_meta,
         }
         if r.is_success:
+            if new_challenge_ref:
+                AUTOPILOT_STATE["challenge_track_store_reference"]=new_challenge_ref
             if new_active_ref:
                 AUTOPILOT_STATE["commercial_evidence_store_reference"]=new_active_ref
             if new_archive_ref:
@@ -1664,6 +1806,10 @@ async def _checkpoint_state_to_render() -> dict:
                 cleanup_generation=generation_id(cleanup_archive)
                 if cleanup_generation and not _reference_contains_generation(new_archive_ref,cleanup_generation):
                     await _delete_evidence_generation(cleanup_archive)
+            if cleanup_challenge:
+                cleanup_generation=generation_id(cleanup_challenge)
+                if cleanup_generation and not _reference_contains_generation(new_challenge_ref,cleanup_generation):
+                    await _delete_challenge_track_generation(cleanup_challenge)
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
     except Exception as e:

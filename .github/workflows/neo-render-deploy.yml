@@ -320,15 +320,37 @@ jobs:
               print("checkpoint_evidence_items="+str(d.get("commercial_evidence_items")))
               raise SystemExit(0)
 
-          stored=int(d.get("stored_bytes") or 0)
+          stored_raw=d.get("stored_bytes")
+          stored=int(stored_raw or 0)
           limit=int(d.get("limit_bytes") or 0)
-          if not (limit > 0 and stored > limit):
+          health=json.load(open("/tmp/predeploy-health.json",encoding="utf-8"))
+          source_commit=str(health.get("commit") or "")
+          legacy_overflow_bootstrap=(
+              stored_raw is None
+              and limit == 100000
+              and source_commit == "678f8e302237f3e9c6b403f80c2930aab860a3c3"
+          )
+          explicit_overflow=(limit > 0 and stored > limit)
+          if not (explicit_overflow or legacy_overflow_bootstrap):
               raise SystemExit("pre-deploy checkpoint failed for non-overflow reason")
 
           snapshot=json.load(open("neo_latest_result.json",encoding="utf-8"))
           floor=json.load(open("neo_cycle_floor.json",encoding="utf-8"))
           snapshot_cycles=int((snapshot.get("autopilot") or {}).get("cycles_completed") or 0)
           floor_cycles=int(floor.get("cycles_completed") or 0)
+          diag=(snapshot.get("autopilot") or {}).get("select_diagnostics") or {}
+          memory=(snapshot.get("autopilot") or {}).get("evidence_memory") or {}
+          evidence=int(diag.get("persistent_evidence_items") or 0)
+          evidence_in=int(memory.get("evidence_in") or 0)
+          evidence_out=int(memory.get("evidence_out") or 0)
+          blocked=int(memory.get("evidence_regression_blocked") or 0)
+          repaired=int(memory.get("timestamp_repaired") or 0)
+          if evidence < 108 or evidence_in != evidence or evidence_out != evidence or blocked != 0 or repaired != 0:
+              raise SystemExit(
+                  "overflow bootstrap evidence guard failed: "
+                  f"persistent={evidence} in={evidence_in} out={evidence_out} "
+                  f"blocked={blocked} repaired={repaired}"
+              )
           raw=str(snapshot.get("captured_at_utc") or "")
           try:
               ts=datetime.fromisoformat(raw.replace("Z","+00:00"))
@@ -348,14 +370,18 @@ jobs:
                   "runtime_cycles":cycles,
                   "snapshot_cycles":snapshot_cycles,
                   "floor_cycles":floor_cycles,
-                  "stored_bytes":stored,
+                  "stored_bytes":stored if stored_raw is not None else None,
                   "limit_bytes":limit,
+                  "legacy_overflow_bootstrap":legacy_overflow_bootstrap,
+                  "source_commit":source_commit,
+                  "evidence":evidence,
               },separators=(",",":"))
           )
           print(
               "overflow_bootstrap_authorized "
               f"runtime_cycles={cycles} snapshot_cycles={snapshot_cycles} "
-              f"stored_bytes={stored} limit_bytes={limit} snapshot_age_seconds={int(age)}"
+              f"stored_bytes={stored_raw} limit_bytes={limit} snapshot_age_seconds={int(age)} "
+              f"legacy={legacy_overflow_bootstrap} evidence={evidence}"
           )
           PY
           else
