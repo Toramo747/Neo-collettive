@@ -248,6 +248,32 @@ jobs:
           set -euo pipefail
           docker build --pull -t neo-ci .
 
+      - name: Smoke test production container startup
+        run: |
+          set -euo pipefail
+          docker rm -f neo-ci-runtime >/dev/null 2>&1 || true
+          docker run -d --name neo-ci-runtime -p 127.0.0.1:10000:10000 -e PORT=10000 neo-ci >/tmp/neo-ci-container-id
+          ready=0
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:10000/livez >/tmp/neo-ci-livez.json; then
+              ready=1
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' neo-ci-runtime 2>/dev/null || echo false)" != "true" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "production container failed startup smoke" >&2
+            docker inspect neo-ci-runtime || true
+            docker logs neo-ci-runtime || true
+            exit 1
+          fi
+          cat /tmp/neo-ci-livez.json
+          docker logs neo-ci-runtime || true
+          docker rm -f neo-ci-runtime >/dev/null
+
       - name: Resolve expected NEO version
         run: |
           set -euo pipefail
