@@ -1,26 +1,72 @@
 name: Commercial Evidence Memory Repair Diagnosis
 on:
   push:
-    branches:
-      - fix/commercial-evidence-memory-repair
-    paths:
-      - tools/memory_repair_diagnose.py
-      - .github/workflows/memory-repair-diagnose.yml
+    branches: [fix/commercial-evidence-memory-repair]
+    paths: [.github/workflows/memory-repair-diagnose.yml]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: commercial-evidence-memory-repair-diagnosis
   cancel-in-progress: false
-
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Diagnose aggregate evidence timestamp loss
+      - name: Back up current private memory before checkpoint repair
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
           RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
-        run: python tools/memory_repair_diagnose.py
+        run: |
+          python - <<'PY'
+          import sys, json, urllib.error, time
+          sys.path.insert(0,"tools")
+          import memory_repair_backup as b
+          original=b._request
+          def checked(url, **kwargs):
+              for attempt in range(3):
+                  try:
+                      return original(url,**kwargs)
+                  except urllib.error.HTTPError as exc:
+                      phase="runtime_export" if kwargs.get("admin") else "backup_write" if kwargs.get("method")=="PUT" else "render_read"
+                      print(json.dumps({"backup_http_status":exc.code,"phase":phase,"value_bytes":len(str((kwargs.get("body") or {}).get("value") or "").encode())}))
+                      if kwargs.get("method","GET")!="GET" or exc.code not in {429,500,502,503,504} or attempt==2:
+                          raise
+                      time.sleep(2)
+          b._request=checked
+          b.main()
+          PY
+      - name: Measure lossless compression using counts only
+        if: always()
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          python - <<'PY'
+          import ast, base64, hashlib, json, lzma, os, urllib.request, zlib
+          from datetime import datetime,timezone
+          from pathlib import Path
+          from commercial_evidence_store import encode_external_store
+          from state_compaction import compact_state_payload, protected_serialized_values
+          req=urllib.request.Request("https://neo-collettive.onrender.com/api/autopilot/status",headers={"Authorization":"Bearer "+os.environ["NEO_ADMIN_TOKEN"]})
+          with urllib.request.urlopen(req,timeout=45) as r:
+              snapshot=json.load(r)
+          state=snapshot["autopilot"]
+          tree=ast.parse(Path("cloud_mcp.py").read_text())
+          node=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=="_state_payload")
+          scope={"AUTOPILOT_STATE":state,"RUNTIME_IDENTITY":snapshot["runtime_profile"],"datetime":datetime,"timezone":timezone,"COMMERCIAL_PRICE_EVIDENCE_LIMIT":120,"COMMERCIAL_PENDING_EVIDENCE_LIMIT":1000}
+          exec(compile(ast.Module(body=[node],type_ignores=[]),"payload_builder","exec"),scope)
+          payload=scope["_state_payload"]()
+          ref,_=encode_external_store(payload["commercial_evidence_memory"],store="render_env_chunks_v2",previous_generation=payload.get("commercial_evidence_store_reference"))
+          payload["commercial_evidence_memory"]=ref
+          payload["commercial_evidence_store_reference"]=ref
+          compact,_=compact_state_payload(payload,max_bytes=100000,force=True)
+          raw=json.dumps(compact,ensure_ascii=False,separators=(",",":")).encode()
+          print(json.dumps({"cycles":state["cycles_completed"],"evidence_items":len(state["commercial_evidence_memory"]),"raw_bytes":len(raw),"zlib_bytes":len(base64.b64encode(zlib.compress(raw,9)))+7}))
+          for preset in (3,6,7,8,6|lzma.PRESET_EXTREME):
+              packed=lzma.compress(raw,preset=preset)
+              assert lzma.decompress(packed,memlimit=64*1024*1024)==raw
+              print(json.dumps({"preset":preset,"xz_bytes":len(base64.b64encode(packed))+5,"roundtrip_ok":True}))
+          PY
