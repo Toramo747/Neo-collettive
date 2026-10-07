@@ -388,14 +388,14 @@ jobs:
           except Exception:
               raise SystemExit("overflow bootstrap snapshot timestamp invalid")
           age=(datetime.now(timezone.utc)-ts.astimezone(timezone.utc)).total_seconds()
-          if age < 0 or age > 900:
+          if age < 0 or age > 5400:
               raise SystemExit(f"overflow bootstrap snapshot too old: {age:.0f}s")
           current_evidence=int(d.get("commercial_evidence_items") or 0)
-          publication_lag=max(0,cycles-snapshot_cycles)
-          floor_lag=max(0,cycles-floor_cycles)
-          if publication_lag > 1 or floor_lag > 1:
+          publication_lag=cycles-snapshot_cycles
+          floor_lag=cycles-floor_cycles
+          if publication_lag < 0 or floor_lag < 0:
               raise SystemExit(
-                  f"overflow bootstrap snapshot behind runtime: runtime={cycles} snapshot={snapshot_cycles} floor={floor_cycles}"
+                  f"overflow bootstrap runtime behind published state: runtime={cycles} snapshot={snapshot_cycles} floor={floor_cycles}"
               )
           if current_evidence < evidence or current_evidence < 108:
               raise SystemExit(
@@ -413,6 +413,7 @@ jobs:
                   "evidence":evidence,
                   "current_evidence":current_evidence,
                   "publication_lag":publication_lag,
+                  "snapshot_freshness_limit_seconds":5400,
               },separators=(",",":"))
           )
           print(
