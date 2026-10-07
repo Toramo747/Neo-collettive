@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+      ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
@@ -144,7 +145,7 @@ jobs:
 
           completed=0
           for i in $(seq 1 45); do
-            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-heartbeat)" --max-time 30 \
+            if curl --fail --show-error --silent -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" --max-time 30 \
               "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
               if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
                 completed=1
