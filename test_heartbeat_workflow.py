@@ -119,6 +119,38 @@ class HeartbeatWorkflowLatencyTests(unittest.TestCase):
         self.assertIn('"hidden_control":hidden_control',block)
         self.assertIn('ap_private.get("hidden_control") or raw.get("hidden_control")',self.workflow)
 
+    def test_snapshot_uses_authenticated_full_autopilot_status(self):
+        w=self.workflow
+        self.assertIn("https://neo-collettive.onrender.com/api/autopilot/status",w)
+        self.assertNotIn("https://neo-collettive.onrender.com/api/autonomy/status",w)
+        self.assertIn('"evidence_memory_telemetry": ap.get("evidence_memory_telemetry") or {}',w)
+        self.assertIn('"evidence_store_status": ap.get("evidence_store_status") or {}',w)
+        self.assertIn('"last_checkpoint": ap.get("last_checkpoint") or {}',w)
+
+    def test_successful_snapshot_notifies_runtime_freshness(self):
+        w=self.workflow
+        self.assertIn("/api/runtime/snapshot-published",w)
+        self.assertIn("X-MYCELIX-Self-Traffic-Proof",w)
+        self.assertIn("github-actions-heartbeat",w)
+        self.assertLess(w.index("git push origin HEAD:main"),w.index("/api/runtime/snapshot-published"))
+
+    def test_snapshot_commit_is_outside_deploy_and_pr_freeze_paths(self):
+        deploy=Path(".github/workflows/neo-render-deploy.yml").read_text(encoding="utf-8")
+        deploy_trigger=deploy.split("permissions:",1)[0]
+        freeze=Path(".github/workflows/memory-repair-freeze.yml").read_text(encoding="utf-8")
+        self.assertNotIn('"neo_latest_result.json"',deploy_trigger)
+        self.assertNotIn('"neo_cycle_floor.json"',deploy_trigger)
+        self.assertIn("pull_request:",freeze)
+        self.assertNotIn("\n  push:",freeze)
+        self.assertIn('git commit -m "MYCELIX runtime snapshot [skip render]"',self.workflow)
+
+    def test_deploy_has_no_one_time_memory_repair_bootstrap(self):
+        deploy=Path(".github/workflows/neo-render-deploy.yml").read_text(encoding="utf-8")
+        self.assertNotIn('source_version=="0.99.53"',deploy)
+        self.assertNotIn('source_commit=="520db03797bf9592052fb20e1f7a22b35e45a1d4"',deploy)
+        self.assertNotIn("one_time_memory_repair_bootstrap_authorized",deploy)
+        self.assertIn("pre-deploy checkpoint failed for non-overflow reason",deploy)
+
     def test_latency_probe_never_calls_remote_tools(self):
         w=self.workflow
         first=w.index("Measure first endpoint latencies")

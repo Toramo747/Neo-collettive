@@ -323,30 +323,7 @@ jobs:
           stored=int(d.get("stored_bytes") or 0)
           limit=int(d.get("limit_bytes") or 0)
           if not (limit > 0 and stored > limit):
-              import os
-              health=json.load(open("/tmp/predeploy-health.json",encoding="utf-8"))
-              expected=open("/tmp/neo_version",encoding="utf-8").read().strip()
-              source_version=str(health.get("version") or "")
-              source_commit=str(health.get("commit") or "")
-              evidence_items=int(d.get("commercial_evidence_items") or 0)
-              authorized="[memory-repair-authorized]" in str(os.environ.get("COMMIT_MESSAGE") or "")
-              one_time_repair=(
-                  authorized
-                  and expected=="0.99.54"
-                  and source_version=="0.99.53"
-                  and source_commit=="520db03797bf9592052fb20e1f7a22b35e45a1d4"
-                  and cycles>=2626
-                  and evidence_items==0
-                  and stored==0
-                  and limit==100000
-              )
-              if not one_time_repair:
-                  raise SystemExit("pre-deploy checkpoint failed for non-overflow reason")
-              print(
-                  "one_time_memory_repair_bootstrap_authorized "
-                  f"source_version={source_version} cycles={cycles} evidence_items={evidence_items}"
-              )
-              raise SystemExit(0)
+              raise SystemExit("pre-deploy checkpoint failed for non-overflow reason")
 
           snapshot=json.load(open("neo_latest_result.json",encoding="utf-8"))
           floor=json.load(open("neo_cycle_floor.json",encoding="utf-8"))

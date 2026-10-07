@@ -144,8 +144,8 @@ jobs:
 
           completed=0
           for i in $(seq 1 45); do
-            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-heartbeat)" --max-time 30 \
-              "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/status.json; then
+            if curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autopilot/status' --marker github-actions-heartbeat)" --max-time 30 \
+              "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json; then
               if INITIAL="$initial_cycles" INITIAL_VERSION="$initial_version" INITIAL_FINISHED="$initial_finished" REQUIRE_NEW="$require_new_cycle" python /tmp/check_neo_complete.py; then
                 completed=1
                 break
@@ -368,6 +368,9 @@ jobs:
                   "jarvis_dialogue_history": ap.get("jarvis_dialogue_history") or [],
                   "jarvis_runtime": ap.get("jarvis_runtime") or {},
                   "commercial_evidence_memory": ap.get("commercial_evidence_memory") or [],
+                  "evidence_memory_telemetry": ap.get("evidence_memory_telemetry") or {},
+                  "evidence_store_status": ap.get("evidence_store_status") or {},
+                  "last_checkpoint": ap.get("last_checkpoint") or {},
                   "evidence_integrity": ap.get("evidence_integrity") or {},
                   "active_thesis": ap.get("active_thesis"),
                   "thesis_history": ap.get("thesis_history") or [],
@@ -489,3 +492,16 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git commit -m "MYCELIX runtime snapshot [skip render]"
           git push origin HEAD:main
+
+          snapshot_utc="$(python -c 'import json; print(str(json.load(open("neo_latest_result.json",encoding="utf-8")).get("captured_at_utc") or ""))')"
+          target="https://neo-collettive.onrender.com/api/runtime/snapshot-published"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-heartbeat)"
+          payload="$(SNAPSHOT_UTC="${snapshot_utc}" python -c 'import json,os; print(json.dumps({"snapshot_utc":os.environ["SNAPSHOT_UTC"]},separators=(",",":")))')"
+          code="$(curl --request POST --show-error --silent --max-time 45 --output /tmp/snapshot-published.json --write-out '%{http_code}' \\
+            -H "Content-Type: application/json" \\
+            -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \\
+            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \\
+            --data "${payload}" \\
+            "${target}")"
+          [ "${code}" = "200" ] || { cat /tmp/snapshot-published.json || true; exit 22; }
+          cat /tmp/snapshot-published.json
