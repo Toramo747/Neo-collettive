@@ -417,6 +417,16 @@ def _term_regex(term: str) -> re.Pattern[str]:
 def contains_term(text: str, term: str) -> bool:
     if not text or not term:
         return False
+    raw=(term or "").strip().lower()
+    if raw.isascii() and raw not in {"manual","spend","waste time"}:
+        # The observed intent path repeatedly scans large bodies for absent
+        # literal phrases. Reject only impossible matches; retain the original
+        # regex for boundaries and all controlled/non-ASCII forms.
+        # IGNORECASE equates ASCII i/s/k with İ/ı/ſ/K. Map dotted I before
+        # casefold so its combining dot cannot hide a possible literal match.
+        candidate=text.replace("\u0130","i").casefold().replace("\u0131","i")
+        if raw not in candidate:
+            return False
     return bool(_term_regex(term).search(text))
 
 
