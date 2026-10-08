@@ -3,6 +3,7 @@ import asyncio
 from contextlib import contextmanager
 import functools
 import inspect
+import os
 import logging
 from pathlib import Path
 import sys
@@ -33,6 +34,7 @@ class RuntimeObservation:
         self.threshold = threshold
         self._lock = threading.Lock()
         self._stats = {}
+        self._first_cycle = 0
         self._stalls = 0
         self._max_lag = 0.0
         self._last_stack = []
@@ -155,9 +157,17 @@ class RuntimeObservation:
         self._deadline = None
         # No join on the event loop: observer exits via Event.wait.
 
+    def mark_first_cycle(self, cycle):
+        with self._lock:
+            if not self._first_cycle:
+                self._first_cycle = max(1, int(cycle))
+
     def private_snapshot(self):
         with self._lock:
-            return {'event_loop_stalls': self._stalls,
+            return {'codec_offthread': os.getenv('NEO_CHECKPOINT_CODEC_OFFTHREAD', '0').strip() == '1',
+                    'first_autopilot_cycle_completed': bool(self._first_cycle),
+                    'first_autopilot_cycle_number': self._first_cycle,
+                    'event_loop_stalls': self._stalls,
                     'event_loop_max_lag_ms': round(self._max_lag, 3),
                     'phases': {k: dict(v) for k, v in self._stats.items()},
                     'last_project_stack': [dict(x) for x in self._last_stack]}
@@ -181,6 +191,9 @@ def public_observation(value):
              'last_process_cpu_ms': number(row.get('last_process_cpu_ms'))}
             for name, row in phases.items() if name in PHASES and isinstance(row, dict)]
     rows.sort(key=lambda x: x['max_duration_ms'], reverse=True)
-    return {'event_loop_stalls': int(number(value.get('event_loop_stalls'))),
+    return {'codec_offthread': value.get('codec_offthread') is True,
+            'first_autopilot_cycle_completed': value.get('first_autopilot_cycle_completed') is True,
+            'first_autopilot_cycle_number': int(number(value.get('first_autopilot_cycle_number'))),
+            'event_loop_stalls': int(number(value.get('event_loop_stalls'))),
             'event_loop_max_lag_ms': number(value.get('event_loop_max_lag_ms')),
             'slowest_phases': rows[:5]}

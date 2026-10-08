@@ -25,7 +25,7 @@ import secrets
 import time
 import traceback
 import zlib
-from state_codec import encode_checkpoint, decode_checkpoint
+from state_codec import encode_checkpoint, decode_checkpoint, encode_checkpoint_async
 from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, generation_id, is_external_reference, recover_external_store_generation, split_active_archive
 import ipaddress
 from datetime import datetime, timezone, timedelta
@@ -1798,12 +1798,12 @@ async def _checkpoint_state_to_render() -> dict:
             "compaction":dict(compaction_meta),
         }
         payload["last_checkpoint"]=durable_checkpoint
-        value,raw_bytes,encoded_bytes=_encode_state_env(payload)
+        value,raw_bytes,encoded_bytes=await encode_checkpoint_async(payload, STATE_ENV_MAX_BYTES)
         for _ in range(2):
             durable_checkpoint["raw_bytes"]=raw_bytes
             durable_checkpoint["stored_bytes"]=encoded_bytes
             payload["last_checkpoint"]=dict(durable_checkpoint)
-            value,raw_bytes,encoded_bytes=_encode_state_env(payload)
+            value,raw_bytes,encoded_bytes=await encode_checkpoint_async(payload, STATE_ENV_MAX_BYTES)
     except Exception as e:
         result={
             "ok":False,
@@ -12869,6 +12869,10 @@ async def _autopilot_cycle() -> None:
             where=(str(tb[-1].filename)+":"+str(tb[-1].lineno)) if tb else ""
             AUTOPILOT_STATE["last_error"] = type(e).__name__ + ": " + str(e)[:420] + ((" @ "+where) if where else "")
         finally:
+            if completed:
+                # Keep the extracted cycle usable in its isolated evaluator namespace.
+                from runtime_observation import OBSERVATION as cycle_observer
+                cycle_observer.mark_first_cycle(int(AUTOPILOT_STATE.get("cycles_completed") or 0))
             AUTOPILOT_STATE["running"] = False
             if not completed:
                 AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
@@ -13389,6 +13393,7 @@ async def api_autonomy_status(request: Request):
         "hidden_control":hidden_control,
         "latest_result":latest,
         "autopilot":{
+            "runtime_observation": OBSERVATION.private_snapshot(),
             "enabled":AUTOPILOT_STATE.get("enabled"),
             "running":AUTOPILOT_STATE.get("running"),
             "cycles_completed":AUTOPILOT_STATE.get("cycles_completed"),

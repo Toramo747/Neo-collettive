@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import json
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -10,7 +11,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from runtime_observation import OBSERVATION
-from state_codec import decode_checkpoint, encode_checkpoint
+from state_codec import decode_checkpoint, encode_checkpoint, encode_checkpoint_async
 
 
 async def replay(mib, passes):
@@ -26,9 +27,9 @@ async def replay(mib, passes):
             with OBSERVATION.phase('restore'):
                 restored = decode_checkpoint(encoded)
             for _ in range(passes):
-                encode_checkpoint(restored, 32 * 1024 * 1024)
+                result = await encode_checkpoint_async(restored, 32 * 1024 * 1024)
         await asyncio.sleep(0.3)
-        return {'raw_bytes': raw_bytes, 'encoding_passes': passes,
+        return {'encoded_sha256': hashlib.sha256(result[0].encode()).hexdigest(), 'raw_bytes': raw_bytes, 'encoding_passes': passes,
                 'cpu_affinity_count': len(os.sched_getaffinity(0)),
                 'synthetic': True, 'production_cause_proven': False,
                 'observation': OBSERVATION.private_snapshot()}

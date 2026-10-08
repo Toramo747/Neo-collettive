@@ -72,6 +72,9 @@ PUBLIC_SNAPSHOT_SCHEMA = {
     },
     "autopilot": {
         "runtime_observation": {
+            "codec_offthread": None,
+            "first_autopilot_cycle_completed": None,
+            "first_autopilot_cycle_number": None,
             "event_loop_stalls": None,
             "event_loop_max_lag_ms": None,
             "slowest_phases": [{

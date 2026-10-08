@@ -1,9 +1,11 @@
-# PR #215: observation-only loop-stall instrumentation
+# PR #215: loop-stall instrumentation and disabled codec correction
 
 The historical 27.5-second stall is still not attributed to a specific
-production function. This addition collects the evidence without moving CPU
-work, changing compression settings, changing the gate, retrying smoke tests,
-or touching Render settings. No merge or deploy has been performed.
+production function. Instrumentation measures the first cycle; the candidate
+compression correction is disabled by default (`NEO_CHECKPOINT_CODEC_OFFTHREAD=0`).
+See [the observation deploy procedure](checkpoint-observation-deploy.md) for
+the switch, bounded smoke checks and user-operated before/after measurement.
+No merge or deploy has been performed.
 
 ## What is observed
 
@@ -60,9 +62,10 @@ actual existing codec can starve the loop with a realistically sized synthetic
 payload. It does **not** prove that lzma caused the historical incident. It is
 not an extrapolation of the historical delay to a 0.15-core service.
 
-No production correction or before/after claim is made. The next evidence step
-is a user-approved instrumentation-only deployment and observation of its first
-autopilot cycle. The user has not approved that deploy.
+These figures describe the original synchronous baseline. The candidate now
+includes a disabled correction; its new local results and production stop
+condition are documented in `checkpoint-observation-deploy.md`. Historical
+production attribution still requires the first-cycle stack on Render.
 
 ## Validation requirements
 
