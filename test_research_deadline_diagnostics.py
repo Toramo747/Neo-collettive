@@ -1,5 +1,6 @@
 import ast
 import asyncio
+from runtime_observation import OBSERVATION
 from pathlib import Path
 import unittest
 
@@ -10,7 +11,7 @@ from public_snapshot import sanitize_public_snapshot
 def load_research(search):
     tree=ast.parse(Path('cloud_mcp.py').read_text())
     fn=next(x for x in tree.body if isinstance(x,ast.AsyncFunctionDef) and x.name=='_free_web_research')
-    ns={'asyncio':asyncio,'routed_public_search':search}
+    ns={'OBSERVATION':OBSERVATION,'asyncio':asyncio,'routed_public_search':search}
     exec(compile(ast.Module(body=[fn],type_ignores=[]),'cloud_mcp.py','exec'),ns)
     return ns['_free_web_research']
 

@@ -4,6 +4,11 @@ name: NEO Render Deploy
 on:
   workflow_dispatch:
     inputs:
+      observation_deploy:
+        description: "Andrea-only: retain observation logs if surface smoke fails; automatic rollback disabled"
+        required: false
+        type: boolean
+        default: false
       extended_validation:
         description: "Run outbound/effectful extended post-deploy validation"
         required: false
@@ -149,11 +154,24 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 45
     env:
+      OBSERVATION_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.observation_deploy && github.actor == 'Toramo747' && github.triggering_actor == 'Toramo747' }}
       HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authorize observation deploy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.observation_deploy }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_ACTOR" != "Toramo747" ] || [ "$GITHUB_TRIGGERING_ACTOR" != "Toramo747" ]; then
+            echo "observation_deploy denied: Andrea/Toramo747 only" >&2
+            exit 1
+          fi
+          echo "::warning::OBSERVATION_DEPLOY: authorized by Andrea; final surface-smoke failure will not roll back the service"
 
       - name: Authorize emergency deploy
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.emergency_deploy }}
@@ -201,11 +219,12 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+          python -m pip install --disable-pip-version-check PyYAML==6.0.3
 
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_memory_repair.py test_evidence_store_atomic.py test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_route_policy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+          python -m unittest -v test_checkpoint_observation_deploy.py test_runtime_observation.py test_deploy_rollback.py test_deploy_health.py test_memory_repair.py test_evidence_store_atomic.py test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_route_policy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
 
       - name: Require all public commercial controls
         run: |
@@ -467,13 +486,26 @@ jobs:
             exit 22
           fi
 
+      - name: Capture previous production commit
+        run: |
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          commit=str(json.load(open("/tmp/predeploy-health.json")).get("commit") or "")
+          if not re.fullmatch(r"[0-9a-f]{40}",commit):
+              raise SystemExit("Previous production commit unavailable; deploy blocked")
+          Path("/tmp/previous-production-commit").write_text(commit)
+          PY
+
       - name: Trigger Render deploy
+        id: render_trigger
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           set -euo pipefail
           sep='?'
           case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          touch /tmp/render-deploy-attempted
           deploy_url="${RENDER_DEPLOY_HOOK}${sep}ref=${GITHUB_SHA}"
           curl --fail --show-error --silent --max-time 60 "$deploy_url" > /tmp/deploy.txt
           cat /tmp/deploy.txt || true
@@ -509,6 +541,10 @@ jobs:
           echo "Timed out waiting for NEO v$expected"
           cat /tmp/health.json || true
           exit 5
+
+      - name: Wait for first completed autopilot cycle
+        continue-on-error: ${{ env.OBSERVATION_DEPLOY == 'true' }}
+        run: python scripts/wait_first_autopilot_cycle.py
 
       - name: Verify repaired commercial evidence memory
         run: |
@@ -575,9 +611,10 @@ jobs:
 
       - name: Verify autopilot runtime
         run: |
+          cat > /tmp/neo-surface-smoke-0.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" --retry 3 --retry-delay 5 \
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" \
             "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/status.json
           cat /tmp/status.json
           EXPECTED="$expected" python - <<'PY'
@@ -590,15 +627,18 @@ jobs:
               raise SystemExit("autopilot disabled")
           print("autopilot enabled; cycles_completed="+str(ap.get("cycles_completed")))
           PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-0.sh
 
       - name: Smoke test autonomous subsystems
         run: |
+          cat > /tmp/neo-surface-smoke-1.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" \
             "https://neo-collettive.onrender.com/api/memory/status" > /tmp/memory.json
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/builder/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/builder/status' --marker github-actions-deploy)" \
             "https://neo-collettive.onrender.com/api/builder/status" > /tmp/builder.json
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" --retry 2 --retry-delay 3 \
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" \
             "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/autonomy.json
           python - <<'PY'
           import json
@@ -623,12 +663,15 @@ jobs:
               raise SystemExit("autonomy guardrails unsafe")
           print("memory, builder and autonomy smoke tests passed")
           PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-1.sh
 
       - name: Smoke test A2A discovery surface
         run: |
+          cat > /tmp/neo-surface-smoke-2.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/inbound/agents' --marker github-actions-deploy)" --retry 2 --retry-delay 3             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)"             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/inbound/agents' --marker github-actions-deploy)"             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
           python - <<'PY'
           import json
           card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
@@ -652,9 +695,12 @@ jobs:
               raise SystemExit("public registry advertisement not enabled")
           print("A2A v1 discovery surface smoke test passed")
           PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-2.sh
 
       - name: Smoke test neo-dialect surface
         run: |
+          cat > /tmp/neo-surface-smoke-3.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
           curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/neo-dialect/1.0' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
           grep -q "neo-dialect/1.0" /tmp/neo-dialect.md
@@ -679,9 +725,12 @@ jobs:
               raise SystemExit("neo-dialect example transcript incomplete")
           print("neo-dialect smoke passed")
           PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-3.sh
 
       - name: Smoke test Registry Health static pages
         run: |
+          cat > /tmp/neo-surface-smoke-4.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
           curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health' --marker github-actions-deploy)" --max-time 30 \
             "https://neo-collettive.onrender.com/registry-health" > /tmp/registry-health.html
@@ -695,24 +744,11 @@ jobs:
             exit 1
           fi
           echo "Registry Health aggregate/about surfaces healthy; server table disabled"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-4.sh
 
       - name: Smoke test NEO Arena read-only surface
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena" > /tmp/arena.html
-          grep -q "NEO Arena" /tmp/arena.html
-          grep -q "mycelix-arena" /tmp/arena.html
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/neo-dialect' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/neo-dialect" > /tmp/arena-neo-dialect.html
-          grep -q "neo-dialect evolution study" /tmp/arena-neo-dialect.html
-          grep -q "neo-dialect 1.0 is sufficient for now" /tmp/arena-neo-dialect.html
-          grep -q "arena-dialect-study-" /tmp/arena-neo-dialect.html
-                    curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/micelio' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/micelio" > /tmp/micelio.html
-          grep -q "Micelio" /tmp/micelio.html
-          grep -q "Memoria verificata" /tmp/micelio.html
-          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/evoluzione' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/evoluzione" > /tmp/evoluzione.html
-          grep -q "Evoluzione" /tmp/evoluzione.html
-          grep -q "promozione automatica" /tmp/evoluzione.html
-          echo "Arena, Micelio and Evoluzione read-only surfaces healthy"
+        run: python scripts/retry_deploy_smoke.py scripts/smoke_arena_surface.sh
 
       - name: Bootstrap first Arena session for v0.99.34
         if: success()
@@ -758,6 +794,7 @@ jobs:
 
       - name: Verify Pathwren remains 100/100
         run: |
+          cat > /tmp/neo-surface-smoke-7.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
           python - <<'PY'
           import json
@@ -780,7 +817,7 @@ jobs:
               "https://www.pathwren.workers.dev/a2a/score",
               json=payload,
               headers={"Content-Type":"application/json","Accept":"application/json"},
-              timeout=45,
+              timeout=30,
           )
           r.raise_for_status()
           response_bytes=r.content
@@ -809,6 +846,8 @@ jobs:
           if int(verdict.get("warnings") or 0)!=0:
               raise SystemExit("Pathwren warnings regressed above zero")
           PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-7.sh
 
       - name: Preserve full Pathwren response as private Actions artifact
         if: always()
@@ -823,28 +862,26 @@ jobs:
         env:
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
+          cat > /tmp/neo-surface-smoke-6.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
-          livez_code="$(curl --silent --show-error --output /tmp/release-livez.json --max-time 45 --write-out '%{http_code}' "https://neo-collettive.onrender.com/livez")"
+          livez_code="$(curl --silent --show-error --output /tmp/release-livez.json --max-time 30 --write-out '%{http_code}' "https://neo-collettive.onrender.com/livez")"
           mcp_payload='{"jsonrpc":"2.0","id":"release-smoke-init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-release-smoke","version":"1"}}}'
-          mcp_code="000"
-          for attempt in $(seq 1 6); do
-            mcp_code="$(curl --silent --show-error --output /tmp/release-mcp.json --max-time 45 --write-out '%{http_code}'               -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"               -H "X-MYCELIX-Self-Traffic: github-actions-deploy"               -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-deploy)"               --data "$mcp_payload" "https://neo-collettive.onrender.com/mcp")"
-            [ "$mcp_code" = "200" ] && break
-            echo "MCP initialize warm-up attempt $attempt returned HTTP $mcp_code"
-            sleep 5
-          done
-          heartbeat_code="$(curl --silent --show-error --output /tmp/release-heartbeat.json --max-time 45 --write-out '%{http_code}'             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)"             "https://neo-collettive.onrender.com/api/heartbeat")"
+          mcp_code="$(curl --silent --show-error --output /tmp/release-mcp.json --max-time 30 --write-out '%{http_code}'               -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"               -H "X-MYCELIX-Self-Traffic: github-actions-deploy"               -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-deploy)"               --data "$mcp_payload" "https://neo-collettive.onrender.com/mcp")"
+          heartbeat_code="$(curl --silent --show-error --output /tmp/release-heartbeat.json --max-time 30 --write-out '%{http_code}'             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)"             "https://neo-collettive.onrender.com/api/heartbeat")"
           echo "livez_http=$livez_code"
           echo "mcp_initialize_http=$mcp_code"
           echo "heartbeat_hmac_only_http=$heartbeat_code"
           test "$livez_code" = "200"
           test "$mcp_code" = "200"
           test "$heartbeat_code" = "200"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-6.sh
 
       - name: Synthetic A2A unverified-dialogue smoke
         env:
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
+          cat > /tmp/neo-surface-smoke-8.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
           python - <<'PY'
           import json
@@ -891,7 +928,7 @@ jobs:
               },
               method="POST",
           )
-          with urllib.request.urlopen(req,timeout=45) as resp:
+          with urllib.request.urlopen(req,timeout=30) as resp:
               status=resp.status
               data=json.load(resp)
           result=data.get("result") or {}
@@ -913,29 +950,12 @@ jobs:
           if not reply.strip():
               raise SystemExit("substantive reply missing")
           PY
-
-      - name: Dispatch post-deploy public snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          dispatched=0
-          for attempt in $(seq 1 5); do
-            if gh workflow run mycelix-heartbeat-v3.yml --ref main; then
-              dispatched=1
-              break
-            fi
-            echo "Heartbeat dispatch attempt ${attempt}/5 failed; retrying" >&2
-            sleep 5
-          done
-          if [ "${dispatched}" != "1" ]; then
-            echo "Post-deploy heartbeat dispatch failed after 5 attempts" >&2
-            exit 22
-          fi
-          echo "Post-deploy heartbeat snapshot workflow dispatched"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-8.sh
 
       - name: Verify post-deploy SETI readiness
         run: |
+          cat > /tmp/neo-surface-smoke-9.sh <<'NEO_SMOKE_BODY_215'
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
           expect_engine_retry=0
@@ -944,7 +964,7 @@ jobs:
             expect_engine_retry=1
           fi
           echo "expect_seti_engine_retry=$expect_engine_retry"
-          for i in $(seq 1 30); do
+          for i in $(seq 1 1); do
             curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" --max-time 30 \
               "https://neo-collettive.onrender.com/api/memory/status" > /tmp/seti-status.json
             if EXPECTED="$expected" EXPECT_ENGINE_RETRY="$expect_engine_retry" python - <<'PY'
@@ -984,7 +1004,7 @@ jobs:
             then
               break
             fi
-            if [ "$i" -eq 30 ]; then
+            if [ "$i" -eq 1 ]; then
               echo "SETI readiness telemetry not observed or invariant failed" >&2
               cat /tmp/seti-status.json
               exit 8
@@ -997,6 +1017,36 @@ jobs:
             exit 1
           fi
           echo "SETI readiness public telemetry healthy; private interviews remain admin-only"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-9.sh
+
+      - name: All required deployment surfaces verified
+        run: |
+          if [ -f /tmp/neo-observation-smoke-failed ]; then
+            echo "::warning::OBSERVATION_DEPLOY completed with failed surface smokes; inspect logs before any further action"
+          else
+            echo "All required post-deploy checks passed"
+          fi
+
+      - name: Dispatch post-deploy public snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dispatched=0
+          for attempt in $(seq 1 5); do
+            if gh workflow run mycelix-heartbeat-v3.yml --ref main; then
+              dispatched=1
+              break
+            fi
+            echo "Heartbeat dispatch attempt ${attempt}/5 failed; retrying" >&2
+            sleep 5
+          done
+          if [ "${dispatched}" != "1" ]; then
+            echo "Post-deploy heartbeat dispatch failed after 5 attempts" >&2
+            exit 22
+          fi
+          echo "Post-deploy heartbeat snapshot workflow dispatched"
 
       - name: Run three market validation cycles
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
@@ -1110,25 +1160,52 @@ jobs:
           gh workflow run registry-health-scan.yml --ref main -f phase=first -f scan_date=''
           echo "Authorized Registry Health phase=first dispatched via workflow_dispatch"
 
+      - name: Restore previous Render production commit
+        if: ${{ failure() && env.OBSERVATION_DEPLOY != 'true' }}
+        env:
+          FAILED_SHA: ${{ github.sha }}
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          [ -f /tmp/render-deploy-attempted ] || exit 0
+          git fetch origin main
+          if ! python scripts/deploy_rollback.py "$FAILED_SHA" --current origin/main; then
+            echo "Newer application commit exists; automatic rollback blocked"
+            exit 1
+          fi
+          previous="$(cat /tmp/previous-production-commit)"
+          sep='?'
+          case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          curl --fail --silent --show-error --max-time 60 "${RENDER_DEPLOY_HOOK}${sep}ref=${previous}" > /tmp/rollback-deploy.json
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 15 'https://neo-collettive.onrender.com/health' > /tmp/rollback-health.json; then
+              if PREVIOUS="$previous" python - <<'PY'
+          import json,os,sys
+          d=json.load(open('/tmp/rollback-health.json'))
+          sys.exit(0 if d.get('commit') == os.environ['PREVIOUS'] else 1)
+          PY
+              then
+                echo "Previous Render production commit restored: $previous"
+                touch /tmp/render-rollback-verified
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Render rollback could not be verified" >&2
+          exit 1
+
       - name: Roll back failed application commit
-        if: failure()
+        if: ${{ failure() && env.OBSERVATION_DEPLOY != 'true' }}
         env:
           FAILED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          [ -f /tmp/render-rollback-verified ] || exit 0
           git fetch origin main
           git checkout -B main origin/main
-          current="$(git rev-parse HEAD)"
-          if [ "$current" != "$FAILED_SHA" ]; then
-            echo "Main advanced to $current; skip automatic rollback of $FAILED_SHA"
-            exit 0
-          fi
-          changed="$(git show --pretty='' --name-only "$FAILED_SHA")"
-          if printf '%s\n' "$changed" | grep -q '^\.github/workflows/'; then
-            echo "Workflow-changing commit: automatic rollback skipped"
-            exit 0
-          fi
+          python scripts/deploy_rollback.py "$FAILED_SHA"
           git config user.name "NEO Safe Rollback"
           git config user.email "actions@users.noreply.github.com"
-          git revert --no-edit "$FAILED_SHA"
+          python scripts/deploy_rollback.py "$FAILED_SHA" --revert
           git push origin HEAD:main
