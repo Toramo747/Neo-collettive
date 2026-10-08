@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from runtime_observation import public_observation
 from copy import deepcopy
 from typing import Any
 
@@ -70,6 +71,14 @@ PUBLIC_SNAPSHOT_SCHEMA = {
         },
     },
     "autopilot": {
+        "runtime_observation": {
+            "event_loop_stalls": None,
+            "event_loop_max_lag_ms": None,
+            "slowest_phases": [{
+                "phase": None, "max_duration_ms": None,
+                "last_duration_ms": None, "last_process_cpu_ms": None,
+            }],
+        },
         "enabled": None,
         "running": None,
         "cycles_completed": None,
@@ -1013,6 +1022,7 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
         "enabled", "running", "cycles_completed", "last_started_utc",
         "last_finished_utc", "last_status", "stagnation_cycles",
     ))
+    out["runtime_observation"] = public_observation(src.get("runtime_observation"))
     out["recent_sectors"] = [str(item)[:48] for item in list(src.get("recent_sectors") or [])[-24:]]
     out["family_performance"] = _project_family_performance(src.get("family_performance"))
     out["inbound_traffic_summary"] = {

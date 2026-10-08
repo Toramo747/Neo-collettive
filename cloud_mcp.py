@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Andrea Gava
 # redeploy trigger after reciprocal-dialogue syntax fix
 import asyncio
+from runtime_observation import OBSERVATION
 import neo_dialect
 import neo_dialect_security
 import neo_dialect_seti_probe
@@ -483,9 +484,17 @@ AUTOPILOT_STATE: dict[str, Any] = {
 }
 
 
+migrate_evidence_memory = OBSERVATION.timed("migration")(migrate_evidence_memory)
+analyze_tool_opportunities = OBSERVATION.timed("commercial_gate")(analyze_tool_opportunities)
+apply_gate_hysteresis = OBSERVATION.timed("gate_hysteresis")(apply_gate_hysteresis)
+outcome_council = OBSERVATION.timed("outcome")(outcome_council)
+
+
+@OBSERVATION.timed("checkpoint_payload")
 def _state_payload() -> dict:
     return {
         "runtime_profile": dict(RUNTIME_IDENTITY),
+        "runtime_observation": OBSERVATION.private_snapshot(),
         "state_saved_at_utc": datetime.now(timezone.utc).isoformat(),
         "last_started_utc": AUTOPILOT_STATE.get("last_started_utc"),
         "last_finished_utc": AUTOPILOT_STATE.get("last_finished_utc"),
@@ -556,6 +565,7 @@ def _state_payload() -> dict:
     }
 
 
+@OBSERVATION.timed("restore_merge")
 def _merge_state_payload(payload: dict | None) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1370,6 +1380,7 @@ def _response_env_value(response: Any) -> str | None:
     return None
 
 
+@OBSERVATION.timed("challenge_store_write")
 async def _write_challenge_track_store(
     track: dict[str, Any],
     *,
@@ -1412,6 +1423,7 @@ async def _write_challenge_track_store(
     return {"ok":True,"reference":reference,"chunk_count":len(chunks)}
 
 
+@OBSERVATION.timed("evidence_store_write")
 async def _write_commercial_evidence_store(
     rows: list[dict[str, Any]],
     *,
@@ -1515,6 +1527,7 @@ async def _delete_challenge_track_generation(reference: dict[str, Any] | None) -
 
 
 
+@OBSERVATION.timed("restore")
 def _restore_state() -> str:
     candidates=[]
 
@@ -1632,14 +1645,18 @@ def _restore_state() -> str:
     return "fresh"
 
 
+@OBSERVATION.timed("checkpoint_local_write")
 def _save_local_state() -> None:
     try:
         with open(STATE_SNAPSHOT_PATH, "w", encoding="utf-8") as fh:
-            json.dump(_state_payload(), fh, ensure_ascii=False, separators=(",", ":"))
+            payload = _state_payload()
+            with OBSERVATION.phase("checkpoint_json"):
+                json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
     except Exception:
         pass
 
 
+@OBSERVATION.timed("checkpoint")
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return {"ok":False,"reason":"render_api_not_configured"}
@@ -1805,11 +1822,12 @@ async def _checkpoint_state_to_render() -> dict:
     }
     try:
         async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
-            r=await client.put(
-                f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{STATE_ENV_KEY}",
-                headers=headers,
-                json={"value":value},
-            )
+            with OBSERVATION.phase("render_write"):
+                r=await client.put(
+                    f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{STATE_ENV_KEY}",
+                    headers=headers,
+                    json={"value":value},
+                )
         result={
             "ok":r.is_success,
             "checkpoint_utc":checkpoint_utc,
@@ -6897,6 +6915,7 @@ def _thesis_search_aliases(active: dict) -> list[str]:
     fallback=str(active.get("term") or job or family.replace("_"," ")).strip()
     return [fallback] if fallback else []
 
+@OBSERVATION.timed("gate")
 def _commercial_evidence_quality(
     web_research: list[dict],
     scouts: list[dict] | None = None,
@@ -7683,6 +7702,7 @@ async def _stackexchange_query_search(query: str, limit: int = 4, meta: dict | N
         return []
 
 
+@OBSERVATION.timed("challenge_research")
 async def _challenge_shadow_research() -> list[dict]:
     """Zero-cost read-only long-window research, isolated from commercial provider counters."""
     specs=[
@@ -8621,6 +8641,7 @@ def _jarvis_next_queries(jarvis_result: dict) -> list[str]:
     return []
 
 
+@OBSERVATION.timed("research")
 async def _free_web_research(
     queries: list[str],
     per_query: int = 5,
@@ -9697,6 +9718,7 @@ def _collective_summary(review: dict) -> dict:
     }
 
 
+@OBSERVATION.timed("director")
 async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, max_agents: int = 3) -> dict:
     plan = director_plan(goal, budget, hours_per_week)
     research_question = (
@@ -12473,6 +12495,7 @@ async def _neo_dialect_probe_seti_candidates(limit: int = 2) -> dict:
     }
 
 
+@OBSERVATION.timed("seti")
 async def _seti_cycle_if_due() -> dict | None:
     state=dict(AUTOPILOT_STATE.get("seti") or {})
     if not SETI_ENABLED:
@@ -12711,6 +12734,7 @@ async def _seti_cycle_if_due() -> dict | None:
         return {"ok":False,"error":state["last_error"]}
 
 
+@OBSERVATION.timed("autopilot")
 async def _autopilot_cycle() -> None:
     if not AUTOPILOT_ENABLED:
         return
@@ -13009,6 +13033,7 @@ async def api_autopilot_status(request: Request):
     _hidden_challenge_control_telemetry()
     _evaluator_contract_telemetry()
     state = dict(AUTOPILOT_STATE)
+    state["runtime_observation"] = OBSERVATION.private_snapshot()
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
     state["runtime_snapshot"] = _runtime_snapshot_freshness()
@@ -13998,6 +14023,7 @@ async def _startup_neo_dialect_probe() -> None:
 
 
 async def lifespan(app: Starlette):
+    await OBSERVATION.start()
     autopilot_task = None
     advertisement_task = None
     dialect_probe_task = None
@@ -14009,6 +14035,7 @@ async def lifespan(app: Starlette):
         try:
             yield
         finally:
+            await OBSERVATION.close()
             if dialect_probe_task and not dialect_probe_task.done():
                 dialect_probe_task.cancel()
             if advertisement_task and not advertisement_task.done():

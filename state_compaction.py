@@ -4,6 +4,7 @@ import base64
 from copy import deepcopy
 import json
 import zlib
+from runtime_observation import OBSERVATION
 from typing import Any
 
 STATE_ENV_COMPRESSED_PREFIX = "zlib64:"
@@ -87,8 +88,10 @@ def _json_bytes(value: Any) -> bytes:
 
 
 def encoded_sizes(payload: dict) -> tuple[int, int]:
-    raw = _json_bytes(payload)
-    packed = zlib.compress(raw, level=9)
+    with OBSERVATION.phase("checkpoint_json"):
+        raw = _json_bytes(payload)
+    with OBSERVATION.phase("checkpoint_zlib"):
+        packed = zlib.compress(raw, level=9)
     encoded = STATE_ENV_COMPRESSED_PREFIX.encode("ascii") + base64.b64encode(packed)
     return len(raw), len(encoded)
 
@@ -413,6 +416,7 @@ def heaviest_key(payload: dict) -> tuple[str | None, int]:
     return str(rows[0]["key"]), int(rows[0]["encoded_bytes"])
 
 
+@OBSERVATION.timed("checkpoint_compaction")
 def compact_state_payload(
     payload: dict,
     *,
