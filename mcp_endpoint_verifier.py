@@ -636,6 +636,14 @@ async def verify_endpoint(
                 tools_count = len(tools)
                 valid_schemas = sum(1 for tool in tools if isinstance(tool, dict) and _schema_sane(tool.get("inputSchema")))
                 invalid_schemas = tools_count - valid_schemas
+                declared_tools = []
+                for tool in tools[:64]:
+                    if not isinstance(tool, dict):
+                        continue
+                    name = " ".join(str(tool.get("name") or "").split())[:120]
+                    description = " ".join(str(tool.get("description") or "").split())[:400]
+                    if name:
+                        declared_tools.append({"name": name, "description": description})
                 tools_ok = int(listed.get("status") or 0) in range(200, 300) and invalid_schemas == 0
                 checks["tools_list"] = {
                     "ok": tools_ok,
@@ -643,6 +651,7 @@ async def verify_endpoint(
                     "tool_count": tools_count,
                     "valid_input_schemas": valid_schemas,
                     "invalid_input_schemas": invalid_schemas,
+                    "declared_tools": declared_tools,
                     "latency_ms": listed.get("latency_ms"),
                 }
                 if not tools_ok:
