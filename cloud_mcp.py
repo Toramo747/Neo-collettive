@@ -7,7 +7,7 @@ import neo_dialect_security
 import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
-import oxibay_doctor
+import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
 from a2a_dialogue import consume_rate as consume_a2a_response_rate, origin_rate_key, plan_untrusted_reply
@@ -10620,7 +10620,7 @@ async def oxibay_doctor(
     """Diagnose a public MCP endpoint without tools/call or production mutation."""
     connection = getattr(ctx, "connection", None)
     caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
-    return await oxibay_doctor.diagnose_endpoint(
+    return await oxibay_doctor_engine.diagnose_endpoint(
         url=(url or None),
         registry_name=(registry_name or None),
         caller=caller,
