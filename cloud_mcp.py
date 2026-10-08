@@ -68,6 +68,7 @@ from challenge_track import (
     challenge_funnel,
     evaluate_challenges,
     merge_challenge_memory,
+    problem_validation_decision,
     route_challenge_evidence,
 )
 from hidden_control_gate import evaluate_hidden_control
@@ -7391,6 +7392,7 @@ def _commercial_evidence_quality(
             "ready":sum(1 for x in challenge_stable_rows if bool(x.get("stable_gate_pass"))),
         },
         "candidates":challenge_telemetry,
+        "decision":problem_validation_decision(challenge_stable_rows),
     }
     AUTOPILOT_STATE["challenge_track"]={
         "mode":"shadow",
