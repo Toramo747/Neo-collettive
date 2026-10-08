@@ -16,7 +16,9 @@ from public_snapshot import sanitize_public_snapshot, validate_public_snapshot
 def simulated_cpu_phase():
     deadline = time.perf_counter() + 0.18
     while time.perf_counter() < deadline:
-        sum(i * i for i in range(1000))
+        total = 0
+        for i in range(1000):
+            total += i * i
 
 
 class ObservationTests(unittest.IsolatedAsyncioTestCase):
