@@ -502,6 +502,26 @@ def build_challenge_telemetry(
     return out
 
 
+
+def problem_validation_decision(evaluated: list[dict] | None) -> dict:
+    """Separate problem validation from commercial proof without weakening either track."""
+    rows=[x for x in (evaluated or []) if isinstance(x,dict)]
+    ready=sum(1 for x in rows if bool(x.get("stable_gate_pass")))
+    validated=ready > 0
+    return {
+        "track":"PROBLEM_VALIDATION",
+        "status":"PROBLEM_VALIDATED" if validated else "EVIDENCE_REQUIRED",
+        "problem_validated":validated,
+        "experiment_ready":validated,
+        "ready_candidates":ready,
+        "manual_confirmation_required":True,
+        "experiment_scope":"BOUNDED_INTERNAL_ONLY",
+        "automatic_build":False,
+        "commercial_gate_influence":"NONE",
+        "automatic_commercial_promotion":False,
+    }
+
+
 def challenge_funnel(collected: int, current_rows: list[dict], evaluated: list[dict]) -> dict:
     requesters={str(x.get("requester_key") or "") for x in current_rows if str(x.get("requester_key") or "")}
     return {
@@ -536,6 +556,6 @@ def evaluate_public_control_cases(cases: list[dict]) -> dict:
 __all__=[
     "CHALLENGE_MISSING_CODES","CHALLENGE_TAGGER_VERSION","challenge_config",
     "route_challenge_evidence","merge_challenge_memory","evaluate_challenges",
-    "apply_challenge_hysteresis","build_challenge_telemetry","challenge_funnel",
+    "apply_challenge_hysteresis","build_challenge_telemetry","problem_validation_decision","challenge_funnel",
     "evaluate_public_control_cases",
 ]

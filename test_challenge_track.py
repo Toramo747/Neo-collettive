@@ -7,11 +7,34 @@ from challenge_track import (
     build_challenge_telemetry,
     evaluate_challenges,
     evaluate_public_control_cases,
+    problem_validation_decision,
     route_challenge_evidence,
 )
 
 
 class ChallengeTrackTests(unittest.TestCase):
+    def test_problem_validation_is_separate_and_bounded(self):
+        decision=problem_validation_decision([
+            {"stable_gate_pass":True},
+            {"stable_gate_pass":False},
+        ])
+        self.assertEqual(decision["track"],"PROBLEM_VALIDATION")
+        self.assertEqual(decision["status"],"PROBLEM_VALIDATED")
+        self.assertTrue(decision["problem_validated"])
+        self.assertTrue(decision["experiment_ready"])
+        self.assertEqual(decision["ready_candidates"],1)
+        self.assertTrue(decision["manual_confirmation_required"])
+        self.assertEqual(decision["experiment_scope"],"BOUNDED_INTERNAL_ONLY")
+        self.assertEqual(decision["commercial_gate_influence"],"NONE")
+        self.assertFalse(decision["automatic_build"])
+        self.assertFalse(decision["automatic_commercial_promotion"])
+
+    def test_problem_validation_without_stable_evidence_does_not_authorize_experiment(self):
+        decision=problem_validation_decision([{"stable_gate_pass":False}])
+        self.assertEqual(decision["status"],"EVIDENCE_REQUIRED")
+        self.assertFalse(decision["problem_validated"])
+        self.assertFalse(decision["experiment_ready"])
+
     def test_public_control_set_all_passes(self):
         data=json.load(open("data/challenge/control_cases.json",encoding="utf-8"))
         result=evaluate_public_control_cases(data.get("cases") or [])
