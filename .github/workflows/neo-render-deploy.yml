@@ -219,6 +219,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+          python -m pip install --disable-pip-version-check PyYAML==6.0.3
 
       - name: Run regression tests
         run: |
