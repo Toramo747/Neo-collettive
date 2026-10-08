@@ -2,11 +2,11 @@
   "schema_v": 1,
   "namespace": "mycelix-arena",
   "arena_id": "mycelix-research-algorithm",
-  "generation": 69,
+  "generation": 70,
   "population": [
     {
-      "genome_id": "g69-elite-1",
-      "generation": 69,
+      "genome_id": "g70-elite-1",
+      "generation": 70,
       "genes": {
         "query_mode": "mixed",
         "query_count": 4,
@@ -19,11 +19,11 @@
         "source_scope": "all"
       },
       "origin": "elite",
-      "parent_id": "g68-elite-1"
+      "parent_id": "g69-elite-1"
     },
     {
-      "genome_id": "g69-elite-2",
-      "generation": 69,
+      "genome_id": "g70-elite-2",
+      "generation": 70,
       "genes": {
         "query_mode": "mixed",
         "query_count": 4,
@@ -36,36 +36,19 @@
         "source_scope": "all"
       },
       "origin": "elite",
-      "parent_id": "g68-elite-2"
+      "parent_id": "g69-elite-2"
     },
     {
-      "genome_id": "g69-3",
-      "generation": 69,
+      "genome_id": "g70-3",
+      "generation": 70,
       "genes": {
-        "query_mode": "buyer",
+        "query_mode": "mixed",
         "query_count": 3,
-        "recency_days": 44,
-        "min_relevance_tokens": 3,
-        "suffix_family": "ops",
-        "topic_shape": "exact",
-        "query_frame": "looking_for",
-        "term_order": "signal_first",
-        "source_scope": "all"
-      },
-      "origin": "random_immigrant",
-      "parent_id": null
-    },
-    {
-      "genome_id": "g69-4",
-      "generation": 69,
-      "genes": {
-        "query_mode": "buyer",
-        "query_count": 4,
-        "recency_days": 12,
+        "recency_days": 8,
         "min_relevance_tokens": 1,
-        "suffix_family": "core",
+        "suffix_family": "ops",
         "topic_shape": "compact",
-        "query_frame": "looking_for",
+        "query_frame": "plain",
         "term_order": "signal_first",
         "source_scope": "all"
       },
@@ -73,33 +56,50 @@
       "parent_id": null
     },
     {
-      "genome_id": "g69-5",
-      "generation": 69,
+      "genome_id": "g70-4",
+      "generation": 70,
       "genes": {
-        "query_mode": "buyer",
+        "query_mode": "mixed",
         "query_count": 4,
-        "recency_days": 43,
-        "min_relevance_tokens": 2,
-        "suffix_family": "core",
+        "recency_days": 45,
+        "min_relevance_tokens": 1,
+        "suffix_family": "ops",
         "topic_shape": "compact",
         "query_frame": "plain",
         "term_order": "topic_first",
-        "source_scope": "stories"
+        "source_scope": "all"
+      },
+      "origin": "mutation",
+      "parent_id": "g69-elite-2"
+    },
+    {
+      "genome_id": "g70-5",
+      "generation": 70,
+      "genes": {
+        "query_mode": "mixed",
+        "query_count": 3,
+        "recency_days": 42,
+        "min_relevance_tokens": 3,
+        "suffix_family": "intent",
+        "topic_shape": "exact",
+        "query_frame": "plain",
+        "term_order": "topic_first",
+        "source_scope": "all"
       },
       "origin": "random_immigrant",
       "parent_id": null
     },
     {
-      "genome_id": "g69-6",
-      "generation": 69,
+      "genome_id": "g70-6",
+      "generation": 70,
       "genes": {
         "query_mode": "workaround",
         "query_count": 2,
-        "recency_days": 22,
-        "min_relevance_tokens": 2,
+        "recency_days": 21,
+        "min_relevance_tokens": 1,
         "suffix_family": "ops",
-        "topic_shape": "exact",
-        "query_frame": "need",
+        "topic_shape": "compact",
+        "query_frame": "plain",
         "term_order": "topic_first",
         "source_scope": "comments"
       },
@@ -107,15 +107,15 @@
       "parent_id": null
     },
     {
-      "genome_id": "g69-7",
-      "generation": 69,
+      "genome_id": "g70-7",
+      "generation": 70,
       "genes": {
-        "query_mode": "mixed",
-        "query_count": 3,
-        "recency_days": 10,
-        "min_relevance_tokens": 1,
-        "suffix_family": "ops",
-        "topic_shape": "exact",
+        "query_mode": "buyer",
+        "query_count": 4,
+        "recency_days": 7,
+        "min_relevance_tokens": 2,
+        "suffix_family": "intent",
+        "topic_shape": "compact",
         "query_frame": "need",
         "term_order": "topic_first",
         "source_scope": "stories"
@@ -124,13 +124,13 @@
       "parent_id": null
     },
     {
-      "genome_id": "g69-8",
-      "generation": 69,
+      "genome_id": "g70-8",
+      "generation": 70,
       "genes": {
-        "query_mode": "mixed",
+        "query_mode": "workaround",
         "query_count": 4,
         "recency_days": 45,
-        "min_relevance_tokens": 2,
+        "min_relevance_tokens": 1,
         "suffix_family": "core",
         "topic_shape": "compact",
         "query_frame": "plain",
@@ -138,7 +138,7 @@
         "source_scope": "all"
       },
       "origin": "mutation",
-      "parent_id": "g68-elite-2"
+      "parent_id": "g69-elite-2"
     }
   ],
   "history": [
@@ -693,6 +693,14 @@
       "champion_genome_id": "g68-elite-1",
       "champion_fitness": 70.041,
       "successful_queries": 104
+    },
+    {
+      "generation": 69,
+      "measured_at_utc": "2026-10-08T23:34:07.697853+00:00",
+      "status": "EVOLVED",
+      "champion_genome_id": "g69-elite-1",
+      "champion_fitness": 71.875,
+      "successful_queries": 112
     }
   ],
   "boundary": {
@@ -710,7 +718,7 @@
     "external_output_trust": "UNTRUSTED_BOUNDED_MUTATION_ONLY"
   },
   "promotion_candidate": {
-    "genome_id": "g68-elite-1",
+    "genome_id": "g69-elite-1",
     "genes": {
       "query_mode": "mixed",
       "query_count": 4,
@@ -722,7 +730,7 @@
       "term_order": "signal_first",
       "source_scope": "all"
     },
-    "fitness": 70.041,
+    "fitness": 71.875,
     "manual_review_required": true,
     "production_promoted": false
   }
