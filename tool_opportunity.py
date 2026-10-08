@@ -8,6 +8,7 @@ gate. Every scored signal must carry a public URL and observation timestamp.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -176,6 +177,46 @@ def _competitor_price_row(row: dict, family: str) -> bool:
     if str(row.get("coverage_source") or "") not in {"pricing_pages","extension_marketplaces"}:
         return False
     return _row_relevant_to_family(row,family)
+
+
+def _cached_price_observation(item: dict, family: str) -> dict | None:
+    """Read our versioned normalized receipt; invalid/legacy caches fall back.
+
+    Only the persisted_strict path calls this. Public provider results cannot
+    supply scoring receipts. Price facts are rechecked against the cache window.
+    """
+    if item.get("_persisted_price_receipt_v") != 1:
+        return None
+    receipt = item.get("_persisted_price_receipt")
+    if not isinstance(receipt, dict):
+        return None
+    string_fields = ("family", "url", "domain", "date", "source", "title", "excerpt",
+                     "price", "price_currency", "price_period", "coverage_source")
+    if any(not isinstance(receipt.get(k), str) for k in string_fields):
+        return None
+    if receipt.get("url") != item.get("url") or receipt.get("family") != family:
+        return None
+    if receipt.get("coverage_source") not in {"pricing_pages", "extension_marketplaces"}:
+        return None
+    if receipt.get("strict_price_verified") is not True or receipt.get("real_price") is not True:
+        return None
+    if not isinstance(receipt.get("payment_required"), bool):
+        return None
+    if receipt.get("vendor") is not None and not isinstance(receipt.get("vendor"), str):
+        return None
+    signals = receipt.get("signal_types")
+    if (not isinstance(signals, list)
+        or any(not isinstance(x, str) or x not in {"PAYMENT", "DISSATISFACTION", "GAP", "TREND", "COUNTER"}
+               for x in signals)):
+        return None
+    price = extract_price(receipt["title"] + " " + str(item.get("page_text") or ""))
+    if not price or any(receipt.get("price_" + key) != price[key] for key in ("amount", "currency", "period")):
+        return None
+    if len(receipt["title"]) > 240 or len(receipt["excerpt"]) > 500:
+        return None
+    fields = (*string_fields, "price_amount", "payment_required", "vendor",
+              "strict_price_verified", "real_price", "signal_types")
+    return deepcopy({key: receipt[key] for key in fields})
 
 
 def market_query_plan(cycle: int, count: int = 10) -> list[dict]:
@@ -532,6 +573,15 @@ def analyze_tool_opportunities(
             enriched=dict(item)
             enriched["coverage_source"]=coverage_source
             row=_source_row(enriched,chosen,observed_at)
+            if (validation_kind == "persisted_strict"
+                and group.get("_persisted_price_family") == chosen
+                and item.get("source") == "persisted-price-validation"):
+                receipt = _cached_price_observation(item, chosen)
+                if receipt is not None:
+                    # This is the original normalized observation from our
+                    # durable strict-price cache, not a new classification of
+                    # its lossy display window. Legacy caches use the old path.
+                    row = receipt
             if row and chosen in by_family:
                 if _row_relevant_to_family(row,chosen):
                     by_family[chosen].append(row)
