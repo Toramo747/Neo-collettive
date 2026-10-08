@@ -102,6 +102,7 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
     def test_tool_access_table_is_explicit(self):
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["neo_director_results"],"public_readonly")
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["neo_web_search"],"gated_network")
+        self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["oxibay_doctor"],"gated_network")
         for name,access in cloud_mcp.MCP_TOOL_ACCESS.items():
             self.assertIn(access,{"public_readonly","gated_network","gated_effectful"},name)
 
