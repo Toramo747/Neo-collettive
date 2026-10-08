@@ -177,6 +177,25 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "promotion_ready": None,
             },
         },
+        "decision_tracks": {
+            "commercial_proof": {
+                "status": None,
+                "gate_pass": None,
+                "qualified_candidates": None,
+                "thresholds_unchanged": None,
+            },
+            "problem_validation": {
+                "status": None,
+                "problem_validated": None,
+                "experiment_ready": None,
+                "ready_candidates": None,
+                "manual_confirmation_required": None,
+                "experiment_scope": None,
+                "commercial_gate_influence": None,
+                "automatic_build": None,
+                "automatic_commercial_promotion": None,
+            },
+        },
         "challenge_diagnostics": {
             "mode": None,
             "status": None,
@@ -740,6 +759,38 @@ def _project_candidate_telemetry(value: Any) -> list[dict]:
     return rows
 
 
+def _project_decision_tracks(latest_result: Any) -> dict:
+    latest=latest_result if isinstance(latest_result,dict) else {}
+    tool=latest.get("tool_opportunities") if isinstance(latest.get("tool_opportunities"),dict) else {}
+    top5=[x for x in (tool.get("top5") or []) if isinstance(x,dict)]
+    top=top5[0] if top5 else {}
+    counts=tool.get("candidate_counts") if isinstance(tool.get("candidate_counts"),dict) else {}
+    challenge=latest.get("challenge_shadow") if isinstance(latest.get("challenge_shadow"),dict) else {}
+    decision=challenge.get("decision") if isinstance(challenge.get("decision"),dict) else {}
+    commercial_pass=bool(top.get("gate_pass"))
+    problem_validated=bool(decision.get("problem_validated"))
+    experiment_ready=bool(decision.get("experiment_ready")) and problem_validated
+    return {
+        "commercial_proof":{
+            "status":"MARKET_READY" if commercial_pass else "EVIDENCE_REQUIRED",
+            "gate_pass":commercial_pass,
+            "qualified_candidates":max(0,int(counts.get("qualified_candidates") or 0)),
+            "thresholds_unchanged":True,
+        },
+        "problem_validation":{
+            "status":"PROBLEM_VALIDATED" if problem_validated else "EVIDENCE_REQUIRED",
+            "problem_validated":problem_validated,
+            "experiment_ready":experiment_ready,
+            "ready_candidates":max(0,int(decision.get("ready_candidates") or 0)),
+            "manual_confirmation_required":True,
+            "experiment_scope":"BOUNDED_INTERNAL_ONLY",
+            "commercial_gate_influence":"NONE",
+            "automatic_build":False,
+            "automatic_commercial_promotion":False,
+        },
+    }
+
+
 def _project_challenge_diagnostics(latest_result: Any) -> dict:
     latest=latest_result if isinstance(latest_result,dict) else {}
     raw=latest.get("challenge_shadow") if isinstance(latest.get("challenge_shadow"),dict) else {}
@@ -1116,6 +1167,7 @@ def sanitize_public_snapshot(snapshot: dict | None) -> dict:
         "ok":bool(hidden.get("ok")),
     }
     out["autopilot"] = sanitize_public_autopilot(src.get("autopilot"))
+    out["autopilot"]["decision_tracks"] = _project_decision_tracks(src.get("latest_result"))
     out["autopilot"]["challenge_diagnostics"] = _project_challenge_diagnostics(src.get("latest_result"))
     out["autopilot"]["select_diagnostics"] = _project_select_diagnostics(src.get("latest_result"))
     validate_public_snapshot(out)
