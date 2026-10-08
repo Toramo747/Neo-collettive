@@ -28,11 +28,30 @@ def rollback_allowed(failed, current='HEAD'):
     return True
 
 
+def revert_failed(failed):
+    """Revert only if HEAD still contains no newer application commit."""
+    if not rollback_allowed(failed):
+        return False
+    parents = git('rev-list', '--parents', '-n', '1', failed).split()[1:]
+    args = ['revert', '--no-edit']
+    if len(parents) > 1:
+        args += ['-m', '1']
+    git(*args, failed)
+    return True
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('failed')
     parser.add_argument('--current', default='HEAD')
+    parser.add_argument('--revert', action='store_true')
     args = parser.parse_args()
+    if args.revert and args.current != 'HEAD':
+        parser.error('--revert requires current HEAD')
+    if args.revert:
+        reverted = revert_failed(args.failed)
+        print('reverted' if reverted else 'newer_application_commit')
+        raise SystemExit(0 if reverted else 3)
     allowed = rollback_allowed(args.failed, args.current)
     print('allowed' if allowed else 'newer_application_commit')
     raise SystemExit(0 if allowed else 3)

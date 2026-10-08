@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from scripts.deploy_rollback import rollback_allowed
+from scripts.deploy_rollback import rollback_allowed, revert_failed
 
 
 class RollbackTests(unittest.TestCase):
@@ -51,3 +51,31 @@ class RollbackTests(unittest.TestCase):
     def test_unrelated_path_blocks(self):
         self.commit('data/other.json', '{}')
         self.assertFalse(rollback_allowed(self.failed))
+
+    def test_real_revert_preserves_later_snapshots(self):
+        failed = self.commit('app.py', 'failed')
+        self.commit('neo_latest_result.json', '{"cycle":2}')
+        self.commit('data/arena/latest.json', '{"generation":3}')
+        self.assertTrue(revert_failed(failed))
+        self.assertEqual(Path('app.py').read_text(), 'base')
+        self.assertEqual(Path('neo_latest_result.json').read_text(), '{"cycle":2}')
+        self.assertEqual(Path('data/arena/latest.json').read_text(), '{"generation":3}')
+
+    def test_real_revert_skipped_after_new_code(self):
+        failed = self.commit('app.py', 'failed')
+        current = self.commit('app.py', 'newer')
+        self.assertFalse(revert_failed(failed))
+        self.assertEqual(self.git('rev-parse', 'HEAD'), current)
+        self.assertEqual(Path('app.py').read_text(), 'newer')
+
+    def test_real_merge_revert_uses_first_parent(self):
+        main = self.git('branch', '--show-current')
+        self.git('checkout', '-qb', 'feature')
+        self.commit('app.py', 'failed')
+        self.git('checkout', '-q', main)
+        self.git('merge', '--no-ff', '-qm', 'merge feature', 'feature')
+        failed = self.git('rev-parse', 'HEAD')
+        self.commit('neo_cycle_floor.json', '{"cycle":3}')
+        self.assertTrue(revert_failed(failed))
+        self.assertEqual(Path('app.py').read_text(), 'base')
+        self.assertEqual(Path('neo_cycle_floor.json').read_text(), '{"cycle":3}')

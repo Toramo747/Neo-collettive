@@ -1180,10 +1180,5 @@ jobs:
           python scripts/deploy_rollback.py "$FAILED_SHA"
           git config user.name "NEO Safe Rollback"
           git config user.email "actions@users.noreply.github.com"
-          parents="$(git rev-list --parents -n 1 "$FAILED_SHA" | wc -w)"
-          if [ "$parents" -gt 2 ]; then
-            git revert -m 1 --no-edit "$FAILED_SHA"
-          else
-            git revert --no-edit "$FAILED_SHA"
-          fi
+          python scripts/deploy_rollback.py "$FAILED_SHA" --revert
           git push origin HEAD:main
