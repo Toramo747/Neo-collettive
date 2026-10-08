@@ -304,7 +304,8 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "confirmation_blockers": [None],
                 "tagger_version": None,
             }],
-            "ingestion_drought": {"schema_v": None, "rows": [{
+            "ingestion_drought": {"schema_v": None, "unjoined_total": None,
+                "measurement_reliable": None, "rows": [{
                 "query_slot": None, "provider_code": None, "raw_results": None,
                 "relevance_pass": None, "useful": None, "new_signal_row": None,
                 "duplicate_memory": None, "new_rejected": None,

@@ -172,6 +172,21 @@ def routed_search_diagnostics(
     }
 
 
+def mark_routing_limit(diagnostics: dict, selected: list[dict], limit: int) -> None:
+    """Mark only receipts beyond the actual router cutoff; never infer a join."""
+    if len(selected) < max(1, min(limit, 12)):
+        return
+    receipts = diagnostics.get("result_receipts") or []
+    last = selected[-1]
+    key = (str(last.get("url") or "").strip(), canonical_source(last.get("source") or "unknown"))
+    for index, receipt in enumerate(receipts):
+        if not receipt.get("reason") and (receipt.get("url"), receipt.get("source")) == key:
+            for omitted in receipts[index + 1:]:
+                if not omitted.get("reason"):
+                    omitted["reason"] = "routing_limit"
+            break
+
+
 class IngestionDiagnostics:
     def __init__(self, enabled: bool = True):
         self.enabled = bool(enabled)

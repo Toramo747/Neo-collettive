@@ -34,7 +34,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
-from state_compaction import STATE_COMPACTION_TARGET_BYTES, compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
+from state_compaction import STATE_COMPACTION_TARGET_BYTES, compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary, strip_private_ingestion_diagnostics
 from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
 from public_projection import project_a2a_discovery, project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
 from trust_lab import evaluate_agent_trust
@@ -88,7 +88,7 @@ from tool_opportunity import (
     seti_market_catalog,
 )
 from ingestion_drought import DroughtFunnel
-from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
+from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics, mark_routing_limit
 from price_validation import (
     PRICE_VALIDATION_QUERY_BUDGET,
     compact_price_evidence,
@@ -493,7 +493,7 @@ outcome_council = OBSERVATION.timed("outcome")(outcome_council)
 
 @OBSERVATION.timed("checkpoint_payload")
 def _state_payload() -> dict:
-    return {
+    return strip_private_ingestion_diagnostics({
         "runtime_profile": dict(RUNTIME_IDENTITY),
         "runtime_observation": OBSERVATION.private_snapshot(),
         "state_saved_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -563,7 +563,7 @@ def _state_payload() -> dict:
         "outcome_control": AUTOPILOT_STATE.get("outcome_control") or {},
         "outcome_history": list(AUTOPILOT_STATE.get("outcome_history") or [])[-40:],
         "seti": AUTOPILOT_STATE.get("seti") or {},
-    }
+    })
 
 
 @OBSERVATION.timed("restore_merge")
@@ -8451,6 +8451,7 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
                 break
         if len(results)>=max(1,min(limit,12)):
             break
+    mark_routing_limit(ingestion_diagnostics, results, limit)
     return {
         "ok":True,
         "query":query,
@@ -8549,6 +8550,7 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
                 break
         if len(results)>=max(1,min(limit,12)):
             break
+    mark_routing_limit(ingestion_diagnostics, results, limit)
     return {
         "ok":True,
         "query":query,
@@ -9640,7 +9642,7 @@ def _record_director_result(result: dict) -> dict:
     del DIRECTOR_RESULT_LOG[:-25]
     try:
         with open(RESULTS_LOG_PATH, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+            fh.write(json.dumps(strip_private_ingestion_diagnostics(entry), ensure_ascii=False, default=str) + "\n")
     except Exception:
         pass
     return entry
@@ -9657,7 +9659,7 @@ def _load_recent_results(limit: int = 10) -> list[dict]:
                 try:
                     row = json.loads(line)
                     if isinstance(row, dict):
-                        rows.append(row)
+                        rows.append(strip_private_ingestion_diagnostics(row))
                 except Exception:
                     continue
     except Exception:
@@ -10476,7 +10478,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_quality": evidence_quality,
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
         "council": council_transcript,
-        "ingestion_diagnostics": evidence_quality.get("ingestion_diagnostics") or {},
+        "ingestion_diagnostics": {k: v for k, v in (evidence_quality.get("ingestion_diagnostics") or {}).items() if k != "drought"},
         "family_performance": family_performance,
         "product_candidate": product_candidate,
         "collective_review": collective_review,

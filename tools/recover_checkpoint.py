@@ -17,7 +17,7 @@ import zlib
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from state_codec import decode_checkpoint
 from runtime_observation import OBSERVATION
-from state_compaction import compact_state_payload, protected_serialized_values
+from state_compaction import compact_state_payload, protected_serialized_values, strip_private_ingestion_diagnostics
 
 SERVICE='srv-dampj8bm8hqs73ac0an0'
 ORIGIN='https://neo-collettive.onrender.com'
@@ -45,7 +45,7 @@ def export(folder):
     # Execute only the repository's pure payload builder, not the application.
     tree=ast.parse(Path('cloud_mcp.py').read_text())
     node=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=='_state_payload')
-    scope={'OBSERVATION':OBSERVATION,'AUTOPILOT_STATE':state,'RUNTIME_IDENTITY':snapshot['runtime_profile'],
+    scope={'strip_private_ingestion_diagnostics':strip_private_ingestion_diagnostics,'OBSERVATION':OBSERVATION,'AUTOPILOT_STATE':state,'RUNTIME_IDENTITY':snapshot['runtime_profile'],
            'datetime':datetime,'timezone':timezone,
            'COMMERCIAL_PRICE_EVIDENCE_LIMIT':120,
            'COMMERCIAL_PENDING_EVIDENCE_LIMIT':1000}

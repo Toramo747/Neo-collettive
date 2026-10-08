@@ -35,7 +35,7 @@ captured before the cycle across active, archived and pending evidence; it uses
 normalized URL OR an existing fingerprint. No URL-only replacement fingerprint is
 invented when a source does not provide one.
 
-Public `select_diagnostics.ingestion_drought.rows` contains numerical leaves only:
+Public `select_diagnostics.ingestion_drought.rows` contains numeric/boolean leaves only:
 query_slot, provider_code, raw_results, relevance_pass, useful, new_signal_row,
 duplicate_memory, new_rejected and numeric rejection codes/counts. Slots are
 cycle-local ordinals, not query hashes. Use the private receipt/query mapping for
@@ -46,6 +46,12 @@ are per receipt, not unique URLs, so repeated returns are visible.
 
 Provider codes: 0 unknown; 1 Bing; 2 Brave; 3 Google PSE; 4 HN; 5 GitHub;
 6 StackExchange; 7 Remotive; 8 RemoteOK; 9 persisted price cache (not a live search).
+Reason 14 is appended as `unjoined`; existing codes retain their positions.
+`routing_limit` is set only by the router at its actual cutoff. Unmatched
+receipts are `unjoined`; `unjoined_total` and `measurement_reliable` expose
+whether the counters can support a diagnosis. Query keys use lowercase,
+compressed whitespace, normalized URL and canonical source on both sides.
+
 Reason codes are the positional enum in ingestion_drought.REASONS; no private
 labels are exported. An unrecognized provider/reason maps to 0.
 
@@ -79,3 +85,26 @@ Three production cycles with the new counters have not been collected: this PR
 is not merged or deployed. Report duplicate_memory/new_rejected per query and
 provider, then replace the indeterminate conclusion with (a), (b), or mixed.
 Do not present offline fixtures or historical aggregates as that measurement.
+
+
+## Review corrections A/B (2026-10-08)
+
+A regression test was written and run before B's repair. It failed because
+`_record_director_result` wrote private_results/private_queries into the disk log
+and `_load_recent_results` loaded them back. Full private receipts now remain
+only in the in-memory result and existing ADMIN routes; the disk history and
+checkpoint discard them. Old disk records are sanitized when read. The cycle
+result has one drought block, under evidence_quality; its top-level diagnostics
+retain the other counters without a second drought copy.
+
+The checkpoint strips these private diagnostics before encoding even when size
+compaction is not triggered. `drop_ephemeral_checkpoint_state` also strips them.
+Protected state, evidence rows and their invariant are not traversed or changed.
+The recovery payload builder receives the same pure stripping helper.
+
+Production state_codec measurement with 3 simulated cycles of 150 receipts:
+baseline 13,447 encoded bytes, instrumented 14,015, delta **568 bytes** (limit
+3,000). This is the isolated fixture measurement, not Render checkpoint size.
+The production pre-deploy checkpoint observed at 18:55 UTC uses 53,367/100,000
+bytes. The public snapshot was stale; post-deploy acceptance must use fresh,
+consecutive cycle observations, not repeats of that snapshot.
