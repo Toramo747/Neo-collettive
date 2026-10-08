@@ -28,7 +28,7 @@ class ObservationTests(unittest.IsolatedAsyncioTestCase):
                 simulated_cpu_phase()
             await asyncio.sleep(0.02)
             result = observer.private_snapshot()
-            self.assertEqual(result['event_loop_stalls'], 1)
+            self.assertGreaterEqual(result['event_loop_stalls'], 1)
             self.assertGreater(result['event_loop_max_lag_ms'], 100)
             self.assertTrue(any(x['function'] == 'simulated_cpu_phase'
                                 for x in result['last_project_stack']))

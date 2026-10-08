@@ -37,58 +37,57 @@ Nessun merge, deploy o intervento su Render è stato eseguito dall'agente.
 
 ## Procedura eseguita da Andrea
 
-1. Prima del merge, disabilita temporaneamente **NEO Render Deploy** nella
-   pagina Actions del repository: il merge modifica file inclusi nel trigger
-   `push` e avvierebbe altrimenti un deploy normale, senza observation_deploy.
-   Nessuna di queste azioni è stata eseguita dall'agente. Sul servizio
-   `neo-collettive`, workspace `My Workspace`, lascia/imposta personalmente
-   `NEO_CHECKPOINT_CODEC_OFFTHREAD=0` per la prima misura.
-2. Esegui il merge solo dopo la tua approvazione, riabilita il workflow e usa
-   **Run workflow**, branch `main`, account Andrea/Toramo747:
-   `observation_deploy=true`, `extended_validation=false`; non abilitare
-   `emergency_deploy` salvo una tua decisione separata. Annota SHA, ID della run,
-   UTC di avvio e ID dell'istanza. Verifica l'avviso OBSERVATION_DEPLOY.
-3. Nei log Render del primo ciclo individua `event_loop_stall`, `event_loop_stack` e
-   `runtime_phase`; registra `event_loop_stalls`, `event_loop_max_lag_ms`,
-   `last_project_stack`, durata/CPU di `checkpoint_json`, `checkpoint_zlib`,
-   `checkpoint_lzma`, `checkpoint`, `autopilot` e delle altre fasi più lente.
-   Leggi la telemetria privata già autorizzata da `/api/autonomy/status` e lo
-   snapshot pubblico; verifica `codec_offthread=false` e il numero del primo
-   ciclo. Conserva solo nomi delle funzioni e aggregati, mai segreti o evidenze.
-4. **Condizione di arresto:** se lo stack sincrono non identifica la chiamata
-   `lzma.compress` dentro `compress_checkpoint` (o identifica un'altra funzione),
-   non attivare la correzione. Riporta la fase e i dati. Uno stack assente rende
-   la prova insufficiente: il campionatore può non operare se il GIL resta
-   occupato o il processo è completamente deschedulato. Non attribuire il
-   blocco alla compressione per sola somiglianza delle durate.
-5. Solo con quella prova, imposta personalmente su Render
-   `NEO_CHECKPOINT_CODEC_OFFTHREAD=1` e riavvia il servizio mantenendo lo stesso
-   commit. La modifica della variabile può già avviare un nuovo container:
-   evita un secondo riavvio durante il primo ciclo. Annota il nuovo ID istanza
-   e UTC; attendi il completamento del primo ciclo di questa istanza.
-6. Ripeti la lettura del punto 3, verifica `codec_offthread=true` e confronta
-   le due finestre. I contatori di processo ripartono: non sottrarre valori
-   appartenenti a istanze diverse. Non rilanciare il workflow di deploy per
-   effettuare lo smoke dopo il riavvio.
-7. Dal checkout dello stesso SHA, con `HEARTBEAT_TOKEN` già disponibile in modo
-   sicuro nell'ambiente locale, esegui il polling e lo stesso smoke Arena:
+1. Esegui **Squash and merge** con il titolo del commit finale contenente
+   `[skip ci]`, per esempio:
+   `Phase 1 deploy reliability and loop observation [skip ci]`.
+   Verifica il titolo nel dialogo finale prima di confermare. GitHub salta i
+   workflow attivati da `push` per quel commit; non occorre disabilitare il
+   workflow. La correzione del test sulla PR viene invece pubblicata senza
+   istruzioni di skip, così tutti i controlli possono essere verificati.
+2. **Actions → NEO Render Deploy (neo-render-deploy.yml) → Run workflow**, branch
+   `main`, account Andrea/Toramo747: `observation_deploy=true`,
+   `extended_validation=false`, `emergency_deploy=false`.
+   `NEO_CHECKPOINT_CODEC_OFFTHREAD` resta `0`, il valore predefinito.
+   Annota SHA, run, UTC e ID istanza; verifica l'avviso OBSERVATION_DEPLOY.
+3. L'agente legge **in sola lettura** log Render e telemetria del primo ciclo:
+   `event_loop_max_lag_ms`, `event_loop_stalls`, stack catturato e durata/CPU
+   per fase (`checkpoint_json`, `checkpoint_zlib`, `checkpoint_lzma`,
+   `checkpoint`, `autopilot` e altre fasi lente). Nei log cerca
+   `event_loop_stall`, `event_loop_stack`, `runtime_phase`; verifica
+   `codec_offthread=false` e il numero del primo ciclo. Se lo stack non
+   identifica `lzma.compress` dentro `compress_checkpoint`, **ci si ferma** e
+   si riporta la fase. Uno stack assente è prova insufficiente. Riportare solo
+   funzioni e aggregati, mai segreti o evidenze.
+4. Solo con quella prova, Andrea imposta personalmente
+   `NEO_CHECKPOINT_CODEC_OFFTHREAD=1` su Render e riavvia il servizio sullo
+   stesso commit. Se il salvataggio avvia già un nuovo container, non
+   interrompere il primo ciclo con un secondo riavvio. Annota istanza e UTC.
+5. L'agente ripete la lettura sul primo ciclo della nuova istanza, verifica
+   `codec_offthread=true` e lancia lo stesso smoke Arena. I contatori sono per
+   processo: non sottrarre valori di istanze diverse e non rilanciare il
+   workflow di deploy per lo smoke. Dal checkout dello stesso SHA, usando
+   l'autenticazione già prevista dallo smoke senza leggere/esportare i valori
+   delle variabili Render:
 
    ```bash
    python scripts/wait_first_autopilot_cycle.py
    OBSERVATION_DEPLOY=true python scripts/retry_deploy_smoke.py scripts/smoke_arena_surface.sh
    ```
 
-   Non usare shell tracing e non stampare il token. Il primo comando fallisce
-   se il segnale non arriva entro 5 minuti. Il secondo registra ogni tentativo;
-   in observation mode un fallimento finale restituisce 0 ma emette un avviso:
-   **l'assenza di avvisi e il successo su `attempt=1/3` sono la prova dello smoke**.
-8. Successo: con `1`, `event_loop_max_lag_ms < 1000` nella finestra del primo
-   ciclo e tutte le asserzioni Arena passano al primo tentativo. Registra prima/
-   dopo, SHA e istanze nella PR. Se il criterio fallisce, conserva i log e
-   riporta la fase responsabile; nessuna ulteriore correzione è implicita.
-   `extended_validation=false` evita le ulteriori attività estese previste dal
-   workflow. Le verifiche Pathwren e dialogo A2A già obbligatorie restano presenti,
-   con gli stessi retry degli altri smoke.
+   Criterio di successo: `event_loop_max_lag_ms < 1000` durante il primo ciclo
+   e smoke Arena verde al tentativo `1/3`, senza avvisi. Il wrapper in modalità
+   osservazione restituisce 0 anche al fallimento finale: verificare il log,
+   non solo l'exit code. Se il criterio fallisce, conservare i log e riportare
+   la fase responsabile.
+
+### Trigger verificati
+
+`neo-render-deploy.yml` ha esclusivamente `push` (branch `main`, con filtro dei
+percorsi) e `workflow_dispatch` (manuale). Non ha `workflow_run`, `schedule`,
+`pull_request_target`, `repository_dispatch` o altri trigger. `[skip ci]` nel
+messaggio del commit squash salta il deploy su quel push e lascia disponibile
+il successivo avvio manuale. Non blocca eventuali workflow schedulati separati.
+Riferimento: [GitHub Docs — Skipping workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs).
 
 ## Verifica locale
 
