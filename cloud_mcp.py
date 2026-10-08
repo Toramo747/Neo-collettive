@@ -7,6 +7,7 @@ import neo_dialect_security
 import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
+import oxibay_doctor
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
 from a2a_dialogue import consume_rate as consume_a2a_response_rate, origin_rate_key, plan_untrusted_reply
@@ -10500,6 +10501,7 @@ MCP_TOOL_ACCESS = {
     "neo_collective":"gated_effectful",
     "neo_inspect_mcp":"gated_network",
     "verify_mcp_endpoint":"gated_network",
+    "oxibay_doctor":"gated_network",
     "neo_web_search":"gated_network",
     "neo_jarvis":"gated_effectful",
     "neo_director":"gated_effectful",
@@ -10598,6 +10600,32 @@ async def verify_mcp_endpoint(
         registry_name=(registry_name or None),
         caller=caller,
         client_version=VERSION,
+    )
+
+
+@mcp.tool(
+    title="OXIBAY Doctor",
+    description=(
+        "Read-only MCP diagnostic. Reuses MYCELIX endpoint verification, classifies technical "
+        "failures, and optionally compares the requested capability with declared tool metadata. "
+        "Never invokes remote tools, never forwards credentials, and never affects commercial gates."
+    ),
+)
+async def oxibay_doctor(
+    ctx: Context,
+    url: str = "",
+    registry_name: str = "",
+    expected_capability: str = "",
+) -> dict:
+    """Diagnose a public MCP endpoint without tools/call or production mutation."""
+    connection = getattr(ctx, "connection", None)
+    caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
+    return await oxibay_doctor.diagnose_endpoint(
+        url=(url or None),
+        registry_name=(registry_name or None),
+        caller=caller,
+        client_version=VERSION,
+        expected_capability=expected_capability,
     )
 
 
