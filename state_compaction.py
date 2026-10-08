@@ -165,9 +165,32 @@ def _summarize_transcript(raw: Any) -> dict[str, Any]:
     }
 
 
+def strip_private_ingestion_diagnostics(payload):
+    """Keep numeric diagnostics durable; raw receipts stay in process memory.
+
+    Evidence and other protected durable state are never traversed or changed.
+    """
+    if isinstance(payload, list):
+        return [strip_private_ingestion_diagnostics(x) for x in payload]
+    if not isinstance(payload, dict):
+        return payload
+    out = {}
+    for key, value in payload.items():
+        if key in PROTECTED_STATE_KEYS:
+            out[key] = deepcopy(value)
+        elif key == "drought" and isinstance(value, dict):
+            out[key] = {k: deepcopy(v) for k, v in value.items()
+                        if k not in {"private_results", "private_queries"}}
+        elif key == "result_receipts":
+            continue
+        else:
+            out[key] = strip_private_ingestion_diagnostics(value)
+    return out
+
+
 def drop_ephemeral_checkpoint_state(payload: dict) -> dict:
     """Remove state that is never consumed by _merge_state_payload after restart."""
-    out = deepcopy(payload)
+    out = strip_private_ingestion_diagnostics(payload)
     out.pop("tool_opportunities", None)
     out.pop("council_history", None)
     out.pop("runtime_snapshot", None)

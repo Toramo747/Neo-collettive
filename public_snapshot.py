@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ingestion_drought import public_drought
 
 import ipaddress
 import re
@@ -303,6 +304,13 @@ PUBLIC_SNAPSHOT_SCHEMA = {
                 "confirmation_blockers": [None],
                 "tagger_version": None,
             }],
+            "ingestion_drought": {"schema_v": None, "unjoined_total": None,
+                "measurement_reliable": None, "rows": [{
+                "query_slot": None, "provider_code": None, "raw_results": None,
+                "relevance_pass": None, "useful": None, "new_signal_row": None,
+                "duplicate_memory": None, "new_rejected": None,
+                "rejections": [{"reason_code": None, "count": None}],
+            }]},
             "rejection_reasons": [{
                 "reason": None,
                 "count": None,
@@ -958,6 +966,7 @@ def _project_select_diagnostics(latest_result: Any) -> dict:
         "post_deploy_pass_ignored": max(0,int(tool.get("post_deploy_pass_ignored") or 0)),
         "top_missing": missing[:12],
         "candidates": _project_candidate_telemetry(tool.get("candidate_telemetry")),
+        "ingestion_drought": public_drought(ingestion.get("drought")),
         "rejection_reasons": _project_reason_counts(ingestion.get("rejected_by_reason")),
         "search_sources": _project_search_sources(ingestion),
         "buyer_voice_by_source": _project_source_counts(ingestion.get("buyer_voice_by_source")),

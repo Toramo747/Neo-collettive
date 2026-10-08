@@ -69,6 +69,7 @@ def routed_search_diagnostics(
     passed = Counter()
     errors = 0
     seen = set()
+    receipts = []
     attempts = Counter()
     empty = Counter()
     source_errors = Counter()
@@ -119,7 +120,11 @@ def routed_search_diagnostics(
             source = canonical_source(row.get("source") or "unknown")
             raw[source] += 1
             url = str(row.get("url") or "").strip()
+            receipt = {"url": url, "source": source, "fingerprint": row.get("fingerprint"),
+                       "relevance_pass": False, "reason": ""}
+            receipts.append(receipt)
             if not url or url in seen:
+                receipt["reason"] = "missing_url" if not url else "routing_duplicate"
                 continue
             seen.add(url)
             try:
@@ -131,10 +136,15 @@ def routed_search_diagnostics(
                 )
                 if isinstance(relevance, dict) and relevance.get("relevant"):
                     passed[source] += 1
+                    receipt["relevance_pass"] = True
+                else:
+                    receipt["reason"] = "query_irrelevant"
             except Exception:
+                receipt["reason"] = "relevance_error"
                 errors += 1
 
     return {
+        "result_receipts": receipts,
         "raw_by_source": dict(raw),
         "query_relevance_pass_by_source": dict(passed),
         "query_relevance_pass_by_source_and_class": {
@@ -160,6 +170,21 @@ def routed_search_diagnostics(
         },
         "diagnostic_errors": errors,
     }
+
+
+def mark_routing_limit(diagnostics: dict, selected: list[dict], limit: int) -> None:
+    """Mark only receipts beyond the actual router cutoff; never infer a join."""
+    if len(selected) < max(1, min(limit, 12)):
+        return
+    receipts = diagnostics.get("result_receipts") or []
+    last = selected[-1]
+    key = (str(last.get("url") or "").strip(), canonical_source(last.get("source") or "unknown"))
+    for index, receipt in enumerate(receipts):
+        if not receipt.get("reason") and (receipt.get("url"), receipt.get("source")) == key:
+            for omitted in receipts[index + 1:]:
+                if not omitted.get("reason"):
+                    omitted["reason"] = "routing_limit"
+            break
 
 
 class IngestionDiagnostics:

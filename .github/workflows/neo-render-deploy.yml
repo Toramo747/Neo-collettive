@@ -1020,6 +1020,11 @@ jobs:
           NEO_SMOKE_BODY_215
           python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-9.sh
 
+      - name: Verify three consecutive ingestion observation cycles
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: python scripts/verify_ingestion_deploy.py
+
       - name: All required deployment surfaces verified
         run: |
           if [ -f /tmp/neo-observation-smoke-failed ]; then

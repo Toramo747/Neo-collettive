@@ -34,7 +34,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from typing import Any
 from state_recovery import apply_monotonic_cycle_floor, merge_supplementary_state, reconcile_thesis_cycles, select_freshest_state
-from state_compaction import STATE_COMPACTION_TARGET_BYTES, compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary
+from state_compaction import STATE_COMPACTION_TARGET_BYTES, compact_state_payload, encoded_sizes, heaviest_key, merge_cumulative_inbound_summary, strip_private_ingestion_diagnostics
 from route_policy import RoutePolicyConfig, RoutePolicyMiddleware, admin_header_authorized
 from public_projection import project_a2a_discovery, project_agent_chats, project_agent_demand, project_inbox, project_inbound_agents, project_intelligence, project_trust_evaluations
 from trust_lab import evaluate_agent_trust
@@ -87,7 +87,8 @@ from tool_opportunity import (
     opportunity_candidate,
     seti_market_catalog,
 )
-from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics
+from ingestion_drought import DroughtFunnel
+from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics, mark_routing_limit
 from price_validation import (
     PRICE_VALIDATION_QUERY_BUDGET,
     compact_price_evidence,
@@ -492,7 +493,7 @@ outcome_council = OBSERVATION.timed("outcome")(outcome_council)
 
 @OBSERVATION.timed("checkpoint_payload")
 def _state_payload() -> dict:
-    return {
+    return strip_private_ingestion_diagnostics({
         "runtime_profile": dict(RUNTIME_IDENTITY),
         "runtime_observation": OBSERVATION.private_snapshot(),
         "state_saved_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -562,7 +563,7 @@ def _state_payload() -> dict:
         "outcome_control": AUTOPILOT_STATE.get("outcome_control") or {},
         "outcome_history": list(AUTOPILOT_STATE.get("outcome_history") or [])[-40:],
         "seti": AUTOPILOT_STATE.get("seti") or {},
-    }
+    })
 
 
 @OBSERVATION.timed("restore_merge")
@@ -6941,6 +6942,17 @@ def _commercial_evidence_quality(
     shadow_metrics=public_shadow_projection((model_shadow_state or {}).get("student_metrics") or {})
     shadow_metrics["student_available"]=bool(SHADOW_STUDENT is not None)
     shadow_seen=0
+    drought = DroughtFunnel((AUTOPILOT_STATE.get("commercial_evidence_memory") or [])
+                            + (AUTOPILOT_STATE.get("commercial_evidence_archive_rows") or [])
+                            + (AUTOPILOT_STATE.get("pending_evidence") or []))
+    active_query = ""
+    for group in web_research:
+        if not isinstance(group, dict):
+            continue
+        q = " ".join(str(group.get("query") or "").split())
+        diag = group.get("ingestion_diagnostics") or {}
+        for receipt in diag.get("result_receipts") or []:
+            drought.add(q, receipt, receipt.get("relevance_pass"), receipt.get("reason") or "")
     diagnostics=IngestionDiagnostics(INGESTION_DIAGNOSTICS_ENABLED)
     diagnostics.merge_web_research(web_research)
     diagnostics.add_raw_rows(scouts or [])
@@ -6971,6 +6983,7 @@ def _commercial_evidence_quality(
     fresh_seconds=7*24*3600
 
     def reject(reason: str, url: str, title: str, role: str = "", source: str = "", query_class: str = ""):
+        drought.outcome(active_query, url, reason, source)
         diagnostics.record_rejection(reason,source,query_class or role)
         if len(rejected)<40:
             rejected.append({"reason":reason,"url":(url or "")[:500],"title":(title or "")[:180],"query_role":role})
@@ -7002,7 +7015,12 @@ def _commercial_evidence_quality(
         challenge_current.append(row)
 
     def ingest(url: str, title: str, body: str, source: str, query: str = "", query_role: str = "", scout: bool = False, metadata: dict | None = None):
-        nonlocal challenge_collected, shadow_metrics, shadow_seen
+        nonlocal challenge_collected, shadow_metrics, shadow_seen, active_query
+        active_query = " ".join((query or "").split())
+        # Providers with no routed diagnostics (and scouts) still get receipts.
+        if scout or not drought.has_receipt(active_query, url, source):
+            drought.add(active_query, {"url": url, "source": source,
+                                      "fingerprint": (metadata or {}).get("fingerprint")}, False)
         meta=query_meta.get(" ".join((query or "").split()).lower()) or {}
         query_class=diagnostic_query_class(meta,query_role)
         query_intent=str(meta.get("query_intent") or "pain").strip().lower()
@@ -7056,6 +7074,7 @@ def _commercial_evidence_quality(
         if query and not relevance.get("relevant"):
             reject("query_irrelevant",url,title,query_role,source,query_class)
             return
+        drought.relevant(active_query, url, source)
         if scout:
             diagnostics.record_scout_relevance(source,query_class)
         text=(title_low+" "+body_low)
@@ -7186,6 +7205,7 @@ def _commercial_evidence_quality(
             "first_seen_epoch":now_epoch,
             "seen_count":1,
         }
+        drought.outcome(active_query, url, source=source)
         current_rows.append(row)
 
     for item in challenge_shadow_rows or []:
@@ -7314,6 +7334,7 @@ def _commercial_evidence_quality(
                     else "bing" if source_name=="bing-rss-free"
                     else source_name
                 )
+                drought.new_signal(str(row.get("url") or ""), q, source_name)
                 diagnostics.record_new_signal_row(
                     source_name,
                     diagnostic_query_class(meta,str(row.get("query_role") or "")),
@@ -7533,6 +7554,8 @@ def _commercial_evidence_quality(
         }
         if qualified_related: qualified_families.append(family)
 
+    ingestion_snapshot = diagnostics.snapshot()
+    ingestion_snapshot["drought"] = drought.snapshot()
     return {
         "evidence_schema_v":EVIDENCE_SCHEMA_VERSION,
         "tagger_v":TAGGER_VERSION,
@@ -7548,7 +7571,7 @@ def _commercial_evidence_quality(
         "persistent_evidence_items":len(memory),
         "quarantined_evidence_items":sum(1 for x in memory if not bool(x.get("gate_eligible"))),
         "rejected_current_results":rejected,
-        "ingestion_diagnostics":diagnostics.snapshot(),
+        "ingestion_diagnostics":ingestion_snapshot,
         "memory_retention_days":21,
         "freshness_window_days":7,
         "useful_results":[{k:v for k,v in x.items() if k not in {"first_seen_epoch","last_seen_epoch"}} for x in memory[:20]],
@@ -8428,6 +8451,7 @@ async def paid_market_search(query: str, meta: dict | None = None, limit: int = 
                 break
         if len(results)>=max(1,min(limit,12)):
             break
+    mark_routing_limit(ingestion_diagnostics, results, limit)
     return {
         "ok":True,
         "query":query,
@@ -8526,6 +8550,7 @@ async def routed_public_search(query: str, meta: dict | None = None, limit: int 
                 break
         if len(results)>=max(1,min(limit,12)):
             break
+    mark_routing_limit(ingestion_diagnostics, results, limit)
     return {
         "ok":True,
         "query":query,
@@ -9617,7 +9642,7 @@ def _record_director_result(result: dict) -> dict:
     del DIRECTOR_RESULT_LOG[:-25]
     try:
         with open(RESULTS_LOG_PATH, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+            fh.write(json.dumps(strip_private_ingestion_diagnostics(entry), ensure_ascii=False, default=str) + "\n")
     except Exception:
         pass
     return entry
@@ -9634,7 +9659,7 @@ def _load_recent_results(limit: int = 10) -> list[dict]:
                 try:
                     row = json.loads(line)
                     if isinstance(row, dict):
-                        rows.append(row)
+                        rows.append(strip_private_ingestion_diagnostics(row))
                 except Exception:
                     continue
     except Exception:
@@ -10453,7 +10478,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "evidence_quality": evidence_quality,
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
         "council": council_transcript,
-        "ingestion_diagnostics": evidence_quality.get("ingestion_diagnostics") or {},
+        "ingestion_diagnostics": {k: v for k, v in (evidence_quality.get("ingestion_diagnostics") or {}).items() if k != "drought"},
         "family_performance": family_performance,
         "product_candidate": product_candidate,
         "collective_review": collective_review,

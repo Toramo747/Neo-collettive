@@ -735,3 +735,31 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+class DroughtPublicPrivacyTests(unittest.TestCase):
+    def test_drought_is_numeric_boolean_allowlist_without_urls_or_query_text(self):
+        from ingestion_drought import DroughtFunnel
+        from public_snapshot import PUBLIC_SNAPSHOT_SCHEMA
+        observer = DroughtFunnel([])
+        observer.add('TOP SECRET QUERY', {'url': 'https://private.example/secret', 'source': 'bing-rss'}, True)
+        drought = observer.snapshot()
+        drought['rows'][0]['injected'] = 'http://private.example'
+        raw = {'latest_result': {'evidence_quality': {'ingestion_diagnostics': {'drought': drought}}}}
+        snapshot = sanitize_public_snapshot(raw)
+        validate_public_snapshot(snapshot)
+        public = snapshot['autopilot']['select_diagnostics']['ingestion_drought']
+        schema = PUBLIC_SNAPSHOT_SCHEMA['autopilot']['select_diagnostics']['ingestion_drought']
+        def walk(value, allowed):
+            if isinstance(value, dict):
+                self.assertLessEqual(set(value), set(allowed))
+                for k, v in value.items(): walk(v, allowed[k])
+            elif isinstance(value, list):
+                for v in value: walk(v, allowed[0])
+            else:
+                self.assertIn(type(value), (int, bool))
+        walk(public, schema)
+        self.assertFalse(public['measurement_reliable'])
+        serialized = json.dumps(snapshot)
+        self.assertNotIn('http', serialized)
+        self.assertNotIn('TOP SECRET QUERY', serialized)
+        self.assertNotIn('private_results', serialized)
