@@ -19,10 +19,10 @@ account for 62, 61 and 73 results respectively. The existing stages have differe
 denominators (provider receipts versus routed results); do not subtract their
 totals to infer duplicates. The public snapshots contain no raw-result identities.
 
-**Conclusion: (a), (b), or mixed is not yet identifiable.** Classification rejection
-is observed, but whether those rejected rows are new is unknown. Stable memory
-counts do not establish search saturation. Historical duplicate/new-rejected
-counts cannot be reconstructed from these aggregates.
+**Conclusion: (b), predominantly new-to-memory results being rejected.** The
+three consecutive instrumented production cycles below establish this result.
+The older snapshots alone could not distinguish the cases; historical duplicate
+counts cannot be reconstructed from those aggregates.
 
 ## Added observation
 
@@ -79,12 +79,54 @@ correct a classifier only if a labelled regression demonstrates an actual bug.
 For mixed results, apply those changes independently. No threshold relaxation
 is proposed. Preserve raw/private data access boundaries.
 
-## Outstanding acceptance evidence
+## Production acceptance and diagnosis (2026-10-08)
 
-Three production cycles with the new counters have not been collected: this PR
-is not merged or deployed. Report duplicate_memory/new_rejected per query and
-provider, then replace the indeterminate conclusion with (a), (b), or mixed.
-Do not present offline fixtures or historical aggregates as that measurement.
+PRs #218 and #219 were merged in that order. Production commit
+`ac91d2aaaba44d86232b863d51448535d723b623` passed the full deploy workflow:
+[run 37830095916](https://github.com/Toramo747/Neo-collettive/actions/runs/37830095916).
+Its read-only acceptance step emitted the three public numerical projections
+below and `three_consecutive_cycles_valid=true` at 19:26:27 UTC. No rollback
+was required. Rows were nonempty and unjoined_total was zero for every cycle.
+
+| Cycle | measurement_reliable | evidence_out | stored_bytes | Raw | Duplicate memory | New rejected | Useful |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 2956 | true | 145 | 51,615 | 142 | 4 | 138 | 0 |
+| 2957 | true | 145 | 52,275 | 140 | 7 | 133 | 3 |
+| 2958 | true | 145 | 53,267 | 141 | 3 | 138 | 2 |
+
+Counts by provider across those three cycles (receipts, not unique URLs):
+
+| Provider | Raw | Duplicate memory | New rejected | Useful |
+|---|---:|---:|---:|---:|
+| Bing RSS | 237 | 3 | 234 | 3 |
+| Brave | 12 | 0 | 12 | 0 |
+| HN | 114 | 8 | 106 | 2 |
+| GitHub | 58 | 3 | 55 | 0 |
+| Unknown (code 0) | 2 | 0 | 2 | 0 |
+| Total | 423 | 14 | 409 | 5 |
+
+Only 14/423 receipts (3.3%) matched existing evidence; 409/423 (96.7%) were
+new to memory and rejected. Useful is not an additional disjoint category:
+all five useful receipts were already in memory. New-signal insertions remained
+zero. This supports case **(b)** as the principal measured cause, not saturation
+of already-stored evidence. Some overlap exists, but it is a small minority.
+
+Rejection counts include no_demand_signal=80, no_family=56 and
+weak_family_relevance=65; the other reasons are query_irrelevant=82,
+routing_limit=68, noise_domain=33, github_no_buyer_problem_context=23,
+github_noise=7 and routing_duplicate=4. Thus not every new rejection is a
+classifier rejection: routing and relevance filtering also contribute.
+
+These counters define new relative to evidence memory, not relative to all
+previous searches. They cannot establish whether the same rejected URLs recur
+across cycles; that narrower search-saturation question needs private receipt
+comparison. No classifier defect follows merely from rejection counts. The
+regex equivalence sample above remains identical, with the stated sample limits.
+
+Proposed next fix: improve query intent/family precision for the dominant new
+rejections, after reviewing their private examples; rotate queries only where
+repeated rejected URLs demonstrate saturation. Preserve all gates and thresholds.
+No such ingestion fix is applied in this PR.
 
 
 ## Review corrections A/B (2026-10-08)
