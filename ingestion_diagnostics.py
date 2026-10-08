@@ -69,6 +69,7 @@ def routed_search_diagnostics(
     passed = Counter()
     errors = 0
     seen = set()
+    receipts = []
     attempts = Counter()
     empty = Counter()
     source_errors = Counter()
@@ -119,7 +120,11 @@ def routed_search_diagnostics(
             source = canonical_source(row.get("source") or "unknown")
             raw[source] += 1
             url = str(row.get("url") or "").strip()
+            receipt = {"url": url, "source": source, "fingerprint": row.get("fingerprint"),
+                       "relevance_pass": False, "reason": ""}
+            receipts.append(receipt)
             if not url or url in seen:
+                receipt["reason"] = "missing_url" if not url else "routing_duplicate"
                 continue
             seen.add(url)
             try:
@@ -131,10 +136,15 @@ def routed_search_diagnostics(
                 )
                 if isinstance(relevance, dict) and relevance.get("relevant"):
                     passed[source] += 1
+                    receipt["relevance_pass"] = True
+                else:
+                    receipt["reason"] = "query_irrelevant"
             except Exception:
+                receipt["reason"] = "relevance_error"
                 errors += 1
 
     return {
+        "result_receipts": receipts,
         "raw_by_source": dict(raw),
         "query_relevance_pass_by_source": dict(passed),
         "query_relevance_pass_by_source_and_class": {
