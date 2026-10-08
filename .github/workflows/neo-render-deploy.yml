@@ -149,11 +149,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     env:
       HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Authorize emergency deploy
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.emergency_deploy }}
@@ -205,7 +207,7 @@ jobs:
       - name: Run regression tests
         run: |
           set -euo pipefail
-          python -m unittest -v test_memory_repair.py test_evidence_store_atomic.py test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_route_policy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+          python -m unittest -v test_deploy_rollback.py test_deploy_health.py test_memory_repair.py test_evidence_store_atomic.py test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_route_policy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
 
       - name: Require all public commercial controls
         run: |
@@ -467,13 +469,26 @@ jobs:
             exit 22
           fi
 
+      - name: Capture previous production commit
+        run: |
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          commit=str(json.load(open("/tmp/predeploy-health.json")).get("commit") or "")
+          if not re.fullmatch(r"[0-9a-f]{40}",commit):
+              raise SystemExit("Previous production commit unavailable; deploy blocked")
+          Path("/tmp/previous-production-commit").write_text(commit)
+          PY
+
       - name: Trigger Render deploy
+        id: render_trigger
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           set -euo pipefail
           sep='?'
           case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          touch /tmp/render-deploy-attempted
           deploy_url="${RENDER_DEPLOY_HOOK}${sep}ref=${GITHUB_SHA}"
           curl --fail --show-error --silent --max-time 60 "$deploy_url" > /tmp/deploy.txt
           cat /tmp/deploy.txt || true
@@ -699,20 +714,25 @@ jobs:
       - name: Smoke test NEO Arena read-only surface
         run: |
           set -euo pipefail
+          echo "Arena smoke request: /arena"
           curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena" > /tmp/arena.html
           grep -q "NEO Arena" /tmp/arena.html
           grep -q "mycelix-arena" /tmp/arena.html
+          echo "Arena smoke request: /arena/neo-dialect"
           curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/neo-dialect' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/neo-dialect" > /tmp/arena-neo-dialect.html
           grep -q "neo-dialect evolution study" /tmp/arena-neo-dialect.html
           grep -q "neo-dialect 1.0 is sufficient for now" /tmp/arena-neo-dialect.html
           grep -q "arena-dialect-study-" /tmp/arena-neo-dialect.html
-                    curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/micelio' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/micelio" > /tmp/micelio.html
+          echo "Arena smoke request: /arena/micelio"
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/micelio' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/micelio" > /tmp/micelio.html
           grep -q "Micelio" /tmp/micelio.html
           grep -q "Memoria verificata" /tmp/micelio.html
+          echo "Arena smoke request: /arena/evoluzione"
           curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/arena/evoluzione' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/arena/evoluzione" > /tmp/evoluzione.html
           grep -q "Evoluzione" /tmp/evoluzione.html
           grep -q "promozione automatica" /tmp/evoluzione.html
           echo "Arena, Micelio and Evoluzione read-only surfaces healthy"
+
 
       - name: Bootstrap first Arena session for v0.99.34
         if: success()
@@ -914,26 +934,6 @@ jobs:
               raise SystemExit("substantive reply missing")
           PY
 
-      - name: Dispatch post-deploy public snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          dispatched=0
-          for attempt in $(seq 1 5); do
-            if gh workflow run mycelix-heartbeat-v3.yml --ref main; then
-              dispatched=1
-              break
-            fi
-            echo "Heartbeat dispatch attempt ${attempt}/5 failed; retrying" >&2
-            sleep 5
-          done
-          if [ "${dispatched}" != "1" ]; then
-            echo "Post-deploy heartbeat dispatch failed after 5 attempts" >&2
-            exit 22
-          fi
-          echo "Post-deploy heartbeat snapshot workflow dispatched"
-
       - name: Verify post-deploy SETI readiness
         run: |
           set -euo pipefail
@@ -997,6 +997,29 @@ jobs:
             exit 1
           fi
           echo "SETI readiness public telemetry healthy; private interviews remain admin-only"
+
+      - name: All required deployment surfaces verified
+        run: echo "All required post-deploy checks passed"
+
+      - name: Dispatch post-deploy public snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dispatched=0
+          for attempt in $(seq 1 5); do
+            if gh workflow run mycelix-heartbeat-v3.yml --ref main; then
+              dispatched=1
+              break
+            fi
+            echo "Heartbeat dispatch attempt ${attempt}/5 failed; retrying" >&2
+            sleep 5
+          done
+          if [ "${dispatched}" != "1" ]; then
+            echo "Post-deploy heartbeat dispatch failed after 5 attempts" >&2
+            exit 22
+          fi
+          echo "Post-deploy heartbeat snapshot workflow dispatched"
 
       - name: Run three market validation cycles
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
@@ -1110,25 +1133,57 @@ jobs:
           gh workflow run registry-health-scan.yml --ref main -f phase=first -f scan_date=''
           echo "Authorized Registry Health phase=first dispatched via workflow_dispatch"
 
+      - name: Restore previous Render production commit
+        if: failure()
+        env:
+          FAILED_SHA: ${{ github.sha }}
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          [ -f /tmp/render-deploy-attempted ] || exit 0
+          git fetch origin main
+          if ! python scripts/deploy_rollback.py "$FAILED_SHA" --current origin/main; then
+            echo "Newer application commit exists; automatic rollback blocked"
+            exit 1
+          fi
+          previous="$(cat /tmp/previous-production-commit)"
+          sep='?'
+          case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          curl --fail --silent --show-error --max-time 60 "${RENDER_DEPLOY_HOOK}${sep}ref=${previous}" > /tmp/rollback-deploy.json
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 15 'https://neo-collettive.onrender.com/health' > /tmp/rollback-health.json; then
+              if PREVIOUS="$previous" python - <<'PY'
+          import json,os,sys
+          d=json.load(open('/tmp/rollback-health.json'))
+          sys.exit(0 if d.get('commit') == os.environ['PREVIOUS'] else 1)
+          PY
+              then
+                echo "Previous Render production commit restored: $previous"
+                touch /tmp/render-rollback-verified
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Render rollback could not be verified" >&2
+          exit 1
+
       - name: Roll back failed application commit
         if: failure()
         env:
           FAILED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          [ -f /tmp/render-rollback-verified ] || exit 0
           git fetch origin main
           git checkout -B main origin/main
-          current="$(git rev-parse HEAD)"
-          if [ "$current" != "$FAILED_SHA" ]; then
-            echo "Main advanced to $current; skip automatic rollback of $FAILED_SHA"
-            exit 0
-          fi
-          changed="$(git show --pretty='' --name-only "$FAILED_SHA")"
-          if printf '%s\n' "$changed" | grep -q '^\.github/workflows/'; then
-            echo "Workflow-changing commit: automatic rollback skipped"
-            exit 0
-          fi
+          python scripts/deploy_rollback.py "$FAILED_SHA"
           git config user.name "NEO Safe Rollback"
           git config user.email "actions@users.noreply.github.com"
-          git revert --no-edit "$FAILED_SHA"
+          parents="$(git rev-list --parents -n 1 "$FAILED_SHA" | wc -w)"
+          if [ "$parents" -gt 2 ]; then
+            git revert -m 1 --no-edit "$FAILED_SHA"
+          else
+            git revert --no-edit "$FAILED_SHA"
+          fi
           git push origin HEAD:main

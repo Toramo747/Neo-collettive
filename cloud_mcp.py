@@ -13601,6 +13601,7 @@ def _hidden_control_telemetry() -> dict:
 async def health(request: Request):
     limited=_probe_rate_limit(request,"health")
     if limited is not None:
+        limited.headers["Cache-Control"]="no-store"
         return limited
     _record_inbound_traffic(request)
     snapshot=_runtime_snapshot_freshness()
@@ -13615,7 +13616,7 @@ async def health(request: Request):
         "runtime_snapshot":snapshot,
         "hidden_control":hidden_control,
         "hidden_challenge_control":hidden_challenge_control,
-    })
+    },headers={"Cache-Control":"no-store"})
 
 
 REGISTRY_HEALTH_SERVER_TABLE_ENABLED = str(
