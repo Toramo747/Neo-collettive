@@ -361,6 +361,45 @@ class PublicSnapshotPrivacyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"candidate_tagger"):
             validate_public_snapshot(bad)
 
+    def test_decision_tracks_are_separate_and_fail_closed(self):
+        raw={
+            "snapshot_schema":7,
+            "neo_version":"0.99.54",
+            "latest_result":{
+                "tool_opportunities":{
+                    "top5":[{"gate_pass":False}],
+                    "candidate_counts":{"qualified_candidates":0},
+                },
+                "challenge_shadow":{
+                    "decision":{
+                        "problem_validated":True,
+                        "experiment_ready":True,
+                        "ready_candidates":1,
+                        "manual_confirmation_required":True,
+                        "experiment_scope":"BOUNDED_INTERNAL_ONLY",
+                        "commercial_gate_influence":"NONE",
+                        "automatic_build":False,
+                        "automatic_commercial_promotion":False,
+                        "private":"PRIVATE",
+                    },
+                },
+            },
+        }
+        public=sanitize_public_snapshot(raw)
+        tracks=public["autopilot"]["decision_tracks"]
+        self.assertEqual(tracks["commercial_proof"]["status"],"EVIDENCE_REQUIRED")
+        self.assertFalse(tracks["commercial_proof"]["gate_pass"])
+        self.assertTrue(tracks["commercial_proof"]["thresholds_unchanged"])
+        self.assertEqual(tracks["problem_validation"]["status"],"PROBLEM_VALIDATED")
+        self.assertTrue(tracks["problem_validation"]["experiment_ready"])
+        self.assertTrue(tracks["problem_validation"]["manual_confirmation_required"])
+        self.assertEqual(tracks["problem_validation"]["experiment_scope"],"BOUNDED_INTERNAL_ONLY")
+        self.assertEqual(tracks["problem_validation"]["commercial_gate_influence"],"NONE")
+        self.assertFalse(tracks["problem_validation"]["automatic_build"])
+        self.assertFalse(tracks["problem_validation"]["automatic_commercial_promotion"])
+        self.assertNotIn("PRIVATE",json.dumps(tracks,sort_keys=True))
+        validate_public_snapshot(public)
+
     def test_challenge_snapshot_is_aggregate_hmac_only_and_text_free(self):
         raw={
             "snapshot_schema":7,
