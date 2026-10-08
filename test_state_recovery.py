@@ -230,7 +230,7 @@ class StateRecoveryTests(unittest.TestCase):
         self.assertIn("published_evidence_floor",block)
         self.assertIn("current_evidence < published",block)
         self.assertIn("EMERGENCY_DEPLOY",block)
-        self.assertIn("git fetch --quiet --depth=1 origin main:refs/remotes/origin/main",block)
+        self.assertIn("git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main",block)
         self.assertIn("/tmp/predeploy-public-snapshot.json",block)
         self.assertIn("/tmp/predeploy-cycle-floor.json",block)
         self.assertIn("legacy_overflow_bootstrap",block)
