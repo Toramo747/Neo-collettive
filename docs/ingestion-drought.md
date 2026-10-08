@@ -108,3 +108,13 @@ baseline 13,447 encoded bytes, instrumented 14,015, delta **568 bytes** (limit
 The production pre-deploy checkpoint observed at 18:55 UTC uses 53,367/100,000
 bytes. The public snapshot was stale; post-deploy acceptance must use fresh,
 consecutive cycle observations, not repeats of that snapshot.
+
+Deployment acceptance uses the existing ADMIN status route in read-only mode,
+with the workflow's existing token. It waits for three completed consecutive
+cycles and logs only the public numeric/boolean drought projection, cycle number,
+evidence_out and checkpoint bytes. Any failed condition or observation timeout
+fails deployment verification and invokes the existing rollback. No repair is
+attempted in production.
+
+Full Python 3.12 verification after review corrections and acceptance tests:
+`971 passed, 1 warning, 702 subtests passed in 42.12s`.
