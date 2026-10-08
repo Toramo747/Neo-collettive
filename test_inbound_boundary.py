@@ -61,6 +61,7 @@ class InboundBoundaryTests(unittest.TestCase):
             "neo_collective":"gated_effectful",
             "neo_inspect_mcp":"gated_network",
             "verify_mcp_endpoint":"gated_network",
+            "oxibay_doctor":"gated_network",
             "neo_web_search":"gated_network",
             "neo_jarvis":"gated_effectful",
             "neo_director":"gated_effectful",
