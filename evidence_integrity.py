@@ -433,12 +433,22 @@ def find_term_positions(text: str, term: str, limit: int = 8) -> list[tuple[int,
 def commercial_family_scores(text: str) -> dict[str, int]:
     """Score all matching families; longer/specific phrases outrank generic tokens."""
     low=(text or "").lower()
+    # Literal absence is a rejection prefilter only: the original regex still
+    # decides every potential match, including boundaries and controlled forms.
+    # Python IGNORECASE also equates ASCII i with dotless i and s with long s.
+    # casefold handles long s/Kelvin; map dotless i explicitly. Non-ASCII terms
+    # bypass the prefilter so their original matching semantics are preserved.
+    candidate_text=low.casefold().replace("\u0131","i")
     scores: dict[str,int]={}
     for family,_base_terms in FAMILY_TERMS:
         terms=family_relevance_terms(family)
         score=0
         expansions=set(FAMILY_EXPANSIONS.get(family,()))
         for term in terms:
+            raw=(term or "").strip().lower()
+            if (raw.isascii() and raw not in {"manual","spend","waste time"}
+                    and raw not in candidate_text):
+                continue
             if not contains_term(low,term):
                 continue
             words=max(1,len(term.split()))
