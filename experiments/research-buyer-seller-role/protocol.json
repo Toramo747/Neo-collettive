@@ -1,0 +1,80 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-buyer-seller-role-risk-march-2026",
+  "parent_pr": 239,
+  "parent_commit": "5adc4c416581087da94a8552f89c7e47888f5bf8",
+  "purpose": "Falsifiable audit of seller-role voice colliding with buyer/demand lexical heuristics; review-only, not production classification.",
+  "preregistration": {
+    "source": "hn_algolia_public_read_only",
+    "window": {
+      "id": "2026-03",
+      "start_epoch": 1772323200,
+      "end_epoch": 1775001600
+    },
+    "baseline_source": "experiments/research-fresh-screen/protocol.json",
+    "query_arm": "matched_baseline",
+    "topics": 4,
+    "queries": 16,
+    "hits_per_query": 30,
+    "max_public_requests": 16,
+    "max_review_slots": 8,
+    "authored_synthetic_labels_only": true,
+    "prior_observations_used_for_rule_design": "PR234–239 public aggregate reports and evidence_integrity.py guard code; no individual real labels",
+    "untouched_for_human_independent_confirmation": false
+  },
+  "roles": {
+    "hard_supplier_lexemes": [
+      "i offer",
+      "i provide",
+      "i sell",
+      "we offer",
+      "we provide",
+      "we sell",
+      "i'm available for freelance",
+      "i am available for freelance",
+      "looking for clients",
+      "seeking clients",
+      "looking for customers",
+      "hire me"
+    ],
+    "risk_output": "REVIEW_SELLER_ROLE_COLLISION",
+    "no_risk_output": "NO_EXPLICIT_SELLER_ROLE_COLLISION",
+    "unknown_context_policy": "no blanket exclusion",
+    "acceptance_policy": "NEVER_CHANGE_EXISTING_LABELS"
+  },
+  "minimum_quality": {
+    "require_16_of_16_queries": true,
+    "require_synthetic_positive_controls": true,
+    "require_synthetic_negative_controls": true,
+    "require_diagnostic_metric_integrity": true,
+    "expect_exact_score_delta": 0,
+    "expect_all_existing_labels_preserved": true,
+    "automatic_promotion": false,
+    "independent_validations": 0
+  },
+  "boundary": {
+    "paid_api_calls": false,
+    "production_state_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "price_cache_influence": "NONE",
+    "student_promotion": false,
+    "model_or_policy_weight_change": false,
+    "commercial_threshold_change": false,
+    "raw_source_text_persisted": false,
+    "source_urls_persisted": false,
+    "source_ids_persisted": false,
+    "query_strings_persisted": false,
+    "private_or_hidden_sets_read": false,
+    "human_reviewed_cases": 0,
+    "automatic_promotion": false
+  },
+  "limitations": [
+    "Author-labelled synthetic fixtures test behavior, not real-world accuracy or commercial truth.",
+    "March 2026 public HN is a fresh untouched window for THIS rule, but shares provider and classifier with earlier experiments; not independent cross-source validation.",
+    "An explicit seller-role cue does not prove a message has no buyer-side need; mixed cases remain accepted and flagged for review.",
+    "Buyer/seller risk flags are an annotation only; they cannot prevent commercial evidence, change accepted threads, or mutate the student.",
+    "Live risk counts do not provide false-positive rates because source cases are not double blind human-labelled.",
+    "Human independent validation and a different source are still blocked. No commercial promotion."
+  ]
+}
