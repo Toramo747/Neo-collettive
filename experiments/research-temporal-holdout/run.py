@@ -49,8 +49,6 @@ def load():
         raise ValueError("Promotion is forbidden")
     if len(p["temporal_windows"]) != 3 or len(p["topics"]) != 4:
         raise ValueError("Invalid temporal or topical sample")
-    if p["arms"]["compact_matched"] != old["arms"]["compact_matched"]["genes"] if False else False:
-        raise ValueError("Unexpected settings")  # The assertion below pins genes explicitly.
     for arm, key in (("compact_matched", "compact_matched"), ("evolved_g69", "evolved")):
         expected_genes = {**old["shared_genes"], **old["arms"][key]}
         if p["arms"][arm] != expected_genes:
