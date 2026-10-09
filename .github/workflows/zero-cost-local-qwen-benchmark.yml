@@ -54,7 +54,7 @@ jobs:
           ollama list
       - name: Run synthetic evaluation (CPU only)
         env:
-          MODEL: ${{ inputs.model }}
+          MODEL: ${{ inputs.model || 'qwen2.5:0.5b-instruct' }}
         run: |
           set -euo pipefail
           timeout 1700 python arena_free_model_benchmark.py --execute --models "$MODEL" --per-case-timeout 100 --max-seconds 1600 --out /tmp/oxibay-qwen-evaluation.json
