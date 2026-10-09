@@ -1,0 +1,56 @@
+name: Research Autocorrection External Screen
+
+on:
+  push:
+    branches: [experiment/research-autocorrection-external-benchmark]
+    paths:
+      - "experiments/research-autocorrection-external/**"
+      - "test_research_autocorrection_external.py"
+      - ".github/workflows/research-autocorrection-external.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-hn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run no-network safety and preregistration tests
+        run: python -m unittest -v test_research_autocorrection test_research_autocorrection_external
+      - name: Verify offline plan
+        run: python experiments/research-autocorrection-external/compare.py
+      - name: Evaluate eight frozen gametes on public HN only
+        run: timeout 840 python experiments/research-autocorrection-external/compare.py --execute
+      - name: Fail closed against any promotion or raw data persistence
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/oxibay-autocorrection-external-aggregate.json',encoding='utf-8'))
+          assert d['candidate_count']==8
+          assert d['independent_validated_replications']==0
+          assert d['automatic_promotion'] is False
+          assert d['production_state_write'] is False
+          assert d['commercial_gate_influence']=='NONE'
+          assert d['raw_external_text_or_identifiers_persisted'] is False
+          assert d['human_review']=='NOT_PERFORMED'
+          assert len(d['time_windows'])==2
+          assert all(v['eligible_for_promotion'] is False for v in d['gamete_verdicts'])
+          print({'overall':d['overall_verdict'],'provider_queries':d['unique_provider_requests_total'],
+                 'complete':d['all_provider_requests_succeeded']})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-autocorrection-external-aggregates
+          path: /tmp/oxibay-autocorrection-external-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30

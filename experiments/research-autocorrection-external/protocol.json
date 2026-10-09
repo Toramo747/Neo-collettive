@@ -1,0 +1,106 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-autocorrection-eight-gamete-external-2026-10-09",
+  "preregistered_before_external_calls": true,
+  "source_pr": 230,
+  "parent_commit": "b654fae076a585ad70760f178c7bc6e46391192f",
+  "source_run": 37897414832,
+  "training_only_months": [
+    "2026-05",
+    "2026-06",
+    "2026-07"
+  ],
+  "evaluation_windows": [
+    {
+      "id": "2026-08",
+      "start": "2026-08-01T00:00:00+00:00",
+      "end": "2026-09-01T00:00:00+00:00"
+    },
+    {
+      "id": "2026-09",
+      "start": "2026-09-01T00:00:00+00:00",
+      "end": "2026-10-01T00:00:00+00:00"
+    }
+  ],
+  "evaluation_topics": [
+    {
+      "full": "retail shelf stockout detection",
+      "compact": "stockout alerts",
+      "domain": "retail_stockout"
+    },
+    {
+      "full": "hotel room cleaning assignment",
+      "compact": "housekeeping tasks",
+      "domain": "hotel_housekeeping"
+    },
+    {
+      "full": "parcel delivery exception resolution",
+      "compact": "delivery exceptions",
+      "domain": "parcel_logistics"
+    },
+    {
+      "full": "public library catalogue data corrections",
+      "compact": "library catalog",
+      "domain": "library_cataloguing"
+    }
+  ],
+  "provider": {
+    "name": "hn_algolia_public_read_only",
+    "endpoint": "https://hn.algolia.com/api/v1/search_by_date",
+    "max_hits_per_query": 30,
+    "max_unique_queries_per_window": 144,
+    "max_total_unique_query_requests": 288,
+    "http_timeout_seconds": 25,
+    "concurrency": 8
+  },
+  "baseline_genes": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "compact",
+    "query_frame": "plain",
+    "term_order": "topic_first",
+    "source_scope": "all"
+  },
+  "arms": {
+    "baseline": 1,
+    "candidates": 8,
+    "planned_queries_per_arm_window": 16
+  },
+  "decision_rule": {
+    "min_baseline_relevant_hits": 8,
+    "minimum_net_unique_thread_gain": 2,
+    "min_signal_topic_coverage": 2,
+    "minimum_precision_ratio": 1,
+    "minimum_successful_windows": 2,
+    "all_provider_queries_required": true,
+    "all_metric_audits_required": true,
+    "independent_replications_required_for_promotion": 3,
+    "allow_automatic_promotion": false
+  },
+  "constraints": {
+    "zero_paid_provider_queries": true,
+    "historical_backtest_not_prospective": true,
+    "selected_gametes_reuse_prior_training_feedback_only": true,
+    "single_provider_only": true,
+    "not_blind_human_verified": true,
+    "no_raw_source_text_in_artifacts": true,
+    "no_raw_source_ids_in_artifacts": true,
+    "no_source_urls_in_artifacts": true,
+    "no_source_query_strings_in_artifacts": true,
+    "no_commercial_gate_influence": true,
+    "no_runtime_or_arena_state_writes": true,
+    "no_production_deploy": true,
+    "no_student_promotion": true,
+    "no_paid_model": true
+  },
+  "caveats": [
+    "These are retrospective August and September slices, not a prospective validation.",
+    "New topic names and categories differ from training but semantic distance is unverified.",
+    "Eight tested hypotheses create multiple-comparison selection bias; no winner claim or promotion.",
+    "Same single HN source, same machine evaluator, and unreviewed buyer evidence.",
+    "Do not modify topics, windows, metrics, or frozen generated genes after outcomes."
+  ]
+}
