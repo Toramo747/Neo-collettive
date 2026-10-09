@@ -1,0 +1,72 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-autocorrection-shadow-2026-10-09",
+  "parent_pr": 229,
+  "parent_commit": "9e3f86fbd6bb3fae7c7e91adfcfbf20029b23da0",
+  "training_feedback": "experiments/research-autocorrection/feedback_2026-10-09.json",
+  "max_candidates": 8,
+  "training_only": [
+    "2026-05",
+    "2026-06",
+    "2026-07"
+  ],
+  "rejection_feedback": [
+    "no_buyer_voice",
+    "irrelevant",
+    "unknown_family",
+    "no_demand_tags"
+  ],
+  "knob_bounds": {
+    "exploration_rate": [
+      0.1,
+      0.5
+    ],
+    "novelty_penalty": [
+      0,
+      0.4
+    ],
+    "temporal_robustness": [
+      0,
+      0.5
+    ]
+  },
+  "known_genes": [
+    "query_mode",
+    "query_count",
+    "recency_days",
+    "min_relevance_tokens",
+    "suffix_family",
+    "topic_shape",
+    "query_frame",
+    "term_order",
+    "source_scope"
+  ],
+  "evaluation_gate": {
+    "windows_required": 2,
+    "matched_min_relevant_hits": 8,
+    "min_unique_thread_gain": 2,
+    "min_signal_topics": 2,
+    "nondecreasing_precision": true,
+    "automatic_promotion": false,
+    "independent_rounds_required": 3
+  },
+  "safety": {
+    "shadow_only": true,
+    "provider_cost_eur": 0,
+    "production_state_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "price_cache_influence": "NONE",
+    "commercial_policy_mutation": false,
+    "private_dataset_access": false,
+    "raw_external_text_persisted": false,
+    "automatic_promotion": false
+  },
+  "limitations": [
+    "Historical May-July aggregate reports are training feedback only, never independent validation.",
+    "No automatic classifier, model, source policy, or commercial gate changes.",
+    "The new four knobs control only shadow proposals and hypothetical post-evaluation ranking.",
+    "No real-world claims until preregistered fresh-source matched test and blind human review.",
+    "An offline synthetic unit-test success is not a model benchmark."
+  ]
+}
