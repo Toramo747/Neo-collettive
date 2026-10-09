@@ -1,0 +1,65 @@
+name: Research Buyer Seller Role Collision Shadow
+on:
+  push:
+    branches: [experiment/research-buyer-seller-role-shadow]
+    paths:
+      - "experiments/research-buyer-seller-role/**"
+      - "test_research_buyer_seller_role.py"
+      - ".github/workflows/research-buyer-seller-role.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  free-hn-role-collision-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Offline synthetic controls and inherited integrity checks
+        run: python -m unittest -v test_research_buyer_seller_role test_research_april_pain_queries
+      - name: Validate bounded plan and 10 author-labelled synthetic tests
+        run: python experiments/research-buyer-seller-role/audit.py
+      - name: Conduct March frozen baseline search and role flag audit
+        run: timeout 440 python experiments/research-buyer-seller-role/audit.py --execute
+      - name: Ensure output has no raw cases, source IDs or new commercial labels
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('/tmp/oxibay-seller-role-collision-anonymous.json').read_text())
+          assert p['public_queries_planned']==16
+          assert p['human_labelled_cases']==p['independent_replications']==p['new_validated_buyers']==0
+          assert p['role_review_flags_are_errors'] is False
+          assert p['classifier_changed'] is False
+          assert p['commercial_gate_influence']=='NONE'
+          assert p['automatic_promotion'] is False
+          assert p['production_state_write'] is False
+          assert p['raw_source_text_persisted'] is False
+          assert p['source_ids_persisted'] is False
+          assert p['source_urls_persisted'] is False
+          assert p['query_strings_persisted'] is False
+          assert p['synthetic_controls']['pass']
+          m=p['metric']
+          assert m['legacy_accepted_labels_unchanged']
+          assert m['legacy_scores_unchanged']
+          assert m['accepted_without_seller_role_cue']+m['accepted_seller_role_collision_count']==m['signal_hits']
+          assert m['review_shadow_top8_flagged']>=m['review_baseline_top8_flagged']
+          print({'verdict':p['status'],'queries_ok':p['public_queries_ok'],
+                 'buyer_signal_threads':m['unique_signal_threads'],
+                 'seller_role_review_flags':m['accepted_seller_role_collision_count'],
+                 'author_labelled_controls':p['synthetic_controls']['total'],
+                 'human_reviewed':0})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seller-role-shadow-aggregate-only
+          path: /tmp/oxibay-seller-role-collision-anonymous.json
+          if-no-files-found: warn
+          retention-days: 14
