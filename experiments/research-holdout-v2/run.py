@@ -116,13 +116,19 @@ def diagnostic_metrics(pairs, batches, genes):
             per_topic[topic]["unique_objects"] += 1
             title = prior.clean_text(hit.get("title") or hit.get("story_title") or "")
             body = prior.clean_text(hit.get("comment_text") or hit.get("story_text") or "")
+            # score_hits applies clean_text to the concatenated title/body,
+            # including its shared 1600-character limit. Use the identical
+            # composite for relevance and commercial-family classification.
+            # Keep original individually cleaned fields for the remaining
+            # score_hits predicates (vendor, buyer, demand tags).
+            score_text = prior.clean_text((title + " " + body).strip())
             url = str(hit.get("url") or hit.get("story_url") or "")
             stage = "valid_signal"
-            if len(prior.text_tokens(topic) & prior.text_tokens(title + " " + body)) < genes["min_relevance_tokens"]:
+            if len(prior.text_tokens(topic) & prior.text_tokens(score_text)) < genes["min_relevance_tokens"]:
                 stage = "irrelevant"
             elif prior.is_vendor_content(title, body, url, "hn-algolia-routed") or prior.is_supply_offer(title, body, url, "hn-algolia-routed"):
                 stage = "vendor_or_supply"
-            elif prior.commercial_family((title + " " + body).lower()) == "other":
+            elif prior.commercial_family(score_text) == "other":
                 stage = "unknown_family"
             elif not prior.buyer_voice_present(title, body):
                 stage = "no_buyer_voice"
