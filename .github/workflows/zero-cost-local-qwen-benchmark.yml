@@ -47,14 +47,20 @@ jobs:
           curl --noproxy '*' -fsS --max-time 5 http://127.0.0.1:11434/api/tags >/dev/null
       - name: Pull exactly the selected public model
         env:
-          MODEL: ${{ inputs.model || 'qwen2.5:0.5b-instruct' }}
+          MODEL: ${{ inputs.model || 'qwen3.5:4b-q4_K_M' }}
         run: |
           set -euo pipefail
+          # Public GitHub runners have finite RAM; fail closed for oversized models.
+          free_kib=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
+          if [ "$MODEL" = 'qwen3.5:9b-q4_K_M' ] && [ "$free_kib" -lt 10000000 ]; then
+            echo 'Insufficient free runner RAM for 9B; no download or inference attempted.'
+            exit 1
+          fi
           timeout 900 ollama pull "$MODEL"
           ollama list
       - name: Run synthetic evaluation (CPU only)
         env:
-          MODEL: ${{ inputs.model || 'qwen2.5:0.5b-instruct' }}
+          MODEL: ${{ inputs.model || 'qwen3.5:4b-q4_K_M' }}
         run: |
           set -euo pipefail
           timeout 1700 python arena_free_model_benchmark.py --execute --models "$MODEL" --per-case-timeout 100 --max-seconds 1600 --out /tmp/oxibay-qwen-evaluation.json
