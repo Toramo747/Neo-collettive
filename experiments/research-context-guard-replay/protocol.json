@@ -1,0 +1,60 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-context-guard-replay-2026-10-09",
+  "parent_pr": 235,
+  "parent_sha": "b519e1fd7a64ffb819048a6ec28c048887edaecc",
+  "period": {
+    "name": "2026-09",
+    "start_epoch": 1788220800,
+    "end_epoch": 1790812800
+  },
+  "data_provenance": "new_public_retrieval_same_predeclared_source_contexts_as_pr235",
+  "public_requests_ceiling": 5,
+  "contexts": [
+    "applicant_offers",
+    "employer_job_posts",
+    "show_hn_projects"
+  ],
+  "comparison": {
+    "legacy": "existing production-derived source content predicates, with topic relevance intentionally omitted",
+    "shadow": "identical existing content predicates plus source_context review annotations",
+    "allow_relevance_or_commercial_scorer_changes": false,
+    "allow_context_based_rejection": false,
+    "evaluate_positive_tags": [
+      "PAIN",
+      "BUY_INTENT",
+      "PAID_DEMAND"
+    ],
+    "measures": [
+      "family_and_buyer",
+      "legacy_content_filter_stages",
+      "content_only_positive_tags",
+      "needs_context_review",
+      "decision_changes"
+    ],
+    "require_decision_changes": 0
+  },
+  "boundaries": {
+    "no_customer_demand_claim": true,
+    "no_verified_false_positive_claim": true,
+    "no_independent_validation_claim": true,
+    "source_text_persisted": false,
+    "source_ids_persisted": false,
+    "source_urls_persisted": false,
+    "human_labelled_cases": 0,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "production_write": false,
+    "price_cache_influence": "NONE",
+    "paid_api_calls": false,
+    "automatic_promotion": false,
+    "full_production_score_emulated": false
+  },
+  "limitations": [
+    "This is a diagnostic replay of content predicates, NOT the complete scorer, because the relevance-to-topic gate is absent.",
+    "The provider can return different records on repeated historical queries. Comparisons to PR235 are non-paired and not tests of changed production accuracy.",
+    "Context review flags do not establish false-positive or false-negative cases.",
+    "No human review was performed, source provider is not independent, no result may be promoted.",
+    "September source contexts are development feedback after PR235. Do not count as untouched holdout."
+  ]
+}
