@@ -1,0 +1,109 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-algorithm-temporal-holdout-2026-10-09",
+  "preregistered_before_first_execution": true,
+  "parent_pr": 228,
+  "pinned_parent_commit": "45037cbc84579ac227bb006077838e3e8a6fcd45",
+  "hypothesis": "Evolved compact signal-first research retrieves at least 2 more deduplicated valid discussion threads than equally short compact topic-first baseline without lower signal precision, across unseen archived periods.",
+  "source": "hn_algolia_public_read_only",
+  "api_endpoint": "https://hn.algolia.com/api/v1/search_by_date",
+  "query_suffixes": [
+    "problem",
+    "pay for",
+    "workaround",
+    "manual"
+  ],
+  "topics": [
+    {
+      "full": "employee leave balance approval workflow",
+      "compact": "leave management",
+      "domain": "workforce_leave"
+    },
+    {
+      "full": "field service quote preparation",
+      "compact": "quote preparation",
+      "domain": "field_service_quotes"
+    },
+    {
+      "full": "newsletter subscriber onboarding",
+      "compact": "newsletter automation",
+      "domain": "newsletter_subscriptions"
+    },
+    {
+      "full": "document signing approval bottlenecks",
+      "compact": "document processing",
+      "domain": "document_approvals"
+    }
+  ],
+  "temporal_windows": [
+    {
+      "id": "2026-05",
+      "start": "2026-05-01T00:00:00+00:00",
+      "end": "2026-06-01T00:00:00+00:00"
+    },
+    {
+      "id": "2026-06",
+      "start": "2026-06-01T00:00:00+00:00",
+      "end": "2026-07-01T00:00:00+00:00"
+    },
+    {
+      "id": "2026-07",
+      "start": "2026-07-01T00:00:00+00:00",
+      "end": "2026-08-01T00:00:00+00:00"
+    }
+  ],
+  "arms": {
+    "compact_matched": {
+      "query_mode": "mixed",
+      "query_count": 4,
+      "recency_days": 45,
+      "min_relevance_tokens": 1,
+      "suffix_family": "core",
+      "topic_shape": "compact",
+      "query_frame": "plain",
+      "term_order": "topic_first",
+      "source_scope": "all"
+    },
+    "evolved_g69": {
+      "query_mode": "mixed",
+      "query_count": 4,
+      "recency_days": 45,
+      "min_relevance_tokens": 1,
+      "suffix_family": "core",
+      "topic_shape": "compact",
+      "query_frame": "plain",
+      "term_order": "signal_first",
+      "source_scope": "all"
+    }
+  },
+  "query_budget": {
+    "per_arm_per_window": 16,
+    "max_queries_per_window": 32,
+    "max_queries_total": 96,
+    "hits_per_query": 30,
+    "fixed_snapshot_window": true
+  },
+  "decision_rule": {
+    "matched_min_relevant_hits": 8,
+    "minimum_unique_thread_gain": 2,
+    "minimum_signal_topics": 2,
+    "precision_ratio_min": 1,
+    "minimum_passed_windows_for_temporal_robustness": 2,
+    "require_all_windows_complete": true,
+    "promote": false
+  },
+  "constraints": {
+    "source_provider_independence": false,
+    "human_verified": false,
+    "historical_backtest_not_prospective": true,
+    "count_as_independent_validation": false,
+    "synthetic_controls_only": true,
+    "no_raw_text_urls_ids_in_artifact": true,
+    "commercial_gate_influence": "NONE",
+    "production_state_write": false,
+    "commercial_evidence_influence": "NONE",
+    "private_datasets_access": false,
+    "paid_api_calls": false,
+    "automatic_promotion": false
+  }
+}

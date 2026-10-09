@@ -1,0 +1,55 @@
+name: Research Temporal Holdout Shadow
+
+on:
+  push:
+    branches: [experiment/research-algorithm-temporal-holdout]
+    paths:
+      - "experiments/research-temporal-holdout/**"
+      - "test_research_temporal_holdout.py"
+      - ".github/workflows/research-temporal-holdout.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  historical-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run preregistration and isolation tests
+        run: python -m unittest -v test_research_independent_holdout test_research_holdout_v2 test_research_replication_v3 test_research_temporal_holdout
+      - name: Plan-only smoke
+        run: python experiments/research-temporal-holdout/run.py
+      - name: Run historical HN research only (one trial)
+        run: timeout 720 python experiments/research-temporal-holdout/run.py --execute
+      - name: Guard privacy and operational boundaries
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/oxibay-temporal-holdout-aggregate.json',encoding='utf-8'))
+          assert data['validated_independent_replications']==0
+          assert data['cross_source_validation'] is False
+          assert data['human_verified'] is False
+          assert data['production_state_write'] is False
+          assert data['automatic_promotion'] is False
+          assert data['commercial_gate_influence']=='NONE'
+          assert data['raw_external_text_persisted'] is False
+          assert data['synthetic_controls']['pass'] is True
+          assert len(data['windows'])==3
+          print({'verdict':data['verdict'],'windows':[(r['window'],r['verdict'],r['arms']['compact_matched']['unique_signal_threads'],r['arms']['evolved_g69']['unique_signal_threads']) for r in data['windows']]})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-temporal-holdout-aggregates
+          path: /tmp/oxibay-temporal-holdout-aggregate.json
+          if-no-files-found: warn
+          retention-days: 30
