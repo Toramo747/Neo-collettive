@@ -34,6 +34,8 @@ class IndependentResearchHoldoutTests(unittest.TestCase):
         hit={"objectID":"111","story_id":"111","comment_text":"We spend hours on contract renewal tracking and need help"}
         rows=m.valid_thread_metrics(q,[[hit],[hit]],g)
         self.assertEqual(1,rows["deduped_object_count"])
+        self.assertEqual(1,sum(rows["rejection_reasons"].values()))
+        self.assertEqual(0,rows["rejection_reasons"]["valid_signal"])
 
 if __name__=="__main__":
     unittest.main()
