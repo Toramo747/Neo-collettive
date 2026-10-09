@@ -84,7 +84,7 @@ def load():
     return p,{"legacy_mixed":{"genes":a,"pairs":left},
               "candidate_pain":{"genes":b,"pairs":right}}
 
-def shadow_review_stats(pairs,batches,genes):
+def shadow_review_stats(pairs,batches,genes,p):
     """Only aggregate context counts; never touch the base classifier score."""
     seen=set()
     items=[]
@@ -138,7 +138,7 @@ def evaluate(p,plan,payload):
             or metrics["stages"]["valid_signal"]!=score["signal_hits"]
             or score["unique_signal_threads"]>score["signal_hits"]):
             raise ValueError("Stage/score mismatch")
-        context=shadow_review_stats(pairs,batches,g,p) if False else shadow_review_stats(pairs,batches,g,p)
+        context=shadow_review_stats(pairs,batches,g,p)
         output[name]={"queries_ok":query_ok,
                       "deduplicated_objects":score["deduped_object_count"],
                       "relevant_hits":score["relevant_hits"],
