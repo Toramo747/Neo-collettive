@@ -52,6 +52,27 @@ def policy():
         if p["boundary"].get(k)!=v:raise ValueError("Policy boundary: "+k)
     return p
 
+def enforce_windows_private_acl(path):
+    """On Windows, chmod 0700 is not an ACL; explicitly remove inherited access."""
+    if os.name != "nt":
+        return
+    import re
+    import subprocess
+    who=subprocess.run(["whoami","/user","/fo","csv","/nh"],
+                       check=True,capture_output=True,text=True)
+    rows=list(csv.reader(io.StringIO(who.stdout)))
+    if len(rows)!=1 or len(rows[0])<2:
+        raise ValueError("Windows user SID could not be resolved")
+    sid=rows[0][1].strip()
+    if not re.fullmatch(r"S-\\d+(?:-\\d+)+",sid):
+        raise ValueError("Invalid Windows user SID")
+    # Access is granted only to current user and LOCAL SYSTEM.
+    # On failure, collection stops before writing any raw source text.
+    subprocess.run(["icacls",str(path),"/inheritance:r","/grant:r",
+                    f"*{sid}:(OI)(CI)F","*S-1-5-18:(OI)(CI)F"],
+                   check=True,capture_output=True,text=True)
+
+
 def private_path(raw,create=False):
     if not raw:raise ValueError("Explicit --private-dir is required")
     path=Path(raw).expanduser()
@@ -63,6 +84,7 @@ def private_path(raw,create=False):
         if path.exists():raise ValueError("Use a fresh private directory, never overwrite")
         path.mkdir(parents=True,mode=0o700)
         os.chmod(path,0o700)
+        enforce_windows_private_acl(path)
     elif not path.is_dir():raise ValueError("Missing private directory")
     return path
 
