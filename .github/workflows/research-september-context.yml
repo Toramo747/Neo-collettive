@@ -1,0 +1,60 @@
+name: Research September Context Shadow
+
+on:
+  push:
+    branches: [experiment/research-context-september-shadow]
+    paths:
+      - "experiments/research-september-context/**"
+      - "test_research_september_context.py"
+      - ".github/workflows/research-september-context.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contextual-heuristics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: No-network isolation and regression tests
+        run: python -m unittest -v test_research_september_context test_research_context_shadow
+      - name: Confirm read-only query plan
+        run: python experiments/research-september-context/check.py
+      - name: Compare predeclared September public source contexts
+        run: timeout 430 python experiments/research-september-context/check.py --execute
+      - name: Assert no source IDs or production claims
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('/tmp/oxibay-context-september-shadow-aggregates.json').read_text())
+          assert set(result['context_summaries'])=={'applicant_offers','employer_job_posts','show_hn_projects'}
+          assert result['policy']=='REVIEW_ONLY_NEVER_AUTO_REJECT'
+          assert result['classifier_predictions_modified'] is False
+          assert result['human_labels']==result['promotions']==0
+          assert result['verified_false_positives']==result['verified_false_negatives']==0
+          assert result['source_text_persisted'] is False
+          assert result['source_ids_persisted'] is False
+          assert result['raw_urls_persisted'] is False
+          assert result['production_write'] is False
+          assert result['commercial_gate_influence']=='NONE'
+          print({'status':result['status'],
+                 'counts':[(name,row['status'],row['counts']['examined'],
+                            row['counts']['buyer_family_overlap']) for name,row in result['context_summaries'].items()],
+                 'verified_case_labels':0})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: september-context-aggregate-only
+          path: /tmp/oxibay-context-september-shadow-aggregates.json
+          if-no-files-found: warn
+          retention-days: 14
