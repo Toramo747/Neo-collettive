@@ -12,3 +12,6 @@ Run plan without network: python experiments/research-replication-v3/replicate.p
 Run explicit read-only comparison: python experiments/research-replication-v3/replicate.py --execute
 
 Human review of buyer authenticity remains necessary before any commercial statement.
+## Post-run diagnostic safety amendment (2026-10-09)
+
+The immutable first-run Actions report (37890169522) had a conflict in panel B evolved arm: 5 valid_signal diagnostic classifications versus 4 score_hits signal hits. The discrepancy could reflect separate text-normalization or classification paths. The first-run machine verdict is preserved, but **is not sufficient evidence of consistent scoring**. This post-run change is explicitly an audit safety guard, NOT a new preregistration or an independent round: every arm must have matching scorer and diagnostic valid_signal counts, plausible unique-thread totals and complete bucket accounting, otherwise `INCONCLUSIVE_METRIC_DISAGREEMENT`. Do not merge or promote until a reproducible fixture and exact cause are established without publishing raw external content. Reruns of this same provider/window do not count as independent replications.

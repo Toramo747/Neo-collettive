@@ -35,6 +35,7 @@ def load():
         if p["boundary"].get(k)!=val: raise ValueError("Policy drift: "+k)
     assert p["decision_rule"]["commercial_promotion"] is False
     assert p["decision_rule"]["required_independent_rounds"]==3
+    assert p["metric_integrity_amendment"]["fail_closed"] is True
     assert all(v==v2p["expected_treatment_genes"][k] for k,v in p["shared_genes"].items())
     assert len(p["panels"])==2 and len(p["arms"])==3
     prior={t["full"] for t in v2p["holdout_topics"]}
@@ -81,6 +82,33 @@ def verdict(matched,evolved,p):
         return "CANDIDATE_NOT_VALIDATED"
     return "NO_GAIN_VS_MATCHED_BASELINE"
 
+
+def metric_audit(arm):
+    """Guard against divergence between scorer and diagnostic stage accounting."""
+    score=arm["score"]["score"]
+    stages=arm["score"]["stages"]
+    stage_valid=stages["valid_signal"]
+    scored=score["signal_hits"]
+    threads=score["unique_signal_threads"]
+    total=sum(stages.values())
+    objects=score["deduped_object_count"]
+    return {
+        "consistent":bool(stage_valid==scored and threads<=scored and total==objects),
+        "diagnostic_valid_signals":stage_valid,
+        "scorer_valid_signals":scored,
+        "scorer_unique_threads":threads,
+        "diagnostic_stage_total":total,
+        "deduplicated_objects":objects
+    }
+
+
+def audited_verdict(out,controls,p):
+    if not controls["pass"]:
+        return "INVALID_SYNTHETIC_CONTROL"
+    if not all(metric_audit(out[name])["consistent"] for name in p["arms"]):
+        return "INCONCLUSIVE_METRIC_DISAGREEMENT"
+    return verdict(out["compact_matched"],out["evolved"],p)
+
 async def run():
     p=load();groups=plans(p)
     queries=sorted({x["query"] for panel in groups.values() for arm in panel.values() for x in arm["rows"]})
@@ -109,7 +137,8 @@ async def run():
             out[name]={"ok":sum(int(payloads[r["query"]]["ok"]) for r in rows),
                        "score":v2.diagnostic_metrics(rows,
                         [payloads[r["query"]]["hits"] for r in rows],arm["genes"])}
-        out["verdict"]="INVALID_SYNTHETIC_CONTROL" if not controls["pass"] else verdict(out["compact_matched"],out["evolved"],p)
+        out["metric_integrity"]={name:metric_audit(out[name]) for name in p["arms"]}
+        out["verdict"]=audited_verdict(out,controls,p)
         results[panel]=out
     report={"schema_v":1,"experiment_id":p["experiment_id"],"captured_at_utc":datetime.now(timezone.utc).isoformat(),
         "protocol_sha256":hashlib.sha256(PROTOCOL.read_bytes()).hexdigest(),
@@ -125,7 +154,7 @@ async def run():
             return {"query_ok":out[arm]["ok"],"relevant":m["relevant_hits"],
                 "threads":m["unique_signal_threads"],"topics":m["topic_coverage"],"precision":m["precision"]}
         summary[name]={"exact":stats("exact_original"),"matched":stats("compact_matched"),
-                       "evolved":stats("evolved"),"verdict":out["verdict"]}
+                       "evolved":stats("evolved"),"verdict":out["verdict"],"metric_integrity":out["metric_integrity"]}
     print(json.dumps({"controls_pass":controls["pass"],"panels":summary,
                      "validated_independent_rounds":0,"report":str(REPORT)},sort_keys=True))
 

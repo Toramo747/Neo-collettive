@@ -43,3 +43,20 @@ class ResearchReplicationV3Tests(unittest.TestCase):
         self.assertIn('"validated_independent_rounds":0',code)
         self.assertIn('"human_verified":False',code)
         self.assertIn('"automatic_promotion":False',code)
+
+    def test_metric_mismatch_fails_closed(self):
+        p=m.load()
+        def arm(relevant,signals,threads,valid,buckets):
+            stages={"valid_signal":valid, **buckets}
+            return {"ok":16,"score":{"score":{"relevant_hits":relevant,"precision":signals/max(1,relevant),
+                "signal_hits":signals,"unique_signal_threads":threads,"topic_coverage":2,
+                "deduped_object_count":sum(stages.values())},"stages":stages}}
+        clean=arm(15,1,1,1,{"irrelevant":14,"no_buyer_voice":12})
+        mismatch=arm(18,4,4,5,{"irrelevant":15,"no_buyer_voice":8,"no_demand_tags":5,"unknown_family":2})
+        out={"exact_original":clean,"compact_matched":clean,"evolved":mismatch}
+        self.assertFalse(m.metric_audit(mismatch)["consistent"])
+        self.assertEqual(m.audited_verdict(out,{"pass":True},p),"INCONCLUSIVE_METRIC_DISAGREEMENT")
+        fixed=arm(18,4,4,4,{"irrelevant":15,"no_buyer_voice":8,"no_demand_tags":5,"unknown_family":2})
+        self.assertTrue(m.metric_audit(fixed)["consistent"])
+        out["evolved"]=fixed
+        self.assertNotEqual(m.audited_verdict(out,{"pass":True},p),"INCONCLUSIVE_METRIC_DISAGREEMENT")
