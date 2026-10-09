@@ -1,0 +1,54 @@
+name: Research Autocorrection Shadow
+
+on:
+  push:
+    branches: [experiment/research-algorithm-autocorrection-shadow]
+    paths:
+      - "experiments/research-autocorrection/**"
+      - "test_research_autocorrection.py"
+      - ".github/workflows/research-autocorrection-shadow.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-gametes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run no-network feedback and fitness contract tests
+        run: python -m unittest -v test_research_autocorrection
+      - name: Generate eight read-only shadow variants from historical aggregate failures
+        run: python experiments/research-autocorrection/engine.py
+      - name: Assert no production writes or claimed independent wins
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/oxibay-research-autocorrection-shadow.json'))
+          assert p['decision']=='GENERATED_SHADOW_GAMETES_UNVALIDATED'
+          assert p['candidate_count']==8
+          assert p['validated_independent_rounds']==0
+          assert p['automatic_promotion'] is False
+          assert p['production_state_write'] is False
+          assert p['commercial_gate_influence']=='NONE'
+          assert p['training_is_independent_test'] is False
+          assert p['raw_external_text_persisted'] is False
+          assert all(c['external_score'] is None and not c['eligible_for_promotion'] for c in p['candidates'])
+          print({'candidates':p['candidate_count'],'focus':p['rejection_priority'][0],
+                 'validated':p['validated_independent_rounds']})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-autocorrection-gametes
+          path: /tmp/oxibay-research-autocorrection-shadow.json
+          if-no-files-found: warn
+          retention-days: 30
