@@ -86,3 +86,4 @@ class ResearchReplicationV3Tests(unittest.TestCase):
             "Diagnostic and production-aligned scorer must classify the same cleaned text")
         self.assertEqual(measures["score"]["signal_hits"], 0)
         self.assertEqual(measures["stages"]["irrelevant"], 1)
+        self.assertEqual(measures["score"]["deduped_object_count"], 1)
