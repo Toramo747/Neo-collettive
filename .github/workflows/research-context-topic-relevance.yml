@@ -1,0 +1,63 @@
+name: Research Frozen Topic Relevance Audit
+on:
+  push:
+    branches: [experiment/research-context-topic-relevance]
+    paths:
+      - "experiments/research-context-topic-relevance/**"
+      - "test_research_context_topic_relevance.py"
+      - ".github/workflows/research-context-topic-relevance.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-topic-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Verify frozen topics and content-stage regressions, offline
+        run: python -m unittest -v test_research_context_topic_relevance test_research_context_guard_replay
+      - name: Plan only
+        run: python experiments/research-context-topic-relevance/check.py
+      - name: Conditional content relevance on September contexts
+        run: timeout 440 python experiments/research-context-topic-relevance/check.py --execute
+      - name: Enforce aggregate-only and no commercial promotion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('/tmp/oxibay-context-topic-relevance-anonymous.json').read_text())
+          assert len(r['source_contexts'])==3
+          assert r['topic_queries_actually_executed'] is False
+          assert r['end_to_end_search_evaluated'] is False
+          assert r['verified_buyer_cases']==0
+          assert r['independent_replications']==0
+          assert r['independently_human_reviewed'] is False
+          assert r['source_text_persisted'] is False
+          assert r['source_ids_persisted'] is False
+          assert r['automatic_promotion'] is False
+          assert r['production_write'] is False
+          assert r['commercial_gate_influence']=='NONE'
+          if r['status']=='FROZEN_TOPIC_CONDITIONAL_DIAGNOSTIC':
+              assert r['totals_if_complete']['examined']<=180
+              print({'status':r['status'],'total':r['totals_if_complete'],
+                     'validated_buyer_cases':0})
+          else:
+              assert r['totals_if_complete'] is None
+              print({'status':r['status'],'missing_source_types':
+                 [k for k,v in r['source_contexts'].items()
+                  if v['status']!='AGGREGATED_FROZEN_TOPIC_DIAGNOSTIC']})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frozen-topic-context-aggregates-only
+          path: /tmp/oxibay-context-topic-relevance-anonymous.json
+          if-no-files-found: warn
+          retention-days: 14
