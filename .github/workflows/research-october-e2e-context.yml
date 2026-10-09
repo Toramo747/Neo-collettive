@@ -1,0 +1,69 @@
+name: Research October E2E Matched Context Shadow
+
+on:
+  push:
+    branches: [experiment/research-october-e2e-context-shadow]
+    paths:
+      - "experiments/research-october-e2e-context/**"
+      - "test_research_october_e2e_context.py"
+      - ".github/workflows/research-october-e2e-context.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-matched:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Synthetic deterministic regression tests
+        run: python -m unittest -v test_research_october_e2e_context test_research_context_topic_relevance
+      - name: Confirm pinned one-batch query plan
+        run: python experiments/research-october-e2e-context/run.py
+      - name: Run matched query search on October public HN data
+        run: timeout 440 python experiments/research-october-e2e-context/run.py --execute
+      - name: Verify no claims of gain, no source leakage or production influence
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('/tmp/oxibay-october-e2e-context-aggregate.json').read_text())
+          assert p['public_queries_planned']==16
+          assert p['matched_search_queries_same_for_both_arms'] is True
+          assert p['frozen_relevance_gate_applied'] is True
+          assert p['human_verified'] is False
+          assert p['independent_replications']==0
+          assert p['validated_source_buyer_cases']==0
+          assert p['automatic_promotion'] is False
+          assert p['production_write'] is False
+          assert p['commercial_gate_influence']=='NONE'
+          assert p['source_ids_persisted'] is False
+          assert p['source_text_persisted'] is False
+          assert p['source_urls_persisted'] is False
+          a=p['assessment']
+          assert a['baseline_and_shadow_equal_scores'] and a['baseline_and_shadow_equal_labels']
+          assert a['delta_unique_threads']==0
+          assert a['delta_precision']==0
+          assert sum(x['examined'] for x in a['context'].values())==a['deduplicated_objects']
+          assert sum(x['valid_signal'] for x in a['context'].values())==a['signal_hits']
+          print({'status':p['status'],'queries_ok':p['public_queries_completed'],
+                 'signal_threads':a['unique_signal_threads'],
+                 'context_review_queue':a['review_queue_positive_records'],
+                 'relevant_hits':a['relevant_hits'],
+                 'independent_validation_rounds':0})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-october-matched-aggregates-only
+          path: /tmp/oxibay-october-e2e-context-aggregate.json
+          if-no-files-found: warn
+          retention-days: 14

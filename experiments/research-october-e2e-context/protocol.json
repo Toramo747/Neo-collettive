@@ -1,0 +1,93 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-october-e2e-context-shadow-2026-10-09",
+  "parent_pr": 237,
+  "parent_commit": "5228c24428e6c69439a26ba6714e6c19b1118cc2",
+  "source": "hn_algolia_public_read_only",
+  "source_window": {
+    "id": "2026-10-01_to_2026-10-09_utc_exclusive",
+    "start_epoch": 1790812800,
+    "end_epoch": 1791504000
+  },
+  "topics_source": "experiments/research-fresh-screen/protocol.json",
+  "topics": [
+    {
+      "domain": "hospitality",
+      "full": "restaurant reservation no shows",
+      "compact": "restaurant booking"
+    },
+    {
+      "domain": "retail_inventory",
+      "full": "inventory reorder alerts for retail",
+      "compact": "inventory alert"
+    },
+    {
+      "domain": "file_management",
+      "full": "cloud storage file access requests",
+      "compact": "file access"
+    },
+    {
+      "domain": "shipping_returns",
+      "full": "shipping returns label processing",
+      "compact": "returns label"
+    }
+  ],
+  "fixed_baseline": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "compact",
+    "query_frame": "plain",
+    "term_order": "topic_first",
+    "source_scope": "all"
+  },
+  "arms": [
+    "matched_legacy",
+    "same_scoring_with_source_context_review_only"
+  ],
+  "query_budget": {
+    "per_topic": 4,
+    "total": 16,
+    "hits_per_query": 30,
+    "max_public_requests": 16
+  },
+  "context_rules": {
+    "applicant_offers": "ask hn: who wants to be hired?",
+    "employer_job_posts": "ask hn: who is hiring?",
+    "show_hn_projects": "show hn:",
+    "unrecognized": "other_or_unknown",
+    "effect": "REVIEW_QUEUE_ANNOTATION_ONLY"
+  },
+  "decision_contract": {
+    "minimum_relevant_baseline": 8,
+    "minimum_unique_threads_for_descriptive_result": 1,
+    "expected_score_difference": 0,
+    "automatic_promotion": false,
+    "validated_independent_rounds": 0,
+    "precisions_compared_on_identical_corpus": true
+  },
+  "safety": {
+    "raw_source_content_persisted": false,
+    "source_ids_persisted": false,
+    "source_urls_persisted": false,
+    "queries_logged": false,
+    "private_sets_accessed": false,
+    "production_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "pricing_influence": "NONE",
+    "paid_api_calls": false,
+    "human_reviewed": false,
+    "automatic_promotion": false
+  },
+  "interpretation": [
+    "Historical October 1-8 public HN data were not used in May-September experiments. This diagnostic cannot establish independent human-verified commercial gain.",
+    "Identical search queries, results, labels, and score by design: source context only annotates a review queue, so no uplift can be inferred or claimed.",
+    "Context inferred conservatively from parent story title; unknown source context never implies a negative label.",
+    "Original frozen four topics and matched gene parameters from August PR232, not chosen after October results.",
+    "All source data are discarded after process; only aggregate counts are uploaded, with no links/IDs/raw text.",
+    "An absent or weak baseline is inconclusive, not a success. No learner/gate/promotion writes."
+  ]
+}
