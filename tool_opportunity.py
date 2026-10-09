@@ -114,12 +114,14 @@ PRICE_RE = re.compile(
 )
 
 
-def _utc(value: str | None = None) -> str:
+def _utc(value: str | None = None, fallback: str | None = None) -> str:
     if value:
         try:
             return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
         except Exception:
             pass
+    if fallback:
+        return datetime.fromisoformat(str(fallback).replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -466,7 +468,7 @@ def _source_row(raw: dict, family: str, observed_at: str) -> dict | None:
         "family":family,
         "url":url[:1200],
         "domain":domain,
-        "date":_utc(str(raw.get("date") or raw.get("observed_at_utc") or observed_at)),
+        "date":_utc(str(raw.get("date") or raw.get("observed_at_utc") or observed_at), fallback=observed_at),
         "source":str(raw.get("source") or "public_web")[:80],
         "title":title,
         "excerpt":text[:500],
@@ -497,6 +499,7 @@ def analyze_tool_opportunities(
     now_utc: str | None = None,
     source_diagnostics: dict | None = None,
     usage_evidence: dict | None = None,
+    decision_observer=None,
 ) -> dict:
     """Build and rank TOOL_OPPORTUNITY theses from URL-grounded public signals only."""
     observed_at=_utc(now_utc)
@@ -696,6 +699,18 @@ def analyze_tool_opportunities(
             "gate_rule":"specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
             "missing":missing,
         }
+        if decision_observer is not None:
+            decision_observer({
+                "family":family,"score":score,"monetization_score":score,
+                "missing_codes":list(missing),"raw_gate_pass":gate_pass,
+                "competitors_with_real_price":len(real_payment_keys),
+                "dissatisfaction":len(dissatisfaction_domains),"documented_gap":len(gap_domains),
+                "payment_points":min(50,len(real_payment_keys)*25),
+                "dissatisfaction_points":min(30,len(dissatisfaction_domains)*15),
+                "gap_points":min(10,len(gap_domains)*10),
+                "trend_points":min(10,len(trend_domains)*5),
+                "counter_penalty":min(20,len(counter_domains)*10),
+            })
         opportunities.append(opportunity)
 
     for family_rows in by_family.values():
