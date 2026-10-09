@@ -64,7 +64,7 @@ def enforce_windows_private_acl(path):
     if len(rows)!=1 or len(rows[0])<2:
         raise ValueError("Windows user SID could not be resolved")
     sid=rows[0][1].strip()
-    if not re.fullmatch(r"S-\\d+(?:-\\d+)+",sid):
+    if not re.fullmatch(r"S-\d+(?:-\d+)+",sid):
         raise ValueError("Invalid Windows user SID")
     # Access is granted only to current user and LOCAL SYSTEM.
     # On failure, collection stops before writing any raw source text.
