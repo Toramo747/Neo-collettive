@@ -198,7 +198,7 @@ def report_for_model(model: str, digest: str, cases: list[dict[str, Any]],
                 "error_class": type(e).__name__,
             }
         rows.append(score)
-    complete = len(rows) == len(cases)
+    complete = len(rows) == len(cases) and all(x.get("error_class") is None for x in rows)
     correct = sum(x["decision_correct"] for x in rows)
     valid = sum(x["contract_ok"] for x in rows)
     hallucinated = sum(x["fabricated_ids"] for x in rows)
