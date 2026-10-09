@@ -1,0 +1,55 @@
+name: Research Context Guard Replay
+on:
+  push:
+    branches: [experiment/research-context-guard-replay]
+    paths:
+      - "experiments/research-context-guard-replay/**"
+      - "test_research_context_guard_replay.py"
+      - ".github/workflows/research-context-guard-replay.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-guard-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: No-network synthetic invariants
+        run: python -m unittest -v test_research_context_guard_replay test_research_september_context
+      - name: Planning check
+        run: python experiments/research-context-guard-replay/check.py
+      - name: Read-only September source content guard analysis
+        run: timeout 440 python experiments/research-context-guard-replay/check.py --execute
+      - name: Assert no data leakage or production changes
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('/tmp/oxibay-context-guard-replay-anonymous.json').read_text())
+          assert set(r['contexts'])=={'applicant_offers','employer_job_posts','show_hn_projects'}
+          assert r['legacy_vs_context_shadow_decision_changes']==0
+          assert r['strict_topic_relevance_evaluated'] is False
+          assert r['human_labels']==r['verified_false_positives']==r['verified_false_negatives']==0
+          assert r['new_commercial_signals_claimed']==0
+          assert r['source_text_persisted'] is False
+          assert r['source_ids_persisted'] is False
+          assert r['source_urls_persisted'] is False
+          assert r['automatic_promotion'] is False and r['production_write'] is False
+          assert r['commercial_gate_influence']=='NONE'
+          print({'status':r['status'],'overall':r['overall'],
+                 'context_source_statuses':{k:v['status'] for k,v in r['contexts'].items()}})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: context-content-guard-aggregate-only
+          path: /tmp/oxibay-context-guard-replay-anonymous.json
+          if-no-files-found: warn
+          retention-days: 14
