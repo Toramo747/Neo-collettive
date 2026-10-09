@@ -1,6 +1,10 @@
 name: Zero Cost Local Qwen Benchmark
 
 on:
+  push:
+    branches: [experiment/zero-cost-llm-arena-benchmark]
+    paths:
+      - ".github/workflows/zero-cost-local-qwen-benchmark.yml"
   workflow_dispatch:
     inputs:
       model:
@@ -43,7 +47,7 @@ jobs:
           curl --noproxy '*' -fsS --max-time 5 http://127.0.0.1:11434/api/tags >/dev/null
       - name: Pull exactly the selected public model
         env:
-          MODEL: ${{ inputs.model }}
+          MODEL: ${{ inputs.model || 'qwen2.5:0.5b-instruct' }}
         run: |
           set -euo pipefail
           timeout 900 ollama pull "$MODEL"
