@@ -1,0 +1,179 @@
+{
+  "schema_v": 1,
+  "campaign": "arena-gametes-2026-10-09",
+  "created_date_utc": "2026-10-09",
+  "status": "SHADOW_CANDIDATES_NOT_VALIDATED",
+  "parent_branch": "main",
+  "provenance": "Human-authorized ten-gamete experimental seed pack; not external evidence, not production results.",
+  "baseline_paths": {
+    "collective-mind": "data/arena/collective-mind/latest.json",
+    "llm-guided-search": "data/arena/llm-guided-search/latest.json",
+    "warp-propulsion": "data/arena/warp-propulsion/latest.json",
+    "research-algorithm": "data/arena/research-algorithm/latest.json"
+  },
+  "allocation": {
+    "collective-mind": 4,
+    "llm-guided-search": 3,
+    "warp-propulsion": 2,
+    "research-algorithm": 1
+  },
+  "boundary": {
+    "arena_only": true,
+    "network_calls": false,
+    "external_agent_contact": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "production_state_write": false,
+    "automatic_promotion": false,
+    "paid_provider_calls": false,
+    "personal_data_included": false,
+    "manual_review_required": true
+  },
+  "gametes": [
+    {
+      "id": "CM-01",
+      "arena": "collective-mind",
+      "kind": "routing",
+      "genes": {
+        "name": "balanced-ready-retry",
+        "ready_bonus": 16,
+        "novelty_bonus": 10,
+        "prior_failure_penalty": 18,
+        "http_error_penalty": 12
+      },
+      "hypothesis": "Prefer verified readiness while penalizing previously unproductive agents, without making HTTP 200 equivalent to a valid proposal.",
+      "method": "Replay the same fixed prior-contact history; compare accepted substantive proposals per contacted agent with the existing routing champion in later bounded rounds.",
+      "falsifier": "Reject if valid proposal yield is not higher over at least three independent rounds or if the same agents repeatedly return unrelated policy boilerplate."
+    },
+    {
+      "id": "CM-02",
+      "arena": "collective-mind",
+      "kind": "routing",
+      "genes": {
+        "name": "novelty-after-failure",
+        "ready_bonus": 12,
+        "novelty_bonus": 18,
+        "prior_failure_penalty": 20,
+        "http_error_penalty": 20
+      },
+      "hypothesis": "Try task-verified novel collaborators after repeated non-substantive answers, preserving readiness constraints.",
+      "method": "Measure proposal relevance, falsifier presence and repeat-contact failures against the current routing champion over identical packet sets.",
+      "falsifier": "Reject if it yields fewer relevant, falsifiable proposals or increases failed/irrelevant contacts compared with the champion."
+    },
+    {
+      "id": "CM-03",
+      "arena": "collective-mind",
+      "kind": "quality_guard",
+      "genes": {
+        "name": "require-test-and-falsifier",
+        "abstention_threshold": 1,
+        "require_test_signal": true,
+        "require_falsifier_signal": true
+      },
+      "hypothesis": "Require both a measurable method and a falsifier before considering an external answer a scientific proposal.",
+      "method": "Apply the existing adversarial proposal holdout and then a separately curated unseen set of irrelevant structured-agent replies.",
+      "falsifier": "Reject if false acceptances occur on the unseen set, or if valid measurable proposals are excluded more often than under the selected guard."
+    },
+    {
+      "id": "CM-04",
+      "arena": "collective-mind",
+      "kind": "score_genome",
+      "genes": {
+        "evidence": 45,
+        "confidence": 20,
+        "gain": 15,
+        "support": 20
+      },
+      "hypothesis": "Give source-backed evidence more influence than self-reported confidence or estimated gain without changing production scoring.",
+      "method": "Rescore the same untrusted Arena proposals and run an independent blinded relevance review across distinct rounds.",
+      "falsifier": "Reject if the ordering favors unsupported proposals or does not increase agreement with blinded relevance assessments."
+    },
+    {
+      "id": "LLM-01",
+      "arena": "llm-guided-search",
+      "kind": "prompt_mutation",
+      "genes": {
+        "parent_mutation": "buyer_plus_paid",
+        "instruction": "Focus on a concrete buyer asking for a quote, a budget, or paid assistance with recurring invoice reconciliation; preserve the exact workflow subject and avoid product/vendor statements."
+      },
+      "hypothesis": "A budget-plus-workflow formulation may produce more independent buyer-demand threads without increasing vendor noise.",
+      "method": "In shadow only, compare against baseline on identical topics, dates, providers, absolute signal threads and precision; reject hallucinated or invented URLs.",
+      "falsifier": "Reject unless unique signal threads increase, precision stays at least equal and no protected gate/evidence count is altered."
+    },
+    {
+      "id": "LLM-02",
+      "arena": "llm-guided-search",
+      "kind": "prompt_mutation",
+      "genes": {
+        "parent_mutation": "pain_plus_burden",
+        "instruction": "Look for first-person weekly rework, time lost and manual workarounds in compliance evidence collection; preserve the source topic and avoid generic AI tool advertising."
+      },
+      "hypothesis": "Recurring first-person burden can surface clearer problem evidence than generic automation language.",
+      "method": "Compare source-grounded first-person pain and independent threads on the same bounded baseline corpus; keep all existing vendor/supply guards.",
+      "falsifier": "Reject if absolute independent pain threads or precision fail to improve, or if source attribution is lost."
+    },
+    {
+      "id": "LLM-03",
+      "arena": "llm-guided-search",
+      "kind": "prompt_mutation",
+      "genes": {
+        "parent_mutation": "precision_pain",
+        "instruction": "Favor concise natural-language buyer complaints about manual spreadsheet handoffs and errors, with one strong pain phrase and no generic software terms."
+      },
+      "hypothesis": "A short precision-oriented query can avoid vendor-heavy results without losing true buyer signals.",
+      "method": "Evaluate side by side against unmutated queries with source diversity, unique demand threads and yield per successful query.",
+      "falsifier": "Reject if absolute signal threads fall, precision worsens, or the LLM substitutes invented evidence for retrieved sources."
+    },
+    {
+      "id": "WARP-01",
+      "arena": "warp-propulsion",
+      "kind": "theoretical_candidate",
+      "genes": {
+        "family": "positive_energy_subluminal",
+        "wall_thickness": 1.25,
+        "bubble_radius": 0.72,
+        "effective_beta": 0.82,
+        "shear_control": 0.98,
+        "lapse_modulation": 0.025
+      },
+      "hypothesis": "A slightly slower subluminal surrogate may lower the curvature/horizon penalty relative to the existing heuristic champion.",
+      "method": "Run the existing deterministic surrogate, then independently test stress tensors and energy conditions under fixed geometry/velocity controls.",
+      "falsifier": "Reject as an improvement if surrogate fitness does not exceed the current champion; never infer physical feasibility without a realizable matter source."
+    },
+    {
+      "id": "WARP-02",
+      "arena": "warp-propulsion",
+      "kind": "theoretical_candidate",
+      "genes": {
+        "family": "irrotational_shift",
+        "wall_thickness": 1.2,
+        "bubble_radius": 0.78,
+        "effective_beta": 0.88,
+        "shear_control": 0.94,
+        "lapse_modulation": 0.04
+      },
+      "hypothesis": "A different metric family may diversify the local surrogate search rather than repeat one subluminal family.",
+      "method": "Compute existing bounded heuristic diagnostics and require an explicit metric with full tensor checks before claiming any physical result.",
+      "falsifier": "Reject physical claims if geometry is unsupported or energy conditions and stability are unproven, regardless of heuristic fitness."
+    },
+    {
+      "id": "ALG-01",
+      "arena": "research-algorithm",
+      "kind": "query_genome",
+      "genes": {
+        "query_mode": "mixed",
+        "query_count": 4,
+        "recency_days": 30,
+        "min_relevance_tokens": 1,
+        "suffix_family": "core",
+        "topic_shape": "compact",
+        "query_frame": "need",
+        "term_order": "signal_first",
+        "source_scope": "all"
+      },
+      "hypothesis": "An explicit buyer-first query frame may improve absolute unique demand signals on the same public research sources.",
+      "method": "On a bounded shadow benchmark, compare to g69-elite-1 using identical provider/topic/time conditions and source-independent thread counts.",
+      "falsifier": "Reject if unique signal threads decrease, precision deteriorates, or any fresh observation is treated as verified price without price validation."
+    }
+  ]
+}
