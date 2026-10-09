@@ -1,0 +1,11 @@
+# A real query intervention after no-gain review-only experiments
+
+PR #238 established that source_context annotations only change review routing, not the original scoring. To attempt actual retrieval improvement without inventing new scoring thresholds, this PR preregisters exactly **one already-supported gene mutation**: `query_mode=mixed` to `query_mode=pain`. It retains all other frozen baseline genes, four domains (from August PR232), query counts and HN Algolia provider.
+
+April 2026 was not used in the recorded May–October experiments. We use one fixed calendar month, 16 equal-budget HN topic-targeted queries per arm and 30 hits max per query. The union has at most 32 free public requests. Query suffixes differ, so retrieval results are not the same; treatment and baseline are matched on calendar window, topical domains, classifier, source and budgets. Only the same unmodified `diagnostic_metrics` computes relevance and valid discussion threads for either arm. Context annotations remain *review queue ordering only*, and never suppress an accepted hit, including true problems in job-seeker/Show HN threads.
+
+The predeclared screening rule is **at least two more distinct valid threads, at least two covered topics, and signal precision no lower than a baseline with at least eight relevant hits**, with all 16 queries of each arm successful and synthetic diagnostics consistent. A positive machine verdict is `SCREEN_CANDIDATE_NOT_VALIDATED`: it is **not** a commercially validated result, a true-positive human label, or permission to merge/promote. Failures and negative results must be preserved; never tune against April then claim it independently validates that tuned candidate.
+
+The review queue's top-eight in the original retrieval order is compared with top-eight selected by **known suspect source categories first**. This can prioritize risk review, but neither increases retrieval score by itself nor proves label correctness. No human reviewers or independent-source replications available; *zero validated buyer cases*.
+
+CI creates only anonymous aggregates and never saves external query strings, raw text, HN IDs, links or source content. No paid API, student training, commercial evidence/gate/threshold change, price cache or memory write, production deployment or automatic merge/promotion.

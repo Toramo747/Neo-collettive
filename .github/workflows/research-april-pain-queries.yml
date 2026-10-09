@@ -1,0 +1,70 @@
+name: Research April Matched Query Intervention
+
+on:
+  push:
+    branches: [experiment/research-april-pain-query-holdout]
+    paths:
+      - "experiments/research-april-pain-queries/**"
+      - "test_research_april_pain_queries.py"
+      - ".github/workflows/research-april-pain-queries.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-matched-query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Synthetic query budget and review invariants
+        run: python -m unittest -v test_research_april_pain_queries test_research_october_e2e_context
+      - name: Validate immutable preregistered plan
+        run: python experiments/research-april-pain-queries/run.py
+      - name: Run read-only paired-budget public April HN query experiment
+        run: timeout 540 python experiments/research-april-pain-queries/run.py --execute
+      - name: Assert complete privacy and no promotion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('/tmp/oxibay-research-april-pain-query-aggregates.json').read_text())
+          assert len(p['arms'])==2
+          assert set(p['arms'])=={'legacy_mixed','candidate_pain'}
+          assert p['provider_unique_queries']<=32
+          assert p['human_labelled_cases']==p['independent_replications']==0
+          assert p['measured_commercial_gain'] is False
+          assert p['independently_validated'] is False
+          assert p['automatic_promotion'] is False
+          assert p['production_state_write'] is False
+          assert p['commercial_gate_influence']=='NONE'
+          assert p['raw_external_text_persisted'] is False
+          assert p['source_ids_persisted'] is False
+          assert p['source_urls_persisted'] is False
+          assert p['query_strings_persisted'] is False
+          for row in p['arms'].values():
+              assert row['queries_ok']<=16
+              assert row['metric_integrity']
+              c=row['context_review']
+              assert c['all_existing_accept_decisions_preserved']
+              assert c['review_queue_only']
+              assert c['accepted_records']==row['valid_signal_rows']
+          print({'verdict':p['verdict'],
+                 'baseline':{k:p['arms']['legacy_mixed'][k] for k in ('relevant_hits','unique_signal_threads','precision')},
+                 'candidate':{k:p['arms']['candidate_pain'][k] for k in ('relevant_hits','unique_signal_threads','precision')},
+                 'human_validation':0})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-april-pain-query-aggregates-only
+          path: /tmp/oxibay-research-april-pain-query-aggregates.json
+          if-no-files-found: warn
+          retention-days: 14

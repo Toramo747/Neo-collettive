@@ -1,0 +1,78 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-april-pain-query-screen-2026-10-09",
+  "parent_pr": 238,
+  "parent_sha": "be5e7a8d7486628854cdceceaeea31487c121ba9",
+  "purpose": "Test an actual query intervention suggested by September/October source-context confounders instead of claiming review annotations improve retrieval.",
+  "provider": "hn_algolia_public_read_only",
+  "provider_endpoint": "https://hn.algolia.com/api/v1/search_by_date",
+  "window": {
+    "id": "2026-04",
+    "start_epoch": 1775001600,
+    "end_epoch": 1777593600
+  },
+  "topics_source": "experiments/research-fresh-screen/protocol.json",
+  "topic_domains": [
+    "hospitality",
+    "retail_inventory",
+    "file_management",
+    "shipping_returns"
+  ],
+  "arms": [
+    "legacy_mixed",
+    "candidate_pain"
+  ],
+  "candidate_mutation": {
+    "gene": "query_mode",
+    "from": "mixed",
+    "to": "pain",
+    "other_gene_changes_allowed": false,
+    "rationale": "Problem/pain queries may reduce supplier-driven content while retaining more authentic unmet-need discussion threads."
+  },
+  "budget": {
+    "queries_per_arm": 16,
+    "hits_per_query": 30,
+    "maximum_public_api_calls": 32
+  },
+  "decision_rule": {
+    "require_all_queries": true,
+    "min_baseline_relevant_hits": 8,
+    "min_unique_thread_gain": 2,
+    "min_signal_topic_coverage": 2,
+    "nondecreasing_signal_precision": true,
+    "positive_label": "SCREEN_CANDIDATE_NOT_VALIDATED",
+    "negative_label": "NO_REPRODUCIBLE_GAIN_DEMONSTRATED",
+    "automatic_promotion": false
+  },
+  "context_review": {
+    "enable": true,
+    "review_queue_only": true,
+    "max_review_slots": 8,
+    "rank_known_applicant_or_hiring_or_show_hn_first": true,
+    "never_reject_due_to_context": true
+  },
+  "safety": {
+    "production_state_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "prices_influence": "NONE",
+    "private_data_used": false,
+    "paid_api_calls": false,
+    "raw_external_text_persisted": false,
+    "source_urls_persisted": false,
+    "source_ids_persisted": false,
+    "query_strings_persisted": false,
+    "automatic_promotion": false,
+    "student_promotion": false,
+    "human_verified": false,
+    "independent_replications": 0
+  },
+  "scientific_limits": [
+    "The April 2026 data are untouched by recorded May-October PR225-238 runs, but one historical window and one source cannot independently validate a generalized effect.",
+    "Candidate query_mode=pain is an already-known bounded genome setting, not an automatically self-taught improvement.",
+    "Review-only source_context flag changes inspection order only, never scoring or accepted threads.",
+    "Queries differ by suffixes across arms; matching is on topic, source, time, count and classifier, not identical-result pairing.",
+    "A positive machine-signal verdict would remain unvalidated: human review and independent-source replications required.",
+    "No raw HN texts, URLs, IDs or query strings can enter artifacts, logs, PR comments or production."
+  ]
+}
