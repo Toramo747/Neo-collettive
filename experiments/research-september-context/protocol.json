@@ -1,0 +1,75 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-context-september-2026-shadow",
+  "parent_pr": 234,
+  "parent_sha": "c9ecdb4a203ef32abf9f978d0e851fe740c16217",
+  "source": "hn_algolia_public_read_only",
+  "rationale": "Check whether existing buyer-voice and commercial-family heuristics appear in disjoint source contexts that have different interpretations; never call overlap a confirmed false positive.",
+  "period": {
+    "name": "2026-09",
+    "start_epoch": 1788220800,
+    "end_epoch": 1790812800
+  },
+  "contexts": [
+    {
+      "key": "applicant_offers",
+      "mode": "story_comments",
+      "exact_title": "Ask HN: Who wants to be hired? (September 2026)",
+      "meaning": "job-seeking offer context; not software buyer demand by default"
+    },
+    {
+      "key": "employer_job_posts",
+      "mode": "story_comments",
+      "exact_title": "Ask HN: Who is hiring? (September 2026)",
+      "meaning": "employer job vacancies, not automatically software-purchase demand"
+    },
+    {
+      "key": "show_hn_projects",
+      "mode": "tagged_stories",
+      "tag": "show_hn",
+      "meaning": "product demos and mixed projects, possible genuine needs; no blanket veto"
+    }
+  ],
+  "query_budget": {
+    "max_total_provider_requests": 5,
+    "story_lookup_max_hits": 20,
+    "per_context_hits": 60
+  },
+  "shadow_parameter": {
+    "name": "source_context",
+    "values": [
+      "applicant_offers",
+      "employer_job_posts",
+      "show_hn_projects"
+    ],
+    "policy": "REVIEW_ONLY_NEVER_AUTO_REJECT",
+    "affects_production_scoring": false
+  },
+  "required_controls": {
+    "source_context_does_not_imply_label": true,
+    "no_heuristic_false_positive_claim": true,
+    "mixed_context_never_blanket_rejected": true,
+    "unknown_provider_or_missing_story_inconclusive": true
+  },
+  "boundary": {
+    "production_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "pricing_changes": false,
+    "paid_api_calls": false,
+    "raw_hn_text_persisted": false,
+    "hn_identifiers_persisted": false,
+    "hn_urls_persisted": false,
+    "private_sets_used": false,
+    "automatic_promotion": false,
+    "human_labelled_cases": 0
+  },
+  "limitations": [
+    "Deliberately selected thread types, not a representative sample.",
+    "Same HN Algolia provider and same heuristic family; not cross-source validation.",
+    "Search metadata alone cannot verify a real buyer or willingness to pay.",
+    "No raw evidence and no human labels persisted; flagged overlaps are NOT proven mistakes.",
+    "The parameter only changes shadow review priority, never accepted demand counts.",
+    "September has not been used to evolve these context hypotheses; after this run it becomes development feedback, not untouched confirmation."
+  ]
+}
