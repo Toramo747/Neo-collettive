@@ -1,0 +1,136 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-matched-replication-2026-10-09",
+  "preregistered_before_execution": true,
+  "upstream_v2": {
+    "pr": 227,
+    "commit": "f50936d916cf7b3c751e2f6376445b8f6faa6659",
+    "run": 37888655971,
+    "verdict": "CANDIDATE_FOR_FUTURE_REPLICATION",
+    "baseline_threads": 0,
+    "evolved_threads": 3,
+    "evolved_precision": 0.0556
+  },
+  "source": "hn_algolia_public_read_only",
+  "recency_days": 45,
+  "hits_per_query": 30,
+  "arms": {
+    "exact_original": {
+      "topic_shape": "exact",
+      "term_order": "topic_first"
+    },
+    "compact_matched": {
+      "topic_shape": "compact",
+      "term_order": "topic_first"
+    },
+    "evolved": {
+      "topic_shape": "compact",
+      "term_order": "signal_first"
+    }
+  },
+  "shared_genes": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "query_frame": "plain",
+    "source_scope": "all"
+  },
+  "excluded_domains": [
+    "manual_data_entry",
+    "finance_ops",
+    "security_compliance",
+    "spreadsheet",
+    "contract_renewals",
+    "vendor_onboarding",
+    "payroll",
+    "customer_support",
+    "shopify_catalog",
+    "podcast_editing",
+    "website_broken_links"
+  ],
+  "panels": [
+    {
+      "panel": "A",
+      "topics": [
+        {
+          "full": "crm lead qualification workflow",
+          "compact": "lead qualification",
+          "domain": "crm_lead_ops"
+        },
+        {
+          "full": "api webhook retry failures",
+          "compact": "webhook retry",
+          "domain": "integration_api"
+        },
+        {
+          "full": "appointment booking reminders",
+          "compact": "appointment booking",
+          "domain": "local_business_tools"
+        },
+        {
+          "full": "online course enrollment operations",
+          "compact": "learning platform",
+          "domain": "education_tools"
+        }
+      ]
+    },
+    {
+      "panel": "B",
+      "topics": [
+        {
+          "full": "marketing campaign attribution tracking",
+          "compact": "marketing automation",
+          "domain": "marketing_seo"
+        },
+        {
+          "full": "developer ci build failures",
+          "compact": "devops tool",
+          "domain": "developer_tools"
+        },
+        {
+          "full": "business intelligence dashboard refresh",
+          "compact": "analytics dashboard",
+          "domain": "analytics_tools"
+        },
+        {
+          "full": "product description localization workflow",
+          "compact": "localization workflow",
+          "domain": "content_tools"
+        }
+      ]
+    }
+  ],
+  "decision_rule": {
+    "matched_min_relevant_hits": 8,
+    "required_gain_threads": 2,
+    "minimum_signal_topics": 2,
+    "precision_ratio_min": 1,
+    "required_independent_rounds": 3,
+    "commercial_promotion": false
+  },
+  "limitations": [
+    "Both panels share one source and time window: not independent chronological/provider replications.",
+    "No human verification of previous three discussion threads is possible from aggregate-only v2 report.",
+    "Compact baseline controls topic string length, not all search strategy confounders.",
+    "Synthetic test cases are not human verified demand."
+  ],
+  "boundary": {
+    "production_state_write": false,
+    "automatic_promotion": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "paid_api_calls": false,
+    "private_datasets_access": false,
+    "raw_external_text_persisted": false
+  },
+  "metric_integrity_amendment": {
+    "date_utc": "2026-10-09",
+    "observed_on_run": 37890169522,
+    "description": "POST-RUN DIAGNOSTIC SAFETY AMENDMENT, not a new preregistered independent test",
+    "fail_closed": true,
+    "required": "signal_hits equals diagnostic valid_signal count, unique_threads<=signal_hits, stage totals equal deduped objects",
+    "outcome_on_mismatch": "INCONCLUSIVE_METRIC_DISAGREEMENT"
+  }
+}
