@@ -118,7 +118,6 @@ def compare_rows(context,rows,max_hits=60):
         counts["examined"]+=1
         counts["family_and_buyer"]+=int(old["family_and_buyer"])
         counts["review_flags"]+=int(shadow["review"]!="NO_HEURISTIC_OVERLAP")
-        counts["passes_content_only"]+=int(shadow["content_only_pass"])
         counts["positive_demand_tags"]+=int(old["positives"])
         counts[old["stage"]]+=1
     if sum(counts[k] for k in STAGES)!=counts["examined"]:
