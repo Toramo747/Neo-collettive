@@ -1,0 +1,59 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-autocorrection-fresh-screen-2026-10-09",
+  "parent_sha": "b654fae076a585ad70760f178c7bc6e46391192f",
+  "training_months": [
+    "2026-05",
+    "2026-06",
+    "2026-07"
+  ],
+  "screen_month": "2026-08",
+  "start_epoch": 1785542400,
+  "end_epoch": 1788220800,
+  "provider": "hn_algolia_public_read_only",
+  "max_hits_per_query": 30,
+  "queries_per_arm": 16,
+  "max_arms": 9,
+  "max_public_queries": 144,
+  "topics": [
+    {
+      "full": "restaurant reservation no shows",
+      "compact": "restaurant booking",
+      "domain": "hospitality"
+    },
+    {
+      "full": "inventory reorder alerts for retail",
+      "compact": "inventory alert",
+      "domain": "retail_inventory"
+    },
+    {
+      "full": "cloud storage file access requests",
+      "compact": "file access",
+      "domain": "file_management"
+    },
+    {
+      "full": "shipping returns label processing",
+      "compact": "returns label",
+      "domain": "shipping_returns"
+    }
+  ],
+  "criteria": {
+    "min_matched_relevant": 8,
+    "min_unique_thread_gain": 2,
+    "min_topic_coverage": 2,
+    "nondecreasing_precision": true,
+    "require_metric_consistency": true
+  },
+  "boundaries": {
+    "automatic_promotion": false,
+    "production_state_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "raw_external_text_persisted": false,
+    "private_data_access": false,
+    "paid_api_calls": false,
+    "human_verified": false,
+    "independent_validation_rounds": 0
+  },
+  "interpretation": "This is a *development screening* window used to select a hypothesis. No gamete may be promoted and this screening cannot also be counted as confirmation."
+}
