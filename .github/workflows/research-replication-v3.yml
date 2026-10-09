@@ -1,0 +1,53 @@
+name: Research Matched Replication Shadow
+
+on:
+  push:
+    branches: [experiment/research-algorithm-matched-replication]
+    paths:
+      - "experiments/research-replication-v3/**"
+      - "test_research_replication_v3.py"
+      - ".github/workflows/research-replication-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run isolated test suite
+        run: python -m unittest -v test_research_independent_holdout test_research_holdout_v2 test_research_replication_v3
+      - name: Verify default is plan only
+        run: python experiments/research-replication-v3/replicate.py
+      - name: Run independent-topic compact-baseline comparison
+        run: timeout 670 python experiments/research-replication-v3/replicate.py --execute
+      - name: Verify no gates or data were changed
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/oxibay-replication-v3-report.json'))
+          assert d['validated_independent_rounds']==0
+          assert d['human_verified'] is False
+          assert d['automatic_promotion'] is False
+          assert d['production_state_write'] is False
+          assert d['commercial_gate_influence']=='NONE'
+          assert d['raw_external_text_persisted'] is False
+          assert d['synthetic_controls']['pass'] is True
+          print({k: {'verdict':v['verdict'], 'matched_threads':v['compact_matched']['score']['score']['unique_signal_threads'], 'evolved_threads':v['evolved']['score']['score']['unique_signal_threads']} for k,v in d['panels'].items()})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-matched-v3-aggregates
+          path: /tmp/oxibay-replication-v3-report.json
+          if-no-files-found: warn
+          retention-days: 30
