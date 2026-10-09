@@ -60,3 +60,27 @@ class ResearchReplicationV3Tests(unittest.TestCase):
         self.assertTrue(m.metric_audit(fixed)["consistent"])
         out["evolved"]=fixed
         self.assertNotEqual(m.audited_verdict(out,{"pass":True},p),"INCONCLUSIVE_METRIC_DISAGREEMENT")
+
+
+    def test_long_text_relevance_is_identical_to_scorer(self):
+        # Author-made synthetic HN fixture: the topic and demand evidence occur
+        # after the composited score_hits 1600-character boundary, but within
+        # the individually cleaned 1600-character comment body.
+        genes=m.load()["shared_genes"]
+        topic="manual data entry"
+        title=("Routine operations have become difficult for several departments "
+               "and the issue repeats throughout the year")
+        body=("ordinary contextual filler " * 56 +
+              m.v2.POSITIVE_TEXT)
+        self.assertLessEqual(len(body),1600)
+        self.assertGreater(len(title+" "+body),1600)
+        self.assertNotIn(topic, (title+" "+body)[:1600].lower())
+        hit={"objectID":"synthetic-long-1","story_id":"synthetic-long-1",
+             "title":title,"comment_text":body}
+        measures=m.v2.diagnostic_metrics(
+            [{"topic":topic,"query":"manual data entry workaround"}],
+            [[hit]],genes)
+        self.assertEqual(
+            measures["score"]["signal_hits"],
+            measures["stages"]["valid_signal"],
+            "Diagnostic and production-aligned scorer must classify the same cleaned text")
