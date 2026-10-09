@@ -69,3 +69,16 @@ class BlindReviewTests(unittest.TestCase):
   self.assertNotIn("replace_evidence_memory(",source)
   self.assertNotIn("upload_artifact(",source)
   self.assertIn("development_only",source)
+
+
+class WindowsLauncherStaticTests(unittest.TestCase):
+ def test_launcher_is_explicit_private_and_fails_closed(self):
+  script=Path("experiments/research-human-review/Start-PrivateReview.ps1").read_text(encoding="utf-8")
+  self.assertIn("experiment/research-human-blind-audit",script)
+  self.assertIn("if ($PlanOnly)",script)
+  self.assertIn("require-hashes",script)
+  self.assertIn("test_research_human_review",script)
+  self.assertIn("collect --private-dir",script)
+  self.assertIn("LOCALAPPDATA",script)
+  self.assertNotIn("git push",script.lower())
+  self.assertNotIn("github.com/upload",script.lower())
