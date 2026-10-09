@@ -67,7 +67,11 @@ def valid_thread_metrics(pairs,hits,genes):
             unique.append(hit)
         scored.append({"topic":pair["topic"],"query":pair["query"],"hits":unique})
     base=score_hits(genes,scored)
-    # Per-topic credit independent of total volume; only counts distinct source threads.
+    # A mutually-exclusive aggregate diagnostic explains *why* hits were rejected.
+    # These buckets contain no URLs, text, IDs or private content.
+    rejection_reasons={key:0 for key in (
+        "irrelevant", "vendor_or_supply", "unknown_family",
+        "no_buyer_voice", "no_demand_tags", "valid_signal")}
     topic_threads={}
     for row in scored:
         topic=row["topic"]
@@ -76,18 +80,28 @@ def valid_thread_metrics(pairs,hits,genes):
             title=clean_text(hit.get("title") or hit.get("story_title") or "")
             body=clean_text(hit.get("comment_text") or hit.get("story_text") or "")
             if len(text_tokens(topic)&text_tokens(title+" "+body))<genes["min_relevance_tokens"]:
+                rejection_reasons["irrelevant"]+=1
                 continue
             url=str(hit.get("url") or hit.get("story_url") or "")
             if is_vendor_content(title,body,url,"hn-algolia-routed") or is_supply_offer(title,body,url,"hn-algolia-routed"):
+                rejection_reasons["vendor_or_supply"]+=1
                 continue
-            if commercial_family((title+" "+body).lower())=="other" or not buyer_voice_present(title,body):
+            if commercial_family((title+" "+body).lower())=="other":
+                rejection_reasons["unknown_family"]+=1
+                continue
+            if not buyer_voice_present(title,body):
+                rejection_reasons["no_buyer_voice"]+=1
                 continue
             tags=demand_signal_type(title,body,query_role="buyer",strong_pain_only=False,seller_launch_guard=True,url=url,source="hn-algolia-routed",vendor_content_guard=True,web_buyer_voice_guard=True,supply_offer_guard=True,query_echo_guard=True,query=row["query"])
             if not set(tags)&{"PAIN","BUY_INTENT","PAID_DEMAND"}:
+                rejection_reasons["no_demand_tags"]+=1
                 continue
             sid=str(hit.get("story_id") or hit.get("objectID") or "")
-            if sid:
-                topic_threads[topic].add(sid)
+            if not sid:
+                rejection_reasons["no_demand_tags"]+=1
+                continue
+            rejection_reasons["valid_signal"]+=1
+            topic_threads[topic].add(sid)
     # The original score_hits thread number is deduped, but topic membership can repeat;
     # compute union over all four topics for conservative global unique-thread count.
     all_threads=set().union(*topic_threads.values())
@@ -95,6 +109,9 @@ def valid_thread_metrics(pairs,hits,genes):
     base["topic_coverage"]=sum(bool(s) for s in topic_threads.values())
     base["per_topic_unique_threads"]={k:len(v) for k,v in topic_threads.items()}
     base["deduped_object_count"]=len(seen)
+    if sum(rejection_reasons.values())!=len(seen):
+        raise ValueError("Diagnostic accounting mismatch")
+    base["rejection_reasons"]=rejection_reasons
     return base
 
 async def run():
