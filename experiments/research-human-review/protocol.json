@@ -1,0 +1,51 @@
+{
+  "schema_v": 1,
+  "experiment_id": "oxibay-human-blind-audit-2026-10-09",
+  "parent_pr": 232,
+  "parent_commit": "90c4757fc5e1670a6030b1e9d2b9be33233c6ff1",
+  "study_class": "RETROSPECTIVE_DEVELOPMENT_ERROR_ANALYSIS_NOT_CONFIRMATORY",
+  "hn_source": "https://hn.algolia.com/api/v1/search_by_date",
+  "source_month": "2026-08",
+  "start_epoch": 1785542400,
+  "end_epoch": 1788220800,
+  "max_query_count": 16,
+  "max_hits_per_query": 30,
+  "max_per_stage": 5,
+  "max_cases": 30,
+  "stages": [
+    "irrelevant",
+    "vendor_or_supply",
+    "unknown_family",
+    "no_buyer_voice",
+    "no_demand_tags",
+    "valid_signal"
+  ],
+  "allowed_labels": [
+    "real_demand",
+    "no_demand",
+    "uncertain"
+  ],
+  "required_reviewers": 2,
+  "min_descriptive_cases": 12,
+  "boundary": {
+    "source_data_local_only": true,
+    "labels_local_only": true,
+    "raw_data_to_github": false,
+    "source_ids_to_github": false,
+    "read_only_public_source": true,
+    "paid_api_calls": false,
+    "commercial_gate_influence": "NONE",
+    "production_state_write": false,
+    "auto_model_training": false,
+    "auto_promotion": false,
+    "independent_validation_rounds": 0
+  },
+  "limits": [
+    "August data already used by PR232 screening; this is not an untouched independent holdout.",
+    "Reretrieval may differ from archived HN index and PR232 counts; do not claim the exact same records.",
+    "No human evaluation has occurred in CI; two CSV files do not prove two distinct reviewers.",
+    "Stage-balanced samples do not estimate deployment prevalence, sensitivity or specificity.",
+    "Reviewer disagreements and uncertain labels block a completed review.",
+    "No commercial pricing, buyer identity or willingness-to-pay independently established."
+  ]
+}
