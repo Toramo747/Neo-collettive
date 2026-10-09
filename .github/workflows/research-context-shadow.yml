@@ -1,0 +1,53 @@
+name: Research Public Context Shadow
+on:
+  push:
+    branches: [experiment/research-context-shadow-audit]
+    paths:
+      - "experiments/research-context-shadow/**"
+      - "test_research_context_shadow.py"
+      - ".github/workflows/research-context-shadow.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  limited-public-aggregates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Offline diagnostic tests
+        run: python -m unittest -v test_research_context_shadow test_research_human_review
+      - name: No-network plan
+        run: python experiments/research-context-shadow/audit.py
+      - name: Limited public HN context analysis, aggregate only
+        run: timeout 300 python experiments/research-context-shadow/audit.py --execute
+      - name: Assert fail-closed, source identifiers absent from output
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('/tmp/oxibay-research-context-shadow-aggregates.json').read_text())
+          assert p['status']=='CONTEXT_DIAGNOSTIC_ONLY'
+          assert p['human_reviews_completed']==0
+          assert p['classifier_false_positive_count_verified']==0
+          assert p['classifier_false_negative_count_verified']==0
+          assert not p['source_text_persisted'] and not p['source_ids_persisted']
+          assert p['production_state_write'] is False
+          assert p['commercial_gate_influence']=='NONE'
+          assert set(p['contexts'])=={'employment_supply','project_showcase'}
+          print({'contexts':[(k,v['status'],v['counts']['examined']) for k,v in p['contexts'].items()],
+                 'human_validations':0})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-context-anonymized-only
+          path: /tmp/oxibay-research-context-shadow-aggregates.json
+          if-no-files-found: warn
+          retention-days: 14

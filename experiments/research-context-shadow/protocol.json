@@ -1,0 +1,48 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-context-shadow-audit-2026-10-09",
+  "parent_pr": 233,
+  "parent_commit": "177da4b7c32b371ee198d1e8a9b8e40b5691f067",
+  "source": "hn_algolia_public_read_only",
+  "endpoint_search": "https://hn.algolia.com/api/v1/search",
+  "endpoint_comments": "https://hn.algolia.com/api/v1/search_by_date",
+  "period": "2026-08",
+  "start_epoch": 1785542400,
+  "end_epoch": 1788220800,
+  "contexts": [
+    {
+      "key": "employment_supply",
+      "exact_title": "Ask HN: Who wants to be hired? (August 2026)",
+      "interpretation": "source offers and job-seeking messages, not buyer demand by default"
+    },
+    {
+      "key": "project_showcase",
+      "exact_title": "Ask HN: What are you working on? (August 2026)",
+      "interpretation": "mixed projects, possible real problem statements and vendor showcases; no blanket rejection"
+    }
+  ],
+  "max_story_lookup_hits": 20,
+  "max_comments_per_context": 60,
+  "max_requests": 4,
+  "boundary": {
+    "read_only_public_api": true,
+    "raw_text_to_artifact": false,
+    "raw_text_to_stdout": false,
+    "source_ids_to_artifact": false,
+    "source_ids_to_source_code": false,
+    "source_urls_to_artifact": false,
+    "paid_api_calls": false,
+    "production_state_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "automatic_promotion": false,
+    "independent_validation_claim": false
+  },
+  "limitations": [
+    "Two targeted source contexts deliberately sampled, not representative or randomized.",
+    "No real human labels and no confirmation of false positives/negatives.",
+    "Source-context flags are a review-priority diagnostic, never a production gate.",
+    "No recovered Aug 2026 PR232 raw data; retrieved comments may differ in time.",
+    "No customer identities or willingness to pay proven."
+  ]
+}
