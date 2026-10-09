@@ -1,0 +1,53 @@
+name: Disjoint Research Holdout Shadow
+
+on:
+  push:
+    branches: [experiment/research-algorithm-disjoint-holdout]
+    paths:
+      - "experiments/research-holdout-v2/**"
+      - "test_research_holdout_v2.py"
+      - ".github/workflows/research-holdout-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install hash-locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Run no-network isolation and synthetic control tests
+        run: python -m unittest -v test_research_independent_holdout test_research_holdout_v2
+      - name: Preregistered plan-only smoke
+        run: python experiments/research-holdout-v2/run.py
+      - name: Run one isolated HN public research round
+        run: timeout 390 python experiments/research-holdout-v2/run.py --execute
+      - name: Assert no gate influence and no state mutation
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/oxibay-research-disjoint-holdout.json',encoding='utf-8'))
+          assert d['automatic_promotion'] is False
+          assert d['production_state_write'] is False
+          assert d['raw_external_text_persisted'] is False
+          assert d['commercial_gate_influence']=='NONE'
+          assert d['validated_independent_rounds']==0
+          assert d['human_verified_external_labels'] is False
+          assert d['controls']['pass'] is True
+          print({'verdict':d['verdict'],'baseline':d['results']['baseline']['metrics']['score']['unique_signal_threads'],'treatment':d['results']['treatment']['metrics']['score']['unique_signal_threads']})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-disjoint-holdout-shadow
+          path: /tmp/oxibay-research-disjoint-holdout.json
+          if-no-files-found: warn
+          retention-days: 30

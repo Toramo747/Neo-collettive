@@ -1,0 +1,96 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-disjoint-holdout-2026-10-09",
+  "preregristration_note": "Locked before first v2 external-data query; preserve prior v1 result unchanged",
+  "prior_experiment_id": "research-independent-holdout-2026-10-09",
+  "candidate_id": "g69-elite-1",
+  "baseline_definition": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "exact",
+    "query_frame": "plain",
+    "term_order": "topic_first",
+    "source_scope": "all"
+  },
+  "expected_treatment_genes": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "compact",
+    "query_frame": "plain",
+    "term_order": "signal_first",
+    "source_scope": "all"
+  },
+  "excluded_topic_domains": [
+    "manual_data_entry",
+    "finance_operations",
+    "security_compliance",
+    "spreadsheet_workflow",
+    "contract_renewals",
+    "vendor_onboarding",
+    "security_questionnaires",
+    "payroll_corrections"
+  ],
+  "holdout_topics": [
+    {
+      "full": "customer support ticket routing",
+      "compact": "support ticket",
+      "domain": "customer_support"
+    },
+    {
+      "full": "shopify product catalog synchronization",
+      "compact": "shopify catalog",
+      "domain": "ecommerce_catalog"
+    },
+    {
+      "full": "podcast editing workflow",
+      "compact": "podcast workflow",
+      "domain": "creator_podcasts"
+    },
+    {
+      "full": "website broken link checking",
+      "compact": "broken link",
+      "domain": "website_quality"
+    }
+  ],
+  "source": "hn_algolia_public_read_only",
+  "hit_limit_per_query": 30,
+  "minimum_success_rate": 1,
+  "require_equal_cutoff": true,
+  "require_unique_object_dedup": true,
+  "decision_rule": {
+    "candidate_min_unique_thread_gain": 2,
+    "candidate_min_precision_ratio_vs_baseline": 1,
+    "candidate_min_topic_coverage": 2,
+    "required_independent_rounds_before_validation": 3,
+    "promote_to_production": false
+  },
+  "controls": {
+    "synthetic_not_external": true,
+    "labels_author_defined_not_human_verified": true,
+    "positive_fixture_origin": "test_arena_research_algorithm.py::test_support_penalty_blocks_tiny_perfect_sample",
+    "require_positive_and_negative": true,
+    "never_count_controls_in_live_results": true
+  },
+  "limitations": [
+    "Domain disjointness is a documented manual topical judgment, not a learned semantic-independence proof.",
+    "The preceding v1 holdout remains NO_DEMONSTRATED_GAIN and is not a replication success.",
+    "Synthetic control labels are neither human-reviewed external evidence nor commercial proof.",
+    "One source (Hacker News Algolia) cannot establish independent domains or verified buyer demand.",
+    "No decision changes, automatic promotion, model learning, payment, Render or production data writes permitted."
+  ],
+  "boundary": {
+    "production_state_write": false,
+    "automatic_promotion": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "private_datasets_access": false,
+    "paid_api_calls": false,
+    "raw_external_text_persisted": false
+  }
+}
