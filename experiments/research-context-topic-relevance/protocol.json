@@ -1,0 +1,82 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-context-topic-relevance-2026-10-09",
+  "parent_pr": 236,
+  "parent_commit": "0939d0c718ee92877bb924dbb5b8a723ebeb21fa",
+  "source": "hn_algolia_public_read_only",
+  "period": {
+    "name": "2026-09",
+    "start_epoch": 1788220800,
+    "end_epoch": 1790812800
+  },
+  "contexts": [
+    "applicant_offers",
+    "employer_job_posts",
+    "show_hn_projects"
+  ],
+  "topics_source": "experiments/research-fresh-screen/protocol.json",
+  "topics": [
+    {
+      "domain": "hospitality",
+      "compact": "restaurant booking"
+    },
+    {
+      "domain": "retail_inventory",
+      "compact": "inventory alert"
+    },
+    {
+      "domain": "file_management",
+      "compact": "file access"
+    },
+    {
+      "domain": "shipping_returns",
+      "compact": "returns label"
+    }
+  ],
+  "frozen_baseline": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "compact",
+    "query_frame": "plain",
+    "term_order": "topic_first",
+    "source_scope": "all"
+  },
+  "query_role_note": "Synthetic audit query <compact topic> problem passed to existing classifier; no actual topic-conditioned HN search executed. These are conditional evaluations of preselected source records, NOT matched-search precision.",
+  "max_public_requests": 5,
+  "max_records_per_context": 60,
+  "comparison_type": "fixed_source_corpus_with_counterfactual_topic_relevance_not_end_to_end_retrieval",
+  "pipeline": "frozen existing content guards + exact existing min_relevance_tokens topic gate, without changing classification logic",
+  "integrity": {
+    "every_topic_stage_accounting": true,
+    "score_diagnostic_agreement": true,
+    "no_more_topical_signals_than_content_only": true,
+    "context_labels_cannot_auto_reject": true,
+    "pass_to_commercial_scoring": false
+  },
+  "boundaries": {
+    "production_write": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "price_cache_influence": "NONE",
+    "private_sets_accessed": false,
+    "paid_api_calls": false,
+    "raw_source_text_persisted": false,
+    "source_ids_persisted": false,
+    "source_urls_persisted": false,
+    "human_labels": 0,
+    "independent_confirmations": 0,
+    "automatic_promotion": false,
+    "source_context_used_to_change_label": false
+  },
+  "limitations": [
+    "September source data are development feedback and not unseen independent holdout.",
+    "This probes the topic-conditioned content gate using source contexts, not an actual search query; reported valid_signal is not an observed commercial opportunity.",
+    "The same retrieved comment can qualify for multiple topics: topic-record counts cannot be summed as independent buyers.",
+    "No blind human review was conducted, so verified false-positive/negative rates are unknown.",
+    "The frozen topics were originally specified in the August matched baseline experiment; no post-hoc topic tailoring.",
+    "The public HN index may change over time; do not compare raw counts between distinct retrievals as paired tests."
+  ]
+}
