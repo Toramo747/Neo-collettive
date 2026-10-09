@@ -79,14 +79,16 @@ def valid_thread_metrics(pairs,hits,genes):
         for hit in row["hits"]:
             title=clean_text(hit.get("title") or hit.get("story_title") or "")
             body=clean_text(hit.get("comment_text") or hit.get("story_text") or "")
-            if len(text_tokens(topic)&text_tokens(title+" "+body))<genes["min_relevance_tokens"]:
+            # Same aggregate 1600-char normalization as score_hits.
+            score_text=clean_text((title+" "+body).strip())
+            if len(text_tokens(topic)&text_tokens(score_text))<genes["min_relevance_tokens"]:
                 rejection_reasons["irrelevant"]+=1
                 continue
             url=str(hit.get("url") or hit.get("story_url") or "")
             if is_vendor_content(title,body,url,"hn-algolia-routed") or is_supply_offer(title,body,url,"hn-algolia-routed"):
                 rejection_reasons["vendor_or_supply"]+=1
                 continue
-            if commercial_family((title+" "+body).lower())=="other":
+            if commercial_family(score_text)=="other":
                 rejection_reasons["unknown_family"]+=1
                 continue
             if not buyer_voice_present(title,body):
