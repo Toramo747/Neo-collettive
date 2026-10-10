@@ -34,3 +34,15 @@ Usare `exposure_current` e `exposure_previous` come denominatori **comparabili**
 - Nessuna promozione automatica. IPD può suggerire cosa *esplorare*, non ciò che può essere *venduto*.
 - L'IPD attuale usa segnali positivi già etichettati e non risolve da sé i falsi negativi: quella è una ricerca separata.
 - La CI testa soltanto logica sintetica: senza prova sul campo il vantaggio empirico è **non dimostrato**.
+
+## HN shadow adapter (PR #242, subsequent isolated commit)
+A bounded public-only provider has been added at `experiments/demand-pressure/hn_shadow.py`, and a **manual-only** GitHub Actions experiment is defined by `.github/workflows/demand-pressure-hn-shadow.yml`. It performs at most 16 free HN Algolia searches: four frozen topics × four disjoint seven-day windows, with 30 hits/request, and processes source text in memory only. It neither reads the private commercial store nor writes runtime state, env, memory or published snapshots.
+
+It uses the **existing lexical guard helpers**, rejecting explicit seller voice and apparent self-traffic, and HMAC-deduplicates per HN discussion thread. Even successful lexical matches remain *machine-observed discussion signals*: the search provider, thread metadata, apparent buyer voice and one platform **cannot prove distinct human buyers or external validation**. The producer deliberately marks all human identities unverified. The resulting `ipd_score` is only a preliminary exploratory index and should **never** be interpreted as 0–100% commercial confidence.
+
+For truncated/failed provider responses the result is flagged `SOURCE_TRUNCATED` or `INCONCLUSIVE_PROVIDER_FAILURE`. Equal search budgets do not establish complete denominators: HN's search ranking, index freshness and platform sampling may differ by week even below the per-query cap. Therefore apparent demand growth is a **non-causal, potentially biased** search-rate comparison, not population growth. Future work must require independent review and multisource corroboration before making claims of genuine demand increases.
+
+Plan mode makes no network calls:
+`python experiments/demand-pressure/hn_shadow.py`.
+
+The explicit `--execute` mode is reserved for the manually dispatched experiment, not part of main or the production cycle. Its artifact contains only aggregate counts/score components, without HN content, URLs, IDs, opaque HMACs, author names or actual query strings. The workflow must never be enabled on a deployment trigger or merged without separate authorization and review.
