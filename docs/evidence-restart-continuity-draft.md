@@ -23,3 +23,10 @@
 - Repeated restart simulation with zero unexplained loss, preserve privacy; existing 6/6 public+hidden gate unchanged.
 
 Related: #244 (Render deploy blocked).
+
+## Follow-up hardening (2026-10-10)
+- Verified predecessor decoding failure or fallback after corrupted current reference now returns `continuity_unverified` and sets `evidence_store_degraded=true` to prevent new active-store promotion.
+- Identity loss is permitted only if the exact previous identity is present in verified archive rows, or its `last_seen_epoch` demonstrably exceeds existing 21-day retention. Unknown timestamps and unexplained replacements remain blocked.
+- Added synthetic tests for archive and retention exceptions plus corrupt predecessor fail-closed behavior.
+- A **missing predecessor reference** is explicitly marked `no_predecessor` (first generation / truncated ancestry ambiguous), not certified. Promoting this guard needs a separately preserved private high-water baseline.
+- Existing fail-closed degraded checkpoint path preserves the prior external reference, but may still update unrelated checkpoint fields; validate against production backup before release.
