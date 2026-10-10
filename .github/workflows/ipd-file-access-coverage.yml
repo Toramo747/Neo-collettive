@@ -1,0 +1,42 @@
+name: IPD File Access Coverage Shadow
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-hn-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Verify synthetic completeness tests
+        run: python -m unittest -v test_demand_pressure_high_recall test_demand_pressure_file_access_audit test_demand_pressure_private_blind_review
+      - name: Execute four bounded searches (500 results maximum per query)
+        run: timeout 480 python experiments/demand-pressure/file_access_coverage.py --execute
+      - name: Check privacy and absence of commercial promotion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("/tmp/oxibay-ipd-file-access-completeness-aggregates.json").read_text())
+          assert p["max_public_queries"]==4
+          assert p["human_labels"]==p["verified_independent_buyers"]==0
+          assert p["production_state_write"] is False
+          assert p["commercial_gate_influence"]=="NONE"
+          assert p["raw_external_content_persisted"] is False
+          assert p["source_ids_persisted"] is False
+          assert p["automatic_promotion"] is False
+          print({"result":p["status"],"candidate_threads":p.get("all_unique_candidate_threads"),"complete":p.get("all_source_windows_complete")})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ipd-file-access-completeness-aggregate
+          path: /tmp/oxibay-ipd-file-access-completeness-aggregates.json
+          retention-days: 7
