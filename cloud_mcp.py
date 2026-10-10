@@ -108,7 +108,7 @@ from query_builder import (
 )
 from quarantine_revalidation import revalidate_quarantined_rows
 from evidence_memory_guard import repair_evidence_timestamps, replace_evidence_memory_rows
-from evidence_restart_continuity import verify_restart_continuity
+from evidence_restart_continuity import verify_restart_continuity, preserve_checkpoint_continuity_status
 from search_providers import (
     begin_cycle as begin_search_provider_cycle,
     configured_provider,
@@ -1725,14 +1725,17 @@ async def _checkpoint_state_to_render() -> dict:
             payload["commercial_evidence_store_reference"]=dict(original_ref)
             payload["pending_evidence"]=pending_rows
             payload["evidence_store_degraded"]=True
-            payload["evidence_store_status"]={
-                "status":"degraded",
-                "active_count":len(evidence_rows),
-                "expected_active_count":int(original_ref.get("evidence_count") or 0),
-                "pending_count":len(pending_rows),
-                "pending_overflow_count":pending_overflow_count,
-                "archive_count":len(archive_rows),
-            }
+            payload["evidence_store_status"]=preserve_checkpoint_continuity_status(
+                AUTOPILOT_STATE.get("evidence_store_status"),
+                {
+                    "status":"degraded",
+                    "active_count":len(evidence_rows),
+                    "expected_active_count":int(original_ref.get("evidence_count") or 0),
+                    "pending_count":len(pending_rows),
+                    "pending_overflow_count":pending_overflow_count,
+                    "archive_count":len(archive_rows),
+                },
+            )
             compaction_meta["store_mode"]="external"
             compaction_meta["evidence_count_after_compaction"]=int(original_ref.get("evidence_count") or 0)
         else:
