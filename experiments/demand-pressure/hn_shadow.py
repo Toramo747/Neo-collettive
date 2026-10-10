@@ -38,8 +38,8 @@ OUT = Path("/tmp/oxibay-ipd-hn-shadow-aggregates.json")
 
 
 def plan(now_epoch: float) -> list[dict]:
-    # Stable whole UTC-day anchor; four consecutive 7-day windows.
-    anchor = int(now_epoch) // 86400 * 86400
+    # Freeze an exact observation end across all 16 windows.
+    anchor = int(now_epoch)
     return [
         {"topic": topic, "query": query, "week": week,
          "start": anchor - (week + 1) * WEEK_SECONDS,
@@ -177,7 +177,7 @@ async def execute():
                 payload.append({"ok": True, "hits": doc["hits"][:HITS_PER_QUERY]})
             except (httpx.HTTPError, ValueError, TypeError):
                 payload.append({"ok": False, "hits": []})
-    output = evaluate(queries, payload, key=os.urandom(32), now_epoch=now)
+    output = evaluate(queries, payload, key=os.urandom(32), now_epoch=int(now))
     OUT.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "status": "SHADOW_ONLY",
