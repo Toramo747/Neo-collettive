@@ -108,6 +108,7 @@ from query_builder import (
 )
 from quarantine_revalidation import revalidate_quarantined_rows
 from evidence_memory_guard import repair_evidence_timestamps, replace_evidence_memory_rows
+from evidence_restart_continuity import verify_restart_continuity
 from search_providers import (
     begin_cycle as begin_search_provider_cycle,
     configured_provider,
@@ -1587,6 +1588,14 @@ def _restore_state() -> str:
     payload=merge_supplementary_state(payload,compatible_candidates)
     payload,evidence_store_restore=_hydrate_external_commercial_evidence(payload)
     meta["commercial_evidence_store"]=evidence_store_restore
+    # Compare with a verifiable older generation even when the new generation
+    # is structurally valid. An unexplained reduction must not be checkpointed.
+    payload,evidence_continuity=verify_restart_continuity(
+        payload,
+        decode_previous=lambda ref: decode_external_store(ref,_evidence_chunks_from_env(ref)),
+        evidence_key=_evidence_memory_key,
+    )
+    meta["evidence_continuity"]=evidence_continuity
     payload,challenge_track_store_restore=_hydrate_external_challenge_track(payload)
     meta["challenge_track_store"]=challenge_track_store_restore
     cycle_floor,cycle_floor_load=_load_cycle_floor()
