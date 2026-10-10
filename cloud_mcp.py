@@ -1594,6 +1594,7 @@ def _restore_state() -> str:
         payload,
         decode_previous=lambda ref: decode_external_store(ref,_evidence_chunks_from_env(ref)),
         evidence_key=_evidence_memory_key,
+        restore_status=str(evidence_store_restore.get("status") or "ok"),
     )
     meta["evidence_continuity"]=evidence_continuity
     payload,challenge_track_store_restore=_hydrate_external_challenge_track(payload)
