@@ -76,5 +76,54 @@ class FunnelAuditTests(unittest.TestCase):
             diagnose(data)
 
 
+    def test_repository_snapshot_is_supported_without_mutation(self):
+        """Integrate against the committed snapshot, not a hand-copied fixture."""
+        import json
+        from pathlib import Path
+
+        snapshot_path = Path(__file__).resolve().parent / 'neo_latest_result.json'
+        before = snapshot_path.read_bytes()
+        snapshot = json.loads(before)
+        audit = diagnose(snapshot)
+        self.assertEqual(snapshot_path.read_bytes(), before)
+        self.assertEqual(audit['status'], 'SHADOW_DIAGNOSTIC_ONLY')
+        self.assertFalse(audit['production_state_write'])
+        self.assertFalse(audit['automatic_promotion'])
+        self.assertEqual(audit['commercial_gate_influence'], 'NONE')
+        self.assertTrue(audit['requires_independent_human_labels'])
+
+        source = snapshot['autopilot']['select_diagnostics']
+        self.assertEqual(audit['funnel'][0]['input'],
+                         source['funnel']['raw_received'])
+        self.assertEqual(audit['funnel'][-1]['output'],
+                         source['funnel']['persisted'])
+        self.assertEqual(
+            audit['largest_absolute_drop']['lost'],
+            max(stage['lost'] for stage in audit['funnel']),
+        )
+        self.assertEqual(
+            {entry['source'] for entry in audit['sources']},
+            {entry['source'] for entry in source['search_sources']},
+        )
+        self.assertEqual(
+            audit['event_loop']['codec_offthread'],
+            snapshot['autopilot']['runtime_observation']['codec_offthread'],
+        )
+        # The result may expose safe aggregates, never individual traffic or
+        # private evidence, even if those fields are present in the snapshot.
+        serialized = json.dumps(audit)
+        for private_field in ('inbound_traffic_events', 'content_fingerprint',
+                              'inbound_review_queue', 'commercial_evidence_memory',
+                              'source_url', 'raw_external_text'):
+            self.assertNotIn(private_field, serialized)
+
+    def test_no_unsupported_false_negative_claim(self):
+        """Aggregate attrition alone is not a human-reviewed misclassification."""
+        report = diagnose(fixture())
+        self.assertTrue(report['requires_independent_human_labels'])
+        self.assertNotIn('false_negative_count', report)
+        self.assertNotIn('validated_buyer_demand', report)
+        self.assertEqual(report['commercial_gate_influence'], 'NONE')
+
 if __name__ == '__main__':
     unittest.main()
