@@ -70,8 +70,8 @@ class RestartContinuityTests(unittest.TestCase):
 
     def test_corrupt_previous_is_not_claimed_verified(self):
         payload, status = exercise(rows(5), rows(6), corrupt_previous=True)
-        self.assertEqual(status["status"], "predecessor_unavailable")
-        self.assertNotEqual(status["status"], "verified")
+        self.assertEqual(status["status"], "continuity_unverified")
+        self.assertTrue(payload["evidence_store_degraded"])
         self.assertEqual(len(payload["commercial_evidence_memory"]), 6)
 
     def test_missing_reference_does_not_change_state(self):
@@ -82,6 +82,55 @@ class RestartContinuityTests(unittest.TestCase):
         )
         self.assertEqual(status["status"], "no_external_reference")
         self.assertEqual(payload, initial)
+
+    def test_proven_archive_is_allowed(self):
+        previous = rows(5)
+        current = previous[:3]
+        old_ref, old_chunks = encode_external_store(previous, store="render_env_chunks_v2")
+        new_ref, _ = encode_external_store(current, store="render_env_chunks_v2", previous_generation=old_ref)
+        payload = {"commercial_evidence_store_reference": new_ref,
+                   "commercial_evidence_memory": current,
+                   "commercial_evidence_archive_rows": previous[3:],
+                   "evidence_store_status": {"status": "ok"}}
+        out, status = verify_restart_continuity(
+            payload,
+            decode_previous=lambda ref: decode_external_store(ref, old_chunks),
+            evidence_key=lambda row: row["evidence_id"],
+            now_epoch=1800000500,
+        )
+        self.assertEqual(status["status"], "verified")
+        self.assertEqual(status["archived_count"], 2)
+        self.assertFalse(out.get("evidence_store_degraded", False))
+
+    def test_proven_retention_is_allowed(self):
+        previous = rows(4)
+        previous[3]["last_seen_epoch"] = 1700000000
+        current = previous[:3]
+        old_ref, old_chunks = encode_external_store(previous, store="render_env_chunks_v2")
+        new_ref, _ = encode_external_store(current, store="render_env_chunks_v2", previous_generation=old_ref)
+        payload = {"commercial_evidence_store_reference": new_ref,
+                   "commercial_evidence_memory": current}
+        out, status = verify_restart_continuity(
+            payload, decode_previous=lambda ref: decode_external_store(ref, old_chunks),
+            evidence_key=lambda row: row["evidence_id"], now_epoch=1800000500,
+        )
+        self.assertEqual(status["status"], "verified")
+        self.assertEqual(status["expired_count"], 1)
+        self.assertFalse(out.get("evidence_store_degraded", False))
+
+    def test_fallback_to_previous_is_held(self):
+        previous = rows(4)
+        payload, status = exercise(previous, previous)
+        ref, chunks = encode_external_store(previous, store="render_env_chunks_v2")
+        value = {"commercial_evidence_store_reference": ref,
+                 "commercial_evidence_memory": previous}
+        out, result = verify_restart_continuity(
+            value, decode_previous=lambda r: previous,
+            evidence_key=lambda row: row["evidence_id"],
+            restore_status="recovered_previous_generation",
+        )
+        self.assertEqual(result["status"], "continuity_unverified")
+        self.assertTrue(out["evidence_store_degraded"])
 
     def test_source_does_not_write_any_identifiers_to_public_telemetry(self):
         old = rows(5)
