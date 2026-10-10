@@ -30,3 +30,10 @@ Related: #244 (Render deploy blocked).
 - Added synthetic tests for archive and retention exceptions plus corrupt predecessor fail-closed behavior.
 - A **missing predecessor reference** is explicitly marked `no_predecessor` (first generation / truncated ancestry ambiguous), not certified. Promoting this guard needs a separately preserved private high-water baseline.
 - Existing fail-closed degraded checkpoint path preserves the prior external reference, but may still update unrelated checkpoint fields; validate against production backup before release.
+
+## Private inventory review (2026-10-10)
+- Reviewed existing read-only tooling: `tools/memory_repair_private_scan.py`, `tools/memory_repair_diagnose.py` and their manual workflows. No sensitive evidence data was exported or live Render settings changed.
+- Historic 2026-10-07 diagnosis workflow showed two verified backup manifests with 94 checkpoint rows each, and recorded active store generations of 90-92 rows. This does NOT establish recovery of the 200 active records observed on 2026-10-10 before restart.
+- Comparing the missing 53 records requires a private identity-level inventory of the 200-record generation and current store, with identities/HMAC retained only privately. Current connector does not allow reading Render env values or private repository evidence; no recovery is claimed.
+- Changed missing predecessor behavior to `continuity_unverified` and degraded read-only hold rather than silently accepting an unverified baseline. This is intentionally conservative and may block legitimate first-generation writes; requires private baseline bootstrap before promotion.
+- Do not run `checkpoint-private-recovery.yml` for diagnosis: its stage step WRITES `NEO_STATE_JSON`.
