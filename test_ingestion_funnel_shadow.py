@@ -17,6 +17,11 @@ def fixture():
                     'raw_received': 140, 'query_relevant': 113,
                     'family_matched': 54, 'buyer_voice': 2,
                     'commercial_signal': 0, 'persisted': 0,
+                    'discarded_by_reason': [
+                        {'reason': 'no_demand_signal', 'count': 38},
+                        {'reason': 'no_family', 'count': 22},
+                        {'reason': 'weak_family_relevance', 'count': 16},
+                    ],
                 },
                 'search_sources': [
                     {'source': 'bing-rss', 'attempts': 14, 'raw_results': 84,
@@ -75,6 +80,34 @@ class FunnelAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unrecognized source diagnostic'):
             diagnose(data)
 
+
+    def test_buyer_voice_is_not_human_verified(self):
+        report = diagnose(fixture())
+        self.assertFalse(report['buyer_voice_counter_is_verified_buyer'])
+        self.assertFalse(report['differences_are_verified_rejections'])
+        self.assertEqual(report['stage_semantics']['buyer_voice'],
+                         'web_voice_guard_passed_or_was_not_applicable')
+        self.assertEqual(report['rejection_reasons'][0],
+                         {'reason': 'no_demand_signal', 'count': 38})
+        self.assertTrue(report['rejections_not_directly_reconcilable_to_stage_differences'])
+
+    def test_unrecognized_rejection_reason_is_private_and_fails_closed(self):
+        sample = fixture()
+        sample['autopilot']['select_diagnostics']['funnel']['discarded_by_reason'].append(
+            {'reason': 'secret.example.org', 'count': 1})
+        with self.assertRaisesRegex(ValueError, 'unrecognized rejection reason'):
+            diagnose(sample)
+
+    def test_duplicate_reason_and_invalid_count_fail_closed(self):
+        sample = fixture()
+        reasons = sample['autopilot']['select_diagnostics']['funnel']['discarded_by_reason']
+        reasons.append({'reason': 'no_family', 'count': 2})
+        with self.assertRaisesRegex(ValueError, 'duplicate rejection reason'):
+            diagnose(sample)
+        sample = fixture()
+        sample['autopilot']['select_diagnostics']['funnel']['discarded_by_reason'][0]['count'] = True
+        with self.assertRaises(ValueError):
+            diagnose(sample)
 
     def test_repository_snapshot_is_supported_without_mutation(self):
         """Integrate against the committed snapshot, not a hand-copied fixture."""
