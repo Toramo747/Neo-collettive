@@ -88,6 +88,7 @@ from tool_opportunity import (
     seti_market_catalog,
 )
 from ingestion_drought import DroughtFunnel
+from demand_research_coverage import probe_public_hn_coverage, empty_coverage
 from ingestion_diagnostics import IngestionDiagnostics, diagnostic_query_class, routed_search_diagnostics, mark_routing_limit
 from price_validation import (
     PRICE_VALIDATION_QUERY_BUDGET,
@@ -9896,6 +9897,15 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         web_queries, per_query=6, query_meta=query_meta,
         timeout_seconds=WEB_RESEARCH_TIMEOUT_SECONDS,
     )
+    # Shadow-only coverage probe: once per 12 cycles, one free HN request.
+    # No changes to web_research, commercial scoring, memory, or gate.
+    coverage_observation=empty_coverage()
+    if cycle_no % 12 == 0 and web_queries:
+        first_meta=query_meta.get(" ".join(str(web_queries[0]).split()).lower()) or {}
+        coverage_seed=natural_search_seed(str(web_queries[0]),first_meta)
+        if coverage_seed:
+            coverage_observation=await probe_public_hn_coverage(coverage_seed)
+
 
     async def _enrich_price_groups_from_pages(groups: list[dict], max_pages: int = 2) -> int:
         fetched=0
@@ -10474,6 +10484,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "research": evidence,
         "search_strategy": search_strategy,
         "web_research": web_research,
+        "demand_coverage_observation": coverage_observation,
         "web_source_count": web_source_count,
         "evidence_quality": evidence_quality,
         "tool_opportunities": AUTOPILOT_STATE.get("tool_opportunities") or {},
