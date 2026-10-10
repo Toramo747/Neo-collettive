@@ -62,9 +62,10 @@ def verify_restart_continuity(
 
     predecessor = reference.get("previous_generation")
     if not isinstance(predecessor, dict):
-        # First-generation baselines cannot be verified without independent
-        # private inventory; do not falsely report success.
-        return out, {"status": "no_predecessor"}
+        # A first-generation reference may be legitimate, but it is also
+        # indistinguishable from truncated ancestry. Fail closed until an
+        # independent, private baseline verifies that promotion is safe.
+        return hold("continuity_unverified", expected_count=len(current))
 
     previous = decode_previous(predecessor)
     if previous is None:
