@@ -132,3 +132,26 @@ def verify_restart_continuity(
         missing_count=len(unexplained),
     )
     return payload, {"status": "continuity_blocked", **meta}
+
+
+def preserve_checkpoint_continuity_status(
+    previous: dict[str, Any] | None, checkpoint_status: dict[str, Any],
+) -> dict[str, Any]:
+    """Keep a private restart warning through the legacy degraded checkpoint.
+
+    The checkpoint must continue to reference the original evidence generation.
+    Only aggregate diagnostics are persisted; identities stay private.
+    """
+    out = dict(checkpoint_status)
+    prior = previous if isinstance(previous, dict) else {}
+    reason = str(prior.get("status") or "")
+    if reason not in {"continuity_unverified", "continuity_blocked"}:
+        return out
+    out["status"] = reason
+    try:
+        out["missing_from_new_generation"] = max(
+            0, int(prior.get("missing_from_new_generation") or 0)
+        )
+    except (ValueError, TypeError):
+        out["missing_from_new_generation"] = 0
+    return out
