@@ -23,6 +23,7 @@ from evidence_integrity import (
     buyer_voice_present, seller_voice_present, is_launch_title,
     demand_signal_type, is_self_contamination,
 )
+from discovery_v3 import query_relevance
 
 ENDPOINT = "https://hn.algolia.com/api/v1/search_by_date"
 # Limited scope: frozen topics rather than evolving/search-optimized queries.
@@ -68,6 +69,8 @@ def convert(hits: list[dict], *, key: bytes, topic: str) -> list[dict]:
             continue
         title, body = text_of(hit)
         if not title and not body:
+            continue
+        if not query_relevance(title, body, topic, {"search_alias_used": topic}).get("relevant"):
             continue
         if is_launch_title(title) or seller_voice_present(title, body):
             continue
@@ -122,7 +125,13 @@ def evaluate(plan_rows: list[dict], batches: list[dict], *, key: bytes, now_epoc
         # Keep a per-topic unique thread count, never number of matched comments.
         input_rows = []
         for week in range(4):
-            input_rows.extend(convert(batches_by_week[week], key=key, topic=topic))
+            # A provider bug or wrong numericFilter cannot create artificial growth.
+            eligible = [hit for hit in batches_by_week[week]
+                        if isinstance(hit, dict)
+                        and isinstance(hit.get("created_at_i"), int)
+                        and not isinstance(hit.get("created_at_i"), bool)
+                        and plan_rows[indices[week]]["start"] <= hit["created_at_i"] < plan_rows[indices[week]]["end"]]
+            input_rows.extend(convert(eligible, key=key, topic=topic))
         # A source from one provider has no validated independent humans.
         score = demand_pressure_index(
             input_rows, now_epoch=now_epoch,
