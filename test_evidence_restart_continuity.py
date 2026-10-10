@@ -2,7 +2,7 @@
 import unittest
 
 from commercial_evidence_store import encode_external_store, decode_external_store
-from evidence_restart_continuity import verify_restart_continuity
+from evidence_restart_continuity import verify_restart_continuity, preserve_checkpoint_continuity_status
 
 
 def rows(n):
@@ -145,6 +145,28 @@ class RestartContinuityTests(unittest.TestCase):
         self.assertEqual(status["status"], "continuity_unverified")
         self.assertTrue(out["evidence_store_degraded"])
         self.assertEqual(out["commercial_evidence_store_reference"], ref)
+
+    def test_restart_warning_survives_checkpoint(self):
+        old = rows(200)
+        new = old[:147]
+        changed, info = exercise(old, new)
+        self.assertEqual(info["missing_count"], 53)
+        checkpoint = preserve_checkpoint_continuity_status(
+            changed["evidence_store_status"],
+            {"status": "degraded", "active_count": len(changed["commercial_evidence_memory"]),
+             "expected_active_count": len(new)}
+        )
+        self.assertEqual(checkpoint["status"], "continuity_blocked")
+        self.assertEqual(checkpoint["missing_from_new_generation"], 53)
+        self.assertEqual(checkpoint["active_count"], 200)
+        again = preserve_checkpoint_continuity_status(checkpoint, dict(checkpoint))
+        self.assertEqual(again, checkpoint)
+
+    def test_normal_degraded_checkpoint_is_unchanged(self):
+        status = {"status": "degraded", "active_count": 2}
+        self.assertEqual(
+            preserve_checkpoint_continuity_status({"status": "ok"}, status), status
+        )
 
     def test_source_does_not_write_any_identifiers_to_public_telemetry(self):
         old = rows(5)
