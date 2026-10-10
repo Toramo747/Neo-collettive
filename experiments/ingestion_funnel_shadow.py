@@ -12,6 +12,25 @@ STAGES = (
     'buyer_voice', 'commercial_signal', 'persisted',
 )
 SOURCES = frozenset(('bing-rss', 'brave', 'github', 'hn', 'stackexchange'))
+# Fixed public reason enum: unknown/private strings must not escape in reports.
+REJECTION_REASONS = frozenset((
+    'unknown', 'missing_url', 'routing_duplicate', 'query_irrelevant',
+    'relevance_error', 'routing_limit', 'self_contamination_rejected',
+    'noise_domain', 'github_noise', 'github_no_buyer_problem_context',
+    'no_family', 'weak_family_relevance', 'context_too_short',
+    'no_demand_signal', 'unjoined',
+))
+# These are independent instrumentation counters, not labels by humans.
+# In cloud_mcp.ingest(), buyer_voice increments when the generic-web voice
+# guard is not missing; it does not verify buyer identity on HN/GitHub.
+STAGE_SEMANTICS = {
+    'raw_received': 'provider_receipts',
+    'query_relevant': 'query_relevance_counter',
+    'family_matched': 'family_found_before_strength_and_context_checks',
+    'buyer_voice': 'web_voice_guard_passed_or_was_not_applicable',
+    'commercial_signal': 'signal_types_nonempty_not_commercial_gate_approval',
+    'persisted': 'merged_or_appended_evidence_rows_not_new_qualified_buyers',
+}
 
 
 def nonnegative_integer(value, label):
@@ -62,6 +81,18 @@ def diagnose(snapshot):
     if sum(row['raw_results'] for row in per_source) != values[0]:
         raise ValueError('source totals disagree with funnel')
 
+    reasons = funnel.get('discarded_by_reason')
+    if not isinstance(reasons, list):
+        raise ValueError('rejection reason aggregate missing')
+    rejected = {}
+    for item in reasons:
+        if not isinstance(item, dict) or item.get('reason') not in REJECTION_REASONS:
+            raise ValueError('invalid or unrecognized rejection reason')
+        reason = item['reason']
+        if reason in rejected:
+            raise ValueError('duplicate rejection reason')
+        rejected[reason] = nonnegative_integer(item.get('count'), 'rejection count')
+
     provider = selection.get('search_provider') or {}
     reasons = provider.get('fallback_reasons') or []
     budget_paced = sum(nonnegative_integer(item.get('count'), 'fallback count')
@@ -82,6 +113,14 @@ def diagnose(snapshot):
         'commercial_gate_influence': 'NONE',
         'automatic_promotion': False,
         'funnel': transitions,
+        'stage_semantics': STAGE_SEMANTICS.copy(),
+        'differences_are_verified_rejections': False,
+        'buyer_voice_counter_is_verified_buyer': False,
+        'rejection_reasons': [
+            {'reason': key, 'count': rejected[key]}
+            for key in sorted(rejected, key=lambda k: (-rejected[k], k))
+        ],
+        'rejections_not_directly_reconcilable_to_stage_differences': True,
         'largest_absolute_drop': {'from': priority[0]['from'],
                                   'to': priority[0]['to'],
                                   'lost': priority[0]['lost']},
