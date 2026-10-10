@@ -16,6 +16,7 @@ import io
 import json
 import os
 from pathlib import Path
+from importlib.util import spec_from_file_location, module_from_spec
 import re
 import secrets
 import subprocess
@@ -25,12 +26,15 @@ import httpx
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from experiments.demand_pressure.file_access_audit import (
-    QUERY, TOPIC, HITS_PER_QUERY, MAX_CALLS, protocol, analyze,
-    SELLER_RISK, TOPIC_TYPES,
-    FILE_CONTEXT,
-)
-from experiments.demand_pressure.hn_shadow import convert, text_of
+from discovery_v3 import query_relevance
+_spec = spec_from_file_location("ipd_private_file_audit", Path(__file__).with_name("file_access_audit.py"))
+_audit = module_from_spec(_spec)
+_spec.loader.exec_module(_audit)
+QUERY, TOPIC = _audit.QUERY, _audit.TOPIC
+HITS_PER_QUERY, MAX_CALLS = _audit.HITS_PER_QUERY, _audit.MAX_CALLS
+protocol, analyze = _audit.protocol, _audit.analyze
+SELLER_RISK, TOPIC_TYPES, FILE_CONTEXT = _audit.SELLER_RISK, _audit.TOPIC_TYPES, _audit.FILE_CONTEXT
+convert, text_of = _audit.hn.convert, _audit.hn.text_of
 
 CASE_FILE = "blind_cases.jsonl"
 MAPPING_FILE = "private_machine_annotations.json"
@@ -119,11 +123,9 @@ def prepare_cases(batches: list[dict], *, secret: bytes) -> tuple[list[dict], di
                 continue  # one representative HN comment per discussion
             text = title + " " + body
             machine = {
-                "weak_topic_overlap": __import__("discovery_v3").query_relevance(
+                "weak_topic_overlap": len(query_relevance(
                     title, body, QUERY, {"search_alias_used": QUERY}
-                ).get("overlap", []) and len(__import__("discovery_v3").query_relevance(
-                    title, body, QUERY, {"search_alias_used": QUERY}
-                ).get("overlap", [])) < 2,
+                ).get("overlap") or []) < 2,
                 "seller_risk": bool(SELLER_RISK.search(text)),
                 "file_context": bool(FILE_CONTEXT.search(text)),
                 "explicit_solution_request_machine": rows[0]["explicit_solution_request"],
@@ -163,12 +165,6 @@ def write_packet(private_dir: str, cases: list[dict], mapping: dict) -> dict:
         "commercial_gate_influence": "NONE",
         "production_state_write": False,
     }
-
-
-async def collect(destination: str) -> dict:
-    # Validate location BEFORE making public requests.
-    _private_dir(destination)
-    raise AssertionError("Unreachable")
 
 
 async def fetch_and_collect(destination: str) -> dict:
