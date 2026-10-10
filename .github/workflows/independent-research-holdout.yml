@@ -1,0 +1,48 @@
+name: Independent Research Holdout
+
+on:
+  push:
+    branches: [experiment/research-algorithm-independent-holdout]
+    paths:
+      - "experiments/research-holdout/**"
+      - "test_research_independent_holdout.py"
+      - ".github/workflows/independent-research-holdout.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Test holdout isolation
+        run: python -m unittest -v test_research_independent_holdout
+      - name: Run read-only public research holdout
+        run: timeout 390 python experiments/research-holdout/compare.py
+      - name: Assert no promotion or data mutation
+        run: |
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/oxibay-independent-research-holdout.json'))
+          assert p['automatic_promotion'] is False
+          assert p['commercial_gate_influence']=='NONE'
+          assert p['raw_external_text_persisted'] is False
+          assert p['validated_independent_rounds']==0
+          print({'verdict':p['verdict'],'baseline':p['results']['baseline']['metrics']['unique_signal_threads'],'treatment':p['results']['treatment']['metrics']['unique_signal_threads']})
+          PY
+          git diff --exit-code -- data/arena
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-holdout-${{ github.run_id }}
+          path: /tmp/oxibay-independent-research-holdout.json
+          if-no-files-found: warn
+          retention-days: 30

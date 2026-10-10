@@ -1,0 +1,75 @@
+{
+  "schema_v": 1,
+  "experiment_id": "research-independent-holdout-2026-10-09",
+  "registered_at_utc": "2026-10-09",
+  "dataset_policy": "FOUR_TOPICS_OUTSIDE_THE_FOUR_EVOLUTION_TOPICS",
+  "baseline": "matched_budget_baseline_query_strategy",
+  "treatment": "g69-elite-1",
+  "baseline_definition": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "exact",
+    "query_frame": "plain",
+    "term_order": "topic_first",
+    "source_scope": "all"
+  },
+  "expected_treatment_genes": {
+    "query_mode": "mixed",
+    "query_count": 4,
+    "recency_days": 45,
+    "min_relevance_tokens": 1,
+    "suffix_family": "core",
+    "topic_shape": "compact",
+    "query_frame": "plain",
+    "term_order": "signal_first",
+    "source_scope": "all"
+  },
+  "holdout_topics": [
+    {
+      "full": "contract renewal tracking",
+      "compact": "contract renewal"
+    },
+    {
+      "full": "vendor onboarding paperwork",
+      "compact": "vendor onboarding"
+    },
+    {
+      "full": "security audit questionnaires",
+      "compact": "audit questionnaires"
+    },
+    {
+      "full": "payroll corrections",
+      "compact": "payroll correction"
+    }
+  ],
+  "minimum_query_success_rate": 1,
+  "hit_limit_per_query": 30,
+  "require_equal_cutoff": true,
+  "require_deduplicated_hits": true,
+  "decision_rule": {
+    "candidate_min_unique_thread_gain": 2,
+    "candidate_min_precision_ratio_vs_baseline": 1,
+    "candidate_min_topic_coverage": 2,
+    "required_independent_rounds_before_validation": 3,
+    "promote_to_production": false
+  },
+  "caveats": [
+    "This is a one-source Hacker News Algolia benchmark, not independent domain confirmation.",
+    "Distinct discussion threads are not distinct domains or verified customer demand.",
+    "The benchmark cannot establish willingness to pay, verified competitor prices or commercial gate readiness.",
+    "Four novel topics alone do not establish comprehensive distribution-shift generalization.",
+    "No Arena state, production memory, operational score, thresholds or commercial gate may be changed."
+  ],
+  "boundary": {
+    "production_state_write": false,
+    "automatic_promotion": false,
+    "commercial_gate_influence": "NONE",
+    "commercial_evidence_influence": "NONE",
+    "private_datasets_access": false,
+    "paid_api_calls": false,
+    "raw_external_text_persisted": false
+  }
+}
