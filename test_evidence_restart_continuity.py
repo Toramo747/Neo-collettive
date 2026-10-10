@@ -132,6 +132,20 @@ class RestartContinuityTests(unittest.TestCase):
         self.assertEqual(result["status"], "continuity_unverified")
         self.assertTrue(out["evidence_store_degraded"])
 
+    def test_missing_predecessor_reference_blocks_checkpoint_promotion(self):
+        old = rows(5)
+        ref, _ = encode_external_store(old, store="render_env_chunks_v2")
+        payload = {"commercial_evidence_store_reference": ref,
+                   "commercial_evidence_memory": old,
+                   "evidence_store_status": {"status": "ok"}}
+        out, status = verify_restart_continuity(
+            payload, decode_previous=lambda _: None,
+            evidence_key=lambda row: row["evidence_id"]
+        )
+        self.assertEqual(status["status"], "continuity_unverified")
+        self.assertTrue(out["evidence_store_degraded"])
+        self.assertEqual(out["commercial_evidence_store_reference"], ref)
+
     def test_source_does_not_write_any_identifiers_to_public_telemetry(self):
         old = rows(5)
         payload, status = exercise(old, old[:1])
