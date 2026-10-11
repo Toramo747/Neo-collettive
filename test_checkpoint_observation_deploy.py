@@ -61,8 +61,13 @@ class CodecSwitchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sync['encoded_sha256'], threaded['encoded_sha256'])
         self.assertEqual(sync['cpu_affinity_count'], 1)
         self.assertGreaterEqual(sync['raw_bytes'], 3 * 1024 * 1024)
-        self.assertGreater(sync['observation']['event_loop_max_lag_ms'], 2000)
-        self.assertLess(threaded['observation']['event_loop_max_lag_ms'], 1000)
+        # CPU speed on hosted runners is variable; assert the relative stall
+        # reduction instead of demanding a fixed 2-second sync stall.
+        sync_lag = sync['observation']['event_loop_max_lag_ms']
+        threaded_lag = threaded['observation']['event_loop_max_lag_ms']
+        self.assertGreater(sync_lag, 750)
+        self.assertGreater(sync_lag, 2 * threaded_lag)
+        self.assertLess(threaded_lag, 1000)
         self.assertFalse(sync['observation']['codec_offthread'])
         self.assertTrue(threaded['observation']['codec_offthread'])
         self.assertTrue(any(row['function'] == 'compress_checkpoint'
