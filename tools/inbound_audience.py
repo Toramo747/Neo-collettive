@@ -85,7 +85,8 @@ def main(path: str) -> int:
     def tally(rows, key):
         out = {}
         for e in rows:
-            k = str(e.get(key) or "-")[:60]
+            v = e.get(key)
+            k = ("-" if v is None or v == "" else str(v))[:60]
             out[k] = out.get(k, 0) + 1
         return dict(sorted(out.items(), key=lambda kv: -kv[1])[:8])
     if real_ev:
@@ -105,12 +106,17 @@ def main(path: str) -> int:
             "client_family": {f: sum(1 for e in real_ev if family(str(e.get("user_agent") or "")) == f) for f in
                               ("python", "node", "curl", "go", "browser", "mcp_client", "ip_only", "other")}},
             separators=(",", ":"))[:3900])
-    if ev:
-        print("::notice title=event keys::" + ",".join(sorted({k for e in ev[:200] for k in e})))
+    if real_ev:
+        print("::notice title=real contact intent::" + json.dumps({
+            "intent_primary": tally(real_ev, "intent_primary"), "commercial_intent": tally(real_ev, "commercial_intent"),
+            "identity_status": tally(real_ev, "identity_status"), "distinct_threads": len({e.get("thread_id") for e in real_ev if e.get("thread_id")})},
+            separators=(",", ":")))
     msgs = ap.get("inbound_messages") or []
     stats = ap.get("inbound_agent_stats") or {}
     print("::notice title=inbound messages::" + json.dumps({"messages": len(msgs) if isinstance(msgs, list) else None,
-          "agent_stats_keys": sorted(stats)[:20] if isinstance(stats, dict) else None}, separators=(",", ":")))
+          "agent_stats_by_kind": ({k: sum(1 for x in stats if (str(x).split(":")[0] if ":" in str(x) else "other") == k) for k in
+                                   {str(x).split(":")[0] if ":" in str(x) else "other" for x in stats}}
+                                  if isinstance(stats, dict) else None)}, separators=(",", ":")))
     keys = sorted(k for k in (d.get("autopilot") or {}) if "chat" in k or "a2a" in k)
     mon = (d.get("autopilot") or {}).get("agent_chat_monitor") or (d.get("latest_result") or {}).get("agent_chat_monitor")
     print("::notice title=agent chats::" + json.dumps({"thread_count": (mon or {}).get("thread_count") if isinstance(mon, dict) else None,
