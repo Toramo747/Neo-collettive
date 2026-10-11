@@ -1,0 +1,46 @@
+name: Arena Commercial Signal Phase 0
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert offline workflow contract
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          p=Path("arena/commercial_signal/evaluate.py")
+          tree=ast.parse(p.read_text(encoding="utf-8"))
+          banned={"socket","urllib","requests","http","ftplib","smtplib","websocket"}
+          imports=set()
+          for n in ast.walk(tree):
+              if isinstance(n,ast.Import):
+                  imports.update(x.name.split(".")[0] for x in n.names)
+              elif isinstance(n,ast.ImportFrom) and n.module:
+                  imports.add(n.module.split(".")[0])
+          bad=sorted(imports & banned)
+          if bad:
+              raise SystemExit("network_imports_forbidden:"+",".join(bad))
+          print("offline_evaluator_contract=ok")
+          PY
+      - name: Validate schema and evaluator tests
+        run: |
+          python3 -m json.tool arena/commercial_signal/proposal.schema.json >/dev/null
+          python3 -m unittest -v arena.commercial_signal.test_evaluate
+      - name: Evaluate baseline and alternatives
+        run: |
+          python3 -m arena.commercial_signal.evaluate --out arena-commercial-signal-scores.json
+      - name: Publish aggregate scores only
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-commercial-signal-scores
+          path: arena-commercial-signal-scores.json
+          retention-days: 14
