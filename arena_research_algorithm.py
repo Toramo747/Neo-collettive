@@ -397,8 +397,8 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
         "supply_rejected": supply_rejected,
     }
 
-def shadow_teacher_summary(ranked: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Compare the arena's own ranking with the teacher's view (shadow only)."""
+def shadow_teacher_summary(ranked: list[dict[str, Any]], reference: str = "arena_ranking") -> dict[str, Any] | None:
+    """Compare a reference ranking (the arena's own, or the lexicon's in teacher mode) with the teacher's view."""
     rows = [(x.get("genome_id"), (x.get("metrics") or {}).get("shadow_teacher")) for x in ranked]
     rows = [(g, s) for g, s in rows if isinstance(s, dict)]
     if not rows:
@@ -416,6 +416,7 @@ def shadow_teacher_summary(ranked: list[dict[str, Any]]) -> dict[str, Any] | Non
         "teacher_champion": teacher_order[0],
         "agree_on_champion": arena_order[0] == teacher_order[0],
         "rank_correlation": round(spearman, 3) if spearman is not None else None,
+        "reference": reference,
         "affects_selection": False,
     }
 
@@ -974,7 +975,11 @@ async def run(data_dir: Path, explicit_candidate_id: str = "", fitness_mode: str
             for x in ranked
         ],
         "collaborators": collaborators,
-        "shadow_teacher_summary": shadow_teacher_summary(ranked),
+        # In teacher mode `ranked` is already the teacher's order: compare it with the
+        # lexicon order instead, otherwise the correlation is trivially 1.0.
+        "shadow_teacher_summary": shadow_teacher_summary(
+            sorted(ranked, key=ranking_key, reverse=True) if teacher_mode else ranked,
+            reference="lexicon_ranking" if teacher_mode else "arena_ranking"),
         "control_metrics": control_metrics,
         "promotion_candidate": next_state["promotion_candidate"],
         "boundary": dict(BOUNDARY),

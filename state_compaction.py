@@ -287,8 +287,10 @@ def trim_inbound_traffic_events(payload: dict, limit: int = INBOUND_TRAFFIC_EVEN
     out = deepcopy(payload)
     rows = out.get("inbound_traffic_events")
     if isinstance(rows, list) and len(rows) > limit:
-        # inbound_traffic_summary is intentionally kept unchanged. It is the
-        # cumulative rollup captured before trimming; only source events shrink.
+        # inbound_traffic_summary is kept unchanged; the dropped events are
+        # added to inbound_traffic_evicted so totals survive a restart.
+        from inbound_traffic import account_evicted
+        out["inbound_traffic_evicted"] = account_evicted(out.get("inbound_traffic_evicted"), rows[:-limit])
         out["inbound_traffic_events"] = rows[-limit:]
     return out
 

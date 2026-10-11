@@ -44,7 +44,7 @@ from trust_lab import evaluate_agent_trust
 from intent_discovery import classify_agent_intent, intent_followup, upgrade_legacy_intent_state
 from agent_demand import summarize_agent_demand
 from agent_chat import append_exchange, backfill_inbound_chat_events, summarize_chat_threads
-from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, declared_user_authorized_unverified, reconcile_message_events, summarize_events as summarize_inbound_traffic, retroactive_from_inbound_messages, reclassify_known_self_events
+from inbound_traffic import append_event as append_inbound_traffic_event, classify_inbound_event, content_fingerprint, declared_user_authorized_unverified, reconcile_message_events, summarize_events as summarize_inbound_traffic, append_event_tracked as append_inbound_traffic_event_tracked, empty_evicted as empty_inbound_evicted, retroactive_from_inbound_messages, reclassify_known_self_events
 from inbound_boundary import explicit_review_authorized, origin_risk_flags, review_required_result, stage_inbound_claim
 from inbound_interview import advance_inbound_interview, upgrade_legacy_admitted_interviews
 from runtime_boundary import load_runtime_profile, runtime_identity, sanitize_commercial_state, state_profile_status
@@ -547,6 +547,7 @@ def _state_payload() -> dict:
         "inbound_agent_stats": AUTOPILOT_STATE.get("inbound_agent_stats") or {},
         "inbound_traffic_events": list(AUTOPILOT_STATE.get("inbound_traffic_events") or [])[-1200:],
         "inbound_traffic_summary": AUTOPILOT_STATE.get("inbound_traffic_summary") or {},
+        "inbound_traffic_evicted": AUTOPILOT_STATE.get("inbound_traffic_evicted") or {},
         "inbound_security_events": list(AUTOPILOT_STATE.get("inbound_security_events") or [])[-80:],
         "inbound_security_stats": AUTOPILOT_STATE.get("inbound_security_stats") or {},
         "inbound_review_queue": list(AUTOPILOT_STATE.get("inbound_review_queue") or [])[-80:],
@@ -673,10 +674,14 @@ def _merge_state_payload(payload: dict | None) -> bool:
     elif isinstance(payload.get("inbound_messages"), list):
         AUTOPILOT_STATE["inbound_traffic_events"] = retroactive_from_inbound_messages(payload.get("inbound_messages") or [])
     AUTOPILOT_STATE["inbound_traffic_events"] = reclassify_known_self_events(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
-    recent_inbound_summary = summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or [])
-    AUTOPILOT_STATE["inbound_traffic_summary"] = merge_cumulative_inbound_summary(
-        payload.get("inbound_traffic_summary") if isinstance(payload.get("inbound_traffic_summary"), dict) else {},
-        recent_inbound_summary,
+    persisted_evicted = payload.get("inbound_traffic_evicted")
+    AUTOPILOT_STATE["inbound_traffic_evicted"] = (
+        persisted_evicted if isinstance(persisted_evicted, dict) and persisted_evicted.get("schema_v") == 1
+        else empty_inbound_evicted()
+    )
+    AUTOPILOT_STATE["inbound_traffic_summary"] = summarize_inbound_traffic(
+        AUTOPILOT_STATE.get("inbound_traffic_events") or [],
+        evicted=AUTOPILOT_STATE["inbound_traffic_evicted"],
     )
     if isinstance(payload.get("inbound_security_events"), list):
         AUTOPILOT_STATE["inbound_security_events"] = payload.get("inbound_security_events")[-80:]
@@ -2223,9 +2228,10 @@ def _record_inbound_traffic(request: Request, *, payload: dict|None=None, endpoi
         "tool_name":tool_name,
         "origin_risk_flags":origin_risk_flags(meta["ip_or_origin"]),
     }
-    events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
+    events,evicted=append_inbound_traffic_event_tracked(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row,AUTOPILOT_STATE.get("inbound_traffic_evicted"))
     AUTOPILOT_STATE["inbound_traffic_events"]=events
-    AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
+    AUTOPILOT_STATE["inbound_traffic_evicted"]=evicted
+    AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events,evicted=evicted)
     _save_local_state()
     return dict(events[-1]) if events else row
 
@@ -11774,7 +11780,7 @@ async def api_render_diagnostics(request: Request):
             "latest_ask": latest_ask,
             "neo_jarvis_runtime": AUTOPILOT_STATE.get("jarvis_runtime") if target == "jarvis" else None,
             "last_dialogue": (list(AUTOPILOT_STATE.get("jarvis_dialogue_history") or [])[-1] if target == "jarvis" and AUTOPILOT_STATE.get("jarvis_dialogue_history") else None),
-            "inbound_traffic_summary": summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or []),
+            "inbound_traffic_summary": summarize_inbound_traffic(AUTOPILOT_STATE.get("inbound_traffic_events") or [], evicted=AUTOPILOT_STATE.get("inbound_traffic_evicted")),
             "recent_inbound_traffic": [dict(x) for x in (AUTOPILOT_STATE.get("inbound_traffic_events") or [])[-200:] if isinstance(x,dict)],
             "log_rows_scanned": len(rows),
             "categories": categories,
@@ -14119,9 +14125,10 @@ class _InboundTrafficASGI:
             "origin_risk_flags":origin_risk_flags(source),
             "tool_name":requested_tool_name,
         }
-        events=append_inbound_traffic_event(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row)
+        events,evicted=append_inbound_traffic_event_tracked(AUTOPILOT_STATE.get("inbound_traffic_events") or [],row,AUTOPILOT_STATE.get("inbound_traffic_evicted"))
         AUTOPILOT_STATE["inbound_traffic_events"]=events
-        AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events)
+        AUTOPILOT_STATE["inbound_traffic_evicted"]=evicted
+        AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events,evicted=evicted)
         _save_local_state()
         if rpc=="tools/call":
             tool_name=str(params.get("name") or "").strip()

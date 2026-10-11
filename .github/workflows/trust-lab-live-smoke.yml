@@ -56,14 +56,22 @@ jobs:
 
       - name: Evaluate bounded synthetic trust cases
         shell: bash
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set -euo pipefail
 
           post_case() {
             local input="$1"
             local output="$2"
+            # POST /api/trust/evaluate is review-guarded since 2026-10-04: sign it as our own traffic.
+            local url="https://neo-collettive.onrender.com/api/trust/evaluate"
+            local proof
+            proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "$url" --marker github-actions-trust-lab)"
             curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45 \
               -H "Content-Type: application/json" \
+              -H "X-MYCELIX-Self-Traffic: github-actions-trust-lab" \
+              -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
               --data-binary "@$input" \
               "https://neo-collettive.onrender.com/api/trust/evaluate" \
               -o "$output"

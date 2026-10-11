@@ -49,3 +49,9 @@ Relay (`mycelix-relay-pilot`) was not touched and is not proposed as storage.
 
 Rollback: redeploy `ac91d2aa` (env is compatible: new fields are ignored by old code). Deleted orphans can be restored from the private backup with the same keys.
 If step 3 still fails with an env of ~0.56 MB, hypothesis 3 is falsified and the next check is the deploy log text in the Render dashboard.
+
+## Inbound traffic totals are cumulative (2026-10-11)
+
+Before this change the inbound "total" counts were recomputed from the retained event buffer (at most 1200 events, 300 after a checkpoint trim), so they shrank at every restart and equalled the last-24h window. Events leaving the buffer (ring trim or checkpoint trim) are now added to `inbound_traffic_evicted`, persisted with the state. Totals are computed as buffer plus evicted (`cumulative_counting: buffer_plus_evicted`, starting at `cumulative_since_utc`); the 24h and 7d windows still come from the buffer. Counts lost before this change cannot be recovered.
+
+Our own post-deploy MCP probe and the Trust Lab smoke now sign their requests as self-traffic, so they are no longer counted as external contacts or refused by the review guard.
