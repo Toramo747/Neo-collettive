@@ -309,6 +309,20 @@ def main(argv):
             vc = TfidfVectorizer(ngram_range=(1, 2), min_df=2, max_features=30000, sublinear_tf=True)
             mc = LogisticRegression(max_iter=2000, C=2.0, class_weight="balanced").fit(vc.fit_transform(dtexts), dy)
             variants["in_domain_only"] = mc.predict_proba(vc.transform(texts))[:, 1]
+            # Threshold chosen by 5-fold cross-validation on the 668 training items only
+            # (never on the calibration set), maximising F1.
+            from sklearn.model_selection import StratifiedKFold
+            oof = [0.0] * len(dtexts)
+            for tr_i, te_i in StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED).split(dtexts, dy):
+                v_ = TfidfVectorizer(ngram_range=(1, 2), min_df=2, max_features=30000, sublinear_tf=True)
+                m_ = LogisticRegression(max_iter=2000, C=2.0, class_weight="balanced").fit(
+                    v_.fit_transform([dtexts[i] for i in tr_i]), [dy[i] for i in tr_i])
+                for i, sc in zip(te_i, m_.predict_proba(v_.transform([dtexts[i] for i in te_i]))[:, 1]):
+                    oof[i] = float(sc)
+            best_t = max((t / 100 for t in range(5, 96)), key=lambda t: prf(dy, [x >= t for x in oof])[2])
+            metrics["in_domain_cv"] = {"oof_auc": round(roc_auc_score(dy, oof), 3), "threshold": best_t,
+                                       "oof_prf": prf(dy, [x >= best_t for x in oof]),
+                                       "calibration_prf_at_cv_threshold": prf(yb, [x >= best_t for x in variants["in_domain_only"]])}
             # B: web + in-domain (in-domain weighted x5)
             vb = TfidfVectorizer(ngram_range=(1, 2), min_df=3, max_features=60000, sublinear_tf=True)
             xb = vb.fit_transform([d["masked"] for d in train] + dtexts)
@@ -345,7 +359,7 @@ def main(argv):
           ("train", "test", "train_pos", "test_pos", "teacher_auc", "teacher_prf", "lexicon_prf")}))
     print("::notice title=maestro phase3 per source::" + json.dumps(metrics["per_source"]))
     print("::notice title=maestro phase3 calibration (claude labels)::" + json.dumps(metrics.get("calibration_claude")))
-    print("::notice title=maestro phase3 in-domain variants::" + json.dumps({"train": metrics.get("in_domain_train"), "variants": metrics.get("calibration_variants")}))
+    print("::notice title=maestro phase3 in-domain variants::" + json.dumps({"train": metrics.get("in_domain_train"), "cv": metrics.get("in_domain_cv"), "variants": metrics.get("calibration_variants")}))
     print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} vendor_negatives={len(vendors)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
     return 0
 
