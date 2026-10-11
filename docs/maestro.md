@@ -148,3 +148,23 @@ Reading:
 - The calibration set has only 9 positives: every figure here is noisy.
 
 Next (proposal): Claude labels the remaining 668 NEO observations; the teacher is retrained on web labels + in-domain NEO labels and tested on the 100 calibration items, which stay out of training.
+
+### Phase 3c — in-domain training (2026-10-11)
+Claude labelled the remaining 668 NEO observations (`maestro/maestro_train_claude.jsonl`, `label_origin: claude`): 56 buyer_tool_search, 120 vendor_offer, 2 job_posting, 1 manual_recurring_work, 489 other. The 100 calibration items stay out of training.
+
+| Model | Evaluation | AUC | P / R / F1 |
+|---|---|---|---|
+| Lexicon (production primitives) | 668 in-domain items (56 positive) | — | 0.21 / 0.64 / 0.32 |
+| Teacher, in-domain only | 5-fold cross-validation on the 668 (threshold chosen inside CV) | **0.931** | **0.74 / 0.52 / 0.61** |
+| Lexicon | 100 calibration items (9 positive) | — | 0.28 / 0.89 / 0.42 |
+| Teacher, web only | 100 calibration items | 0.77 | 0.12 / 0.78 / 0.21 |
+| Teacher, in-domain only | 100 calibration items (CV threshold) | 0.919 | 0.50 / 0.33 / 0.40 |
+| Teacher, web + in-domain (in-domain x5) | 100 calibration items | 0.885 | 0.44 / 0.44 / 0.44 |
+
+Reading:
+- In-domain labels are what made the difference: vendor pages flagged fell from 11–12/16 to 0–1/16, "other" from ~37/73 to 1–4/73.
+- On the larger in-domain evaluation (56 positives) the teacher roughly doubles the lexicon's F1 (0.61 vs 0.32) with 3.5x its precision (0.74 vs 0.21).
+- On the 9-positive calibration set teacher and lexicon tie on F1; with 9 positives one item moves F1 by ~0.1, so this set alone cannot separate them. AUC (0.88–0.92) shows the teacher ranks far better.
+- All labels are Claude's, not human: the teacher learns Claude's judgement. `hidden.jsonl` (Andrea's) remains the independent exam.
+
+Status: a teacher that beats the lexicon on NEO's own data exists; it is not wired to any arena or to production. Next decisions are Andrea's: (1) shadow use as arena fitness; (2) a human check of a sample of Claude's labels.
