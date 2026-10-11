@@ -40,12 +40,13 @@ from maestro_label_sample_v3 import VALID_RE  # noqa: E402
 from maestro_label_pool_v4 import month_windows  # noqa: E402
 
 SEED = 20261015
+HN_SHOW_NEGATIVES = [0]
 SPLIT_DAYS = 365
 TEMPLATE_RE = re.compile(
     r"#+\s*|\b(feature request|feature|enhancement|bug report|bug|describe the (feature|bug|solution)|"
     r"problem statement|to reproduce|expected behaviou?r|steps to reproduce|is your feature request related to a problem|"
     r"pre-submit checks|checklist|possible solution|alternatives you've considered|additional context|"
-    r"use cases?|proposal|summary)\b", re.I)
+    r"use cases?|proposal|summary|describe|the solution you'd like|shut up and|looking for|show hn|ask hn)\b", re.I)
 
 
 def mask(text: str) -> str:
@@ -104,6 +105,7 @@ def hn_negatives(client, n_random: int, n_show: int, now: int, rng: random.Rando
             if not title.lower().startswith("show hn") or any_demand(text) or len(text) < 40:
                 continue
             show.append({"source": "hn", "text": text[:1500], "title": title, "created": h.get("created_at_i")})
+    HN_SHOW_NEGATIVES[0] = len(show[:n_show])
     return out + show[:n_show]
 
 
@@ -208,7 +210,8 @@ def main(argv):
         data += [dict(p, y=1) for p in pos[:k]] + [dict(n, y=0) for n in ng[:k]]
     split = now - SPLIT_DAYS * 86400
     for d in data:
-        d["masked"] = mask((d["title"] + " " + d["text"]))
+        # HN story titles (e.g. "Show HN") describe the thread, not the comment: excluded.
+        d["masked"] = mask(d["text"] if d["source"] == "hn" else (d["title"] + " " + d["text"]))
         d["test"] = epoch(d["created"]) >= split
     train = [d for d in data if not d["test"]]
     test = [d for d in data if d["test"]]
@@ -260,7 +263,7 @@ def main(argv):
     print("::notice title=maestro phase3 overall::" + json.dumps({k: metrics[k] for k in
           ("train", "test", "train_pos", "test_pos", "teacher_auc", "teacher_prf", "lexicon_prf")}))
     print("::notice title=maestro phase3 per source::" + json.dumps(metrics["per_source"]))
-    print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} stamp={stamp}")
+    print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
     return 0
 
 
