@@ -1,0 +1,41 @@
+name: Maestro Phase 2a Label Sample (private)
+on:
+  push:
+    branches:
+      - arena/maestro-label-census
+    paths:
+      - tools/maestro_label_sample.py
+      - .github/workflows/maestro-sample.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: maestro-sample
+  cancel-in-progress: false
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet httpx
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      # Public texts + links go ONLY to the private archive; logs show counts.
+      - name: Sample natural labels
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/maestro_label_sample.py private-labels/maestro | grep '^::'
+      - name: Persist sample in private archive
+        run: |
+          git -C private-labels config user.name "NEO Maestro Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add maestro
+          git -C private-labels commit --quiet -m "maestro phase 2a: label precision sample"
+          git -C private-labels push --quiet
