@@ -51,8 +51,17 @@ ANOMALIES = (
     ("w_boson_mass", 'abs:"W boson mass" OR abs:"W-boson mass"', "CDF 2022 W mass vs other measurements", False),
     ("lithium_problem", 'abs:"lithium problem"', "Big Bang nucleosynthesis predicts more lithium than observed", False),
     ("casimir_negative_energy", 'abs:Casimir AND abs:"negative energy"', "Measured negative energy density in the lab", False),
-    ("proton_radius_control", 'abs:"proton radius puzzle"', "Control: widely regarded as largely resolved", True),
+    # Control widened 2026-10-11 (authorized): the "puzzle" phrase alone gave ~3 papers per window,
+    # too few to calibrate anything.
+    ("proton_radius_control", 'abs:"proton radius" OR abs:"proton charge radius"',
+     "Control: widely regarded as largely resolved", True),
 )
+
+# Observations stored before queries were recorded in state: the query they were made with.
+LEGACY_QUERIES = {"proton_radius_control": 'abs:"proton radius puzzle"'}
+
+# Topic names that contain a cue word: naming the topic is not claiming a tension.
+EXTRA_ECHO = {"proton_radius_control": ("proton radius puzzle",)}
 
 TENSION_RE = re.compile(r"\b(tension|discrepanc\w*|anomal\w*|disagree\w*|inconsisten\w*|puzzle|deviat\w* from)\b", re.I)
 RESOLUTION_RE = re.compile(r"\b(resolv\w*( the \w+)?|consistent with|in agreement|agrees? with|no (significant )?(tension|evidence|discrepancy|anomaly)|alleviat\w*|reconcil\w*|eliminat\w*)\b", re.I)
@@ -90,7 +99,8 @@ def parse_entries(atom: str) -> list[dict]:
 
 def strip_query_echo(text: str, query: str) -> str:
     """Remove the phrases we searched for: 'Hubble tension' must not count as a tension cue."""
-    for phrase in re.findall(r'"([^"]+)"', query or ""):
+    # Longest phrases first, so "proton radius puzzle" goes before "proton radius".
+    for phrase in sorted(re.findall(r'"([^"]+)"', query or ""), key=len, reverse=True):
         text = re.sub(re.escape(phrase), " ", text, flags=re.I)
     return text
 
@@ -172,11 +182,15 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
         if i:
             time.sleep(pause)
         try:
-            s = score(parse_entries(fetch(query)), now, query=query)
+            echo = query + "".join(f' "{p}"' for p in EXTRA_ECHO.get(aid, ()))
+            s = score(parse_entries(fetch(query)), now, query=echo)
         except Exception as exc:
             errors[aid] = type(exc).__name__
             continue
-        s.update({"why": why, "control": control, "query": query, "trend": trend(s, previous.get(aid))})
+        prev = previous.get(aid)
+        if prev is not None and prev.get("query", LEGACY_QUERIES.get(aid, query)) != query:
+            prev = None   # a different query is a different measurement: no trend across it
+        s.update({"why": why, "control": control, "query": query, "trend": trend(s, prev)})
         rows[aid] = s
     controls_ok, controls_note = controls_check(rows)
     ranked = sorted((a for a in rows if not rows[a]["control"]),
@@ -195,7 +209,7 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
     history = list(state.get("history") or [])[-180:]
     history.append({"at": now.isoformat(), **{a: {"persistence": r["persistence"], "sigma_median": r["sigma_median"],
                                                   "papers": r["papers"]} for a, r in rows.items()}})
-    new_state = {"schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "last": {a: {k: r[k] for k in ("papers", "persistence", "sigma_median")}
+    new_state = {"schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "last": {a: {k: r[k] for k in ("papers", "persistence", "sigma_median", "query")}
                                                          for a, r in rows.items()} or previous,
                  "history": history}
     data_dir.mkdir(parents=True, exist_ok=True)
