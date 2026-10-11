@@ -168,3 +168,11 @@ Reading:
 - All labels are Claude's, not human: the teacher learns Claude's judgement. `hidden.jsonl` (Andrea's) remains the independent exam.
 
 Status: a teacher that beats the lexicon on NEO's own data exists; it is not wired to any arena or to production. Next decisions are Andrea's: (1) shadow use as arena fitness; (2) a human check of a sample of Claude's labels.
+
+### Shadow use in the research arena (2026-10-11)
+Teacher v1 (web + in-domain, trained on 13,668 items; held-out calibration AUC 0.919, P/R/F1 0.46/0.56/0.50 vs lexicon 0.28/0.89/0.42) is stored only in the private archive and loaded by the research algorithm arena in **shadow**: it adds `metrics.shadow_teacher` per genome and `shadow_teacher_summary` to the report. Ranking, fitness, selection and promotion are unchanged (PR #250, merged with `[skip ci]`: no deploy).
+
+First shadow generation (77, 10:04 UTC):
+- Teacher and arena agree on the champion (g77-elite-1); rank correlation 0.929.
+- Champion: 13 arena signals; the teacher calls 24 of its 74 retrieved hits real demand.
+- Mutation g77-8: arena fitness 42 (6 signals), teacher 22 hits — the same as the second elite (fitness 65). The first case where the two views diverge; worth following over more generations.
