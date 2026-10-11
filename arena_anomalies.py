@@ -38,6 +38,7 @@ SCORING_V = 2  # bump whenever cue scoring changes: older baselines are not comp
 API = "https://export.arxiv.org/api/query"
 WINDOW_DAYS = 180
 MAX_RESULTS = 200
+MIN_PAPERS = 10  # below this a persistence value is noise: no trend, ranked last, cannot calibrate controls
 ATOM = {"a": "http://www.w3.org/2005/Atom"}
 
 ANOMALIES = (
@@ -120,10 +121,13 @@ def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS, qu
         "sigma_max": max(sigmas) if sigmas else None,
         "sample": [{"id": e["id"], "published": e["published"][:10], "title": e["title"][:140]} for e in recent[:5]],
         "window_capped": len(entries) >= MAX_RESULTS and n == len(entries),
+        "low_sample": n < MIN_PAPERS,
     }
 
 
 def trend(current: dict, previous: dict | None) -> dict:
+    if current.get("low_sample"):
+        return {"status": "INSUFFICIENT_DATA", "reason": f"fewer than {MIN_PAPERS} papers in window"}
     if not previous:
         return {"status": "FIRST_OBSERVATION"}
     def delta(key):
@@ -139,6 +143,23 @@ def trend(current: dict, previous: dict | None) -> dict:
     else:
         status = "STABLE"
     return {"status": status, "persistence_delta": dp, "sigma_median_delta": ds, "papers_delta": delta("papers")}
+
+
+def controls_check(rows: dict) -> tuple[bool | None, str]:
+    """A control (an anomaly regarded as resolved) must neither strengthen nor
+    outrank every real anomaly.  With too few papers it cannot calibrate anything."""
+    controls = [r for r in rows.values() if r["control"]]
+    real = [r["persistence"] for r in rows.values() if not r["control"] and not r.get("low_sample")
+            and r["persistence"] is not None]
+    usable = [r for r in controls if not r.get("low_sample")]
+    if controls and not usable:
+        return None, f"control has fewer than {MIN_PAPERS} papers: calibration not testable this run"
+    for r in usable:
+        if r["trend"]["status"] == "STRENGTHENING":
+            return False, "control is strengthening"
+        if real and r["persistence"] is not None and r["persistence"] > max(real):
+            return False, "control outranks every real anomaly"
+    return True, "controls behave as expected"
 
 
 def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: float = 3.2) -> dict:
@@ -157,14 +178,17 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
             continue
         s.update({"why": why, "control": control, "query": query, "trend": trend(s, previous.get(aid))})
         rows[aid] = s
-    controls_ok = all(r["trend"]["status"] != "STRENGTHENING" for r in rows.values() if r["control"])
+    controls_ok, controls_note = controls_check(rows)
     ranked = sorted((a for a in rows if not rows[a]["control"]),
-                    key=lambda a: (rows[a]["persistence"] or -1, rows[a]["sigma_median"] or 0), reverse=True)
+                    key=lambda a: (not rows[a].get("low_sample"), rows[a]["persistence"] or -1,
+                                   rows[a]["sigma_median"] or 0), reverse=True)
     report = {
         "schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "generated_at_utc": now.isoformat(),
         "window_days": WINDOW_DAYS, "anomalies": rows, "errors": errors,
         "ranking_by_persistence": ranked,
         "controls_ok": controls_ok,
+        "controls_note": controls_note,
+        "min_papers": MIN_PAPERS,
         "boundary": BOUNDARY,
         "disclaimer": "Literature attention signals from abstract wording and quoted significances; not physical evidence.",
     }

@@ -39,12 +39,28 @@ class AnomalyTests(unittest.TestCase):
         self.assertEqual(a.trend({"persistence": 0.6, "sigma_median": 4}, {"persistence": 0.4, "sigma_median": 4})["status"], "STRENGTHENING")
         self.assertEqual(a.trend({"persistence": 0.1, "sigma_median": 3}, {"persistence": 0.4, "sigma_median": 4})["status"], "FADING")
 
+    def test_low_sample_has_no_trend_and_cannot_calibrate(self):
+        self.assertEqual(a.trend({"persistence": 0.9, "low_sample": True}, {"persistence": 0.1})["status"], "INSUFFICIENT_DATA")
+        one = atom([("2610.1", "2026-10-02T00:00:00Z", "X", "A puzzle remains.")])
+        with tempfile.TemporaryDirectory() as d:
+            r = a.run(Path(d), fetch=lambda q: one, now=NOW, pause=0)
+        self.assertIsNone(r["controls_ok"])
+        self.assertTrue(all(x["low_sample"] for x in r["anomalies"].values()))
+
+    def test_control_outranking_real_anomalies_is_flagged(self):
+        rows = {"real": {"control": False, "low_sample": False, "persistence": 0.1, "trend": {"status": "STABLE"}},
+                "ctl": {"control": True, "low_sample": False, "persistence": 0.6, "trend": {"status": "FIRST_OBSERVATION"}}}
+        ok, note = a.controls_check(rows)
+        self.assertFalse(ok)
+        self.assertIn("outranks", note)
+
     def test_run_writes_metadata_only_and_flags_controls(self):
-        feed = atom([("2610.9", "2026-10-02T00:00:00Z", "X", "A 4 sigma discrepancy remains.")])
+        feed = atom([(f"2610.{i}", "2026-10-02T00:00:00Z", "X", "A 4 sigma discrepancy remains.") for i in range(12)])
         with tempfile.TemporaryDirectory() as d:
             r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0)
             self.assertEqual(len(r["anomalies"]), len(a.ANOMALIES))
-            self.assertTrue(r["controls_ok"])        # first observation: nothing strengthening yet
+            # Same feed for every query: the control ties the real anomalies, it does not outrank them.
+            self.assertTrue(r["controls_ok"], r["controls_note"])
             self.assertFalse(r["boundary"]["automatic_physical_claims"])
             dumped = json.dumps(r)
             self.assertNotIn("A 4 sigma discrepancy remains", dumped)  # abstracts are not persisted

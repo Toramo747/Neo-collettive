@@ -110,6 +110,9 @@ PUBLIC_SNAPSHOT_SCHEMA = {
             "logical_messages_total": None,
             "technical_evidence_total": None,
             "dedup_window_seconds": None,
+            "events_in_buffer": None,
+            "cumulative_counting": None,
+            "cumulative_since_utc": None,
             "counts": {
                 "total": {key: None for key in TRAFFIC_CATEGORIES},
                 "last_24h": {key: None for key in TRAFFIC_CATEGORIES},
@@ -1042,6 +1045,7 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
             "schema_v", "official_counting_since_utc", "events_total",
             "logical_messages_total", "technical_evidence_total",
             "dedup_window_seconds", "first_real_contact_utc", "last_real_contact_utc",
+            "events_in_buffer", "cumulative_counting", "cumulative_since_utc",
         )),
         "counts": _project_counts(summary.get("counts")),
     }

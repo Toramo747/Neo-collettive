@@ -7,7 +7,10 @@ import json
 import random
 from pathlib import Path
 
+import os
+
 import httpx
+import httpx2  # noqa: F401  (client type used by the MCP transport)
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
@@ -15,6 +18,24 @@ MYCELIX_MCP="https://neo-collettive.onrender.com/mcp"
 REGISTRY="https://registry.modelcontextprotocol.io/v0.1/servers"
 CASPER="io.github.magiautonomous/casper-tools"
 OUT=Path("runtime/verify-mcp-endpoint-live.json")
+SELF_MARKER="github-actions-verify-mcp-probe"
+
+
+def self_traffic_client() -> "httpx2.AsyncClient|None":
+    """Mark our own probe as self-traffic so it never counts as an external contact.
+    A fresh proof is signed for every request (proofs expire after 300 s)."""
+    secret=os.environ.get("NEO_HEARTBEAT_TOKEN","")
+    if not secret:
+        return None
+    from self_traffic_auth import make_self_traffic_proof
+
+    async def sign(request):
+        request.headers["X-MYCELIX-Self-Traffic"]=SELF_MARKER
+        request.headers["X-MYCELIX-Self-Traffic-Proof"]=make_self_traffic_proof(secret,request.url.path or "/")
+    from mcp.shared._httpx_utils import create_mcp_http_client
+    client=create_mcp_http_client()
+    client.event_hooks={"request":[sign],"response":[]}
+    return client
 
 
 def _rows(payload):
@@ -91,7 +112,8 @@ async def main():
     ]
 
     report={"mycelix_mcp":MYCELIX_MCP,"random_registry_peers":chosen,"results":[]}
-    async with streamable_http_client(MYCELIX_MCP) as streams:
+    client=self_traffic_client()
+    async with streamable_http_client(MYCELIX_MCP,http_client=client) as streams:
         read,write=streams[0],streams[1]
         async with ClientSession(read,write) as session:
             await session.initialize()
@@ -103,6 +125,8 @@ async def main():
                     data={"ok":False,"live":False,"error":type(exc).__name__+":"+str(exc)[:300]}
                 report["results"].append({"label":req["label"],"arguments":req["arguments"],"result":data})
                 await asyncio.sleep(1)
+    if client is not None:
+        await client.aclose()
 
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")

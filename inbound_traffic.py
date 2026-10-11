@@ -266,7 +266,48 @@ def logical_message_groups(events: list[dict]|None, *, window_seconds: int=LOGIC
     return groups
 
 
-def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dict:
+def empty_evicted(now: datetime|None=None) -> dict:
+    """Rollup of events that left the retained buffer (ring trim or checkpoint trim)."""
+    now=now or datetime.now(timezone.utc)
+    return {"schema_v":1,"since_utc":now.isoformat(),"events":0,"logical_messages":0,
+            "counts":{k:0 for k in CATEGORIES},"first_real_contact_utc":None,"last_real_contact_utc":None}
+
+
+def account_evicted(evicted: dict|None, dropped: list[dict]|None, *, now: datetime|None=None) -> dict:
+    """Add rows leaving the buffer to the cumulative rollup (logical-message counts, as in summarize_events)."""
+    out=dict(evicted) if isinstance(evicted,dict) and evicted.get("schema_v")==1 else empty_evicted(now)
+    out["counts"]={k:int((out.get("counts") or {}).get(k,0)) for k in CATEGORIES}
+    rows=[dict(x) for x in (dropped or []) if isinstance(x,dict)]
+    if not rows:
+        return out
+    rows=reclassify_legacy_contacts(reclassify_known_self_events(rows))
+    groups=logical_message_groups(rows)
+    for group in groups:
+        rep=group.get("representative") or {}
+        cat=str(rep.get("category") or "unknown")
+        if cat not in CATEGORIES: cat="unknown"
+        out["counts"][cat]+=1
+        if cat=="real_contact":
+            ts=_event_time(rep)
+            if ts is not None:
+                iso=ts.isoformat()
+                if not out.get("first_real_contact_utc") or iso<out["first_real_contact_utc"]:
+                    out["first_real_contact_utc"]=iso
+                if not out.get("last_real_contact_utc") or iso>out["last_real_contact_utc"]:
+                    out["last_real_contact_utc"]=iso
+    out["events"]=int(out.get("events") or 0)+len(rows)
+    out["logical_messages"]=int(out.get("logical_messages") or 0)+len(groups)
+    return out
+
+
+def append_event_tracked(events: list[dict]|None, event: dict, evicted: dict|None, *, max_events: int=1200) -> tuple[list[dict],dict]:
+    """append_event that keeps counting what the ring buffer drops."""
+    full=append_event(events,event,max_events=10**9)
+    dropped=full[:-max_events] if len(full)>max_events else []
+    return full[-max_events:], account_evicted(evicted,dropped)
+
+
+def summarize_events(events: list[dict]|None, *, now: datetime|None=None, evicted: dict|None=None) -> dict:
     now=now or datetime.now(timezone.utc)
     rows=reclassify_legacy_contacts(reclassify_known_self_events(events))
     logical_groups=logical_message_groups(rows)
@@ -300,7 +341,7 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
             self_traffic_origins[name]+=1
     def counts(c: Counter) -> dict:
         return {k:int(c.get(k,0)) for k in CATEGORIES}
-    return {
+    summary={
         "schema_v":2,
         "official_counting_since_utc":OFFICIAL_COUNTING_SINCE_UTC,
         "legacy_rule":"real_contact before commit 30aeb80 is preserved as legacy_unattributable and excluded from official real_contact counts",
@@ -318,7 +359,23 @@ def summarize_events(events: list[dict]|None, *, now: datetime|None=None) -> dic
         "crawler_origins":[{"name":name,"requests":count} for name,count in crawler_origins.most_common()],
         "real_contact_origins":[{"name":name,"requests":count} for name,count in real_contact_origins.most_common()],
         "self_traffic_origins":[{"name":name,"requests":count} for name,count in self_traffic_origins.most_common()],
+        "events_in_buffer":len(rows),
+        "cumulative_counting":"buffer_only",
     }
+    if isinstance(evicted,dict) and evicted.get("schema_v")==1:
+        ev_counts=evicted.get("counts") or {}
+        total=summary["counts"]["total"]
+        summary["counts"]["total"]={k:int(total.get(k,0))+int(ev_counts.get(k,0)) for k in CATEGORIES}
+        summary["events_total"]=len(rows)+int(evicted.get("events") or 0)
+        summary["technical_evidence_total"]=summary["events_total"]
+        summary["logical_messages_total"]=len(logical_rows)+int(evicted.get("logical_messages") or 0)
+        firsts=[x for x in (summary["first_real_contact_utc"],evicted.get("first_real_contact_utc")) if x]
+        lasts=[x for x in (summary["last_real_contact_utc"],evicted.get("last_real_contact_utc")) if x]
+        summary["first_real_contact_utc"]=min(firsts) if firsts else None
+        summary["last_real_contact_utc"]=max(lasts) if lasts else None
+        summary["cumulative_counting"]="buffer_plus_evicted"
+        summary["cumulative_since_utc"]=evicted.get("since_utc")
+    return summary
 
 def retroactive_from_inbound_messages(messages: list[dict]|None) -> list[dict]:
     out=[]
