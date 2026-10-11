@@ -109,6 +109,30 @@ def hn_negatives(client, n_random: int, n_show: int, now: int, rng: random.Rando
     return out + show[:n_show]
 
 
+def hn_vendor_negatives(client, since: int, n: int) -> list[dict]:
+    """Sellers presenting their own product (Show HN / Launch HN posts): the
+    teacher must learn buyer vs seller, not just 'talks about a tool'."""
+    out, seen = [], set()
+    for tags in ("show_hn", "launch_hn"):
+        for page in range(20):
+            if len(out) >= n:
+                break
+            try:
+                data = client.get("https://hn.algolia.com/api/v1/search", headers=census.UA, params={
+                    "tags": tags, "hitsPerPage": 50, "page": page, "numericFilters": f"created_at_i>{since}"}).json()
+            except Exception:
+                break
+            for h in data.get("hits") or []:
+                text = strip_html(h.get("story_text") or "")
+                if len(text) < 80 or h.get("objectID") in seen:
+                    continue
+                seen.add(h.get("objectID"))
+                out.append({"source": "hn", "text": text[:1500], "title": "", "created": h.get("created_at_i"), "vendor": True})
+            if page + 1 >= int(data.get("nbPages") or 0):
+                break
+    return out[:n]
+
+
 def gh_negatives(client, headers, per_month: int) -> list[dict]:
     out, seen = [], set()
     for start, end in month_windows(datetime.now(timezone.utc)):
@@ -196,17 +220,20 @@ def main(argv):
     if os.getenv("GITHUB_TOKEN"):
         gh["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
     with httpx.Client(timeout=40) as client:
-        neg = (hn_negatives(client, by_src["hn"], min(400, by_src["hn"] // 3), now, rng)
+        vendors = hn_vendor_negatives(client, now - 3 * 365 * 86400, by_src["hn"] // 2)
+        neg = (vendors + hn_negatives(client, by_src["hn"], min(400, by_src["hn"] // 3), now, rng)
                + gh_negatives(client, gh, 100)
                + se_negatives(client, now - 3 * 365 * 86400, 15))
     # Balance per source so the source itself is not a label.
     data = []
     for src in ("hn", "gh", "se"):
         pos = [p for p in positives if p["source"] == src]
-        ng = [n for n in neg if n["source"] == src]
+        ng_v = [n for n in neg if n["source"] == src and n.get("vendor")]
+        ng_o = [n for n in neg if n["source"] == src and not n.get("vendor")]
+        rng.shuffle(ng_o)
+        ng = ng_v + ng_o  # keep every seller example, fill with ordinary negatives
         k = min(len(pos), len(ng))
         rng.shuffle(pos)
-        rng.shuffle(ng)
         data += [dict(p, y=1) for p in pos[:k]] + [dict(n, y=0) for n in ng[:k]]
     split = now - SPLIT_DAYS * 86400
     for d in data:
@@ -292,7 +319,7 @@ def main(argv):
           ("train", "test", "train_pos", "test_pos", "teacher_auc", "teacher_prf", "lexicon_prf")}))
     print("::notice title=maestro phase3 per source::" + json.dumps(metrics["per_source"]))
     print("::notice title=maestro phase3 calibration (claude labels)::" + json.dumps(metrics.get("calibration_claude")))
-    print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
+    print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} vendor_negatives={len(vendors)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
     return 0
 
 
