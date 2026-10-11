@@ -36,3 +36,21 @@ Honest reading:
 - Stack Exchange softwarerecs is almost empty for these terms (16): low value, candidate for replacement.
 
 Proposal (pending Andrea): proceed to phase 2 on the label-rich families only, starting with a precision check on a sample of each label type.
+
+### Phase 2a — precision check (2026-10-11, sample of 100, seed 20261011)
+Seeded random sample, 20 per label type, from the 14 label-rich families; texts stored only in the private archive (`maestro/maestro-sample-20261011T064953Z.jsonl`). Annotation by Claude with one rubric: *does a person or organisation show a need for a software tool or feature in the matched family?*
+
+| Label type | Real demand | Main failure |
+|---|---|---|
+| GitHub `label:bounty` | 0/20 | agent/crypto bounty farms, mirrored bounty boards, internal project tasks |
+| GitHub reactions >= 10 | 3/20 | bug reports on big products; family term matched somewhere in long bodies |
+| Ask HN | 1/20 | sellers presenting products, opinion threads |
+| HN "would pay" | 1/20 | phrase present 20/20, but almost always "companies would pay…" in unrelated debates |
+| RemoteOK | 0/20 | job ads for roles; substring artefacts ("excel" in "excellent") |
+| **Total** | **5/100** | |
+
+Automatic lexical check: the family term appears in the stored text in only 4/20, 4/20, 9/20, 2/20, 0/20 items.
+
+**Conclusion: the phase 1 "viable" verdict does not hold.** At about 5% precision the 7069 counts correspond to a few hundred real labels, spread thin. The idea is not dead, but these label definitions are noise.
+Signals worth keeping: first-person "I would pay for this" replying to a concrete product, and feature requests with many reactions on tool repositories (demand to *improve* existing tools, which is part of NEO's mission).
+Next step if approved: strict label definitions (first-person pay/tool-seeking patterns, product-context replies, bounty-farm exclusion, whole-word matching), new sample, same rubric; viability re-judged only on measured precision.
