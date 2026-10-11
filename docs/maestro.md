@@ -54,3 +54,21 @@ Automatic lexical check: the family term appears in the stored text in only 4/20
 **Conclusion: the phase 1 "viable" verdict does not hold.** At about 5% precision the 7069 counts correspond to a few hundred real labels, spread thin. The idea is not dead, but these label definitions are noise.
 Signals worth keeping: first-person "I would pay for this" replying to a concrete product, and feature requests with many reactions on tool repositories (demand to *improve* existing tools, which is part of NEO's mission).
 Next step if approved: strict label definitions (first-person pay/tool-seeking patterns, product-context replies, bounty-farm exclusion, whole-word matching), new sample, same rubric; viability re-judged only on measured precision.
+
+### Phase 2b — strict labels (2026-10-11, seed 20261012)
+Same rubric, now family-agnostic (need for a software tool or feature). Sample in the private archive (`maestro-sample-v2-20261011T065709Z.jsonl`).
+
+| Label type | Pool (6 months, capped at 3 pages per query) | Real demand in sample |
+|---|---|---|
+| HN first-person willingness to pay | 134 | 6/20 (software; the other "pay" items are hardware, food, rhetoric) |
+| HN explicit tool seeking | 37 | 11/20 |
+| GitHub titled feature requests, >= 20 reactions | 0 | — (query too strict) |
+| **Total** | | **17/40 = 42%** (phase 2a: 5%) |
+
+Findings:
+- Strict, first-person definitions raise precision about 8x. Precision problem solved in principle.
+- Volume is the new limit: at this precision the pools give roughly 70 real labels in 6 months, below what a teacher needs. Pools were capped (3 pages per query) and can be widened.
+- None of the 171 pooled items mention a NEO family term as a whole word: real expressed demand on HN is about consumer and developer software, not the B2B workflow families NEO targets. This is a finding about NEO's scope, not only about the teacher.
+- Best signals: replies under "Show HN" ("I was looking for an app like this", "I would happily pay a one-time price") — demand attached to a concrete product.
+
+Proposal (pending Andrea): widen the strict pools (more pages and phrase variants, GitHub feature requests with relaxed reaction threshold) and re-measure volume at fixed precision before any training.
