@@ -1,0 +1,36 @@
+name: Private Candidate Review Snapshot (read-only)
+on:
+  push:
+    branches: [ops/candidate-review]
+    paths: [.github/candidate-review-trigger.txt, .github/workflows/candidate-review.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      # Read-only GET of the admin status. The payload goes ONLY to the private
+      # archive; the log prints sizes, never content.
+      - name: Fetch admin status into the private archive
+        env:
+          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p private-labels/ops
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          curl --fail --silent --show-error --max-time 60 -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \
+            "https://neo-collettive.onrender.com/api/autopilot/status" -o "private-labels/ops/autopilot-status-${stamp}.json"
+          echo "::notice title=candidate review::bytes=$(wc -c < private-labels/ops/autopilot-status-${stamp}.json)"
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add ops
+          git -C private-labels commit --quiet -m "ops: private autopilot status snapshot for candidate review"
+          git -C private-labels push --quiet
