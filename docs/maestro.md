@@ -92,3 +92,24 @@ Findings:
 - Volume is still the limit: ~190 real labels in 6 months.
 
 Levers for volume (proposal): (1) extend the window to 3 years — labels are historical by design; (2) GitHub feature requests with >= 5 reactions on all repositories, family assigned afterwards, instead of family term in the title; (3) drop the noisy pay phrases.
+
+### Phase 2d — three-year pools (2026-10-11, seed 20261014)
+Window 3 years; only the precise label types; GitHub feature requests on all repositories (36 monthly windows, 300 per month, sorted by reactions; GitHub reports 56,472 matching issues in total). Pools and a 100-item sample in the private archive (`maestro-pool-v4-20261011T071419Z.jsonl`).
+
+| Label type | Pool (3 years) | Real demand in sample | Estimated real labels |
+|---|---|---|---|
+| HN first-person pay | 871 | 4/20 | ~170 |
+| HN tool seeking | 315 | 13/20 | ~200 |
+| HN product validation under Show HN | 353 | 16/20 (one "I'm going to buy it") | ~280 |
+| GitHub feature requests, >= 5 reactions | 8,621 | 19/20 | ~8,200 |
+| Stack Exchange softwarerecs | 1,370 | 20/20 | ~1,370 |
+| **Total** | **11,530** | **72/100** | **~10,200** |
+
+**Volume solved: about 10,000 real demand labels at 72% sample precision.**
+
+Limits to carry into phase 3:
+- Skew: GitHub dominates (80%) and is mostly developer and AI tooling. Only 208 items match a NEO family term (the 2-term family matcher is too narrow); B2B workflow families remain under-represented.
+- Strength: feature requests and tool requests show need, not payment. Explicit willingness to pay is ~170 labels (the noisiest type). The teacher will learn "real need for a software tool"; "will pay" stays a separate, small signal.
+- Only positives so far: training needs matched negatives from the same sources (ordinary comments, bug reports, questions without tool seeking).
+
+Proposal (pending Andrea): phase 3 — dataset with matched negatives, a light classifier trained on years 1–2 and tested on year 3, then calibration against the 768 private labels before any arena use.
