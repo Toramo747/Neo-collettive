@@ -1,0 +1,9 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MYCELIX_RELAY_ENABLED=0 PORT=10000
+WORKDIR /app
+COPY requirements-relay-render.txt ./
+RUN pip install --no-cache-dir -r requirements-relay-render.txt
+# Allowlist only: no cloud_mcp.py, snapshots, checkpoints, Render credentials or NEO startup.
+COPY relay_render.py relay_render_backup.py relay_app.py relay_store.py relay_peer.py ./
+COPY inbound_interview.py intent_discovery.py seti_radar.py runtime_boundary.py runtime_profile.json ./
+CMD ["python", "relay_render.py"]
