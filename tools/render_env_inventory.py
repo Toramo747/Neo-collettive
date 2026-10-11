@@ -197,13 +197,16 @@ def main() -> int:
         "recoverable_identities_not_in_current": len(recoverable_ids),
     }
     print(json.dumps(summary, separators=(",", ":"), sort_keys=True))
+    # GitHub keeps at most 10 notices per step: keep the output to 6 lines.
     print(f"::notice title=env totals::keys={summary['total_keys']} bytes={summary['total_value_bytes']} backup_sets={len(backup_sets)}")
-    for fam, b in sorted(families.items()):
-        print(f"::notice title=family {fam}::keys={b['keys']} bytes={b['value_bytes']}")
+    print("::notice title=families::" + " ".join(f"{fam}={b['keys']}k/{b['value_bytes']}B" for fam, b in sorted(families.items())))
     st = summary["state"]
-    print(f"::notice title=state::cycles={st['cycles_completed']} generation={st['state_generation']} current_identities={st['current_identities']}")
-    for g in generations:
-        print(f"::notice title=gen {g['family']} {g['generation']}::chunks={g['chunks']} intact={g['intact']} rows={g['rows']} referenced={g['referenced']} head={g['is_current_head']} missing_from_current={g['identities_missing_from_current']}")
+    print(f"::notice title=state::cycles={st['cycles_completed']} generation={st['state_generation']} saved_at={st['saved_at_utc']} current_identities={st['current_identities']}")
+    def fmt(g):
+        return f"{g['generation']}:c{g['chunks']}:{'ok' if g['intact'] else 'BAD'}:r{g['rows']}:{'ref' if g['referenced'] else 'orphan'}{':HEAD' if g['is_current_head'] else ''}:miss{g['identities_missing_from_current']}"
+    for fam in ("neo_evidence", "neo_evidence_archive", "neo_challenge_track"):
+        items = [fmt(g) for g in generations if g["family"] == fam]
+        print(f"::notice title=gens {fam} ({len(items)})::" + (" ".join(items) or "none"))
     print(f"::notice title=recoverable::identities_not_in_current={summary['recoverable_identities_not_in_current']}")
     return 0
 
