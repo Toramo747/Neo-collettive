@@ -16,6 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from warp_physics import evaluate_population
 from warp_reference_search import run_reference_search
+from warp_quantum import assess as quantum_assess, feasibility_map
+
+REFERENCE_SCALE_M = 100.0  # L0 for physical-unit reports: a 100 m bubble (crew-size reference)
 
 SCHEMA_V = 1
 ARENA = "warp-propulsion-research"
@@ -143,7 +146,25 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
         population.append(mutate(rng.choice(parents),rng))
 
     evaluated=[score_candidate(c) for c in population]
-    evaluated.sort(key=lambda x:(len(x["hard_flags"])==0,x["fitness"]),reverse=True)
+    physical=evaluate_population(evaluated)
+    by_id={r["candidate_id"]:r["result"] for r in physical["evaluations"]}
+    for x in evaluated:
+        res=by_id.get(x["candidate_id"]) or {}
+        x["heuristic_fitness"]=x["fitness"]
+        if res.get("status")!="REFERENCE_METRIC_ONLY" or not (res.get("numerics") or {}).get("converged"):
+            # No validated metric for this family: it may stay in the population as a
+            # hypothesis, but it can never be selected (no win by construction).
+            x["hard_flags"]=list(x["hard_flags"])+["NO_PHYSICAL_EVALUATOR"]
+            x["physical_energy_over_L0"]=None
+            continue
+        x["physical_energy_over_L0"]=res.get("eulerian_energy_integral_over_L0")
+        p=x["parameters"]
+        x["quantum"]=quantum_assess(p["bubble_radius"]*REFERENCE_SCALE_M,p["wall_thickness"]*REFERENCE_SCALE_M,p["effective_beta"])
+    # Physics-based order: supported and unflagged first, then least negative Eulerian energy.
+    evaluated.sort(key=lambda x:(len(x["hard_flags"])==0,
+                                 x["physical_energy_over_L0"] is not None,
+                                 -abs(x["physical_energy_over_L0"] or 0.0),
+                                 x["heuristic_fitness"]),reverse=True)
 
     safe_pool=[x for x in evaluated if not x["hard_flags"]]
     ranked=safe_pool if safe_pool else evaluated
@@ -172,7 +193,15 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
         "best":champions[0] if champions else None,
         "top_candidates":champions,
         "hard_flagged":sum(bool(x["hard_flags"]) for x in evaluated),
-        "physical_evaluation":evaluate_population(evaluated),
+        "physical_evaluation":physical,
+        "selection":{
+            "rule":"only candidates with a validated metric (currently alcubierre_like) and no hard flags; ordered by smallest |Eulerian negative energy|; the legacy heuristic score only breaks ties",
+            "physics_affects_selection":True,
+            "unsupported_families_selectable":False,
+            "heuristic_fitness_label":"LEGACY_HEURISTIC_NO_PHYSICAL_MEANING",
+        },
+        "quantum_constraints":feasibility_map(),
+        "best_quantum_verdict":((champions[0].get("quantum") or {}).get("verdict") if champions else None),
         "fixed_target_research":reference_report,
         "boundary":{
             "production_state_write":False,
@@ -181,7 +210,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
             "automatic_engineering_promotion":False,
             "promotion":"HUMAN_SCIENTIFIC_REVIEW_ONLY",
         },
-        "disclaimer":"Original fitness remains heuristic. Separate fixed-target Alcubierre profile research computes required stress tensors and sampled tides/energy-condition violations; no realizable matter source, dynamic validation or evidence of a buildable warp drive.",
+        "disclaimer":"Selection now uses the Alcubierre Eulerian energy where a validated metric exists; the quantum layer (Ford–Roman inequality, Pfenning & Ford 1997) shows no macroscopic bubble is QI-compatible. Original heuristic fitness kept only as a legacy label. Separate fixed-target Alcubierre profile research computes required stress tensors and sampled tides/energy-condition violations; no realizable matter source, dynamic validation or evidence of a buildable warp drive.",
     }
     return next_state,report
 

@@ -68,17 +68,22 @@ class WarpPhysicsTests(unittest.TestCase):
                                                  "wall_thickness": value, "effective_beta": .8})
             self.assertEqual(result["status"], "INVALID_REFERENCE_PARAMETERS")
 
-    def test_scientific_report_does_not_change_evolution(self):
+    def test_physics_now_drives_selection(self):
+        # Contract changed deliberately (2026-10-11, authorized): the validated metric
+        # decides which candidates can be champions; the diagnostic block itself
+        # stays a report (its own affects_* flags remain False).
         state, report = arena.run_generation({}, 48, 42)
-        with patch.object(arena, "evaluate_population", return_value={}):
-            control_state, control_report = arena.run_generation({}, 48, 42)
-        self.assertEqual(state["champions"], control_state["champions"])
-        self.assertEqual(report["top_candidates"], control_report["top_candidates"])
         p = report["physical_evaluation"]
         self.assertEqual(p["reference_evaluated_count"]+p["unsupported_count"]+p["invalid_count"], 48)
         self.assertTrue(p["reference_checks"]["passed"])
-        self.assertFalse(p["affects_fitness"])
-        self.assertFalse(p["affects_selection"])
+        self.assertTrue(report["selection"]["physics_affects_selection"])
+        self.assertTrue(all(c["family"] == "alcubierre_like" for c in report["top_candidates"]))
+        unsupported = {"version": "x", "evaluations": [
+            {"candidate_id": "none", "result": {"status": "UNSUPPORTED_GEOMETRY"}}]}
+        with patch.object(arena, "evaluate_population", return_value=unsupported):
+            _, control = arena.run_generation({}, 48, 42)
+        # Without a validated metric every candidate is flagged: nothing passes on physics.
+        self.assertTrue(all("NO_PHYSICAL_EVALUATOR" in c["hard_flags"] for c in control["top_candidates"]))
         self.assertFalse(state["production_promoted"])
 
     def test_failed_reference_checks_abort_generation(self):
