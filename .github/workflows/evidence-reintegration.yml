@@ -1,0 +1,28 @@
+name: Evidence Reintegration (admin)
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "status | plan | apply | revert"
+        required: true
+        default: status
+      arg:
+        description: "plan_id (apply) or batch (revert)"
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: evidence-reintegration
+  cancel-in-progress: false
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Call admin endpoint (counts only)
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          ARG: ${{ inputs.arg }}
+        run: python tools/evidence_reintegration_call.py "$MODE" $ARG
