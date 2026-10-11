@@ -18,6 +18,10 @@ def atom(entries):
 
 
 class AnomalyTests(unittest.TestCase):
+    def test_query_phrase_is_not_a_tension_cue(self):
+        e = a.parse_entries(atom([("2610.5", "2026-10-01T00:00:00Z", "H", "We revisit the Hubble tension with new data.")]))
+        self.assertEqual(a.score(e, NOW, query='abs:"Hubble tension"')["tension_cues"], 0)
+
     def test_scoring_counts_cues_and_sigmas(self):
         e = a.parse_entries(atom([
             ("2610.1", "2026-10-01T00:00:00Z", "T1", "We find a 5.0 sigma tension with Planck."),
