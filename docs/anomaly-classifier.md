@@ -55,3 +55,22 @@ Authorized by Andrea ("Procedere 1"). About 300 more abstracts are labelled with
 - About 160 are drawn at random from the remaining pool.
 
 The selection uses dates and topics only, never cue words, so it does not favour the cue-word baseline. The adoption rule, the model and the evaluation are unchanged. This is the second and last attempt under this rule: if it fails again, the classifier stays out of the arena.
+
+## Result after amendment 1 (2026-10-11, 866 labels, same rule)
+
+| | Cue words (baseline) | Classifier |
+|---|---|---|
+| Macro-F1, leave-topic-out | 0.413 | **0.528** (+0.115) |
+| Macro-F1, 5-fold (topics seen) | — | 0.601 |
+| Spearman, topic persistence vs labels | −0.29 | +0.46 |
+| Control check | fails | **passes** (proton 0.05; Hubble 0.45; evolving DE 0.50) |
+
+**Decision under the preregistered rule: adopted.** Both conditions hold. The arena now uses the stance classifier (`scoring_v` 3). Cue-word persistence is still reported as `persistence_cue`, and baselines from the two methods are never compared.
+
+Caveats, stated openly:
+- The margin over the 0.10 threshold is small (+0.015).
+- The extra data were chosen after the first, failed evaluation. The selection used dates and topics only and was declared before the evaluation, but it is still a second look.
+- There is a single annotator (Claude).
+- Known miscalibrations on unseen topics: Casimir is predicted at 0.43 while its labels give 0.00 (it is almost all neutral theory), and muon g-2 is predicted at 0.38 against 0.04. Persistence for topics dominated by theory papers is therefore overestimated.
+
+Preview on the current 180-day window: S8 +0.54, Hubble +0.43, evolving dark energy +0.34, proton-radius control −0.27.

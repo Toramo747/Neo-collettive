@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - arena_anomalies.py
+      - anomaly_classifier.py
       - .github/workflows/mycelix-anomaly-arena.yml
   schedule:
     - cron: "11 5 * * *"
@@ -25,9 +26,27 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate
-        run: python -m unittest -v test_arena_anomalies.py
+        run: python -m unittest -v test_arena_anomalies.py test_anomaly_classifier.py
+      # Stance classifier (private model, read-only). Without it the arena falls back
+      # to cue words and reports itself uncalibrated.
+      - name: Fetch private stance classifier
+        id: model
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+          sparse-checkout: anomaly/classifier-v1.joblib
+          sparse-checkout-cone-mode: false
+      - name: Install classifier runtime
+        if: steps.model.outcome == 'success'
+        continue-on-error: true
+        run: python -m pip install --disable-pip-version-check scikit-learn==1.5.2
       # Public arXiv API (1 request / 3 s), metadata and counts only.
       - name: Listen to the literature
+        env:
+          ANOMALY_CLASSIFIER_MODEL: private-labels/anomaly/classifier-v1.joblib
         run: python arena_anomalies.py --data-dir data/arena/anomalies | tee /tmp/anomalies.json
       - name: Assert boundary
         run: |
@@ -38,6 +57,7 @@ jobs:
           assert b["production_state_write"] is False and b["production_runtime_influence"]=="NONE"
           assert b["automatic_physical_claims"] is False
           print(json.dumps({"ranking":r["ranking_by_persistence"],"controls_ok":r["controls_ok"],"errors":r["errors"]}))
+          print(f"::notice title=anomaly arena::mode={r['scoring_mode']} calibrated={r['calibrated']} controls_ok={r['controls_ok']} ranking={','.join(r['ranking_by_persistence'][:4])}")
           PY
       - name: Publish
         if: github.ref == 'refs/heads/main'
@@ -45,6 +65,7 @@ jobs:
           set -euo pipefail
           git config user.name "MYCELIX Anomaly Arena"
           git config user.email "actions@users.noreply.github.com"
+          rm -rf private-labels
           git add data/arena/anomalies
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "anomaly arena observation [skip render]"
