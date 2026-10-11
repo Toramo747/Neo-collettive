@@ -226,6 +226,18 @@ def compact_price_evidence(
             price_raw=str(validated["price"].get("raw") or "")
             pos=source_text.lower().find(price_raw.lower()) if price_raw else -1
             context=(source_text[max(0,pos-48):pos+len(price_raw)+64] if pos>=0 else source_text[:120])
+            # A price window is not a lossless representation of the scorer's
+            # observation: it drops family/title, trend and counter predicates.
+            # Keep the normalized observation, not the full fetched page.
+            # Import lazily because tool_opportunity uses the price parser.
+            from tool_opportunity import _source_row
+            plan_meta = meta.get(key) or {}
+            scoring_input = dict(result)
+            scoring_input["coverage_source"] = (
+                "extension_marketplaces" if plan_meta.get("validation_kind") == "marketplace"
+                or plan_meta.get("role") == "extension_marketplace" else "pricing_pages"
+            )
+            scoring_receipt = _source_row(scoring_input, family, str(result.get("observed_at_utc") or ""))
             rows.append({
                 "track":"price_validation",
                 "family":family,
@@ -238,6 +250,8 @@ def compact_price_evidence(
                 "price_context":" ".join(context.split())[:160],
                 "strict_price_verified":True,
                 "price_source":validated["price_source"],
+                "scoring_receipt_v":1,
+                "scoring_receipt":scoring_receipt,
             })
             if len(rows)>=max(1,int(max_rows)):
                 return rows
@@ -262,6 +276,8 @@ def persisted_price_groups(rows: list[dict[str,Any]] | None) -> list[dict[str,An
             "page_fetched":True,
             "source":"persisted-price-validation",
             "vendor":None,
+            "_persisted_price_receipt_v":row.get("scoring_receipt_v"),
+            "_persisted_price_receipt":row.get("scoring_receipt"),
         })
     for family,items in by_family.items():
         groups.append({
