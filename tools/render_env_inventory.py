@@ -145,10 +145,34 @@ def classify(rows, now: float | None = None) -> dict[str, int]:
     return out
 
 
+def deploy_history() -> list[str]:
+    """Last deploys and service events: status, commit prefix, reason. GET only."""
+    lines = []
+    try:
+        deploys = _get(f"{API}/services/{SERVICE}/deploys?limit=8")
+        for item in deploys if isinstance(deploys, list) else []:
+            d = item.get("deploy") if isinstance(item.get("deploy"), dict) else item
+            commit = (d.get("commit") or {}).get("id", "") if isinstance(d.get("commit"), dict) else ""
+            lines.append(f"{str(d.get('createdAt',''))[:16]}|{d.get('status')}|{commit[:8]}|{d.get('trigger','')}")
+    except Exception as exc:
+        lines.append("deploys_error:" + type(exc).__name__)
+    try:
+        events = _get(f"{API}/services/{SERVICE}/events?limit=20")
+        for item in events if isinstance(events, list) else []:
+            e = item.get("event") if isinstance(item.get("event"), dict) else item
+            details = e.get("details") if isinstance(e.get("details"), dict) else {}
+            reason = json.dumps({k: details[k] for k in ("reason", "status", "deployStatus", "buildStatus", "trigger") if k in details}, separators=(",", ":"))[:220]
+            lines.append(f"{str(e.get('timestamp',''))[:16]}|{e.get('type')}|{reason}")
+    except Exception as exc:
+        lines.append("events_error:" + type(exc).__name__)
+    return lines
+
+
 def main() -> int:
     if not SERVICE or not TOKEN:
         raise ValueError("credentials_missing")
     env = list_env()
+    history = deploy_history()
 
     families: dict[str, dict[str, int]] = {}
     for key, value in env.items():
@@ -227,6 +251,7 @@ def main() -> int:
         "generations": generations,
         "recoverable_identities_not_in_current": len(recoverable_ids),
         "recoverable_classification": classify(recoverable_rows.values()),
+        "deploy_history": history,
     }
     print(json.dumps(summary, separators=(",", ":"), sort_keys=True))
     # GitHub keeps at most 10 notices per step: keep the output to 6 lines.
@@ -239,6 +264,7 @@ def main() -> int:
     for fam in ("neo_evidence", "neo_evidence_archive", "neo_challenge_track"):
         items = [fmt(g) for g in generations if g["family"] == fam]
         print(f"::notice title=gens {fam} ({len(items)})::" + (" ".join(items) or "none"))
+    print("::notice title=deploy history::" + " || ".join(history))
     c = summary["recoverable_classification"]
     print(f"::notice title=recoverable::identities_not_in_current={summary['recoverable_identities_not_in_current']} " + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
