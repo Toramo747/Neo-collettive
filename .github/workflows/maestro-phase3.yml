@@ -1,0 +1,42 @@
+name: Maestro Phase 3 Teacher (private)
+on:
+  push:
+    branches:
+      - arena/maestro-label-census
+    paths:
+      - tools/maestro_phase3.py
+      - .github/workflows/maestro-phase3.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: maestro-phase3
+  cancel-in-progress: false
+jobs:
+  teacher:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet httpx scikit-learn
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      # Data, model terms and metrics go only to the private archive.
+      # hidden.jsonl is never read. Logs show aggregate metrics only.
+      - name: Build dataset, train and evaluate teacher
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/maestro_phase3.py private-labels | grep '^::'
+      - name: Persist in private archive
+        run: |
+          git -C private-labels config user.name "NEO Maestro Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add maestro
+          git -C private-labels commit --quiet -m "maestro phase 3: teacher dataset and metrics"
+          git -C private-labels push --quiet
