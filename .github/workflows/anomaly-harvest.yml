@@ -1,0 +1,32 @@
+name: Anomaly Classifier Harvest (private)
+on:
+  push:
+    branches: [arena/anomaly-classifier]
+    paths: [tools/anomaly_harvest.py, .github/workflows/anomaly-harvest.yml]
+permissions:
+  contents: read
+concurrency:
+  group: anomaly-harvest
+  cancel-in-progress: false
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      # Abstracts go only to the private archive; logs show counts only.
+      - run: python tools/anomaly_harvest.py private-labels
+      - name: Persist in private archive
+        run: |
+          git -C private-labels config user.name "NEO Anomaly Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add anomaly
+          git -C private-labels commit --quiet -m "anomaly classifier: harvested abstracts"
+          git -C private-labels push --quiet

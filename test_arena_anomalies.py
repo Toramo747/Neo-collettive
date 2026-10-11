@@ -43,7 +43,7 @@ class AnomalyTests(unittest.TestCase):
         self.assertEqual(a.trend({"persistence": 0.9, "low_sample": True}, {"persistence": 0.1})["status"], "INSUFFICIENT_DATA")
         one = atom([("2610.1", "2026-10-02T00:00:00Z", "X", "A puzzle remains.")])
         with tempfile.TemporaryDirectory() as d:
-            r = a.run(Path(d), fetch=lambda q: one, now=NOW, pause=0)
+            r = a.run(Path(d), fetch=lambda q: one, now=NOW, pause=0, classify=False)
         self.assertIsNone(r["controls_ok"])
         self.assertTrue(all(x["low_sample"] for x in r["anomalies"].values()))
 
@@ -58,11 +58,28 @@ class AnomalyTests(unittest.TestCase):
                 "proton_radius_control": {"papers": 3, "persistence": 0.1, "sigma_median": None},
                 "hubble_tension": {"papers": 12, "persistence": 0.1, "sigma_median": None}}}
             (Path(d) / "state.json").write_text(json.dumps(st))
-            r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0)
+            r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0, classify=False)
             st2 = json.loads((Path(d) / "state.json").read_text())
         self.assertEqual(r["anomalies"]["proton_radius_control"]["trend"]["status"], "FIRST_OBSERVATION")
         self.assertNotEqual(r["anomalies"]["hubble_tension"]["trend"]["status"], "FIRST_OBSERVATION")
         self.assertIn("query", st2["last"]["hubble_tension"])
+
+    def test_classifier_mode_uses_stance_and_separate_baseline(self):
+        feed = atom([(f"2610.{i}", "2026-10-02T00:00:00Z", "X", "A 4 sigma discrepancy remains.") for i in range(12)])
+        fake = lambda texts: ["resolves" if i % 3 == 0 else "neutral" for i, _ in enumerate(texts)]
+        with tempfile.TemporaryDirectory() as d:
+            a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0, classify=False)
+            r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0, classify=fake)
+            st = json.loads((Path(d) / "state.json").read_text())
+        h = r["anomalies"]["hubble_tension"]
+        self.assertEqual(r["scoring_mode"], "stance-classifier-v1")
+        self.assertEqual(r["scoring_v"], a.SCORING_V_CLASSIFIER)
+        self.assertEqual(h["stance_model"]["resolves"], 4)
+        self.assertEqual(h["persistence"], round(-4 / 12, 3))
+        self.assertNotEqual(h["persistence"], h["persistence_cue"])
+        self.assertEqual(h["trend"]["status"], "FIRST_OBSERVATION")   # cue-word baseline is not comparable
+        self.assertEqual(set(st["last_by_v"]), {str(a.SCORING_V), str(a.SCORING_V_CLASSIFIER)})
+        self.assertNotIn("A 4 sigma discrepancy remains", json.dumps(r))
 
     def test_control_outranking_real_anomalies_is_flagged(self):
         rows = {"real": {"control": False, "low_sample": False, "persistence": 0.1, "trend": {"status": "STABLE"}},
@@ -74,17 +91,18 @@ class AnomalyTests(unittest.TestCase):
     def test_run_writes_metadata_only_and_flags_controls(self):
         feed = atom([(f"2610.{i}", "2026-10-02T00:00:00Z", "X", "A 4 sigma discrepancy remains.") for i in range(12)])
         with tempfile.TemporaryDirectory() as d:
-            r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0)
+            r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0, classify=False)
             self.assertEqual(len(r["anomalies"]), len(a.ANOMALIES))
             # Same feed for every query: the control ties the real anomalies, it does not outrank them.
             self.assertTrue(r["controls_ok"], r["controls_note"])
             self.assertFalse(r["boundary"]["automatic_physical_claims"])
             dumped = json.dumps(r)
             self.assertNotIn("A 4 sigma discrepancy remains", dumped)  # abstracts are not persisted
-            r2 = a.run(Path(d), fetch=lambda q: atom([]), now=NOW, pause=0)
+            r2 = a.run(Path(d), fetch=lambda q: atom([]), now=NOW, pause=0, classify=False)
             st = json.loads((Path(d) / "state.json").read_text())
-            st["scoring_v"] = -1
+            st["scoring_v"] = -1          # an older, incomparable scoring version
+            st.pop("last_by_v", None)
             (Path(d) / "state.json").write_text(json.dumps(st))
-            r3 = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0)
+            r3 = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0, classify=False)
             self.assertEqual(r3["anomalies"]["hubble_tension"]["trend"]["status"], "FIRST_OBSERVATION")
             self.assertEqual(r2["anomalies"]["hubble_tension"]["papers"], 0)

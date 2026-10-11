@@ -34,7 +34,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ARENA = "anomaly-signals"
-SCORING_V = 2  # bump whenever cue scoring changes: older baselines are not comparable
+SCORING_V = 2  # cue-word scoring; bump whenever it changes: older baselines are not comparable
+SCORING_V_CLASSIFIER = 3  # stance classifier (anomaly_classifier, docs/anomaly-classifier.md)
 API = "https://export.arxiv.org/api/query"
 WINDOW_DAYS = 180
 MAX_RESULTS = 200
@@ -105,7 +106,8 @@ def strip_query_echo(text: str, query: str) -> str:
     return text
 
 
-def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS, query: str = "") -> dict:
+def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS, query: str = "",
+          classify=None) -> dict:
     cutoff = now - timedelta(days=window_days)
     recent = []
     for e in entries:
@@ -121,11 +123,20 @@ def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS, qu
     resolution = sum(1 for t in texts if RESOLUTION_RE.search(t))
     sigmas = [float(m) for e in recent for m in SIGMA_RE.findall(e["summary"]) if 0 < float(m) <= 20]
     n = len(recent)
+    model = None
+    if classify is not None and recent:
+        labels = classify([e["title"] + ". " + e["summary"] for e in recent])
+        sup, res = labels.count("supports_tension"), labels.count("resolves")
+        model = {"supports_tension": sup, "resolves": res, "neutral": labels.count("neutral"),
+                 "persistence": round((sup - res) / n, 3)}
+    cue_persistence = round((tension - resolution) / n, 3) if n else None
     return {
         "papers": n,
         "tension_cues": tension,
         "resolution_cues": resolution,
-        "persistence": round((tension - resolution) / n, 3) if n else None,
+        "persistence": model["persistence"] if model else cue_persistence,
+        "persistence_cue": cue_persistence,
+        "stance_model": model,
         "sigma_reported_count": len(sigmas),
         "sigma_median": round(statistics.median(sigmas), 2) if sigmas else None,
         "sigma_max": max(sigmas) if sigmas else None,
@@ -172,18 +183,29 @@ def controls_check(rows: dict) -> tuple[bool | None, str]:
     return True, "controls behave as expected"
 
 
-def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: float = 3.2) -> dict:
+def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: float = 3.2, classify=None) -> dict:
+    """classify: None = load the private stance model if present; False = cue words only; or a callable."""
     now = now or datetime.now(timezone.utc)
     state_path, report_path = data_dir / "state.json", data_dir / "latest.json"
     state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.is_file() else {}
-    previous = (state.get("last") or {}) if state.get("scoring_v") == SCORING_V else {}
+    if classify is None:
+        import anomaly_classifier
+        model = anomaly_classifier.load()
+        classify = (lambda texts: anomaly_classifier.predict(model, texts)) if model is not None else None
+    elif classify is False:
+        classify = None
+    scoring_v = SCORING_V_CLASSIFIER if classify else SCORING_V
+    last_by_v = dict(state.get("last_by_v") or {})
+    if state.get("scoring_v") is not None and str(state.get("scoring_v")) not in last_by_v:
+        last_by_v[str(state["scoring_v"])] = state.get("last") or {}
+    previous = last_by_v.get(str(scoring_v)) or {}
     rows, errors = {}, {}
     for i, (aid, query, why, control) in enumerate(ANOMALIES):
         if i:
             time.sleep(pause)
         try:
             echo = query + "".join(f' "{p}"' for p in EXTRA_ECHO.get(aid, ()))
-            s = score(parse_entries(fetch(query)), now, query=echo)
+            s = score(parse_entries(fetch(query)), now, query=echo, classify=classify)
         except Exception as exc:
             errors[aid] = type(exc).__name__
             continue
@@ -197,20 +219,23 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
                     key=lambda a: (not rows[a].get("low_sample"), rows[a]["persistence"] or -1,
                                    rows[a]["sigma_median"] or 0), reverse=True)
     report = {
-        "schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "generated_at_utc": now.isoformat(),
+        "schema_v": 1, "scoring_v": scoring_v, "arena": ARENA, "generated_at_utc": now.isoformat(),
+        "scoring_mode": "stance-classifier-v1" if classify else "cue-words",
+        "calibrated": bool(classify) and controls_ok is True,
         "window_days": WINDOW_DAYS, "anomalies": rows, "errors": errors,
         "ranking_by_persistence": ranked,
         "controls_ok": controls_ok,
         "controls_note": controls_note,
         "min_papers": MIN_PAPERS,
         "boundary": BOUNDARY,
-        "disclaimer": "Literature attention signals from abstract wording and quoted significances; not physical evidence.",
+        "disclaimer": "Literature attention signals (stance of abstracts, quoted significances); not physical evidence.",
     }
     history = list(state.get("history") or [])[-180:]
-    history.append({"at": now.isoformat(), **{a: {"persistence": r["persistence"], "sigma_median": r["sigma_median"],
+    history.append({"at": now.isoformat(), "scoring_v": scoring_v, **{a: {"persistence": r["persistence"], "sigma_median": r["sigma_median"],
                                                   "papers": r["papers"]} for a, r in rows.items()}})
-    new_state = {"schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "last": {a: {k: r[k] for k in ("papers", "persistence", "sigma_median", "query")}
-                                                         for a, r in rows.items()} or previous,
+    last = {a: {k: r[k] for k in ("papers", "persistence", "sigma_median", "query")} for a, r in rows.items()} or previous
+    last_by_v[str(scoring_v)] = last
+    new_state = {"schema_v": 1, "scoring_v": scoring_v, "arena": ARENA, "last": last, "last_by_v": last_by_v,
                  "history": history}
     data_dir.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps(new_state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
