@@ -35,4 +35,4 @@ Honest reading:
 - Some counts look inflated by loose matching (CRM: 2875 Ask HN, 275 "would pay"): counts are search totals and upper bounds; label precision must be measured on a sample before training.
 - Stack Exchange softwarerecs is almost empty for these terms (16): low value, candidate for replacement.
 
-Decision: proceed to phase 2 on the label-rich families only, starting with a precision check on a sample of each label type.
+Proposal (pending Andrea): proceed to phase 2 on the label-rich families only, starting with a precision check on a sample of each label type.
