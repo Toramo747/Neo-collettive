@@ -32,6 +32,25 @@ class InventoryToolTests(unittest.TestCase):
         self.assertEqual(inv.referenced_generations(b), [b["generation"], a["generation"]])
 
 
+class DeployHistoryPrivacyTests(unittest.TestCase):
+    def test_no_user_identity_in_history(self):
+        def fake_get(url):
+            if "/deploys" in url:
+                return [{"deploy": {"createdAt": "2026-10-10T05:58:00Z", "status": "update_failed", "commit": {"id": "90e07579abc", "message": "secret msg"}, "trigger": "api"}}]
+            return [{"event": {"timestamp": "2026-10-10T05:58:00Z", "type": "deploy_started", "details": {
+                "trigger": {"manual": False, "clearCache": True, "user": {"email": "someone@example.com", "id": "usr-x"}}}}}]
+        original = inv._get
+        inv._get = fake_get
+        try:
+            text = " ".join(inv.deploy_history())
+        finally:
+            inv._get = original
+        self.assertNotIn("@", text)
+        self.assertNotIn("usr-", text)
+        self.assertNotIn("secret msg", text)
+        self.assertIn("clearCache", text)
+
+
 class ClassifyTests(unittest.TestCase):
     def test_retention_buckets(self):
         now = 2_000_000_000

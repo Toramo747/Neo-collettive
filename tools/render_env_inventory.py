@@ -161,7 +161,12 @@ def deploy_history() -> list[str]:
         for item in events if isinstance(events, list) else []:
             e = item.get("event") if isinstance(item.get("event"), dict) else item
             details = e.get("details") if isinstance(e.get("details"), dict) else {}
-            reason = json.dumps({k: details[k] for k in ("reason", "status", "deployStatus", "buildStatus", "trigger") if k in details}, separators=(",", ":"))[:220]
+            picked = {k: details[k] for k in ("reason", "status", "deployStatus", "buildStatus") if k in details}
+            trigger = details.get("trigger") if isinstance(details.get("trigger"), dict) else None
+            if trigger:
+                # Booleans only: the trigger also carries the user's e-mail and id.
+                picked["trigger"] = {k: v for k, v in trigger.items() if isinstance(v, bool) and v}
+            reason = json.dumps(picked, separators=(",", ":"))[:220]
             lines.append(f"{str(e.get('timestamp',''))[:16]}|{e.get('type')}|{reason}")
     except Exception as exc:
         lines.append("events_error:" + type(exc).__name__)
