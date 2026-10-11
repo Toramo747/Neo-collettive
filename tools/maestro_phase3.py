@@ -296,6 +296,32 @@ def main(argv):
             d[0] += 1
             d[1] += int(v >= 0.5)
         # Best threshold for the teacher on this set, reported separately (not used for the 0.5 figures).
+        # In-domain variants: NEO observations labelled by Claude (668, disjoint from the 100 calibration items).
+        tr_path = archive / "maestro" / "maestro_train_claude.jsonl"
+        if tr_path.exists():
+            cal_ids = {c["id"] for c, _ in cal}
+            dom = [json.loads(l) for l in tr_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+            dom = [(d, by_id[d["id"]]) for d in dom if d.get("id") in by_id and d["id"] not in cal_ids]
+            dtexts = [mask(str(r.get("title") or "") + " " + str(r.get("normalized_text") or "")) for _, r in dom]
+            dy = [int(d["final_label"] == "buyer_tool_search") for d, _ in dom]
+            variants = {}
+            # C: in-domain only
+            vc = TfidfVectorizer(ngram_range=(1, 2), min_df=2, max_features=30000, sublinear_tf=True)
+            mc = LogisticRegression(max_iter=2000, C=2.0, class_weight="balanced").fit(vc.fit_transform(dtexts), dy)
+            variants["in_domain_only"] = mc.predict_proba(vc.transform(texts))[:, 1]
+            # B: web + in-domain (in-domain weighted x5)
+            vb = TfidfVectorizer(ngram_range=(1, 2), min_df=3, max_features=60000, sublinear_tf=True)
+            xb = vb.fit_transform([d["masked"] for d in train] + dtexts)
+            wb = [1.0] * len(train) + [5.0] * len(dtexts)
+            mb = LogisticRegression(max_iter=3000, C=2.0, class_weight="balanced").fit(xb, [d["y"] for d in train] + dy, sample_weight=wb)
+            variants["web_plus_in_domain"] = mb.predict_proba(vb.transform(texts))[:, 1]
+            metrics["in_domain_train"] = {"n": len(dom), "buyer_tool_search": sum(dy)}
+            metrics["calibration_variants"] = {
+                k: {"auc": round(roc_auc_score(yb, v), 3) if len(set(yb)) > 1 else None,
+                    "prf_at_0.5": prf(yb, [x >= 0.5 for x in v]),
+                    "flagged_by_label": {lab: f"{sum(1 for (c, _), x in zip(cal, v) if c['final_label'] == lab and x >= 0.5)}/{sum(1 for c, _ in cal if c['final_label'] == lab)}"
+                                         for lab in sorted({c['final_label'] for c, _ in cal})}}
+                for k, v in variants.items()}
         metrics["calibration_claude"] = {
             "n": len(cal), "buyer_tool_search": sum(yb),
             "teacher_auc": round(roc_auc_score(yb, cs), 3) if len(set(yb)) > 1 else None,
@@ -319,6 +345,7 @@ def main(argv):
           ("train", "test", "train_pos", "test_pos", "teacher_auc", "teacher_prf", "lexicon_prf")}))
     print("::notice title=maestro phase3 per source::" + json.dumps(metrics["per_source"]))
     print("::notice title=maestro phase3 calibration (claude labels)::" + json.dumps(metrics.get("calibration_claude")))
+    print("::notice title=maestro phase3 in-domain variants::" + json.dumps({"train": metrics.get("in_domain_train"), "variants": metrics.get("calibration_variants")}))
     print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} vendor_negatives={len(vendors)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
     return 0
 
