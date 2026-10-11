@@ -184,3 +184,13 @@ Comparison, fixed before the first teacher generation:
 - After 2 weeks, run the preregistered shadow review (`tools/research_champion_shadow.py` method) on both champions, on training and holdout topics.
 - The teacher lineage is preferred only if its champion finds more real demand on **holdout** topics in 3 runs on different days (same thresholds as the champion review: >= 1.5x signals and >= 5 holdout signals, precision not lower by more than 0.05).
 - Any change to production remains a separate decision.
+
+## First human review (Andrea, 2026-10-11)
+
+Andrea reviewed 30 of Claude's in-domain labels: a random sample stratified 12 buyer_tool_search, 9 vendor_offer and 9 other.
+- 24 confirmed (80%), 5 corrected, and 1 marked wrong without a replacement label.
+- **Buyer demand:** 10 of Claude's 12 `buyer_tool_search` labels were confirmed. One was in fact a seller posing as a user; one was a technical request internal to a project. Andrea also re-read one "we built X" launch post as demand.
+- **Vendor or other:** two marketing-style or manifesto items labelled `vendor_offer` are `other` for Andrea.
+- Feature requests to open-source projects stay `buyer_tool_search`, which confirms the rubric.
+
+The review is stored as human labels in the private archive (`maestro/maestro_review_andrea.jsonl`). Teacher v1 is not retrained now. Any future teacher must use these labels as overrides, and they are the only human ground truth so far.
