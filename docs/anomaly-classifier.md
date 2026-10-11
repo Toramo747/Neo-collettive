@@ -74,3 +74,21 @@ Caveats, stated openly:
 - Known miscalibrations on unseen topics: Casimir is predicted at 0.43 while its labels give 0.00 (it is almost all neutral theory), and muon g-2 is predicted at 0.38 against 0.04. Persistence for topics dominated by theory papers is therefore overestimated.
 
 Preview on the current 180-day window: S8 +0.54, Hubble +0.43, evolving dark energy +0.34, proton-radius control −0.27.
+
+## Independent label audit (2026-10-11, requested by Andrea)
+
+Two other models relabelled 80 of Claude's abstracts blind: they saw the guideline and the text, but not Claude's labels. The models were Claude Sonnet and Claude Haiku; a third model was unavailable for lack of credits. The sample is stratified by Claude's label (30 supports, 25 resolves, 25 neutral), so these figures describe agreement per class rather than the population.
+
+| Pair | Agreement | Cohen's κ |
+|---|---|---|
+| Claude vs Sonnet | 84% | 0.75 |
+| Claude vs Haiku | 83% | 0.74 |
+| Sonnet vs Haiku | 89% | 0.83 |
+
+- Claude matches the majority of the three on 71 of 80 items.
+- On the 9 items where both reviewers disagree with Claude, most of the errors are Claude's:
+  - two experiment proposals were labelled `supports_tension`, against the guideline's own rule that they are neutral;
+  - mixed abstracts were labelled `resolves` too readily.
+
+  Claude's weak class is `resolves`, which is over-assigned in borderline cases.
+- **Sensitivity check:** with those 9 labels replaced by the reviewers' majority, leave-topic-out macro-F1 is 0.522 against a baseline of 0.405. The margin of +0.117 is unchanged, so the adoption decision does not depend on the contested labels. The audit files are in the private archive (`anomaly/audit/`).
