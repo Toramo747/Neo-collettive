@@ -58,18 +58,20 @@ jobs:
         shell: bash
         env:
           HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
 
           post_case() {
             local input="$1"
             local output="$2"
-            # POST /api/trust/evaluate is review-guarded since 2026-10-04: sign it as our own traffic.
+            # /api/trust/evaluate is admin-only (route policy) and review-guarded since 2026-10-04.
             local url="https://neo-collettive.onrender.com/api/trust/evaluate"
             local proof
             proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "$url" --marker github-actions-trust-lab)"
             curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45 \
               -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${ADMIN_TOKEN}" \
               -H "X-MYCELIX-Self-Traffic: github-actions-trust-lab" \
               -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
               --data-binary "@$input" \
@@ -144,7 +146,9 @@ jobs:
               raise SystemExit("anonymous identity should remain anonymous")
           if not (a.get("evidence") or {}).get("unsupported_inference"):
               raise SystemExit("anonymous unsupported inference was not detected")
-          if (a.get("intent") or {}).get("primary")!="CONNECTIVITY":
+          # The message also makes a commercial claim, so COMMERCIAL may lead; connectivity must still be seen.
+          intent=a.get("intent") or {}
+          if "CONNECTIVITY" not in [intent.get("primary")]+list(intent.get("secondary") or []):
               raise SystemExit("anonymous connectivity intent missing")
           if not (a.get("conversation") or {}).get("allowed_bounded"):
               raise SystemExit("bounded conversation should remain allowed while trust is parked")
@@ -176,9 +180,12 @@ jobs:
 
       - name: Verify experiment remains sidecar
         shell: bash
+        env:
+          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --retry 3 --retry-delay 4 --max-time 45 \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
             "https://neo-collettive.onrender.com/api/trust/evaluate" \
             -o /tmp/status.json
           python - <<'PY'
