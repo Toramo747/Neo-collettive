@@ -116,6 +116,25 @@ def decode_generation(chunks: list[str]) -> tuple[bool, str, list]:
         return False, "", []
 
 
+def newest_seen(value, depth: int = 0) -> float:
+    """Max last_seen_epoch anywhere in the payload (freshness, not content)."""
+    if depth > 6:
+        return 0.0
+    best = 0.0
+    if isinstance(value, dict):
+        try:
+            best = float(value.get("last_seen_epoch") or 0)
+        except (TypeError, ValueError):
+            best = 0.0
+        for v in value.values():
+            if isinstance(v, (dict, list)):
+                best = max(best, newest_seen(v, depth + 1))
+    elif isinstance(value, list):
+        for v in value:
+            best = max(best, newest_seen(v, depth + 1))
+    return best
+
+
 def referenced_generations(ref) -> list[str]:
     out = []
     seen = 0
@@ -239,6 +258,7 @@ def main() -> int:
             "referenced": gen in chain,
             "is_current_head": gen in current_head.values(),
             "identities_missing_from_current": len(missing),
+            "newest_seen_utc": time.strftime("%m-%dT%H:%M", time.gmtime(newest_seen(rows))) if rows else None,
         })
 
     summary = {
@@ -265,7 +285,7 @@ def main() -> int:
     st = summary["state"]
     print(f"::notice title=state::cycles={st['cycles_completed']} generation={st['state_generation']} saved_at={st['saved_at_utc']} current_identities={st['current_identities']}")
     def fmt(g):
-        return f"{g['generation']}:c{g['chunks']}:{'ok' if g['intact'] else 'BAD'}:r{g['rows']}:{'ref' if g['referenced'] else 'orphan'}{':HEAD' if g['is_current_head'] else ''}:miss{g['identities_missing_from_current']}"
+        return f"{g['generation']}:c{g['chunks']}:{'ok' if g['intact'] else 'BAD'}:r{g['rows']}:{'ref' if g['referenced'] else 'orphan'}{':HEAD' if g['is_current_head'] else ''}:miss{g['identities_missing_from_current']}:{g['newest_seen_utc']}"
     for fam in ("neo_evidence", "neo_evidence_archive", "neo_challenge_track"):
         items = [fmt(g) for g in generations if g["family"] == fam]
         print(f"::notice title=gens {fam} ({len(items)})::" + (" ".join(items) or "none"))
