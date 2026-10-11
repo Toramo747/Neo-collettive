@@ -141,3 +141,11 @@ NumPy 2.3.3 is already pinned in the project runtime requirements and is
 installed explicitly by the isolated arena workflow. CPU only; no paid API.
 
 Run: `python -m unittest -v test_arena_warp_propulsion test_warp_physics test_warp_tensor`.
+
+## Quantum layer and physics-based selection (2026-10-11)
+
+- **Quantum constraint** (`warp_quantum.py`): the Ford–Roman quantum inequality for a massless scalar field, applied to the Alcubierre tanh profile as in Pfenning & Ford (1997, https://arxiv.org/abs/gr-qc/9702026). With sampling length `c·tau0 = 0.1·w`, the thickest QI-compatible wall is `w_max = L_P·2·sqrt(3/pi)/(alpha²·beta)` ≈ 200–400 Planck lengths, matching their "few hundred Planck lengths". A 100 m bubble at that wall needs ~10^61–10^62 kg of negative energy. No macroscopic bubble in the reference map is QI-compatible.
+- **Thin-wall energy** `E = −beta²R²/(36w)` is verified against `warp_physics.energy_integral` (0.2–0.5% for w/R = 0.08–0.125, improving as walls thin).
+- **Semiclassical instability** of superluminal bubbles (Finazzi, Liberati, Barceló 2009, https://arxiv.org/abs/0904.0141) is flagged for beta ≥ 1, not computed.
+- **Selection**: families without a validated metric get `NO_PHYSICAL_EVALUATOR` and cannot be champions; validated candidates are ordered by the smallest |Eulerian negative energy|. The old score is kept as `heuristic_fitness` with the label `LEGACY_HEURISTIC_NO_PHYSICAL_MEANING`. Background: with the heuristic, the champion sat at the parameter-box corner (wall at its maximum) and family choice moved the score by < 0.003.
+- Literature context: physically reasonable warp drives violate the null energy condition for some observer (Santiago, Schuster, Visser 2022, https://arxiv.org/abs/2105.03079); a subluminal constant-velocity solution satisfying all energy conditions with a massive matter shell was reported by Fuchs et al. 2024 (https://arxiv.org/abs/2405.02709). Next evaluators: Natário (zero expansion) and Van Den Broeck (https://arxiv.org/abs/gr-qc/9905084).
