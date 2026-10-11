@@ -267,3 +267,24 @@ class ShadowTeacherTests(unittest.TestCase):
                                                            {"comment_text": "weather game", "story_id": 2}]}])
         self.assertEqual(out["scored_hits"], 2)
         self.assertFalse(out["affects_fitness"])
+
+
+class TeacherFitnessTests(unittest.TestCase):
+    def test_teacher_ranking_prefers_teacher_hits(self):
+        a = {"metrics": {"signal_hits": 9, "fitness": 90, "shadow_teacher": {"teacher_hits": 3}}}
+        b = {"metrics": {"signal_hits": 1, "fitness": 10, "shadow_teacher": {"teacher_hits": 7}}}
+        self.assertGreater(ara.teacher_ranking_key(b), ara.teacher_ranking_key(a))
+        self.assertGreater(ara.ranking_key(a), ara.ranking_key(b))  # lexicon arena unchanged
+
+    def test_teacher_mode_refuses_without_model(self):
+        import asyncio, tempfile, maestro_teacher
+        from pathlib import Path
+        saved = (maestro_teacher._MODEL, maestro_teacher._LOADED)
+        maestro_teacher._MODEL, maestro_teacher._LOADED = None, True
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                out = asyncio.run(ara.run(Path(d), "", "teacher"))
+                self.assertEqual(out["status"], "TEACHER_UNAVAILABLE")
+                self.assertFalse((Path(d) / "research-algorithm-teacher").exists())
+        finally:
+            maestro_teacher._MODEL, maestro_teacher._LOADED = saved
