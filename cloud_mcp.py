@@ -26,7 +26,8 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint, encode_checkpoint_async
-from render_saved_env import generation_inventory, load_boot_env
+from render_saved_env import fetch_saved_env, generation_inventory, load_boot_env
+from evidence_reintegration import apply_plan as reintegration_apply, build_plan as reintegration_plan, public_plan as reintegration_public, revert_batch as reintegration_revert
 from state_generation_guard import WRITER_FIELD as STATE_WRITER_FIELD, GUARD_FIELD as STATE_GENERATION_FIELD, check_write_allowed, next_generation, state_generation_of
 from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, generation_id, is_external_reference, recover_external_store_generation, split_active_archive
 import ipaddress
@@ -221,6 +222,10 @@ def _boot_env():
 
 def _persisted_env(key: str) -> str | None:
     return _boot_env().get(key)
+
+
+def _persisted_env_items():
+    return _boot_env().items()
 JARVIS_RENDER_SERVICE_ID = (os.getenv("JARVIS_RENDER_SERVICE_ID") or "").strip()
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
@@ -563,6 +568,7 @@ def _state_payload() -> dict:
         "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
         "evidence_store_status": AUTOPILOT_STATE.get("evidence_store_status") or {},
         "evidence_memory_telemetry": AUTOPILOT_STATE.get("evidence_memory_telemetry") or {},
+        "evidence_reintegration_ledger": list(AUTOPILOT_STATE.get("evidence_reintegration_ledger") or [])[-20:],
         "challenge_track_store_reference": AUTOPILOT_STATE.get("challenge_track_store_reference"),
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
@@ -595,6 +601,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         return False
     perf = payload.get("family_performance")
     recent = payload.get("recent_sectors")
+    if isinstance(payload.get("evidence_reintegration_ledger"), list):
+        AUTOPILOT_STATE["evidence_reintegration_ledger"] = [x for x in payload.get("evidence_reintegration_ledger") if isinstance(x, dict)][-20:]
     if isinstance(perf, dict):
         AUTOPILOT_STATE["family_performance"] = perf
     if isinstance(payload.get("family_cooldowns"), dict):
@@ -1118,7 +1126,7 @@ def _backup_manifest_recovery_rows() -> int:
 
 
 def _backup_manifest_present() -> bool:
-    return any(key.startswith("BACKUP_") and key.endswith("_MANIFEST") for key in os.environ)
+    return any(key.startswith("BACKUP_") and key.endswith("_MANIFEST") for key in _boot_env().keys())
 
 
 def replace_evidence_memory(
@@ -1165,7 +1173,7 @@ def replace_evidence_memory(
 def _recover_best_orphan_generation() -> tuple[list[dict[str, Any]] | None,dict[str, Any] | None]:
     groups={}
     pattern=re.compile(r"^NEO_EVIDENCE_([0-9a-f]{12})_([0-9]+)$")
-    for key,value in os.environ.items():
+    for key,value in _persisted_env_items():
         match=pattern.match(str(key))
         if not match:
             continue
@@ -3099,6 +3107,42 @@ async def agent_demand_page(request: Request):
         )
     body+='</div></section>'
     return layout("Agent Demand",body)
+
+
+async def api_admin_evidence_reintegration(request: Request):
+    """plan / apply(confirm=plan_id) / revert(batch) evidence from saved generations. Counts only."""
+    try:
+        body=await request.json()
+    except Exception:
+        body={}
+    body=body if isinstance(body,dict) else {}
+    mode=str(body.get("mode") or "plan")
+    current=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
+    ledger=list(AUTOPILOT_STATE.get("evidence_reintegration_ledger") or [])
+    if mode=="revert":
+        batch=str(body.get("batch") or "")
+        if not batch:
+            return JSONResponse({"ok":False,"reason":"batch_required"},status_code=400)
+        kept,entry=reintegration_revert(current,batch)
+        AUTOPILOT_STATE["commercial_evidence_memory"]=kept
+        AUTOPILOT_STATE["evidence_reintegration_ledger"]=(ledger+[entry])[-20:]
+        return JSONResponse({"ok":True,"mode":mode,**entry,"active_count":len(kept)})
+    fetched=await asyncio.to_thread(fetch_saved_env,RENDER_API_BASE,RENDER_SERVICE_ID or "",RENDER_API_KEY or "")
+    if not fetched.get("ok"):
+        return JSONResponse({"ok":False,"reason":"saved_env_unavailable:"+str(fetched.get("reason"))},status_code=503)
+    plan=await asyncio.to_thread(reintegration_plan,fetched.get("values") or {},current,_evidence_memory_key)
+    if mode=="plan":
+        return JSONResponse({"ok":True,"mode":mode,**reintegration_public(plan),"active_count":len(current)})
+    if mode!="apply":
+        return JSONResponse({"ok":False,"reason":"unknown_mode"},status_code=400)
+    if not plan.get("plan_id"):
+        return JSONResponse({"ok":True,"mode":mode,"rows":0,"reason":"nothing_to_reintegrate","active_count":len(current)})
+    if str(body.get("confirm") or "")!=plan.get("plan_id"):
+        return JSONResponse({"ok":False,"reason":"plan_changed_or_unconfirmed",**reintegration_public(plan)},status_code=409)
+    merged,entry=reintegration_apply(plan,current)
+    replace_evidence_memory(current,merged,"evidence_reintegration",backup_ok=True)
+    AUTOPILOT_STATE["evidence_reintegration_ledger"]=(ledger+[entry])[-20:]
+    return JSONResponse({"ok":True,"mode":mode,**entry,"active_count":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])})
 
 
 async def api_admin_inbound(request: Request):
@@ -14193,6 +14237,7 @@ app = Starlette(
         Route("/admin/seti-interviews", admin_seti_interviews_page, methods=["GET"]),
         Route("/api/admin/seti-interviews", api_admin_seti_interviews, methods=["GET"]),
         Route("/api/admin/inbound", api_admin_inbound, methods=["GET"]),
+        Route("/api/admin/evidence-reintegration", api_admin_evidence_reintegration, methods=["POST"]),
         Route("/api/admin/agent-chats", api_admin_agent_chats, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/trust", trust_lab_page, methods=["GET"]),

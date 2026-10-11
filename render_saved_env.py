@@ -82,6 +82,7 @@ def fetch_saved_env(
         return {"ok": False, "values": {}, "reason": "render_api_not_configured", "pages": 0}
     headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
     values: dict[str, str] = {}
+    names: list[str] = []
     pages = 0
     cursor: str | None = None
     try:
@@ -97,11 +98,12 @@ def fetch_saved_env(
                 body = r.json()
                 batch = _items(body)
                 for key, value in batch:
+                    names.append(key)
                     if is_persisted_key(key):
                         values[key] = value
                 next_cursor = _cursor(body)
                 if len(batch) < PAGE_LIMIT or not next_cursor or next_cursor == cursor:
-                    return {"ok": True, "values": values, "reason": "ok", "pages": pages}
+                    return {"ok": True, "values": values, "key_names": names, "reason": "ok", "pages": pages}
                 cursor = next_cursor
     except Exception as exc:  # network, JSON, timeout
         return {"ok": False, "values": {}, "reason": type(exc).__name__, "pages": pages}
@@ -120,6 +122,7 @@ class BootEnv:
         self.stale_keys = 0
         self.missing_in_process = 0
         self.saved_only_reads = 0
+        self.saved_key_names: list[str] = []
 
     def get(self, key: str) -> str | None:
         if self.source == "render_api_saved":
@@ -136,6 +139,16 @@ class BootEnv:
                 # still present in the stale process env must not resurrect.
                 return None
         return self._environ(key)
+
+    def keys(self) -> list[str]:
+        if self.source == "render_api_saved":
+            return list(self.saved_key_names or self.saved)
+        return list(os.environ)
+
+    def items(self) -> list[tuple[str, str]]:
+        if self.source == "render_api_saved":
+            return list(self.saved.items())
+        return [(k, v) for k, v in os.environ.items() if is_persisted_key(k)]
 
     def status(self) -> dict[str, Any]:
         return {
@@ -155,7 +168,9 @@ def load_boot_env(api_base: str | None, service_id: str | None, api_key: str | N
         return BootEnv(source="process_env_fallback", reason="disabled", environ=environ)
     fetched = fetch_saved_env(api_base or "", service_id or "", api_key or "", timeout=timeout, transport=transport)
     if fetched.get("ok"):
-        return BootEnv(fetched["values"], source="render_api_saved", reason="ok", environ=environ)
+        boot = BootEnv(fetched["values"], source="render_api_saved", reason="ok", environ=environ)
+        boot.saved_key_names = list(fetched.get("key_names") or [])
+        return boot
     return BootEnv(source="process_env_fallback", reason=str(fetched.get("reason") or "unknown"), environ=environ)
 
 
