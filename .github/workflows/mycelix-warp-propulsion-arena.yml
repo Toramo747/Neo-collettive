@@ -41,8 +41,8 @@ jobs:
       - name: Validate arena
         run: |
           set -euo pipefail
-          python -m py_compile arena_warp_propulsion.py warp_quantum.py warp_physics.py warp_tensor.py warp_reference_search.py arena_collective_mind.py
-          python -m unittest -v test_arena_warp_propulsion.py test_warp_quantum.py test_warp_physics.py test_warp_tensor.py test_arena_collective_mind.py
+          python -m py_compile arena_warp_propulsion.py warp_quantum.py warp_metrics.py warp_physics.py warp_tensor.py warp_reference_search.py arena_collective_mind.py
+          python -m unittest -v test_arena_warp_propulsion.py test_warp_quantum.py test_warp_metrics.py test_warp_physics.py test_warp_tensor.py test_arena_collective_mind.py
 
       - name: Run bounded theoretical generation
         run: |
@@ -105,6 +105,11 @@ jobs:
               raise SystemExit("quantum layer thin-wall check failed")
           if q.get("physical_feasibility_established") is not False:
               raise SystemExit("quantum layer cannot establish feasibility")
+          fam=r.get("other_families") or {}
+          if not fam.get("passed"):
+              raise SystemExit("wormhole / Van Den Broeck reference checks failed")
+          if fam.get("physical_feasibility_established") is not False:
+              raise SystemExit("other families cannot establish feasibility")
           advisory=r.get("external_advisory") or {}
           if advisory.get("affects_fitness") is not False or advisory.get("affects_selection") is not False:
               raise SystemExit("external advisory must remain observational")
