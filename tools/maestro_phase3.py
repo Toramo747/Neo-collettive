@@ -249,6 +249,34 @@ def main(argv):
         s = clf.predict_proba(vec.transform(neo))[:, 1]
         metrics["neo_observations"] = {"n": len(neo), "teacher_flagged": int(sum(1 for v in s if v >= 0.5)),
                                        "teacher_mean": round(float(s.mean()), 3)}
+    # Calibration: 100 NEO observations labelled by Claude (label_origin=claude).
+    cal_path = archive / "maestro" / "maestro_calibration_claude.jsonl"
+    if cal_path.exists() and tpath.exists():
+        by_id = {}
+        for line in tpath.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                by_id[r.get("id")] = r
+        cal = [json.loads(l) for l in cal_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        cal = [(c, by_id[c["id"]]) for c in cal if c.get("id") in by_id]
+        texts = [mask(str(r.get("title") or "") + " " + str(r.get("normalized_text") or "")) for _, r in cal]
+        cs = clf.predict_proba(vec.transform(texts))[:, 1]
+        yb = [c["final_label"] == "buyer_tool_search" for c, _ in cal]
+        lexb = [lexicon_positive(str(r.get("title") or ""), str(r.get("normalized_text") or "")) for _, r in cal]
+        per_label = {}
+        for (c, _), v in zip(cal, cs):
+            d = per_label.setdefault(c["final_label"], [0, 0])
+            d[0] += 1
+            d[1] += int(v >= 0.5)
+        # Best threshold for the teacher on this set, reported separately (not used for the 0.5 figures).
+        metrics["calibration_claude"] = {
+            "n": len(cal), "buyer_tool_search": sum(yb),
+            "teacher_auc": round(roc_auc_score(yb, cs), 3) if len(set(yb)) > 1 else None,
+            "teacher_prf_at_0.5": prf(yb, [v >= 0.5 for v in cs]),
+            "teacher_prf_at_0.8": prf(yb, [v >= 0.8 for v in cs]),
+            "lexicon_prf": prf(yb, lexb),
+            "flagged_by_label": {k: f"{v[1]}/{v[0]}" for k, v in per_label.items()},
+        }
     out = archive / "maestro"
     stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
     (out / f"maestro-phase3-metrics-{stamp}.json").write_text(json.dumps(metrics, indent=1), encoding="utf-8")
@@ -263,6 +291,7 @@ def main(argv):
     print("::notice title=maestro phase3 overall::" + json.dumps({k: metrics[k] for k in
           ("train", "test", "train_pos", "test_pos", "teacher_auc", "teacher_prf", "lexicon_prf")}))
     print("::notice title=maestro phase3 per source::" + json.dumps(metrics["per_source"]))
+    print("::notice title=maestro phase3 calibration (claude labels)::" + json.dumps(metrics.get("calibration_claude")))
     print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
     return 0
 
