@@ -35,8 +35,8 @@ Public HN Algolia only, read-only. Aggregate counts only (no text, URLs, ids). N
 ## Runs
 | Date (UTC) | Set | PROD sig | PROD_EQ sig | CHAMP sig | CHAMP_BUDGET sig | CHAMP prec | PROD_EQ prec | champ_only |
 |---|---|---|---|---|---|---|---|---|
-| 2026-10-11 05:5x | training | 1 | 1 | 13 | 0 | 0.194 | 0.167 | 71 |
-| 2026-10-11 05:5x | holdout | 0 | 0 | 1 | 0 | 0.033 | 0.000 | 55 |
+| 2026-10-11 05:44 | training | 1 | 1 | 13 | 0 | 0.194 | 0.167 | 71 |
+| 2026-10-11 05:44 | holdout | 0 | 0 | 1 | 0 | 0.033 | 0.000 | 55 |
 
 ### Note after run 1 (amendment, declared openly)
 PROD_EQ retrieved only 7–8 stories for 120 requested hits: a bare topic phrase restricted to stories in 45 days finds almost nothing. On training, CHAMP's advantage is volume (13.98 vs 14.29 signals per 100 hits: same yield per hit). On holdout every arm is near zero (CHAMP 1 signal out of 83 hits).
