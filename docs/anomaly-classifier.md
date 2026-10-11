@@ -47,3 +47,11 @@ Weak point: the `resolves` class has only 76 examples. Possible next steps, none
 1. Label more `resolves` cases.
 2. Have Andrea review a sample of labels.
 3. Run the classifier in shadow next to the cue words, without deciding anything.
+
+## Amendment 1 (2026-10-11, before any new evaluation): more `resolves` data
+
+Authorized by Andrea ("Procedere 1"). About 300 more abstracts are labelled with the same guideline:
+- About 140 are drawn at random from periods after each anomaly was widely considered resolved or faded: OPERA from 2012-02, BICEP2 from 2015, the 750 GeV excess from 2016-08, reactor antineutrinos from 2017, the proton radius from 2019, X17 from 2023 and muon g-2 from 2025-06. At most 40 come from any one topic.
+- About 160 are drawn at random from the remaining pool.
+
+The selection uses dates and topics only, never cue words, so it does not favour the cue-word baseline. The adoption rule, the model and the evaluation are unchanged. This is the second and last attempt under this rule: if it fails again, the classifier stays out of the arena.
