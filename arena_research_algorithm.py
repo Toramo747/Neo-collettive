@@ -24,6 +24,8 @@ from typing import Any
 
 import httpx
 
+import maestro_teacher
+
 from evidence_integrity import (
     buyer_voice_present,
     first_person_buyer_voice_present,
@@ -395,6 +397,29 @@ def score_hits(genome: dict[str, Any], query_rows: list[dict[str, Any]]) -> dict
         "supply_rejected": supply_rejected,
     }
 
+def shadow_teacher_summary(ranked: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Compare the arena's own ranking with the teacher's view (shadow only)."""
+    rows = [(x.get("genome_id"), (x.get("metrics") or {}).get("shadow_teacher")) for x in ranked]
+    rows = [(g, s) for g, s in rows if isinstance(s, dict)]
+    if not rows:
+        return None
+    by_teacher = sorted(rows, key=lambda r: (-int(r[1].get("teacher_hits") or 0), str(r[0])))
+    arena_order = [g for g, _ in rows]
+    teacher_order = [g for g, _ in by_teacher]
+    n = len(rows)
+    rank_a = {g: i for i, g in enumerate(arena_order)}
+    rank_t = {g: i for i, g in enumerate(teacher_order)}
+    d2 = sum((rank_a[g] - rank_t[g]) ** 2 for g in arena_order)
+    spearman = 1 - 6 * d2 / (n * (n * n - 1)) if n > 1 else None
+    return {
+        "arena_champion": arena_order[0],
+        "teacher_champion": teacher_order[0],
+        "agree_on_champion": arena_order[0] == teacher_order[0],
+        "rank_correlation": round(spearman, 3) if spearman is not None else None,
+        "affects_selection": False,
+    }
+
+
 def ranking_key(item: dict[str, Any]) -> tuple[int, int, float]:
     """Never rank fewer absolute demand signals above more evidence."""
     metrics=item.get("metrics") if isinstance(item,dict) else {}
@@ -415,6 +440,11 @@ async def evaluate_genome(client: httpx.AsyncClient, item: dict[str, Any]) -> di
     rows = await asyncio.gather(*tasks)
     successful = sum(1 for x in rows if x.get("ok"))
     metrics = score_hits(genes, rows)
+    # Shadow only: what the private teacher thinks of the same hits.
+    # Never read by ranking_key, fitness, selection or promotion.
+    shadow = maestro_teacher.shadow_metrics(maestro_teacher.load(), rows)
+    if shadow is not None:
+        metrics["shadow_teacher"] = shadow
     metrics["successful_queries"] = successful
     metrics["failed_queries"] = len(rows) - successful
     return {**item, "genes": genes, "metrics": metrics}
@@ -912,6 +942,7 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
             for x in ranked
         ],
         "collaborators": collaborators,
+        "shadow_teacher_summary": shadow_teacher_summary(ranked),
         "control_metrics": control_metrics,
         "promotion_candidate": next_state["promotion_candidate"],
         "boundary": dict(BOUNDARY),

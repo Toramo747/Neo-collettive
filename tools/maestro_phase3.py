@@ -49,12 +49,7 @@ TEMPLATE_RE = re.compile(
     r"use cases?|proposal|summary|describe|the solution you'd like|shut up and|looking for|show hn|ask hn)\b", re.I)
 
 
-def mask(text: str) -> str:
-    text = PAY_RE.sub(" ", text)
-    text = SEEK_RE.sub(" ", text)
-    text = VALID_RE.sub(" ", text)
-    text = TEMPLATE_RE.sub(" ", text)
-    return re.sub(r"\s+", " ", text).strip()
+from maestro_teacher import mask  # noqa: E402  (single source of truth for masking)
 
 
 def epoch(created) -> float:
@@ -336,6 +331,19 @@ def main(argv):
                     "flagged_by_label": {lab: f"{sum(1 for (c, _), x in zip(cal, v) if c['final_label'] == lab and x >= 0.5)}/{sum(1 for c, _ in cal if c['final_label'] == lab)}"
                                          for lab in sorted({c['final_label'] for c, _ in cal})}}
                 for k, v in variants.items()}
+            # Final teacher v1: web (all years) + in-domain (x5). Calibration items stay out.
+            from sklearn.pipeline import make_pipeline
+            import joblib
+            final = make_pipeline(
+                TfidfVectorizer(ngram_range=(1, 2), min_df=3, max_features=60000, sublinear_tf=True),
+                LogisticRegression(max_iter=3000, C=2.0, class_weight="balanced"))
+            final.fit([d["masked"] for d in data] + dtexts, [d["y"] for d in data] + dy,
+                      logisticregression__sample_weight=[1.0] * len(data) + [5.0] * len(dtexts))
+            fs = final.predict_proba(texts)[:, 1]
+            metrics["teacher_v1"] = {"trained_on": len(data) + len(dtexts),
+                                     "calibration_auc": round(roc_auc_score(yb, fs), 3) if len(set(yb)) > 1 else None,
+                                     "calibration_prf_at_0.5": prf(yb, [x >= 0.5 for x in fs])}
+            joblib.dump(final, archive / "maestro" / "teacher-v1.joblib", compress=3)
         metrics["calibration_claude"] = {
             "n": len(cal), "buyer_tool_search": sum(yb),
             "teacher_auc": round(roc_auc_score(yb, cs), 3) if len(set(yb)) > 1 else None,
@@ -359,7 +367,7 @@ def main(argv):
           ("train", "test", "train_pos", "test_pos", "teacher_auc", "teacher_prf", "lexicon_prf")}))
     print("::notice title=maestro phase3 per source::" + json.dumps(metrics["per_source"]))
     print("::notice title=maestro phase3 calibration (claude labels)::" + json.dumps(metrics.get("calibration_claude")))
-    print("::notice title=maestro phase3 in-domain variants::" + json.dumps({"train": metrics.get("in_domain_train"), "cv": metrics.get("in_domain_cv"), "variants": metrics.get("calibration_variants")}))
+    print("::notice title=maestro phase3 in-domain variants::" + json.dumps({"train": metrics.get("in_domain_train"), "cv": metrics.get("in_domain_cv"), "teacher_v1": metrics.get("teacher_v1"), "variants": metrics.get("calibration_variants")}))
     print("::notice title=maestro phase3 neo observations::" + json.dumps(metrics.get("neo_observations")) + f" negatives_collected={len(neg)} vendor_negatives={len(vendors)} show_hn_negatives={HN_SHOW_NEGATIVES[0]} top_pos={top[:12]} stamp={stamp}")
     return 0
 

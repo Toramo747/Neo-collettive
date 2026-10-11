@@ -234,3 +234,36 @@ class ResearchAlgorithmArenaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShadowTeacherTests(unittest.TestCase):
+    def test_no_model_is_noop(self):
+        import maestro_teacher
+        self.assertIsNone(maestro_teacher.shadow_metrics(None, [{"hits": [{"comment_text": "x"}]}]))
+        self.assertIsNone(ara.shadow_teacher_summary([{"genome_id": "a", "metrics": {"fitness": 1}}]))
+
+    def test_shadow_never_changes_ranking(self):
+        a = {"genome_id": "a", "metrics": {"signal_hits": 3, "unique_signal_threads": 2, "fitness": 10,
+                                            "shadow_teacher": {"teacher_hits": 0}}}
+        b = {"genome_id": "b", "metrics": {"signal_hits": 1, "unique_signal_threads": 1, "fitness": 5,
+                                            "shadow_teacher": {"teacher_hits": 9}}}
+        self.assertGreater(ara.ranking_key(a), ara.ranking_key(b))
+        s = ara.shadow_teacher_summary([a, b])
+        self.assertEqual((s["arena_champion"], s["teacher_champion"], s["agree_on_champion"]), ("a", "b", False))
+        self.assertFalse(s["affects_selection"])
+
+    def test_shadow_metrics_with_tiny_model(self):
+        import maestro_teacher
+        try:
+            import sklearn  # noqa: F401  (optional: only installed when the teacher is used)
+        except ImportError:
+            self.skipTest("scikit-learn not installed")
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import make_pipeline
+        m = make_pipeline(TfidfVectorizer(), LogisticRegression()).fit(
+            ["i need a tool for invoices", "need software for this", "nice weather today", "great game last night"], [1, 1, 0, 0])
+        out = maestro_teacher.shadow_metrics(m, [{"hits": [{"comment_text": "need a tool for invoices", "story_id": 1},
+                                                           {"comment_text": "weather game", "story_id": 2}]}])
+        self.assertEqual(out["scored_hits"], 2)
+        self.assertFalse(out["affects_fitness"])
