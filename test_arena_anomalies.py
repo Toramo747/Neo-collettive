@@ -47,6 +47,23 @@ class AnomalyTests(unittest.TestCase):
         self.assertIsNone(r["controls_ok"])
         self.assertTrue(all(x["low_sample"] for x in r["anomalies"].values()))
 
+    def test_topic_name_is_not_a_tension_cue(self):
+        q = 'abs:"proton radius" OR abs:"proton charge radius" "proton radius puzzle"'
+        self.assertNotIn("puzzle", a.strip_query_echo("New data on the proton radius puzzle.", q))
+
+    def test_changed_query_breaks_the_trend(self):
+        feed = atom([(f"2610.{i}", "2026-10-02T00:00:00Z", "X", "A 4 sigma discrepancy remains.") for i in range(12)])
+        with tempfile.TemporaryDirectory() as d:
+            st = {"scoring_v": a.SCORING_V, "last": {
+                "proton_radius_control": {"papers": 3, "persistence": 0.1, "sigma_median": None},
+                "hubble_tension": {"papers": 12, "persistence": 0.1, "sigma_median": None}}}
+            (Path(d) / "state.json").write_text(json.dumps(st))
+            r = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0)
+            st2 = json.loads((Path(d) / "state.json").read_text())
+        self.assertEqual(r["anomalies"]["proton_radius_control"]["trend"]["status"], "FIRST_OBSERVATION")
+        self.assertNotEqual(r["anomalies"]["hubble_tension"]["trend"]["status"], "FIRST_OBSERVATION")
+        self.assertIn("query", st2["last"]["hubble_tension"])
+
     def test_control_outranking_real_anomalies_is_flagged(self):
         rows = {"real": {"control": False, "low_sample": False, "persistence": 0.1, "trend": {"status": "STABLE"}},
                 "ctl": {"control": True, "low_sample": False, "persistence": 0.6, "trend": {"status": "FIRST_OBSERVATION"}}}
