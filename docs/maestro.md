@@ -113,3 +113,23 @@ Limits to carry into phase 3:
 - Only positives so far: training needs matched negatives from the same sources (ordinary comments, bug reports, questions without tool seeking).
 
 Proposal (pending Andrea): phase 3 — dataset with matched negatives, a light classifier trained on years 1–2 and tested on year 3, then calibration against the 768 private labels before any arena use.
+
+### Phase 3 — first teacher (2026-10-11)
+Dataset: positives from the 3-year pools, negatives from the same sources and period (random HN comments, GitHub bug/question issues with >= 5 reactions, superuser how-to questions), balanced per source. Selection phrases and issue-template words masked in both classes; HN story titles excluded. TF-IDF + logistic regression, trained on items older than 12 months (8,850), tested on the last 12 months (4,150). Baseline on the same test: production lexicon primitives.
+
+| Test (last 12 months) | Teacher AUC | Teacher P / R / F1 | Lexicon P / R / F1 |
+|---|---|---|---|
+| Hacker News (most comparable: same source, random negatives) | 0.787 | 0.71 / 0.73 / 0.72 | 0.72 / 0.17 / 0.27 |
+| GitHub | 0.972 | 0.95 / 0.88 / 0.91 | 0.72 / 0.52 / 0.60 |
+| Stack Exchange | 0.973 | 0.93 / 0.92 / 0.92 | 0.68 / 0.58 / 0.63 |
+| All | 0.942 | 0.89 / 0.85 / 0.87 | 0.71 / 0.44 / 0.55 |
+
+First run (before stronger masking) had HN AUC 0.841 with "show hn", "shut up", "looking for" among the top terms: leakage, fixed; the table above is the cleaned run.
+
+Reading:
+- HN is the honest number: at the same precision as the lexicon, the teacher finds 4x more real demand (recall 0.73 vs 0.17).
+- GitHub and Stack Exchange scores are inflated by style differences between the classes (feature request vs bug report, softwarerecs vs superuser): partly a real distinction, partly source style. Not to be taken at face value.
+- No Show HN negatives were collected (0): product-validation positives are compared only with random comments; a confound to remove.
+- On the 768 NEO observations the teacher flags 57% as demand, against a few percent for the lexicon judge: likely domain shift (74% of them are GitHub issues). Cannot be judged without human labels.
+
+Correction: the 768 records in `train.jsonl` are unlabelled observations (final_label empty; 5 auto-labels). There is no human-labelled calibration set outside `hidden.jsonl`, which is reserved and never opened. Calibration therefore needs a small set labelled by Andrea.
