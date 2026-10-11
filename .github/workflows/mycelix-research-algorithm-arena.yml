@@ -40,6 +40,24 @@ jobs:
       - name: Install locked dependencies
         run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
 
+      # Shadow teacher (optional): private model, read-only. Never affects
+      # fitness, ranking or selection; only adds counts to the report.
+      - name: Fetch private teacher (shadow only)
+        id: teacher
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+          sparse-checkout: maestro/teacher-v1.joblib
+          sparse-checkout-cone-mode: false
+
+      - name: Install teacher runtime (shadow only)
+        if: steps.teacher.outcome == 'success'
+        continue-on-error: true
+        run: python -m pip install --disable-pip-version-check scikit-learn==1.5.2
+
       - name: Validate isolated evolutionary arena
         run: |
           set -euo pipefail
@@ -49,6 +67,7 @@ jobs:
       - name: Run one bounded generation
         env:
           CANDIDATE_AGENT_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.candidate_agent_id || '' }}
+          MAESTRO_MODEL: private-labels/maestro/teacher-v1.joblib
         run: |
           set -euo pipefail
           python arena_research_algorithm.py             --data-dir data/arena             --candidate-agent-id "$CANDIDATE_AGENT_ID"             | tee /tmp/research-arena-result.json
