@@ -3124,7 +3124,9 @@ async def api_admin_evidence_reintegration(request: Request):
         if not batch:
             return JSONResponse({"ok":False,"reason":"batch_required"},status_code=400)
         kept,entry=reintegration_revert(current,batch)
-        AUTOPILOT_STATE["commercial_evidence_memory"]=kept
+        removed=[x for x in current if x.get("restore_batch")==batch]
+        # Removal is explained (logged as archived) so the memory guard accepts it.
+        kept=replace_evidence_memory(current,kept,"evidence_reintegration_revert",archived_rows=removed)
         AUTOPILOT_STATE["evidence_reintegration_ledger"]=(ledger+[entry])[-20:]
         return JSONResponse({"ok":True,"mode":mode,**entry,"active_count":len(kept)})
     fetched=await asyncio.to_thread(fetch_saved_env,RENDER_API_BASE,RENDER_SERVICE_ID or "",RENDER_API_KEY or "")
