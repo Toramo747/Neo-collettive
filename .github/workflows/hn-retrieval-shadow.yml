@@ -1,0 +1,38 @@
+name: HN Retrieval Shadow (read-only)
+on:
+  push:
+    branches:
+      - experiment/hn-retrieval-shadow
+    paths:
+      - tools/hn_retrieval_shadow.py
+      - .github/workflows/hn-retrieval-shadow.yml
+      - .github/hn-retrieval-shadow-trigger.txt
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hn-retrieval-shadow
+  cancel-in-progress: false
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - run: python -m pip install --disable-pip-version-check scikit-learn==1.5.2
+      # Private teacher, read-only, never committed. Logs show counts only.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+          sparse-checkout: maestro/teacher-v1.joblib
+          sparse-checkout-cone-mode: false
+      - name: Compare HN retrieval arms
+        env:
+          MAESTRO_MODEL: private-labels/maestro/teacher-v1.joblib
+        run: python tools/hn_retrieval_shadow.py | grep '^::'
