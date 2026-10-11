@@ -1,5 +1,10 @@
 name: Evidence Reintegration (admin)
 on:
+  push:
+    branches:
+      - ops/evidence-reintegration-runner
+    paths:
+      - ops/evidence-reintegration.txt
   workflow_dispatch:
     inputs:
       mode:
@@ -25,4 +30,13 @@ jobs:
           NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
           MODE: ${{ inputs.mode }}
           ARG: ${{ inputs.arg }}
-        run: python tools/evidence_reintegration_call.py "$MODE" $ARG
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # One command per line: status | plan | apply <plan_id> | revert <batch>
+            while read -r line; do
+              [ -z "$line" ] && continue
+              python tools/evidence_reintegration_call.py $line
+            done < ops/evidence-reintegration.txt
+          else
+            python tools/evidence_reintegration_call.py "$MODE" $ARG
+          fi
