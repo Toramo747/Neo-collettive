@@ -26,3 +26,13 @@ Counts per family and source over 182 days. Counts are search totals: upper boun
 5. Weekly refresh with new outcomes.
 
 ## Results
+### Phase 1 run 2026-10-11 (Actions run 38118770209)
+By source (182 days): softwarerecs 16, GitHub bounty 732, GitHub reactions>=10 1118, Ask HN 4659, "would pay" comments 416, RemoteOK (snapshot of 99 jobs) 128. **Total 7069; 17/25 families >= 30 → viable by the preregistered rule.**
+
+Honest reading:
+- Ask HN is the weakest label (an explicit question, not a proof) and is 66% of the total. Without it: 2410 labels, **14/25** families >= 30, just below the threshold. Money-only labels (bounty, "would pay", jobs): 1276, 10/25 families.
+- Coverage is uneven: integration/API, AI tools, CRM, developer tools, spreadsheets, support, data cleanup are rich; finance ops, local business, education, micro-SaaS, creator and content tools have almost nothing.
+- Some counts look inflated by loose matching (CRM: 2875 Ask HN, 275 "would pay"): counts are search totals and upper bounds; label precision must be measured on a sample before training.
+- Stack Exchange softwarerecs is almost empty for these terms (16): low value, candidate for replacement.
+
+Decision: proceed to phase 2 on the label-rich families only, starting with a precision check on a sample of each label type.
