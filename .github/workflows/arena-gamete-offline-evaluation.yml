@@ -1,0 +1,48 @@
+name: Arena Gamete Offline Evaluation
+
+on:
+  pull_request:
+    paths:
+      - "data/arena/gametes/**"
+      - "scripts/evaluate_arena_gametes.py"
+      - "test_arena_gamete_pack.py"
+      - "test_arena_gamete_evaluation.py"
+      - ".github/workflows/arena-gamete-offline-evaluation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked local dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Validate candidate contract and offline comparison
+        run: |
+          set -euo pipefail
+          python -m unittest -v test_arena_gamete_pack test_arena_gamete_evaluation
+          python scripts/evaluate_arena_gametes.py --output /tmp/arena-gamete-evaluation.json > /dev/null
+          python - <<'PY'
+          import json
+          p = json.load(open('/tmp/arena-gamete-evaluation.json'))
+          assert p['gametes_total'] == 10
+          assert p['measured_live_provider_rounds'] == 0
+          assert p['production_promoted'] is False
+          assert p['commercial_gate_influence'] == 'NONE'
+          assert p['automatic_winners'] == []
+          print('Offline gamete assessment completed: 10 shadow candidates; zero promotions')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arena-gamete-shadow-report
+          path: /tmp/arena-gamete-evaluation.json
+          if-no-files-found: warn
+          retention-days: 14
