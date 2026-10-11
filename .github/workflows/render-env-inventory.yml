@@ -1,0 +1,31 @@
+name: Render Env Inventory (read-only)
+on:
+  push:
+    branches:
+      - fix/evidence-restart-continuity
+    paths:
+      - tools/render_env_inventory.py
+      - .github/workflows/render-env-inventory.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: render-env-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # GET-only: lists counts, bytes, generation hashes and integrity. Never
+      # writes, deletes or prints a value.
+      - name: Inventory saved Render env (counts only)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+        run: python tools/render_env_inventory.py | grep "^::"

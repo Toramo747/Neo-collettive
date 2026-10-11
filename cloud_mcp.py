@@ -26,6 +26,8 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint, encode_checkpoint_async
+from render_saved_env import generation_inventory, load_boot_env
+from state_generation_guard import WRITER_FIELD as STATE_WRITER_FIELD, GUARD_FIELD as STATE_GENERATION_FIELD, check_write_allowed, next_generation, state_generation_of
 from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, generation_id, is_external_reference, recover_external_store_generation, split_active_archive
 import ipaddress
 from datetime import datetime, timezone, timedelta
@@ -200,6 +202,25 @@ TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID")
+BOOT_SAVED_ENV_ENABLED = os.getenv("NEO_BOOT_SAVED_ENV", "1").strip().lower() not in {"0","false","no","off"}
+BOOT_SAVED_ENV_TIMEOUT = float(os.getenv("NEO_BOOT_SAVED_ENV_TIMEOUT", "8"))
+_BOOT_ENV = None
+STATE_WRITER_ID = secrets.token_hex(8)
+
+
+def _boot_env():
+    """Saved Render env (authoritative after restarts) with os.environ fallback."""
+    global _BOOT_ENV
+    if _BOOT_ENV is None:
+        _BOOT_ENV=load_boot_env(
+            RENDER_API_BASE,RENDER_SERVICE_ID,RENDER_API_KEY,
+            enabled=BOOT_SAVED_ENV_ENABLED,timeout=BOOT_SAVED_ENV_TIMEOUT,
+        )
+    return _BOOT_ENV
+
+
+def _persisted_env(key: str) -> str | None:
+    return _boot_env().get(key)
 JARVIS_RENDER_SERVICE_ID = (os.getenv("JARVIS_RENDER_SERVICE_ID") or "").strip()
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
@@ -865,7 +886,7 @@ def _encode_small_private_env(payload: dict) -> tuple[str,int,int]:
 
 
 def _restore_seti_private_state() -> str:
-    raw=(os.getenv(SETI_PRIVATE_ENV_KEY) or "").strip()
+    raw=(_persisted_env(SETI_PRIVATE_ENV_KEY) or "").strip()
     if not raw:
         return "fresh"
     payload=_decode_state_env(raw)
@@ -1039,7 +1060,7 @@ def _commercial_evidence_env_key(
 def _evidence_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
     ref=reference if isinstance(reference,dict) else {}
     count=max(0,int(ref.get("chunk_count") or 0))
-    return [(os.getenv(_commercial_evidence_env_key(i,ref)) or "") for i in range(count)]
+    return [(_persisted_env(_commercial_evidence_env_key(i,ref)) or "") for i in range(count)]
 
 
 def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -1197,7 +1218,7 @@ def _challenge_track_env_key(index: int, reference: dict[str, Any] | None = None
 def _challenge_track_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
     ref=reference if isinstance(reference,dict) else {}
     count=max(0,int(ref.get("chunk_count") or 0))
-    return [(os.getenv(_challenge_track_env_key(i,ref)) or "") for i in range(count)]
+    return [(_persisted_env(_challenge_track_env_key(i,ref)) or "") for i in range(count)]
 
 
 def _decode_challenge_track_generation(reference: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1534,7 +1555,7 @@ async def _delete_challenge_track_generation(reference: dict[str, Any] | None) -
 def _restore_state() -> str:
     candidates=[]
 
-    raw=(os.getenv(STATE_ENV_KEY) or "").strip()
+    raw=(_persisted_env(STATE_ENV_KEY) or "").strip()
     if raw:
         payload=_decode_state_env(raw)
         if isinstance(payload,dict):
@@ -1647,7 +1668,10 @@ def _restore_state() -> str:
     meta["cycle_floor"]=cycle_floor_meta
     if boundary_event:
         meta["commercial_boundary_event"]=boundary_event
+    meta["boot_env"]=_boot_env().status()
     AUTOPILOT_STATE["restore_candidates"]=meta
+    AUTOPILOT_STATE["boot_env"]=_boot_env().status()
+    AUTOPILOT_STATE["state_generation"]=state_generation_of(payload)
     if isinstance(payload,dict):
         try:
             if _merge_state_payload(payload):
@@ -1668,12 +1692,53 @@ def _save_local_state() -> None:
         pass
 
 
+async def _checkpoint_generation_guard() -> dict:
+    """Refuse to overwrite a saved checkpoint newer than the one we restored."""
+    loaded=int(AUTOPILOT_STATE.get("state_generation") or 0)
+    headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
+    saved_value=None
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            response=await client.get(f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{STATE_ENV_KEY}",headers=headers)
+        if response.status_code==404:
+            saved_value=""
+        elif response.is_success:
+            saved_value=_response_env_value(response)
+    except Exception:
+        saved_value=None
+    return await asyncio.to_thread(check_write_allowed,loaded,saved_value,_decode_state_env,STATE_WRITER_ID)
+
+
 @OBSERVATION.timed("checkpoint")
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return {"ok":False,"reason":"render_api_not_configured"}
 
+    guard=await _checkpoint_generation_guard()
+    AUTOPILOT_STATE["state_generation_guard"]=guard
+    if not guard.get("allowed"):
+        AUTOPILOT_STATE["evidence_store_degraded"]=True
+        AUTOPILOT_STATE["evidence_store_status"]={
+            **dict(AUTOPILOT_STATE.get("evidence_store_status") or {}),
+            "status":"continuity_blocked",
+            "reason":"stale_generation_write_blocked",
+        }
+        result={
+            "ok":False,
+            "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
+            "reason":"stale_generation_write_blocked",
+            "loaded_generation":guard.get("loaded_generation"),
+            "saved_generation":guard.get("saved_generation"),
+        }
+        AUTOPILOT_STATE["last_checkpoint"]=result
+        return result
+    if guard.get("status")=="own_write_adopted":
+        AUTOPILOT_STATE["state_generation"]=int(guard.get("loaded_generation") or 0)
+    new_state_generation=next_generation(int(AUTOPILOT_STATE.get("state_generation") or 0))
+
     payload=_state_payload()
+    payload[STATE_GENERATION_FIELD]=new_state_generation
+    payload[STATE_WRITER_FIELD]=STATE_WRITER_ID
     degraded=bool(AUTOPILOT_STATE.get("evidence_store_degraded"))
     original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
     previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
@@ -1854,6 +1919,14 @@ async def _checkpoint_state_to_render() -> dict:
             "compaction":compaction_meta,
         }
         if r.is_success:
+            echoed=_response_env_value(r)
+            if echoed is not None and echoed!=value:
+                result["ok"]=False
+                result["reason"]="render_state_verify_mismatch"
+                AUTOPILOT_STATE["last_checkpoint"]=result
+                return result
+            result["state_generation"]=new_state_generation
+            AUTOPILOT_STATE["state_generation"]=new_state_generation
             if new_challenge_ref:
                 AUTOPILOT_STATE["challenge_track_store_reference"]=new_challenge_ref
             if new_active_ref:
@@ -13334,6 +13407,9 @@ async def api_memory_status(request: Request):
         "ok":True,
         "neo_version":VERSION,
         "restore_source":AUTOPILOT_STATE.get("restore_source"),
+        "boot_env":dict(AUTOPILOT_STATE.get("boot_env") or {}),
+        "state_generation":AUTOPILOT_STATE.get("state_generation"),
+        "state_generation_guard":{k:(AUTOPILOT_STATE.get("state_generation_guard") or {}).get(k) for k in ("allowed","status","loaded_generation","saved_generation")},
         "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
         "agent_trust_top":top,
         "build_history":list(AUTOPILOT_STATE.get("build_history") or [])[-10:],
