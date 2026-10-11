@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ARENA = "anomaly-signals"
+SCORING_V = 2  # bump whenever cue scoring changes: older baselines are not comparable
 API = "https://export.arxiv.org/api/query"
 WINDOW_DAYS = 180
 MAX_RESULTS = 200
@@ -144,7 +145,7 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
     now = now or datetime.now(timezone.utc)
     state_path, report_path = data_dir / "state.json", data_dir / "latest.json"
     state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.is_file() else {}
-    previous = state.get("last") or {}
+    previous = (state.get("last") or {}) if state.get("scoring_v") == SCORING_V else {}
     rows, errors = {}, {}
     for i, (aid, query, why, control) in enumerate(ANOMALIES):
         if i:
@@ -160,7 +161,7 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
     ranked = sorted((a for a in rows if not rows[a]["control"]),
                     key=lambda a: (rows[a]["persistence"] or -1, rows[a]["sigma_median"] or 0), reverse=True)
     report = {
-        "schema_v": 1, "arena": ARENA, "generated_at_utc": now.isoformat(),
+        "schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "generated_at_utc": now.isoformat(),
         "window_days": WINDOW_DAYS, "anomalies": rows, "errors": errors,
         "ranking_by_persistence": ranked,
         "controls_ok": controls_ok,
@@ -170,7 +171,7 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
     history = list(state.get("history") or [])[-180:]
     history.append({"at": now.isoformat(), **{a: {"persistence": r["persistence"], "sigma_median": r["sigma_median"],
                                                   "papers": r["papers"]} for a, r in rows.items()}})
-    new_state = {"schema_v": 1, "arena": ARENA, "last": {a: {k: r[k] for k in ("papers", "persistence", "sigma_median")}
+    new_state = {"schema_v": 1, "scoring_v": SCORING_V, "arena": ARENA, "last": {a: {k: r[k] for k in ("papers", "persistence", "sigma_median")}
                                                          for a, r in rows.items()} or previous,
                  "history": history}
     data_dir.mkdir(parents=True, exist_ok=True)

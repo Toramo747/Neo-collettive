@@ -49,4 +49,9 @@ class AnomalyTests(unittest.TestCase):
             dumped = json.dumps(r)
             self.assertNotIn("A 4 sigma discrepancy remains", dumped)  # abstracts are not persisted
             r2 = a.run(Path(d), fetch=lambda q: atom([]), now=NOW, pause=0)
+            st = json.loads((Path(d) / "state.json").read_text())
+            st["scoring_v"] = -1
+            (Path(d) / "state.json").write_text(json.dumps(st))
+            r3 = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0)
+            self.assertEqual(r3["anomalies"]["hubble_tension"]["trend"]["status"], "FIRST_OBSERVATION")
             self.assertEqual(r2["anomalies"]["hubble_tension"]["papers"], 0)
