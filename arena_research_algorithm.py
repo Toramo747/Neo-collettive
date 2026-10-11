@@ -420,6 +420,20 @@ def shadow_teacher_summary(ranked: list[dict[str, Any]]) -> dict[str, Any] | Non
     }
 
 
+def teacher_ranking_key(item: dict[str, Any]) -> tuple[int, int, int, float]:
+    """Teacher-fitness arena: rank by hits the maestro calls real demand.
+    Arena signals and fitness only break ties."""
+    metrics=item.get("metrics") if isinstance(item,dict) else {}
+    metrics=metrics if isinstance(metrics,dict) else {}
+    shadow=metrics.get("shadow_teacher") if isinstance(metrics.get("shadow_teacher"),dict) else {}
+    return (
+        int(shadow.get("teacher_hits") or 0),
+        int(shadow.get("teacher_unique_threads") or 0),
+        int(metrics.get("signal_hits") or 0),
+        float(metrics.get("fitness") or 0.0),
+    )
+
+
 def ranking_key(item: dict[str, Any]) -> tuple[int, int, float]:
     """Never rank fewer absolute demand signals above more evidence."""
     metrics=item.get("metrics") if isinstance(item,dict) else {}
@@ -805,10 +819,23 @@ def inject_collaborator_children(
     return out[:POPULATION_SIZE]
 
 
-async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]:
-    state_path = data_dir / "research-algorithm" / "state.json"
-    report_path = data_dir / "research-algorithm" / "latest.json"
+async def run(data_dir: Path, explicit_candidate_id: str = "", fitness_mode: str = "lexicon") -> dict[str, Any]:
+    teacher_mode = fitness_mode == "teacher"
+    arena_dir = "research-algorithm-teacher" if teacher_mode else "research-algorithm"
+    state_path = data_dir / arena_dir / "state.json"
+    report_path = data_dir / arena_dir / "latest.json"
     state = load_json(state_path, {})
+    if teacher_mode:
+        if maestro_teacher.load() is None:
+            # Never evolve blind: without the teacher this arena does not run.
+            return {"status": "TEACHER_UNAVAILABLE", "evaluated_generation": int(state.get("generation") or 0),
+                    "next_generation": int(state.get("generation") or 0), "promotion_candidate": None}
+        if not state:
+            # Fork from the lexicon arena's current population so both lineages start equal.
+            base = load_json(data_dir / "research-algorithm" / "state.json", {})
+            state = {"generation": int(base.get("generation") or 0),
+                     "population": base.get("population") or initial_population(),
+                     "forked_from": {"arena": ARENA_ID, "generation": int(base.get("generation") or 0)}}
     control_data=load_json(data_dir / "research-algorithm" / "control_cases.json", {})
     control_metrics=evaluate_control_cases(control_data.get("cases") or [])
     generation = int(state.get("generation") or 0)
@@ -825,7 +852,7 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
         evaluated = await asyncio.gather(*(evaluate_genome(client, x) for x in population))
         successful_queries = sum(int((x.get("metrics") or {}).get("successful_queries") or 0) for x in evaluated)
         measured = successful_queries >= MIN_SUCCESSFUL_QUERIES
-        ranked = sorted(evaluated, key=ranking_key, reverse=True)
+        ranked = sorted(evaluated, key=teacher_ranking_key if teacher_mode else ranking_key, reverse=True)
         champion = ranked[0] if ranked else population[0]
         collaborators = (
             await collaborator_mutations(client, champion, generation + 1, explicit_candidate_id)
@@ -901,7 +928,8 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
     next_state = {
         "schema_v": 1,
         "namespace": NAMESPACE,
-        "arena_id": ARENA_ID,
+        "arena_id": ARENA_ID + ("-teacher" if teacher_mode else ""),
+        "fitness_mode": fitness_mode,
         "generation": next_generation,
         "population": next_population,
         "history": history,
@@ -914,10 +942,14 @@ async def run(data_dir: Path, explicit_candidate_id: str = "") -> dict[str, Any]
             "production_promoted": False,
         },
     }
+    if teacher_mode and state.get("forked_from"):
+        next_state["forked_from"] = state["forked_from"]
     report = {
         "schema_v": 1,
         "namespace": NAMESPACE,
-        "arena_id": ARENA_ID,
+        "arena_id": ARENA_ID + ("-teacher" if teacher_mode else ""),
+        "fitness_mode": fitness_mode,
+        "forked_from": state.get("forked_from"),
         "captured_at_utc": now_utc(),
         "status": evolution_status,
         "evaluated_generation": generation,
@@ -956,8 +988,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", default="data/arena")
     parser.add_argument("--candidate-agent-id", default="")
+    parser.add_argument("--fitness-mode", choices=("lexicon", "teacher"), default="lexicon")
     args = parser.parse_args()
-    report = asyncio.run(run(Path(args.data_dir), args.candidate_agent_id))
+    report = asyncio.run(run(Path(args.data_dir), args.candidate_agent_id, args.fitness_mode))
     print(json.dumps({
         "ok": True,
         "status": report["status"],

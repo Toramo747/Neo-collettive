@@ -176,3 +176,11 @@ First shadow generation (77, 10:04 UTC):
 - Teacher and arena agree on the champion (g77-elite-1); rank correlation 0.929.
 - Champion: 13 arena signals; the teacher calls 24 of its 74 retrieved hits real demand.
 - Mutation g77-8: arena fitness 42 (6 signals), teacher 22 hits — the same as the second elite (fitness 65). The first case where the two views diverge; worth following over more generations.
+
+### Teacher as real fitness: parallel lineage (2026-10-11, authorized by Andrea)
+Instead of replacing the arena's selection rule, a second lineage was forked: `research-algorithm-teacher` starts from the lexicon arena's current population (generation 77) and selects by the teacher (`teacher_hits`, then teacher threads, then lexicon signals and fitness as tie-breakers). The original arena keeps the lexicon rule as control. Same topics, budget and schedule (teacher arena at :31 every 6 hours). Without the teacher model the teacher arena refuses to run.
+
+Comparison, fixed before the first teacher generation:
+- After 2 weeks, run the preregistered shadow review (`tools/research_champion_shadow.py` method) on both champions, on training and holdout topics.
+- The teacher lineage is preferred only if its champion finds more real demand on **holdout** topics in 3 runs on different days (same thresholds as the champion review: >= 1.5x signals and >= 5 holdout signals, precision not lower by more than 0.05).
+- Any change to production remains a separate decision.
