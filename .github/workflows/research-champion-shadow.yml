@@ -1,0 +1,28 @@
+name: Research Champion Shadow (read-only)
+on:
+  push:
+    branches:
+      - experiment/research-champion-shadow
+    paths:
+      - tools/research_champion_shadow.py
+      - .github/workflows/research-champion-shadow.yml
+      - .github/research-champion-shadow-trigger.txt
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: research-champion-shadow
+  cancel-in-progress: false
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet httpx
+      # Public HN Algolia only; prints aggregate counts as notices, no text/ids.
+      - name: Shadow comparison
+        run: python tools/research_champion_shadow.py | grep '^::'
