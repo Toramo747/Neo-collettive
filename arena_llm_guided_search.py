@@ -18,16 +18,21 @@ MAX_QUERIES_PER_TOPIC=4
 PLATEAU_PATIENCE=3
 MAX_GENERATIONS=8
 
+# Substitution genomes (2026-10-11): HN Algolia requires every query word to
+# match, so appending phrases shrinks recall. Mutations may only swap or drop
+# words; the guard in mutate_query rejects any query longer than its parent.
 MUTATION_GENOMES={
-    "first_person_pain":"Add one concise first-person operational pain phrase; preserve the original workflow terms.",
-    "buyer_intent":"Add one explicit buyer-intent phrase such as looking for help, need someone, need a tool, contractor, or recommendation.",
-    "paid_demand":"Add one willingness-to-pay phrase such as budget, hiring, contractor, quote, fixed price, or paid help.",
-    "operational_burden":"Add one recurring-burden phrase such as every week, takes hours, repetitive, backlog, rework, or error-prone.",
-    "pain_plus_buyer":"Add one first-person pain phrase and one explicit buyer-intent phrase, while preserving the workflow terms.",
-    "pain_plus_burden":"Add one first-person pain phrase and one recurring burden phrase, while preserving the workflow terms.",
-    "buyer_plus_paid":"Add one buyer-intent phrase and one willingness-to-pay phrase, while preserving the workflow terms.",
-    "precision_pain":"Add only the strongest first-person pain phrase; avoid generic automation/software terms and keep the query short.",
+    "pain_swap":"Replace the signal word (such as problem, pay for, workaround, manual) with one pain word real users write, such as hate, tedious, nightmare, painful.",
+    "buyer_swap":"Replace the signal word with one buyer-intent word real users write, such as hire, recommend, budget, alternative.",
+    "burden_swap":"Replace the signal word with one recurring-burden word, such as hours, repetitive, backlog, every week.",
+    "signal_synonym":"Replace the signal word with a close synonym that people use in forum comments.",
+    "topic_colloquial":"Replace one topic word with the everyday word people type for it (for example reconcile -> match, data entry -> typing).",
+    "drop_word":"Remove the least informative word. Keep at least two words.",
+    "colloquial_rewrite":"Rewrite every word in the plain form people type in comments, keeping the same number of words or fewer.",
+    "precision_pain":"Replace the signal word with the single strongest first-person pain word; keep the query short.",
 }
+MUTATION_MAX_EXTRA_WORDS=0
+MUTATION_STATS={"attempted":0,"used":0,"rejected_invalid":0,"rejected_too_long":0,"rejected_topic_drift":0}
 
 PROMPT_GENOMES={
     "first_person_pain":{
@@ -106,26 +111,40 @@ def make_mutation_prompt(topic,base_query,genome_name):
         "Return JSON only: {\"query\":\"...\"}. "
         "You are mutating an existing search query, not replacing its topic. "
         + instruction + " "
+        "Do not add words: the result must have the same number of words as the original or fewer. "
         "Keep the query concise. Do not add URLs. Do not add vendor/SEO language. "
         "Original query: "+json.dumps(base_query)+" Topic: "+json.dumps(topic)
     )
 
 def mutate_query(model,topic,base_query,genome_name):
+    MUTATION_STATS["attempted"]+=1
     response=post_json("http://127.0.0.1:11434/api/generate",{
         "model":model,"prompt":make_mutation_prompt(topic,base_query,genome_name),
         "stream":False,"format":"json",
         "options":{"temperature":0.2,"num_predict":120,"num_ctx":2048},"keep_alive":"10m",
     })
     parsed=extract_json(response.get("response") or "")
-    if not isinstance(parsed,dict):
-        return ""
-    q=valid_query(parsed.get("query"))
+    q=valid_query(parsed.get("query")) if isinstance(parsed,dict) else ""
+    return accept_mutation(base_query,q)
+
+
+def accept_mutation(base_query,q):
+    """Substitution-only guard; updates MUTATION_STATS."""
     if not q:
+        MUTATION_STATS["rejected_invalid"]+=1
+        return ""
+    if len(q.split()) > len(base_query.split())+MUTATION_MAX_EXTRA_WORDS:
+        MUTATION_STATS["rejected_too_long"]+=1
         return ""
     base_tokens={x for x in re.findall(r"[a-z0-9]+",base_query.lower()) if len(x)>=3}
     new_tokens={x for x in re.findall(r"[a-z0-9]+",q.lower()) if len(x)>=3}
     if base_tokens and len(base_tokens & new_tokens) < max(1,min(2,len(base_tokens))):
+        MUTATION_STATS["rejected_topic_drift"]+=1
         return ""
+    if q.lower()==base_query.lower():
+        MUTATION_STATS["rejected_invalid"]+=1
+        return ""
+    MUTATION_STATS["used"]+=1
     return q
 
 def load_champion(data_dir):
@@ -224,6 +243,8 @@ async def run(model,data_dir,out_path):
         "schema_v":4,"namespace":NAMESPACE,"arena_id":ARENA_ID,
         "status":"PLATEAU" if plateau else "MAX_GENERATIONS_REACHED",
         "mode":"iterative_baseline_plus_single_llm_mutation",
+        "mutation_mode":"substitution_only",
+        "mutation_stats":dict(MUTATION_STATS),
         "captured_at_utc":now_utc(),"model":model,"provider":"local_ollama",
         "search_provider":"hn_algolia_public_read_only","baseline_champion":champion_id,
         "baseline_metrics":baseline,

@@ -22,7 +22,7 @@ class LLMGuidedSearchTests(unittest.TestCase):
 
     def test_mutation_population_is_bounded(self):
         self.assertGreaterEqual(len(m.MUTATION_GENOMES),4)
-        p=m.make_mutation_prompt("invoice reconciliation","invoice reconcile pay for","first_person_pain").lower()
+        p=m.make_mutation_prompt("invoice reconciliation","invoice reconcile pay for","pain_swap").lower()
         self.assertIn("mutating an existing search query",p)
         self.assertIn("do not add urls",p)
 
@@ -32,6 +32,23 @@ class LLMGuidedSearchTests(unittest.TestCase):
         self.assertIn('metrics["signal_hits"]>current_metrics["signal_hits"]',src)
         self.assertIn('metrics["unique_signal_threads"]>current_metrics["unique_signal_threads"]',src)
         self.assertIn("and absolute_evidence_gain",src)
+
+    def test_substitution_guard_rejects_longer_queries(self):
+        before=dict(m.MUTATION_STATS)
+        self.assertEqual(m.accept_mutation("problem invoice reconcile","problem invoice reconcile every week takes hours"),"")
+        self.assertEqual(m.MUTATION_STATS["rejected_too_long"],before["rejected_too_long"]+1)
+
+    def test_substitution_guard_accepts_swaps_and_drops(self):
+        self.assertEqual(m.accept_mutation("problem invoice reconcile","hate invoice reconcile"),"hate invoice reconcile")
+        self.assertEqual(m.accept_mutation("pay for invoice reconcile","pay invoice reconcile"),"pay invoice reconcile")
+
+    def test_substitution_guard_rejects_drift_and_noop(self):
+        self.assertEqual(m.accept_mutation("problem invoice reconcile","crm software"),"")
+        self.assertEqual(m.accept_mutation("problem invoice reconcile","problem invoice reconcile"),"")
+
+    def test_prompt_forbids_adding_words(self):
+        p=m.make_mutation_prompt("invoice reconciliation","problem invoice reconcile","pain_swap").lower()
+        self.assertIn("do not add words",p)
 
 if __name__=="__main__":
     unittest.main()
