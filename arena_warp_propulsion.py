@@ -17,6 +17,7 @@ from pathlib import Path
 from warp_physics import evaluate_population
 from warp_reference_search import run_reference_search
 from warp_quantum import assess as quantum_assess, feasibility_map
+from warp_metrics import evaluate_families
 
 REFERENCE_SCALE_M = 100.0  # L0 for physical-unit reports: a 100 m bubble (crew-size reference)
 
@@ -201,6 +202,7 @@ def run_generation(state: dict, population_size: int, seed: int) -> tuple[dict,d
             "heuristic_fitness_label":"LEGACY_HEURISTIC_NO_PHYSICAL_MEANING",
         },
         "quantum_constraints":feasibility_map(),
+        "other_families":evaluate_families(),
         "best_quantum_verdict":((champions[0].get("quantum") or {}).get("verdict") if champions else None),
         "fixed_target_research":reference_report,
         "boundary":{
