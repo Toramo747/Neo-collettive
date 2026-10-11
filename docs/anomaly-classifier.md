@@ -31,3 +31,19 @@ Counting "tension" and "resolution" words in abstracts made the proton-radius co
 - Also reported, but not deciding: the Spearman correlation across the 16 topics between predicted and labelled persistence, and stratified 5-fold macro-F1.
 
 Labels by a single annotator (Claude) are a limitation. A 30-label review by Andrea would measure agreement.
+
+## Result of the first evaluation (2026-10-11, 565 labels)
+
+| | Cue words (baseline) | Classifier |
+|---|---|---|
+| Macro-F1, leave-topic-out | 0.432 | 0.456 |
+| Macro-F1, 5-fold (topics seen) | — | 0.578 |
+| Spearman, topic persistence vs labels | −0.32 | +0.22 |
+| Control check (proton below Hubble and evolving DE) | fails | passes (0.11 vs 0.36 and 0.58) |
+
+**Decision under the preregistered rule: not adopted.** The classifier passes the control check and ranks topics better than cue words, but its macro-F1 on unseen topics is only 0.024 above the baseline, while the rule requires 0.10. The arena keeps cue-word scoring and stays flagged as uncalibrated.
+
+Weak point: the `resolves` class has only 76 examples. Possible next steps, none of them started:
+1. Label more `resolves` cases.
+2. Have Andrea review a sample of labels.
+3. Run the classifier in shadow next to the cue words, without deciding anything.
