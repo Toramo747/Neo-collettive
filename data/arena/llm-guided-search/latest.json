@@ -4,26 +4,26 @@
   "arena_id": "llm-guided-commercial-search",
   "status": "PLATEAU",
   "mode": "iterative_baseline_plus_single_llm_mutation",
-  "captured_at_utc": "2026-10-11T05:53:07.206090+00:00",
-  "model": "qwen2.5:0.5b-instruct",
+  "captured_at_utc": "2026-10-11T06:12:53.571275+00:00",
+  "model": "qwen2.5:3b-instruct-q4_K_M",
   "provider": "local_ollama",
   "search_provider": "hn_algolia_public_read_only",
   "baseline_champion": "g75-elite-1",
   "baseline_metrics": {
-    "fitness": 71.0985,
-    "base_fitness": 71.0985,
+    "fitness": 70.9888,
+    "base_fitness": 70.9888,
     "support_factor": 1.0,
-    "total_hits": 92,
-    "relevant_hits": 66,
+    "total_hits": 91,
+    "relevant_hits": 67,
     "signal_hits": 13,
     "unique_signal_threads": 11,
     "buyer_hits": 30,
     "first_person_buyer_hits": 27,
-    "family_hits": 45,
-    "family_match_rate": 0.6818,
-    "buyer_rate": 0.4545,
-    "first_person_buyer_rate": 0.4091,
-    "precision": 0.197,
+    "family_hits": 46,
+    "family_match_rate": 0.6866,
+    "buyer_rate": 0.4478,
+    "first_person_buyer_rate": 0.403,
+    "precision": 0.194,
     "absolute_signal_score": 1.0,
     "absolute_thread_score": 1.0,
     "evidence_volume_score": 98.0,
@@ -31,327 +31,180 @@
     "supply_rejected": 0
   },
   "final_metrics": {
-    "fitness": 73.1013,
-    "base_fitness": 73.1013,
+    "fitness": 70.9888,
+    "base_fitness": 70.9888,
     "support_factor": 1.0,
-    "total_hits": 115,
-    "relevant_hits": 79,
-    "signal_hits": 17,
-    "unique_signal_threads": 13,
-    "buyer_hits": 35,
-    "first_person_buyer_hits": 32,
-    "family_hits": 58,
-    "family_match_rate": 0.7342,
-    "buyer_rate": 0.443,
-    "first_person_buyer_rate": 0.4051,
-    "precision": 0.2152,
+    "total_hits": 91,
+    "relevant_hits": 67,
+    "signal_hits": 13,
+    "unique_signal_threads": 11,
+    "buyer_hits": 30,
+    "first_person_buyer_hits": 27,
+    "family_hits": 46,
+    "family_match_rate": 0.6866,
+    "buyer_rate": 0.4478,
+    "first_person_buyer_rate": 0.403,
+    "precision": 0.194,
     "absolute_signal_score": 1.0,
     "absolute_thread_score": 1.0,
-    "evidence_volume_score": 124.0,
+    "evidence_volume_score": 98.0,
     "vendor_rejected": 0,
     "supply_rejected": 0
   },
-  "final_genome": "precision_pain",
-  "generations_run": 6,
+  "final_genome": "baseline",
+  "generations_run": 3,
   "plateau_patience": 3,
   "max_generations": 8,
   "history": [
     {
       "generation": 1,
-      "parent_fitness": 71.0985,
-      "winner_genome": "pain_plus_burden",
-      "winner_fitness": 73.675,
+      "parent_fitness": 70.9888,
+      "winner_genome": "precision_pain",
+      "winner_fitness": 35.4885,
       "improved": false,
       "ranked": [
         {
-          "genome": "pain_plus_burden",
-          "fitness": 73.675,
-          "accepted": false
-        },
-        {
-          "genome": "operational_burden",
-          "fitness": 73.2292,
-          "accepted": false
-        },
-        {
           "genome": "precision_pain",
-          "fitness": 68.9722,
+          "fitness": 35.4885,
           "accepted": false
         },
         {
-          "genome": "paid_demand",
-          "fitness": 68.3631,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_buyer",
-          "fitness": 65.3869,
+          "genome": "pain_plus_burden",
+          "fitness": 27.7083,
           "accepted": false
         },
         {
           "genome": "buyer_intent",
-          "fitness": 61.6369,
+          "fitness": 2.9167,
           "accepted": false
         },
         {
           "genome": "first_person_pain",
-          "fitness": 60.0,
+          "fitness": 2.5,
+          "accepted": false
+        },
+        {
+          "genome": "operational_burden",
+          "fitness": 2.5,
           "accepted": false
         },
         {
           "genome": "buyer_plus_paid",
-          "fitness": 37.2917,
+          "fitness": 0.0,
+          "accepted": false
+        },
+        {
+          "genome": "paid_demand",
+          "fitness": 0.0,
+          "accepted": false
+        },
+        {
+          "genome": "pain_plus_buyer",
+          "fitness": 0.0,
           "accepted": false
         }
       ]
     },
     {
       "generation": 2,
-      "parent_fitness": 71.0985,
-      "winner_genome": "buyer_intent",
-      "winner_fitness": 70.9888,
+      "parent_fitness": 70.9888,
+      "winner_genome": "precision_pain",
+      "winner_fitness": 63.7213,
       "improved": false,
       "ranked": [
         {
-          "genome": "buyer_intent",
-          "fitness": 70.9888,
-          "accepted": false
-        },
-        {
           "genome": "precision_pain",
-          "fitness": 66.901,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_burden",
-          "fitness": 64.9797,
-          "accepted": false
-        },
-        {
-          "genome": "operational_burden",
-          "fitness": 64.7619,
-          "accepted": false
-        },
-        {
-          "genome": "paid_demand",
-          "fitness": 64.7619,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_buyer",
-          "fitness": 56.568,
-          "accepted": false
-        },
-        {
-          "genome": "first_person_pain",
-          "fitness": 56.3622,
+          "fitness": 63.7213,
           "accepted": false
         },
         {
           "genome": "buyer_plus_paid",
           "fitness": 51.6667,
+          "accepted": false
+        },
+        {
+          "genome": "first_person_pain",
+          "fitness": 51.6667,
+          "accepted": false
+        },
+        {
+          "genome": "paid_demand",
+          "fitness": 51.6667,
+          "accepted": false
+        },
+        {
+          "genome": "pain_plus_burden",
+          "fitness": 51.6667,
+          "accepted": false
+        },
+        {
+          "genome": "pain_plus_buyer",
+          "fitness": 51.6667,
+          "accepted": false
+        },
+        {
+          "genome": "operational_burden",
+          "fitness": 51.4216,
+          "accepted": false
+        },
+        {
+          "genome": "buyer_intent",
+          "fitness": 51.3333,
           "accepted": false
         }
       ]
     },
     {
       "generation": 3,
-      "parent_fitness": 71.0985,
+      "parent_fitness": 70.9888,
       "winner_genome": "precision_pain",
-      "winner_fitness": 73.1013,
-      "improved": true,
+      "winner_fitness": 63.7213,
+      "improved": false,
       "ranked": [
         {
           "genome": "precision_pain",
-          "fitness": 73.1013,
-          "accepted": true
-        },
-        {
-          "genome": "first_person_pain",
-          "fitness": 66.901,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_burden",
-          "fitness": 64.9797,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_buyer",
-          "fitness": 64.9797,
-          "accepted": false
-        },
-        {
-          "genome": "buyer_intent",
-          "fitness": 64.7619,
-          "accepted": false
-        },
-        {
-          "genome": "operational_burden",
-          "fitness": 64.7619,
-          "accepted": false
-        },
-        {
-          "genome": "paid_demand",
-          "fitness": 56.3622,
+          "fitness": 63.7213,
           "accepted": false
         },
         {
           "genome": "buyer_plus_paid",
+          "fitness": 55.0833,
+          "accepted": false
+        },
+        {
+          "genome": "paid_demand",
           "fitness": 51.6667,
           "accepted": false
-        }
-      ]
-    },
-    {
-      "generation": 4,
-      "parent_fitness": 73.1013,
-      "winner_genome": "operational_burden",
-      "winner_fitness": 73.2432,
-      "improved": false,
-      "ranked": [
-        {
-          "genome": "operational_burden",
-          "fitness": 73.2432,
-          "accepted": false
-        },
-        {
-          "genome": "precision_pain",
-          "fitness": 73.1013,
-          "accepted": false
-        },
-        {
-          "genome": "buyer_intent",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "paid_demand",
-          "fitness": 72.3148,
-          "accepted": false
         },
         {
           "genome": "pain_plus_burden",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "first_person_pain",
-          "fitness": 72.1364,
-          "accepted": false
-        },
-        {
-          "genome": "buyer_plus_paid",
-          "fitness": 71.4541,
+          "fitness": 51.6667,
           "accepted": false
         },
         {
           "genome": "pain_plus_buyer",
-          "fitness": 71.4541,
-          "accepted": false
-        }
-      ]
-    },
-    {
-      "generation": 5,
-      "parent_fitness": 73.1013,
-      "winner_genome": "precision_pain",
-      "winner_fitness": 73.1013,
-      "improved": false,
-      "ranked": [
-        {
-          "genome": "precision_pain",
-          "fitness": 73.1013,
-          "accepted": false
-        },
-        {
-          "genome": "buyer_intent",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "first_person_pain",
-          "fitness": 72.3148,
+          "fitness": 51.6667,
           "accepted": false
         },
         {
           "genome": "operational_burden",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "paid_demand",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_burden",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_buyer",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "buyer_plus_paid",
-          "fitness": 71.4541,
-          "accepted": false
-        }
-      ]
-    },
-    {
-      "generation": 6,
-      "parent_fitness": 73.1013,
-      "winner_genome": "operational_burden",
-      "winner_fitness": 73.1013,
-      "improved": false,
-      "ranked": [
-        {
-          "genome": "operational_burden",
-          "fitness": 73.1013,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_burden",
-          "fitness": 73.1013,
-          "accepted": false
-        },
-        {
-          "genome": "precision_pain",
-          "fitness": 73.1013,
-          "accepted": false
-        },
-        {
-          "genome": "first_person_pain",
-          "fitness": 72.3148,
-          "accepted": false
-        },
-        {
-          "genome": "pain_plus_buyer",
-          "fitness": 72.3148,
+          "fitness": 51.4216,
           "accepted": false
         },
         {
           "genome": "buyer_intent",
-          "fitness": 72.1364,
+          "fitness": 51.3333,
           "accepted": false
         },
         {
-          "genome": "paid_demand",
-          "fitness": 71.864,
-          "accepted": false
-        },
-        {
-          "genome": "buyer_plus_paid",
-          "fitness": 71.6667,
+          "genome": "first_person_pain",
+          "fitness": 51.1905,
           "accepted": false
         }
       ]
     }
   ],
-  "candidate_better_than_baseline": true,
+  "candidate_better_than_baseline": false,
   "production_promoted": false,
   "boundary": {
     "production_state_write": false,
