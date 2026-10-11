@@ -1,0 +1,57 @@
+name: MYCELIX Anomaly Arena
+on:
+  push:
+    branches: [main]
+    paths:
+      - arena_anomalies.py
+      - .github/workflows/mycelix-anomaly-arena.yml
+  schedule:
+    - cron: "11 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: mycelix-anomaly-arena
+  cancel-in-progress: false
+jobs:
+  listen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate
+        run: python -m unittest -v test_arena_anomalies.py
+      # Public arXiv API (1 request / 3 s), metadata and counts only.
+      - name: Listen to the literature
+        run: python arena_anomalies.py --data-dir data/arena/anomalies | tee /tmp/anomalies.json
+      - name: Assert boundary
+        run: |
+          python - <<'PY'
+          import json
+          r=json.load(open("data/arena/anomalies/latest.json",encoding="utf-8"))
+          b=r["boundary"]
+          assert b["production_state_write"] is False and b["production_runtime_influence"]=="NONE"
+          assert b["automatic_physical_claims"] is False
+          print(json.dumps({"ranking":r["ranking_by_persistence"],"controls_ok":r["controls_ok"],"errors":r["errors"]}))
+          PY
+      - name: Publish
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          git config user.name "MYCELIX Anomaly Arena"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/arena/anomalies
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "anomaly arena observation [skip render]"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
+            git rebase --abort >/dev/null 2>&1 || true
+            sleep $((attempt*3))
+          done
+          exit 1
