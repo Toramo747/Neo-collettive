@@ -2,6 +2,7 @@
   "anomalies": {
     "casimir_negative_energy": {
       "control": false,
+      "low_sample": true,
       "papers": 1,
       "persistence": 0.0,
       "query": "abs:Casimir AND abs:\"negative energy\"",
@@ -18,13 +19,15 @@
       "sigma_reported_count": 0,
       "tension_cues": 0,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "reason": "fewer than 10 papers in window",
+        "status": "INSUFFICIENT_DATA"
       },
       "why": "Measured negative energy density in the lab",
       "window_capped": false
     },
     "evolving_dark_energy": {
       "control": false,
+      "low_sample": false,
       "papers": 131,
       "persistence": 0.046,
       "query": "abs:\"dynamical dark energy\" OR abs:\"evolving dark energy\"",
@@ -61,13 +64,17 @@
       "sigma_reported_count": 62,
       "tension_cues": 55,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "papers_delta": 0,
+        "persistence_delta": 0.0,
+        "sigma_median_delta": 0.0,
+        "status": "STABLE"
       },
       "why": "Dark energy, the 'negative pressure' of the universe, may change with time",
       "window_capped": false
     },
     "hubble_tension": {
       "control": false,
+      "low_sample": false,
       "papers": 89,
       "persistence": -0.079,
       "query": "abs:\"Hubble tension\"",
@@ -104,13 +111,17 @@
       "sigma_reported_count": 46,
       "tension_cues": 45,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "papers_delta": 0,
+        "persistence_delta": 0.0,
+        "sigma_median_delta": 0.0,
+        "status": "STABLE"
       },
       "why": "Expansion rate: local vs early-universe values disagree",
       "window_capped": false
     },
     "lithium_problem": {
       "control": false,
+      "low_sample": true,
       "papers": 3,
       "persistence": 0.0,
       "query": "abs:\"lithium problem\"",
@@ -137,13 +148,15 @@
       "sigma_reported_count": 0,
       "tension_cues": 1,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "reason": "fewer than 10 papers in window",
+        "status": "INSUFFICIENT_DATA"
       },
       "why": "Big Bang nucleosynthesis predicts more lithium than observed",
       "window_capped": false
     },
     "neutron_lifetime": {
       "control": false,
+      "low_sample": true,
       "papers": 1,
       "persistence": 0.0,
       "query": "abs:\"neutron lifetime\" AND (abs:beam OR abs:bottle)",
@@ -160,13 +173,15 @@
       "sigma_reported_count": 1,
       "tension_cues": 1,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "reason": "fewer than 10 papers in window",
+        "status": "INSUFFICIENT_DATA"
       },
       "why": "Beam vs bottle lifetimes disagree",
       "window_capped": false
     },
     "proton_radius_control": {
       "control": true,
+      "low_sample": true,
       "papers": 3,
       "persistence": 0.667,
       "query": "abs:\"proton radius puzzle\"",
@@ -193,13 +208,15 @@
       "sigma_reported_count": 0,
       "tension_cues": 2,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "reason": "fewer than 10 papers in window",
+        "status": "INSUFFICIENT_DATA"
       },
       "why": "Control: widely regarded as largely resolved",
       "window_capped": false
     },
     "s8_tension": {
       "control": false,
+      "low_sample": false,
       "papers": 18,
       "persistence": -0.111,
       "query": "abs:\"S8 tension\" OR abs:\"S_8 tension\" OR abs:\"sigma_8 tension\"",
@@ -236,13 +253,17 @@
       "sigma_reported_count": 10,
       "tension_cues": 13,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "papers_delta": 0,
+        "persistence_delta": 0.0,
+        "sigma_median_delta": 0.0,
+        "status": "STABLE"
       },
       "why": "Matter clumping: weak lensing vs CMB",
       "window_capped": false
     },
     "w_boson_mass": {
       "control": false,
+      "low_sample": true,
       "papers": 8,
       "persistence": 0.0,
       "query": "abs:\"W boson mass\" OR abs:\"W-boson mass\"",
@@ -279,7 +300,8 @@
       "sigma_reported_count": 0,
       "tension_cues": 0,
       "trend": {
-        "status": "FIRST_OBSERVATION"
+        "reason": "fewer than 10 papers in window",
+        "status": "INSUFFICIENT_DATA"
       },
       "why": "CDF 2022 W mass vs other measurements",
       "window_capped": false
@@ -293,10 +315,12 @@
     "production_state_write": false,
     "promotion": "HUMAN_SCIENTIFIC_REVIEW_ONLY"
   },
-  "controls_ok": true,
+  "controls_note": "control has fewer than 10 papers: calibration not testable this run",
+  "controls_ok": null,
   "disclaimer": "Literature attention signals from abstract wording and quoted significances; not physical evidence.",
   "errors": {},
-  "generated_at_utc": "2026-10-11T11:38:11.879040+00:00",
+  "generated_at_utc": "2026-10-11T17:07:36.973082+00:00",
+  "min_papers": 10,
   "ranking_by_persistence": [
     "evolving_dark_energy",
     "hubble_tension",
