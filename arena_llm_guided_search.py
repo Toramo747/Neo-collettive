@@ -5,6 +5,7 @@ import argparse, asyncio, json, re, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 import httpx
+from local_llm_decoding import ROBUST_OPTIONS
 
 from arena_research_algorithm import (
     HN_ENDPOINT, MAX_HITS_PER_QUERY, build_queries, clamp_genome,
@@ -92,7 +93,7 @@ def make_prompt(topic,genome_name="hybrid"):
 def plan_queries(model,topic,genome_name):
     response=post_json("http://127.0.0.1:11434/api/generate",{
         "model":model,"prompt":make_prompt(topic,genome_name),"stream":False,"format":"json",
-        "options":{"temperature":0.25,"num_predict":220,"num_ctx":2048},"keep_alive":"0",
+        "options":dict(ROBUST_OPTIONS,temperature=0.25,num_predict=320,num_ctx=2048),"keep_alive":"0",
     })
     parsed=extract_json(response.get("response") or "")
     raw=parsed.get("queries") if isinstance(parsed,dict) else []
