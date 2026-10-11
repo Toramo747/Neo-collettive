@@ -32,5 +32,20 @@ class InventoryToolTests(unittest.TestCase):
         self.assertEqual(inv.referenced_generations(b), [b["generation"], a["generation"]])
 
 
+class ClassifyTests(unittest.TestCase):
+    def test_retention_buckets(self):
+        now = 2_000_000_000
+        rows = [
+            {"last_seen_epoch": now - 22 * 86400},
+            {"last_seen_epoch": now - 86400, "gate_eligible": True},
+            {"last_seen_epoch": now - 86400},
+            {},
+        ]
+        self.assertEqual(inv.classify(rows, now), {
+            "expired_by_retention": 1, "within_retention": 2,
+            "within_retention_gate_eligible": 1, "no_last_seen": 1,
+        })
+
+
 if __name__ == "__main__":
     unittest.main()

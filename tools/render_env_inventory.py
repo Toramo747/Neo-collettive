@@ -29,6 +29,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from state_codec import decode_checkpoint  # noqa: E402
+from evidence_integrity import canonical_url  # noqa: E402
+import time  # noqa: E402
+
+RETENTION_SECONDS = 21 * 86400  # evidence_memory_guard default
 
 API = "https://api.render.com/v1"
 SERVICE = os.getenv("RENDER_SERVICE_ID", "").strip()
@@ -88,10 +92,14 @@ def family_of(key: str) -> str:
 
 
 def identity(row: dict) -> str:
-    url = str(row.get("url") or "").strip().lower().rstrip("/")
+    # Same identity as cloud_mcp._evidence_memory_key.
+    url = canonical_url(str(row.get("url") or ""))
     if url:
-        return "u:" + url
-    return "i:" + str(row.get("evidence_id") or row.get("fingerprint") or "")
+        return "url:" + url
+    key = str(row.get("evidence_id") or row.get("fingerprint") or "").strip()
+    if key:
+        return "id:" + key
+    return "fallback:" + str(row.get("domain") or "").strip().lower() + "|" + str(row.get("title") or "")[:160].strip().lower()
 
 
 def decode_generation(chunks: list[str]) -> tuple[bool, str, list]:
@@ -117,6 +125,23 @@ def referenced_generations(ref) -> list[str]:
             out.append(gen)
         ref = ref.get("previous_generation")
         seen += 1
+    return out
+
+
+def classify(rows, now: float | None = None) -> dict[str, int]:
+    """Bucket missing evidence: expired by the 21d retention vs still in window."""
+    now = time.time() if now is None else now
+    out = {"expired_by_retention": 0, "within_retention": 0, "within_retention_gate_eligible": 0, "no_last_seen": 0}
+    for r in rows:
+        last = float(r.get("last_seen_epoch") or 0)
+        if not last:
+            out["no_last_seen"] += 1
+        elif now - last > RETENTION_SECONDS:
+            out["expired_by_retention"] += 1
+        else:
+            out["within_retention"] += 1
+            if r.get("gate_eligible"):
+                out["within_retention_gate_eligible"] += 1
     return out
 
 
@@ -165,11 +190,17 @@ def main() -> int:
 
     generations = []
     recoverable_ids = set()
+    recoverable_rows: dict[str, dict] = {}
     for (prefix, gen), (intact, rows) in sorted(decoded.items()):
         ids = {identity(r) for r in rows if isinstance(r, dict)}
         missing = ids - current_ids if prefix != "NEO_CHALLENGE_TRACK_" else set()
         if intact and prefix != "NEO_CHALLENGE_TRACK_":
             recoverable_ids |= missing
+            for r in rows:
+                if isinstance(r, dict) and identity(r) in missing:
+                    prev = recoverable_rows.get(identity(r))
+                    if prev is None or float(r.get("last_seen_epoch") or 0) > float(prev.get("last_seen_epoch") or 0):
+                        recoverable_rows[identity(r)] = r
         generations.append({
             "family": prefix.rstrip("_").lower(),
             "generation": gen,  # 12-hex content hash, not record data
@@ -195,6 +226,7 @@ def main() -> int:
         },
         "generations": generations,
         "recoverable_identities_not_in_current": len(recoverable_ids),
+        "recoverable_classification": classify(recoverable_rows.values()),
     }
     print(json.dumps(summary, separators=(",", ":"), sort_keys=True))
     # GitHub keeps at most 10 notices per step: keep the output to 6 lines.
@@ -207,7 +239,8 @@ def main() -> int:
     for fam in ("neo_evidence", "neo_evidence_archive", "neo_challenge_track"):
         items = [fmt(g) for g in generations if g["family"] == fam]
         print(f"::notice title=gens {fam} ({len(items)})::" + (" ".join(items) or "none"))
-    print(f"::notice title=recoverable::identities_not_in_current={summary['recoverable_identities_not_in_current']}")
+    c = summary["recoverable_classification"]
+    print(f"::notice title=recoverable::identities_not_in_current={summary['recoverable_identities_not_in_current']} " + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
 
