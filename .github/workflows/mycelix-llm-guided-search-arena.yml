@@ -20,9 +20,11 @@ concurrency:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     env:
-      MODEL: qwen2.5:0.5b-instruct
+      # 3b: 100% schema-valid vs 50% for 0.5b in the 2026-10-11 local comparison;
+      # ~3.6x slower, so the run budget is raised (free GitHub runner, zero cost).
+      MODEL: qwen2.5:3b-instruct-q4_K_M
       REPORT: data/arena/llm-guided-search/latest.json
     steps:
       - uses: actions/checkout@v4
@@ -47,8 +49,8 @@ jobs:
             curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break
             sleep 1
           done
-          timeout 300 ollama pull "$MODEL"
-          timeout 720 python arena_llm_guided_search.py --model "$MODEL" --out "$REPORT"
+          timeout 480 ollama pull "$MODEL"
+          timeout 2700 python arena_llm_guided_search.py --model "$MODEL" --out "$REPORT"
       - name: Assert production isolation
         run: |
           python - <<'PY'
