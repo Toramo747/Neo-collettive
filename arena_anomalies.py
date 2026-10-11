@@ -44,9 +44,9 @@ ANOMALIES = (
     ("hubble_tension", 'abs:"Hubble tension"', "Expansion rate: local vs early-universe values disagree", False),
     ("evolving_dark_energy", 'abs:"dynamical dark energy" OR abs:"evolving dark energy"',
      "Dark energy, the 'negative pressure' of the universe, may change with time", False),
-    ("s8_tension", 'abs:"S8 tension"', "Matter clumping: weak lensing vs CMB", False),
+    ("s8_tension", 'abs:"S8 tension" OR abs:"S_8 tension" OR abs:"sigma_8 tension"', "Matter clumping: weak lensing vs CMB", False),
     ("neutron_lifetime", 'abs:"neutron lifetime" AND (abs:beam OR abs:bottle)', "Beam vs bottle lifetimes disagree", False),
-    ("w_boson_mass", 'abs:"W boson mass" AND abs:CDF', "CDF 2022 W mass vs other measurements", False),
+    ("w_boson_mass", 'abs:"W boson mass" OR abs:"W-boson mass"', "CDF 2022 W mass vs other measurements", False),
     ("lithium_problem", 'abs:"lithium problem"', "Big Bang nucleosynthesis predicts more lithium than observed", False),
     ("casimir_negative_energy", 'abs:Casimir AND abs:"negative energy"', "Measured negative energy density in the lab", False),
     ("proton_radius_control", 'abs:"proton radius puzzle"', "Control: widely regarded as largely resolved", True),
@@ -86,7 +86,14 @@ def parse_entries(atom: str) -> list[dict]:
     return out
 
 
-def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS) -> dict:
+def strip_query_echo(text: str, query: str) -> str:
+    """Remove the phrases we searched for: 'Hubble tension' must not count as a tension cue."""
+    for phrase in re.findall(r'"([^"]+)"', query or ""):
+        text = re.sub(re.escape(phrase), " ", text, flags=re.I)
+    return text
+
+
+def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS, query: str = "") -> dict:
     cutoff = now - timedelta(days=window_days)
     recent = []
     for e in entries:
@@ -97,8 +104,9 @@ def score(entries: list[dict], now: datetime, window_days: int = WINDOW_DAYS) ->
         if ts >= cutoff:
             recent.append(e)
     # Negated mentions ("no tension", "resolves the discrepancy") are removed first.
-    tension = sum(1 for e in recent if TENSION_RE.search(RESOLUTION_RE.sub(" ", e["summary"])))
-    resolution = sum(1 for e in recent if RESOLUTION_RE.search(e["summary"]))
+    texts = [strip_query_echo(e["summary"], query) for e in recent]
+    tension = sum(1 for t in texts if TENSION_RE.search(RESOLUTION_RE.sub(" ", t)))
+    resolution = sum(1 for t in texts if RESOLUTION_RE.search(t))
     sigmas = [float(m) for e in recent for m in SIGMA_RE.findall(e["summary"]) if 0 < float(m) <= 20]
     n = len(recent)
     return {
@@ -142,7 +150,7 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
         if i:
             time.sleep(pause)
         try:
-            s = score(parse_entries(fetch(query)), now)
+            s = score(parse_entries(fetch(query)), now, query=query)
         except Exception as exc:
             errors[aid] = type(exc).__name__
             continue
