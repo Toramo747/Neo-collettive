@@ -72,6 +72,7 @@ PUBLIC_SNAPSHOT_SCHEMA = {
         },
     },
     "autopilot": {
+        "decision_replay": {"trace_count":None,"last_trace_cycle":None,"input_hash":None,"output_hash":None,"replay_ok":None},
         "runtime_observation": {
             "codec_offthread": None,
             "first_autopilot_cycle_completed": None,
@@ -1034,6 +1035,16 @@ def sanitize_public_autopilot(autopilot: dict | None) -> dict:
         "enabled", "running", "cycles_completed", "last_started_utc",
         "last_finished_utc", "last_status", "stagnation_cycles",
     ))
+    if isinstance(src.get("decision_replay"), dict):
+        trace=src["decision_replay"]
+        import re
+        out["decision_replay"]={
+            "trace_count":max(0,min(20,int(trace.get("trace_count") or 0))),
+            "last_trace_cycle":max(0,int(trace.get("last_trace_cycle") or 0)),
+            "input_hash":str(trace.get("input_hash") or "") if re.fullmatch(r"[0-9a-f]{16}",str(trace.get("input_hash") or "")) else "",
+            "output_hash":str(trace.get("output_hash") or "") if re.fullmatch(r"[0-9a-f]{16}",str(trace.get("output_hash") or "")) else "",
+            "replay_ok":trace.get("replay_ok") is True,
+        }
     out["runtime_observation"] = public_observation(src.get("runtime_observation"))
     out["recent_sectors"] = [str(item)[:48] for item in list(src.get("recent_sectors") or [])[-24:]]
     out["family_performance"] = _project_family_performance(src.get("family_performance"))

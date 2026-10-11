@@ -1,3 +1,5 @@
+import decision_replay
+from copy import deepcopy
 # SPDX-License-Identifier: BUSL-1.1
 # Copyright (c) 2026 Andrea Gava
 # redeploy trigger after reciprocal-dialogue syntax fix
@@ -10091,7 +10093,9 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         return fetched
 
     # Reuse only compact, strict-parser-verified price evidence from prior cycles.
-    persisted_groups=persisted_price_groups(AUTOPILOT_STATE.get("commercial_price_evidence") or [])
+    decision_price_cache=deepcopy(AUTOPILOT_STATE.get("commercial_price_evidence") or [])
+    decision_cache_insert_at=len(web_research)
+    persisted_groups=persisted_price_groups(decision_price_cache)
     for group in persisted_groups:
         family=str(group.get("_persisted_price_family") or "")
         query=str(group.get("query") or "")
@@ -10375,22 +10379,39 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         SETI_PRIVATE_STATE.get("candidates") or {},
         SETI_PRIVATE_STATE.get("interviews") or {},
     )
-    market_analysis=analyze_tool_opportunities(
-        web_research,
-        demand_evidence,
-        seti_catalog,
-        query_meta,
-        source_diagnostics=source_diagnostics,
-        usage_evidence=endpoint_verifier.usage_metrics_snapshot(),
-    )
-    market_analysis["price_validation"]=price_validation_telemetry
-    market_analysis["candidate_telemetry_status"]=(
-        "enabled" if CANDIDATE_TELEMETRY_HMAC_KEY else "telemetry_disabled_no_secret"
-    )
+    decision_now=datetime.now(timezone.utc).isoformat()
+    decision_usage=endpoint_verifier.usage_metrics_snapshot()
     previous_gate_state=AUTOPILOT_STATE.get("gate_stability") or {}
     first_cycle_after_deploy=bool(
         DEPLOY_COMMIT
         and str(previous_gate_state.get("last_observed_commit") or "") != DEPLOY_COMMIT
+    )
+    decision_trace=None
+    try:
+        decision_trace=decision_replay.begin(
+            web_research=web_research, query_meta=query_meta, demand_evidence=demand_evidence,
+            seti_catalog=seti_catalog, price_cache=decision_price_cache,
+            persisted_insert_at=decision_cache_insert_at, source_diagnostics=source_diagnostics,
+            usage_evidence=decision_usage, hysteresis=previous_gate_state,
+            now=decision_now, cycle=int(AUTOPILOT_STATE.get("cycles_completed") or 0)+1,
+            first_cycle_after_deploy=first_cycle_after_deploy, commit=DEPLOY_COMMIT,
+            version=VERSION, tagger_version=TAGGER_VERSION,
+            policy_version=_load_policy().get("policy_version"),
+            genome_id=str(RESEARCH_ARENA_PRODUCTION_GENOME.get("source") or ""),
+            guards={k:v for k,v in globals().items() if k.endswith("GUARD_ENABLED") and isinstance(v,bool)},
+        )
+    except Exception:
+        decision_replay.BUFFER.failed=True
+    decision_components=[]
+    market_analysis=analyze_tool_opportunities(
+        web_research, demand_evidence, seti_catalog, query_meta,
+        now_utc=decision_now, source_diagnostics=source_diagnostics, usage_evidence=decision_usage,
+        decision_observer=decision_replay.observer(decision_components) if decision_trace is not None else None,
+    )
+    decision_analysis=deepcopy(market_analysis) if decision_trace is not None else None
+    market_analysis["price_validation"]=price_validation_telemetry
+    market_analysis["candidate_telemetry_status"]=(
+        "enabled" if CANDIDATE_TELEMETRY_HMAC_KEY else "telemetry_disabled_no_secret"
     )
     gate_state,stable_rows=apply_gate_hysteresis(
         previous_gate_state,
@@ -10403,6 +10424,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         genome_id=str(RESEARCH_ARENA_PRODUCTION_GENOME.get("source") or ""),
         first_cycle_after_deploy=first_cycle_after_deploy,
     )
+    decision_replay.finish(decision_trace, decision_analysis, gate_state, stable_rows, decision_components)
     AUTOPILOT_STATE["gate_stability"]=gate_state
     market_analysis["post_deploy_pass_ignored"]=int(gate_state.get("post_deploy_pass_ignored") or 0)
     if stable_rows:
@@ -12201,6 +12223,22 @@ def _private_seti_console_payload() -> dict:
     }
 
 
+async def api_admin_decision_traces(request: Request):
+    if not _admin_authorized(request):
+        return _admin_auth_failure()
+    headers={"Cache-Control":"no-store"}
+    name=request.query_params.get("trace")
+    try:
+        if name:
+            return JSONResponse(decision_replay.BUFFER.read(name),headers=headers)
+        return JSONResponse({"traces":[p.name for p in decision_replay.BUFFER.paths()],
+                             "capture_failed":decision_replay.BUFFER.failed,
+                             "durable_directory_configured":bool(os.getenv("NEO_DECISION_TRACE_DIR")),
+                             **decision_replay.BUFFER.public()},headers=headers)
+    except Exception:
+        return JSONResponse({"ok":False,"error":"trace_unavailable"},status_code=404,headers=headers)
+
+
 async def api_admin_seti_interviews(request: Request):
     if not _admin_authorized(request):
         return _admin_auth_failure()
@@ -13205,6 +13243,7 @@ async def api_autopilot_status(request: Request):
     _hidden_challenge_control_telemetry()
     _evaluator_contract_telemetry()
     state = dict(AUTOPILOT_STATE)
+    state["decision_replay"] = decision_replay.BUFFER.public()
     state["runtime_observation"] = OBSERVATION.private_snapshot()
     rows = _load_recent_results(1)
     state["latest_result"] = rows[-1] if rows else None
@@ -14237,6 +14276,7 @@ app = Starlette(
         Route("/agent-chats", agent_chats_page, methods=["GET"]),
         Route("/api/agent-chats", api_agent_chats, methods=["GET"]),
         Route("/admin/seti-interviews", admin_seti_interviews_page, methods=["GET"]),
+        Route("/api/admin/decision-traces", api_admin_decision_traces, methods=["GET"]),
         Route("/api/admin/seti-interviews", api_admin_seti_interviews, methods=["GET"]),
         Route("/api/admin/inbound", api_admin_inbound, methods=["GET"]),
         Route("/api/admin/evidence-reintegration", api_admin_evidence_reintegration, methods=["POST"]),
