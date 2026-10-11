@@ -77,6 +77,7 @@ def compute_plan(env: dict[str, str]) -> dict:
 
     # Missing identities per orphan evidence generation (intact only).
     missing_by_gen: dict[str, set[str]] = {}
+    freshness: dict[str, float] = {}
     for (prefix, gen), indexed in groups.items():
         if prefix != "NEO_EVIDENCE_" or gen in referenced:
             continue
@@ -85,10 +86,12 @@ def compute_plan(env: dict[str, str]) -> dict:
             missing = {inv.identity(r) for r in rows if isinstance(r, dict)} - current_ids
             if missing:
                 missing_by_gen[gen] = missing
+                freshness[gen] = inv.newest_seen(rows)
     keep: list[str] = []
     uncovered = set().union(*missing_by_gen.values()) if missing_by_gen else set()
     while uncovered:
-        gen = max(sorted(missing_by_gen), key=lambda g: len(missing_by_gen[g] & uncovered))
+        # Most coverage first; on ties the freshest generation (newest last_seen).
+        gen = max(sorted(missing_by_gen), key=lambda g: (len(missing_by_gen[g] & uncovered), freshness.get(g, 0.0)))
         if not missing_by_gen[gen] & uncovered:
             break
         keep.append(gen)
