@@ -26,6 +26,9 @@ import time
 import traceback
 import zlib
 from state_codec import encode_checkpoint, decode_checkpoint, encode_checkpoint_async
+from render_saved_env import fetch_saved_env, generation_inventory, load_boot_env
+from evidence_reintegration import apply_plan as reintegration_apply, build_plan as reintegration_plan, public_plan as reintegration_public, revert_batch as reintegration_revert
+from state_generation_guard import WRITER_FIELD as STATE_WRITER_FIELD, GUARD_FIELD as STATE_GENERATION_FIELD, check_write_allowed, next_generation, state_generation_of
 from commercial_evidence_store import chunk_key, decode_external_store, encode_external_store, generation_id, is_external_reference, recover_external_store_generation, split_active_archive
 import ipaddress
 from datetime import datetime, timezone, timedelta
@@ -108,6 +111,7 @@ from query_builder import (
 )
 from quarantine_revalidation import revalidate_quarantined_rows
 from evidence_memory_guard import repair_evidence_timestamps, replace_evidence_memory_rows
+from evidence_restart_continuity import verify_restart_continuity, preserve_checkpoint_continuity_status
 from search_providers import (
     begin_cycle as begin_search_provider_cycle,
     configured_provider,
@@ -199,6 +203,29 @@ TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 RENDER_SERVICE_ID = os.getenv("RENDER_SERVICE_ID")
+BOOT_SAVED_ENV_ENABLED = os.getenv("NEO_BOOT_SAVED_ENV", "1").strip().lower() not in {"0","false","no","off"}
+BOOT_SAVED_ENV_TIMEOUT = float(os.getenv("NEO_BOOT_SAVED_ENV_TIMEOUT", "8"))
+_BOOT_ENV = None
+STATE_WRITER_ID = secrets.token_hex(8)
+
+
+def _boot_env():
+    """Saved Render env (authoritative after restarts) with os.environ fallback."""
+    global _BOOT_ENV
+    if _BOOT_ENV is None:
+        _BOOT_ENV=load_boot_env(
+            RENDER_API_BASE,RENDER_SERVICE_ID,RENDER_API_KEY,
+            enabled=BOOT_SAVED_ENV_ENABLED,timeout=BOOT_SAVED_ENV_TIMEOUT,
+        )
+    return _BOOT_ENV
+
+
+def _persisted_env(key: str) -> str | None:
+    return _boot_env().get(key)
+
+
+def _persisted_env_items():
+    return _boot_env().items()
 JARVIS_RENDER_SERVICE_ID = (os.getenv("JARVIS_RENDER_SERVICE_ID") or "").strip()
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
@@ -541,6 +568,7 @@ def _state_payload() -> dict:
         "evidence_store_degraded": bool(AUTOPILOT_STATE.get("evidence_store_degraded")),
         "evidence_store_status": AUTOPILOT_STATE.get("evidence_store_status") or {},
         "evidence_memory_telemetry": AUTOPILOT_STATE.get("evidence_memory_telemetry") or {},
+        "evidence_reintegration_ledger": list(AUTOPILOT_STATE.get("evidence_reintegration_ledger") or [])[-20:],
         "challenge_track_store_reference": AUTOPILOT_STATE.get("challenge_track_store_reference"),
         "challenge_track": AUTOPILOT_STATE.get("challenge_track") or {},
         "hidden_challenge_control": AUTOPILOT_STATE.get("hidden_challenge_control") or {},
@@ -573,6 +601,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         return False
     perf = payload.get("family_performance")
     recent = payload.get("recent_sectors")
+    if isinstance(payload.get("evidence_reintegration_ledger"), list):
+        AUTOPILOT_STATE["evidence_reintegration_ledger"] = [x for x in payload.get("evidence_reintegration_ledger") if isinstance(x, dict)][-20:]
     if isinstance(perf, dict):
         AUTOPILOT_STATE["family_performance"] = perf
     if isinstance(payload.get("family_cooldowns"), dict):
@@ -864,7 +894,7 @@ def _encode_small_private_env(payload: dict) -> tuple[str,int,int]:
 
 
 def _restore_seti_private_state() -> str:
-    raw=(os.getenv(SETI_PRIVATE_ENV_KEY) or "").strip()
+    raw=(_persisted_env(SETI_PRIVATE_ENV_KEY) or "").strip()
     if not raw:
         return "fresh"
     payload=_decode_state_env(raw)
@@ -1038,7 +1068,7 @@ def _commercial_evidence_env_key(
 def _evidence_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
     ref=reference if isinstance(reference,dict) else {}
     count=max(0,int(ref.get("chunk_count") or 0))
-    return [(os.getenv(_commercial_evidence_env_key(i,ref)) or "") for i in range(count)]
+    return [(_persisted_env(_commercial_evidence_env_key(i,ref)) or "") for i in range(count)]
 
 
 def _dedupe_evidence_rows(*groups: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -1096,7 +1126,7 @@ def _backup_manifest_recovery_rows() -> int:
 
 
 def _backup_manifest_present() -> bool:
-    return any(key.startswith("BACKUP_") and key.endswith("_MANIFEST") for key in os.environ)
+    return any(key.startswith("BACKUP_") and key.endswith("_MANIFEST") for key in _boot_env().keys())
 
 
 def replace_evidence_memory(
@@ -1143,7 +1173,7 @@ def replace_evidence_memory(
 def _recover_best_orphan_generation() -> tuple[list[dict[str, Any]] | None,dict[str, Any] | None]:
     groups={}
     pattern=re.compile(r"^NEO_EVIDENCE_([0-9a-f]{12})_([0-9]+)$")
-    for key,value in os.environ.items():
+    for key,value in _persisted_env_items():
         match=pattern.match(str(key))
         if not match:
             continue
@@ -1196,7 +1226,7 @@ def _challenge_track_env_key(index: int, reference: dict[str, Any] | None = None
 def _challenge_track_chunks_from_env(reference: dict[str, Any] | None) -> list[str]:
     ref=reference if isinstance(reference,dict) else {}
     count=max(0,int(ref.get("chunk_count") or 0))
-    return [(os.getenv(_challenge_track_env_key(i,ref)) or "") for i in range(count)]
+    return [(_persisted_env(_challenge_track_env_key(i,ref)) or "") for i in range(count)]
 
 
 def _decode_challenge_track_generation(reference: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1533,7 +1563,7 @@ async def _delete_challenge_track_generation(reference: dict[str, Any] | None) -
 def _restore_state() -> str:
     candidates=[]
 
-    raw=(os.getenv(STATE_ENV_KEY) or "").strip()
+    raw=(_persisted_env(STATE_ENV_KEY) or "").strip()
     if raw:
         payload=_decode_state_env(raw)
         if isinstance(payload,dict):
@@ -1587,6 +1617,15 @@ def _restore_state() -> str:
     payload=merge_supplementary_state(payload,compatible_candidates)
     payload,evidence_store_restore=_hydrate_external_commercial_evidence(payload)
     meta["commercial_evidence_store"]=evidence_store_restore
+    # Compare with a verifiable older generation even when the new generation
+    # is structurally valid. An unexplained reduction must not be checkpointed.
+    payload,evidence_continuity=verify_restart_continuity(
+        payload,
+        decode_previous=lambda ref: decode_external_store(ref,_evidence_chunks_from_env(ref)),
+        evidence_key=_evidence_memory_key,
+        restore_status=str(evidence_store_restore.get("status") or "ok"),
+    )
+    meta["evidence_continuity"]=evidence_continuity
     payload,challenge_track_store_restore=_hydrate_external_challenge_track(payload)
     meta["challenge_track_store"]=challenge_track_store_restore
     cycle_floor,cycle_floor_load=_load_cycle_floor()
@@ -1637,7 +1676,10 @@ def _restore_state() -> str:
     meta["cycle_floor"]=cycle_floor_meta
     if boundary_event:
         meta["commercial_boundary_event"]=boundary_event
+    meta["boot_env"]=_boot_env().status()
     AUTOPILOT_STATE["restore_candidates"]=meta
+    AUTOPILOT_STATE["boot_env"]=_boot_env().status()
+    AUTOPILOT_STATE["state_generation"]=state_generation_of(payload)
     if isinstance(payload,dict):
         try:
             if _merge_state_payload(payload):
@@ -1658,12 +1700,53 @@ def _save_local_state() -> None:
         pass
 
 
+async def _checkpoint_generation_guard() -> dict:
+    """Refuse to overwrite a saved checkpoint newer than the one we restored."""
+    loaded=int(AUTOPILOT_STATE.get("state_generation") or 0)
+    headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
+    saved_value=None
+    try:
+        async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
+            response=await client.get(f"{RENDER_API_BASE}/services/{RENDER_SERVICE_ID}/env-vars/{STATE_ENV_KEY}",headers=headers)
+        if response.status_code==404:
+            saved_value=""
+        elif response.is_success:
+            saved_value=_response_env_value(response)
+    except Exception:
+        saved_value=None
+    return await asyncio.to_thread(check_write_allowed,loaded,saved_value,_decode_state_env,STATE_WRITER_ID)
+
+
 @OBSERVATION.timed("checkpoint")
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return {"ok":False,"reason":"render_api_not_configured"}
 
+    guard=await _checkpoint_generation_guard()
+    AUTOPILOT_STATE["state_generation_guard"]=guard
+    if not guard.get("allowed"):
+        AUTOPILOT_STATE["evidence_store_degraded"]=True
+        AUTOPILOT_STATE["evidence_store_status"]={
+            **dict(AUTOPILOT_STATE.get("evidence_store_status") or {}),
+            "status":"continuity_blocked",
+            "reason":"stale_generation_write_blocked",
+        }
+        result={
+            "ok":False,
+            "checkpoint_utc":datetime.now(timezone.utc).isoformat(),
+            "reason":"stale_generation_write_blocked",
+            "loaded_generation":guard.get("loaded_generation"),
+            "saved_generation":guard.get("saved_generation"),
+        }
+        AUTOPILOT_STATE["last_checkpoint"]=result
+        return result
+    if guard.get("status")=="own_write_adopted":
+        AUTOPILOT_STATE["state_generation"]=int(guard.get("loaded_generation") or 0)
+    new_state_generation=next_generation(int(AUTOPILOT_STATE.get("state_generation") or 0))
+
     payload=_state_payload()
+    payload[STATE_GENERATION_FIELD]=new_state_generation
+    payload[STATE_WRITER_FIELD]=STATE_WRITER_ID
     degraded=bool(AUTOPILOT_STATE.get("evidence_store_degraded"))
     original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
     previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
@@ -1715,14 +1798,17 @@ async def _checkpoint_state_to_render() -> dict:
             payload["commercial_evidence_store_reference"]=dict(original_ref)
             payload["pending_evidence"]=pending_rows
             payload["evidence_store_degraded"]=True
-            payload["evidence_store_status"]={
-                "status":"degraded",
-                "active_count":len(evidence_rows),
-                "expected_active_count":int(original_ref.get("evidence_count") or 0),
-                "pending_count":len(pending_rows),
-                "pending_overflow_count":pending_overflow_count,
-                "archive_count":len(archive_rows),
-            }
+            payload["evidence_store_status"]=preserve_checkpoint_continuity_status(
+                AUTOPILOT_STATE.get("evidence_store_status"),
+                {
+                    "status":"degraded",
+                    "active_count":len(evidence_rows),
+                    "expected_active_count":int(original_ref.get("evidence_count") or 0),
+                    "pending_count":len(pending_rows),
+                    "pending_overflow_count":pending_overflow_count,
+                    "archive_count":len(archive_rows),
+                },
+            )
             compaction_meta["store_mode"]="external"
             compaction_meta["evidence_count_after_compaction"]=int(original_ref.get("evidence_count") or 0)
         else:
@@ -1841,6 +1927,14 @@ async def _checkpoint_state_to_render() -> dict:
             "compaction":compaction_meta,
         }
         if r.is_success:
+            echoed=_response_env_value(r)
+            if echoed is not None and echoed!=value:
+                result["ok"]=False
+                result["reason"]="render_state_verify_mismatch"
+                AUTOPILOT_STATE["last_checkpoint"]=result
+                return result
+            result["state_generation"]=new_state_generation
+            AUTOPILOT_STATE["state_generation"]=new_state_generation
             if new_challenge_ref:
                 AUTOPILOT_STATE["challenge_track_store_reference"]=new_challenge_ref
             if new_active_ref:
@@ -3013,6 +3107,44 @@ async def agent_demand_page(request: Request):
         )
     body+='</div></section>'
     return layout("Agent Demand",body)
+
+
+async def api_admin_evidence_reintegration(request: Request):
+    """plan / apply(confirm=plan_id) / revert(batch) evidence from saved generations. Counts only."""
+    try:
+        body=await request.json()
+    except Exception:
+        body={}
+    body=body if isinstance(body,dict) else {}
+    mode=str(body.get("mode") or "plan")
+    current=[x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
+    ledger=list(AUTOPILOT_STATE.get("evidence_reintegration_ledger") or [])
+    if mode=="revert":
+        batch=str(body.get("batch") or "")
+        if not batch:
+            return JSONResponse({"ok":False,"reason":"batch_required"},status_code=400)
+        kept,entry=reintegration_revert(current,batch)
+        removed=[x for x in current if x.get("restore_batch")==batch]
+        # Removal is explained (logged as archived) so the memory guard accepts it.
+        kept=replace_evidence_memory(current,kept,"evidence_reintegration_revert",archived_rows=removed)
+        AUTOPILOT_STATE["evidence_reintegration_ledger"]=(ledger+[entry])[-20:]
+        return JSONResponse({"ok":True,"mode":mode,**entry,"active_count":len(kept)})
+    fetched=await asyncio.to_thread(fetch_saved_env,RENDER_API_BASE,RENDER_SERVICE_ID or "",RENDER_API_KEY or "")
+    if not fetched.get("ok"):
+        return JSONResponse({"ok":False,"reason":"saved_env_unavailable:"+str(fetched.get("reason"))},status_code=503)
+    plan=await asyncio.to_thread(reintegration_plan,fetched.get("values") or {},current,_evidence_memory_key)
+    if mode=="plan":
+        return JSONResponse({"ok":True,"mode":mode,**reintegration_public(plan),"active_count":len(current)})
+    if mode!="apply":
+        return JSONResponse({"ok":False,"reason":"unknown_mode"},status_code=400)
+    if not plan.get("plan_id"):
+        return JSONResponse({"ok":True,"mode":mode,"rows":0,"reason":"nothing_to_reintegrate","active_count":len(current)})
+    if str(body.get("confirm") or "")!=plan.get("plan_id"):
+        return JSONResponse({"ok":False,"reason":"plan_changed_or_unconfirmed",**reintegration_public(plan)},status_code=409)
+    merged,entry=reintegration_apply(plan,current)
+    replace_evidence_memory(current,merged,"evidence_reintegration",backup_ok=True)
+    AUTOPILOT_STATE["evidence_reintegration_ledger"]=(ledger+[entry])[-20:]
+    return JSONResponse({"ok":True,"mode":mode,**entry,"active_count":len(AUTOPILOT_STATE.get("commercial_evidence_memory") or [])})
 
 
 async def api_admin_inbound(request: Request):
@@ -13321,6 +13453,9 @@ async def api_memory_status(request: Request):
         "ok":True,
         "neo_version":VERSION,
         "restore_source":AUTOPILOT_STATE.get("restore_source"),
+        "boot_env":dict(AUTOPILOT_STATE.get("boot_env") or {}),
+        "state_generation":AUTOPILOT_STATE.get("state_generation"),
+        "state_generation_guard":{k:(AUTOPILOT_STATE.get("state_generation_guard") or {}).get(k) for k in ("allowed","status","loaded_generation","saved_generation")},
         "family_performance":AUTOPILOT_STATE.get("family_performance") or {},
         "agent_trust_top":top,
         "build_history":list(AUTOPILOT_STATE.get("build_history") or [])[-10:],
@@ -14104,6 +14239,7 @@ app = Starlette(
         Route("/admin/seti-interviews", admin_seti_interviews_page, methods=["GET"]),
         Route("/api/admin/seti-interviews", api_admin_seti_interviews, methods=["GET"]),
         Route("/api/admin/inbound", api_admin_inbound, methods=["GET"]),
+        Route("/api/admin/evidence-reintegration", api_admin_evidence_reintegration, methods=["POST"]),
         Route("/api/admin/agent-chats", api_admin_agent_chats, methods=["GET"]),
         Route("/api/inbound/agents", api_inbound_agents, methods=["GET"]),
         Route("/trust", trust_lab_page, methods=["GET"]),
