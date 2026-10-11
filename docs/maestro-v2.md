@@ -27,3 +27,13 @@ Authorized by Andrea on 2026-10-11 ("3 procedere"). This document was written be
 If all three hold, teacher v2 replaces v1 as the **shadow** teacher and in the teacher-fitness arena lineage, after a separate PR. Otherwise v1 stays. There is one attempt: no model or threshold changes after seeing the result.
 
 **Cost.** Zero: GitHub-hosted CPU runner and an open-weights model. Logs show aggregate metrics only.
+
+## Result (2026-10-11, single preregistered attempt)
+
+| Arm | Web time split AUC | In-domain 5-fold AUC | Calibration AUC |
+|---|---|---|---|
+| V1 (TF-IDF + logistic regression) | **0.925** | **0.916** | 0.919 |
+| V2 (bge-small embeddings + logistic regression) | 0.886 | 0.826 | 0.885 |
+| V2H (TF-IDF + embeddings, secondary) | 0.935 | 0.902 | 0.923 |
+
+**Decision: not adopted. Teacher v1 stays.** The embeddings alone are worse on every measure, and much worse on NEO's own observations (−0.09). A plausible reason: what separates demand from supply here is phrasing ("we need", "our team pays for"), and a general-purpose embedding blurs it into topic similarity. The hybrid gains only 0.01 on web data, loses 0.014 in-domain and could not be adopted under the rule. Data: 8,841 web train items and 4,159 web test items; 668 in-domain items (56 positive); 100 calibration items (9 positive).
