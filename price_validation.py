@@ -173,6 +173,22 @@ def buyer_voice_counts(rows: list[dict[str, Any]] | None) -> dict[str,int]:
     return dict(counts)
 
 
+# Platforms where people discuss or host tools are never "competitors with a
+# pricing page": searching site:github.com pricing finds no price list.
+PLATFORM_DOMAINS = (
+    "github.com", "gitlab.com", "bitbucket.org", "ycombinator.com", "reddit.com",
+    "stackoverflow.com", "stackexchange.com", "superuser.com", "serverfault.com",
+    "wikipedia.org", "medium.com", "dev.to", "substack.com", "quora.com",
+    "twitter.com", "x.com", "linkedin.com", "facebook.com", "youtube.com",
+    "google.com", "bing.com", "producthunt.com",
+)
+
+
+def is_platform_domain(domain: str) -> bool:
+    d = str(domain or "").lower().strip(".")
+    return any(d == p or d.endswith("." + p) for p in PLATFORM_DOMAINS)
+
+
 def _known_pricing_domains(
     evidence_rows: list[dict[str, Any]] | None,
     family: str,
@@ -184,7 +200,7 @@ def _known_pricing_domains(
             continue
         url=str(row.get("url") or "")
         domain=canonical_domain(url)
-        if not domain or domain in out:
+        if not domain or domain in out or is_platform_domain(domain):
             continue
         signals={str(x) for x in (row.get("signal_types") or [])}
         if bool(row.get("real_price")) or bool(row.get("strict_price_verified")) or "COMPETITION" in signals:

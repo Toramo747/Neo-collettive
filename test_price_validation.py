@@ -44,6 +44,22 @@ class PriceValidationTests(unittest.TestCase):
             "snippet":"AgentPro costs $29/month",
         }))
 
+    def test_platform_domains_are_never_competitor_pricing_targets(self):
+        from price_validation import _known_pricing_domains, is_platform_domain
+        evidence=[
+            {"family":"integration_api","url":"https://github.com/acme/repo/issues/1","signal_types":["COMPETITION"]},
+            {"family":"integration_api","url":"https://news.ycombinator.com/item?id=1","signal_types":["COMPETITION"]},
+            {"family":"integration_api","url":"https://en.wikipedia.org/wiki/Webhook","real_price":True},
+            {"family":"integration_api","url":"https://webhook.site/pricing","signal_types":["COMPETITION"]},
+        ]
+        self.assertEqual(_known_pricing_domains(evidence,"integration_api"),["webhook.site"])
+        self.assertTrue(is_platform_domain("gist.github.com"))
+        self.assertFalse(is_platform_domain("notgithub.com"))
+        evidence.append({"family":"integration_api","gate_eligible":True,"signal_types":["BUY_INTENT"]})
+        queries=[q["query"] for c in range(12) for q in price_validation_plan(evidence,cycle=c,category_configs=CATEGORY_CONFIGS,budget=4)]
+        self.assertFalse(any("site:github.com" in q or "site:news.ycombinator.com" in q for q in queries))
+        self.assertTrue(any("site:webhook.site" in q for q in queries))
+
     def test_plan_rotates_only_families_with_buyer_voice(self):
         evidence=[
             {"family":"ai_tools","gate_eligible":True,"signal_types":["BUY_INTENT"]},
