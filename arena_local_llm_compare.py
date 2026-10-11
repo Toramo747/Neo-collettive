@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from local_llm_decoding import BASELINE_OPTIONS, ROBUST_OPTIONS, RETRY_OPTIONS, RETRY_SUFFIX, bounded_schema
 import json
 import time
 import urllib.request
@@ -128,7 +129,7 @@ def quality_score(role: str, parsed: dict|None, raw: str, schema_valid: bool) ->
         "score":score,
     }
 
-def run_model(model: str) -> dict[str,Any]:
+def run_model(model: str, decoding: str = "baseline") -> dict[str,Any]:
     cid="arena-compare-"+model.replace(":","-").replace("/","-")+"-"+datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     rows=[]
     total_start=time.perf_counter()
@@ -137,17 +138,27 @@ def run_model(model: str) -> dict[str,Any]:
         schema=schema_for(typ)
         started=time.perf_counter()
         raw=""; parsed=None; error=None; response={}
+        robust=decoding=="robust"
+        retried=False
         try:
             response=post_json("http://127.0.0.1:11434/api/generate",{
                 "model":model,
                 "prompt":prompt,
                 "stream":False,
-                "format":schema,
-                "options":{"temperature":0.2,"num_predict":360,"num_ctx":3072},
-                "keep_alive":"0",
+                "format":bounded_schema(schema) if robust else schema,
+                "options":dict(ROBUST_OPTIONS if robust else BASELINE_OPTIONS),
+                "keep_alive":"5m" if robust else "0",
             })
             raw=str(response.get("response") or "")
             parsed=extract_json(raw)
+            if robust and not isinstance(parsed,dict):
+                retried=True
+                response=post_json("http://127.0.0.1:11434/api/generate",{
+                    "model":model,"prompt":prompt+RETRY_SUFFIX,"stream":False,
+                    "format":bounded_schema(schema),"options":dict(RETRY_OPTIONS),"keep_alive":"0",
+                })
+                raw=str(response.get("response") or "")
+                parsed=extract_json(raw)
         except Exception as exc:
             error=f"{type(exc).__name__}: {exc}"
         elapsed=round(time.perf_counter()-started,3)
@@ -159,7 +170,7 @@ def run_model(model: str) -> dict[str,Any]:
         rows.append({
             "turn":turn,"actor":role,"expected_type":typ,"elapsed_seconds":elapsed,
             "raw":raw[:MAX_CHARS],"parsed":parsed,"schema_valid":valid,
-            "schema_verdict":verdict,"quality":q,"error":error,
+            "schema_verdict":verdict,"quality":q,"error":error,"retried":retried,
             "ollama":{"eval_count":response.get("eval_count"),"eval_duration_ns":response.get("eval_duration")},
         })
     total=round(time.perf_counter()-total_start,3)
@@ -167,6 +178,7 @@ def run_model(model: str) -> dict[str,Any]:
     qsum=sum(float(x["quality"]["score"]) for x in rows)
     return {
         "model":model,
+        "decoding":decoding,
         "transcript":rows,
         "metrics":{
             "messages":len(rows),
@@ -176,15 +188,38 @@ def run_model(model: str) -> dict[str,Any]:
             "total_generation_seconds":total,
             "average_generation_seconds":round(total/max(1,len(rows)),3),
             "glossary_errors":sum(1 for x in rows if not x["quality"]["glossary_correct"]),
+            "retries":sum(1 for x in rows if x.get("retried")),
         },
     }
+
+def decoding_ab(baseline: list[dict[str,Any]], robust: list[dict[str,Any]]) -> dict[str,Any]:
+    """Preregistered rule: robust decoding is adopted for a model if its
+    schema-valid rate rises by >= 0.25 and average quality does not drop."""
+    out={}
+    for b in baseline:
+        r=next((x for x in robust if x["model"]==b["model"]),None)
+        if not r:
+            continue
+        bm,rm=b["metrics"],r["metrics"]
+        adopt=(rm["schema_valid_rate"]>=bm["schema_valid_rate"]+0.25 and rm["average_quality_score"]>=bm["average_quality_score"])
+        out[b["model"]]={
+            "schema_valid_rate":[bm["schema_valid_rate"],rm["schema_valid_rate"]],
+            "average_quality":[bm["average_quality_score"],rm["average_quality_score"]],
+            "average_seconds":[bm["average_generation_seconds"],rm["average_generation_seconds"]],
+            "retries":rm.get("retries",0),
+            "adopt_robust":bool(adopt),
+        }
+    return {"rule":"adopt if schema-valid rate +0.25 and quality not lower","models":out}
+
 
 def main() -> int:
     p=argparse.ArgumentParser()
     p.add_argument("--models",nargs="+",default=list(DEFAULT_MODELS))
     p.add_argument("--out",default="data/arena/local-llm-comparison.json")
+    p.add_argument("--decoding",choices=("baseline","robust","both"),default="both")
     args=p.parse_args()
-    results=[run_model(m) for m in args.models]
+    results=[run_model(m,"baseline") for m in args.models] if args.decoding in ("baseline","both") else []
+    robust=[run_model(m,"robust") for m in args.models] if args.decoding in ("robust","both") else []
     report={
         "schema_v":1,"namespace":NAMESPACE,"status":"COMPLETED",
         "provider":"local_ollama","cost_eur":0,"score_weight":0.0,
@@ -192,7 +227,9 @@ def main() -> int:
         "promotion":"NONE","completed_at_utc":now_utc(),"topic":TOPIC,
         "format_mode":"ollama_json_schema",
         "glossary":{"MCP":"Model Context Protocol","A2A":"Agent2Agent"},
-        "models":results,
+        "models":results or robust,
+        "robust_models":robust,
+        "decoding_ab":decoding_ab(results,robust),
         "guardrails":{
             "deterministic_schema_validation":True,"injection_filter":True,
             "message_length_limit":MAX_CHARS,"no_external_agent_calls":True,

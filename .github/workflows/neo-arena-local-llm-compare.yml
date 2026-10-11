@@ -15,7 +15,7 @@ concurrency:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 40
     env:
       MODEL_SMALL: qwen2.5:0.5b-instruct
       MODEL_LARGE: qwen2.5:3b-instruct-q4_K_M
@@ -70,7 +70,7 @@ jobs:
       - name: Run same-scenario JSON-schema comparison
         run: |
           set -euo pipefail
-          timeout 600 python arena_local_llm_compare.py             --models "$MODEL_SMALL" "$MODEL_LARGE"             --out "$REPORT"
+          timeout 1500 python arena_local_llm_compare.py             --models "$MODEL_SMALL" "$MODEL_LARGE"             --out "$REPORT"
           python - <<'PY'
           import json,os
           p=os.environ["REPORT"]
@@ -85,6 +85,8 @@ jobs:
           }
           open(p,"w",encoding="utf-8").write(json.dumps(d,ensure_ascii=False,indent=2)+"\n")
           print(json.dumps({x["model"]:x["metrics"] for x in d["models"]},indent=2))
+          for m,r in d.get("decoding_ab",{}).get("models",{}).items():
+              print(f"::notice title=decoding A/B {m}::schema_valid {r['schema_valid_rate'][0]}->{r['schema_valid_rate'][1]} quality {r['average_quality'][0]}->{r['average_quality'][1]} sec {r['average_seconds'][0]}->{r['average_seconds'][1]} retries={r['retries']} adopt_robust={r['adopt_robust']}")
           PY
 
       - name: Assert zero-weight isolation
