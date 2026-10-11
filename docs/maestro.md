@@ -72,3 +72,23 @@ Findings:
 - Best signals: replies under "Show HN" ("I was looking for an app like this", "I would happily pay a one-time price") — demand attached to a concrete product.
 
 Proposal (pending Andrea): widen the strict pools (more pages and phrase variants, GitHub feature requests with relaxed reaction threshold) and re-measure volume at fixed precision before any training.
+
+### Phase 2c — widened strict pools (2026-10-11, seed 20261013)
+More phrase variants, up to 20 pages per query, two new label types. Sample of 95 (pools smaller than 20 sampled whole).
+
+| Label type | Pool (6 months) | Real demand in sample | Estimated real labels |
+|---|---|---|---|
+| HN first-person pay (12 phrases) | 187 | 3/20 | ~28 |
+| HN tool seeking (12 phrases) | 49 | 6/20 | ~15 |
+| HN product validation under Show HN | 67 | 15/20 | ~50 |
+| GitHub feature requests, term in title, >= 5 reactions | 15 | 14/15 | ~14 |
+| Stack Exchange softwarerecs (all questions) | 83 | 20/20 | ~83 |
+| **Total** | **401** | **58/95 = 61%** | **~190** |
+
+Findings:
+- Widening the phrases added little volume and some noise ("take my money", "pay good money" are mostly rhetoric): first-person pay fell to 3/20. Keep the original strict phrases only.
+- The precise sources are the ones where demand is structural: product validation under Show HN (75%), GitHub feature requests (93%), softwarerecs (100% by construction).
+- GitHub feature requests are the only source that lands inside NEO's B2B families (CRM, integrations/webhooks, AI tools, knowledge management): it is the natural candidate for the families HN does not cover.
+- Volume is still the limit: ~190 real labels in 6 months.
+
+Levers for volume (proposal): (1) extend the window to 3 years — labels are historical by design; (2) GitHub feature requests with >= 5 reactions on all repositories, family assigned afterwards, instead of family term in the title; (3) drop the noisy pay phrases.
