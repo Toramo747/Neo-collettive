@@ -79,6 +79,38 @@ def main(path: str) -> int:
         top = dict(sorted(named.items(), key=lambda kv: -kv[1])[:15])
         print("::notice title=inbound crawlers::" + json.dumps({"distinct": len(crawl), "named": top,
               "unnamed_requests": other}, separators=(",", ":")))
+    ap = d.get("autopilot") if isinstance(d.get("autopilot"), dict) else d
+    ev = [e for e in (ap.get("inbound_traffic_events") or []) if isinstance(e, dict)]
+    real_ev = [e for e in ev if e.get("category") == "real_contact"]
+    def tally(rows, key):
+        out = {}
+        for e in rows:
+            k = str(e.get(key) or "-")[:60]
+            out[k] = out.get(k, 0) + 1
+        return dict(sorted(out.items(), key=lambda kv: -kv[1])[:8])
+    if real_ev:
+        tools = {}
+        for e in real_ev:
+            t = e.get("tool_name") or e.get("mcp_tool") or (e.get("rpc_params") or {}).get("name") if isinstance(e.get("rpc_params"), dict) else e.get("tool_name") or e.get("mcp_tool")
+            if t:
+                tools[str(t)[:60]] = tools.get(str(t)[:60], 0) + 1
+        days = {}
+        for e in real_ev:
+            dday = str(e.get("timestamp_utc") or "")[:10]
+            days[dday] = days.get(dday, 0) + 1
+        print("::notice title=real contact events::" + json.dumps({
+            "events": len(real_ev), "by_reason": tally(real_ev, "reason"), "by_endpoint": tally(real_ev, "endpoint"),
+            "by_rpc_method": tally(real_ev, "rpc_method"), "tools_called": tools, "by_day": days,
+            "distinct_callers": len({str(e.get("ip_or_origin") or e.get("user_agent") or "") for e in real_ev}),
+            "client_family": {f: sum(1 for e in real_ev if family(str(e.get("user_agent") or "")) == f) for f in
+                              ("python", "node", "curl", "go", "browser", "mcp_client", "ip_only", "other")}},
+            separators=(",", ":"))[:3900])
+    if ev:
+        print("::notice title=event keys::" + ",".join(sorted({k for e in ev[:200] for k in e})))
+    msgs = ap.get("inbound_messages") or []
+    stats = ap.get("inbound_agent_stats") or {}
+    print("::notice title=inbound messages::" + json.dumps({"messages": len(msgs) if isinstance(msgs, list) else None,
+          "agent_stats_keys": sorted(stats)[:20] if isinstance(stats, dict) else None}, separators=(",", ":")))
     keys = sorted(k for k in (d.get("autopilot") or {}) if "chat" in k or "a2a" in k)
     mon = (d.get("autopilot") or {}).get("agent_chat_monitor") or (d.get("latest_result") or {}).get("agent_chat_monitor")
     print("::notice title=agent chats::" + json.dumps({"thread_count": (mon or {}).get("thread_count") if isinstance(mon, dict) else None,

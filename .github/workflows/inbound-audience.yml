@@ -15,13 +15,11 @@ jobs:
         with: {python-version: "3.12"}
       - name: Fetch live status (self-traffic marked) and print aggregates only
         env:
-          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
-          URL='https://neo-collettive.onrender.com/api/autonomy/status'
-          curl --fail --silent --show-error --max-time 60 \
+          curl --fail --silent --show-error --max-time 60 -H "Authorization: Bearer ${ADMIN_TOKEN}" \
             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat" \
-            -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "$URL" --marker github-actions-heartbeat)" \
-            "$URL" > /tmp/status.json
+            "https://neo-collettive.onrender.com/api/autopilot/status" > /tmp/status.json
           python tools/inbound_audience.py /tmp/status.json
           rm -f /tmp/status.json
