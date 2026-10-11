@@ -133,3 +133,18 @@ Reading:
 - On the 768 NEO observations the teacher flags 57% as demand, against a few percent for the lexicon judge: likely domain shift (74% of them are GitHub issues). Cannot be judged without human labels.
 
 Correction: the 768 records in `train.jsonl` are unlabelled observations (final_label empty; 5 auto-labels). There is no human-labelled calibration set outside `hidden.jsonl`, which is reserved and never opened. Calibration therefore needs a small set labelled by Andrea.
+
+### Phase 3b — calibration on NEO's own observations (2026-10-11)
+Andrea asked Claude to act as trainer. Calibration set: 100 NEO observations from `train.jsonl` (seed 20261016), labelled by Claude with the archive's 5 labels, stored as `maestro/maestro_calibration_claude.jsonl` with `label_origin: claude` (not human; `hidden.jsonl` untouched). Result: 9 buyer_tool_search, 16 vendor_offer, 2 job_posting, 73 other.
+
+| Teacher version | HN F1 (web test) | Calibration AUC | Calibration P / R / F1 at 0.5 | at 0.8 | Lexicon P / R / F1 |
+|---|---|---|---|---|---|
+| 3a (random negatives) | 0.73 | 0.814 | 0.15 / 0.89 / 0.26 | 0.40 / 0.44 / 0.42 | 0.28 / 0.89 / 0.42 |
+| 3b (+769 seller posts as negatives) | 0.77 | 0.805 | 0.13 / 0.78 / 0.23 | 0.60 / 0.33 / 0.43 | 0.28 / 0.89 / 0.42 |
+
+Reading:
+- On its own domain (web posts) the teacher is clearly better than the lexicon; seller negatives improved it further (HN F1 0.73 → 0.77).
+- On NEO's real input it is **not better than the lexicon yet**: it still flags 11/16 vendor pages and 34/73 other items. NEO's stream is made of genres the teacher never saw: SEO articles and listicles, spam issues ("Best X company in Y"), internal project tasks on GitHub.
+- The calibration set has only 9 positives: every figure here is noisy.
+
+Next (proposal): Claude labels the remaining 668 NEO observations; the teacher is retrained on web labels + in-domain NEO labels and tested on the 100 calibration items, which stay out of training.
