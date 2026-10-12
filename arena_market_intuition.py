@@ -44,7 +44,7 @@ VERSION = 2
 POPULATION = 8
 ELITES = 2
 QUERIES_PER_GENOME = 4
-HITS_PER_QUERY = 20
+HITS_PER_QUERY = 50
 SE_QUERY_CAP = 6          # Stack Exchange anonymous quota is 300/day per IP
 VOCAB_CAP = 240
 ARCHIVE_CAP = 20000
@@ -195,7 +195,8 @@ def http_json(url: str, timeout: float = 20.0) -> Any:
 
 
 def fetch(q: dict, recency_days: int, getter=http_json) -> list[dict]:
-    text = f"\"{q['phrase']}\" {q['term']}"
+    # Broad retrieval, strict filtering: the need sentence check does precision.
+    text = f"{q['term']} {q['phrase']}"
     since = int(time.time()) - recency_days * 86400
     src = q["source"]
     if src.startswith("hn_"):
@@ -218,7 +219,7 @@ def fetch(q: dict, recency_days: int, getter=http_json) -> list[dict]:
         return rows
     site = SE_SITES[src]
     url = ("https://api.stackexchange.com/2.3/search/advanced?" + urllib.parse.urlencode({
-        "q": text, "site": site, "sort": "creation", "order": "desc", "pagesize": HITS_PER_QUERY,
+        "q": q["term"], "site": site, "sort": "creation", "order": "desc", "pagesize": min(HITS_PER_QUERY, 30),
         "fromdate": since, "filter": "withbody"}))
     data = getter(url)
     rows = []
