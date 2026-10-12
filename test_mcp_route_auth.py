@@ -136,6 +136,21 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(k({"x-forwarded-for":"1.1.1.1, 2.2.2.2","origin":"https://x"},("3.3.3.3",1)),"2.2.2.2")
         self.assertEqual(k({},("3.3.3.3",1)),"3.3.3.3")
 
+    async def test_signed_smoke_uses_public_path_but_is_not_demand(self):
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
+        payload={"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{}}}
+        proof=make_self_traffic_proof("synthetic-hmac","/mcp-smoke")
+        status,_=await _call(self.wrapper,payload,headers={"x-mycelix-smoke-proof":proof})
+        self.assertEqual(status,200)
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE["public_tool_usage"],{})
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE["inbound_traffic_events"][-1]["category"],"self_traffic")
+        gated={"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"neo_web_search","arguments":{"query":"x"}}}
+        status,_=await _call(self.wrapper,gated,headers={"x-mycelix-smoke-proof":proof})
+        self.assertEqual(status,403)   # smoke proof grants no privilege
+        bad=make_self_traffic_proof("wrong-secret","/mcp-smoke")
+        await _call(self.wrapper,payload,headers={"x-mycelix-smoke-proof":bad})
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]["verify_mcp_endpoint"]["calls"],1)
+
     async def test_admin_calls_are_not_counted_as_demand(self):
         cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
         payload={"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"oxibay_doctor","arguments":{}}}

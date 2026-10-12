@@ -14238,6 +14238,12 @@ class _InboundTrafficASGI:
             user_agent=header_map.get("user-agent",""),origin=source,rpc_method=rpc,has_text=False,
             self_marker=self_marker,self_verified=self_verified,declared_agent_id=header_map.get("x-agent-id",""),
         )
+        # Signed smoke test: logged as our own traffic (never a real contact), but
+        # gets no privilege: it still goes through the public path and limits.
+        if header_map.get("x-mycelix-smoke-proof") and verify_self_traffic_proof(
+            HEARTBEAT_TOKEN,"/mcp-smoke",header_map.get("x-mycelix-smoke-proof","")
+        ).get("valid"):
+            category,reason="self_traffic","signed_smoke_test"
         params=payload.get("params") if isinstance(payload.get("params"),dict) else {}
         requested_tool_name=str(params.get("name") or "").strip()[:180] or None if rpc=="tools/call" else None
         row={
@@ -14286,6 +14292,7 @@ class _InboundTrafficASGI:
                 pass
             elif access=="public_network" and not privileged:
                 limit_key=_trusted_client_key(header_map,client)
+                # Signed smoke tests arrive here as self_traffic: limited, not counted.
                 if category!="self_traffic":
                     _record_public_tool_use(tool_name,limit_key,category)
                 if not _consume_mcp_public_network_limit(limit_key):
