@@ -70,5 +70,16 @@ class ArenaTests(unittest.TestCase):
         self.assertEqual(state["generation"], 1)
 
 
+
+class NeedSentenceTests(unittest.TestCase):
+    def test_term_and_need_must_share_a_sentence(self):
+        q = {"term": "crm", "phrase": "i wish there was"}
+        base = {"url": "https://news.ycombinator.com/item?id=1", "domain": "news.ycombinator.com", "title": "", "signal_types": []}
+        off = dict(base, excerpt="I wish there was a follow button on HN. Unrelated: our crm is fine.")
+        on = dict(base, excerpt="Honestly I wish there was a CRM that did not need a consultant to set up.")
+        self.assertEqual(a.need_sentence(off, q), "")
+        self.assertIn("CRM", a.need_sentence(on, q))
+
+
 if __name__ == "__main__":
     unittest.main()
