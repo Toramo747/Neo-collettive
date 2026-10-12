@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = "qwen2.5:14b-instruct-q4_K_M"
 SLUG = "neo-market-mind"
-MAX_ITEMS = 200
+MAX_ITEMS = 150
 WEEKLY_CAP_MINUTES = 25 * 60
 
 DRIVER = r'''
@@ -29,7 +29,10 @@ os.makedirs(W + "/mods", exist_ok=True)
 for name, src in SOURCES.items():
     open(W + "/mods/" + name, "w").write(src)
 sys.path.insert(0, W + "/mods")
+subprocess.run("apt-get install -y -qq zstd >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq zstd)", shell=True, capture_output=True)
 subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True, capture_output=True)
+os.environ["LD_LIBRARY_PATH"] = "/usr/local/nvidia/lib:/usr/local/nvidia/lib64:" + os.environ.get("LD_LIBRARY_PATH", "")
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 for _ in range(60):
     try:

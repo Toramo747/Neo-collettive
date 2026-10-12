@@ -45,3 +45,14 @@ Earlier fixes the same morning: v2 requires the need and the term in the same
 sentence (v1 rewarded unrelated chatter: 45 → 3 when replayed), broad
 retrieval with strict filtering, and a self-chaining loop because GitHub's
 scheduler had stopped firing.
+
+## Deep mind on Kaggle (2026-10-12)
+
+Every 12 generations (~6 h) the arena dispatches `mycelix-market-mind-deep`:
+a private Kaggle kernel on a free T4 runs qwen2.5 **14B** over the queued need
+sentences (max 150, people only as hashes), re-judges them, assigns problems,
+merges synonym problems and writes a deeper diary entry with new ideas. The
+result lands in `deep_inbox/` and the next generation applies it (deep verdicts
+override the small mind). GPU use is tracked privately with a 25 h/week cap.
+Measured on Kaggle: 14B fully on GPU, ~3.5–5 tokens/s, so a session takes
+about 30–40 minutes.
