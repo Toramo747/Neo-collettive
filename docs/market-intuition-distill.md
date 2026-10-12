@@ -25,3 +25,24 @@ On the held-out people, against the teacher's real_need labels:
 All three → the tuned model replaces the small mind. Otherwise the result is
 recorded as negative and the base model stays. The ceiling is the teacher:
 distillation cannot be better than the 14B, and inherits its biases.
+
+## Result (2026-10-12/13): NOT adopted
+
+Data: 1,198 sentences labeled by the 14B in 15 minutes of GPU (4 parallel
+requests); 959 for training (640 batch examples), 239 held out by person.
+Training: 20 minutes on a Kaggle T4, final average loss 1.33, GGUF q4_k_m 1.8 GB.
+
+| held-out vs 14B teacher | base 3B | distilled 3B |
+|---|---:|---:|
+| F1 (real need) | 0.616 | 0.621 |
+| precision | 0.527 | 0.621 |
+| recall | 0.742 | 0.621 |
+| false-positive rate | 0.254 | **0.145** |
+| agreement | 0.745 | 0.791 |
+| valid JSON | 97.1 % | 100 % |
+
+Rule: F1 gain ≥ 0.10 **failed** (+0.005); false-positive rate not higher
+passed. Machine verdict: not adopted; the base model stays. The student trades
+recall for precision (43 % fewer false needs), which may matter for the arena,
+but changing the rule after seeing the result is not allowed: any new attempt
+needs a new preregistration.
