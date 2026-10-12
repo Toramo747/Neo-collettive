@@ -387,7 +387,10 @@ def retroactive_from_inbound_messages(messages: list[dict]|None) -> list[dict]:
             continue
         sender=row.get("sender") if isinstance(row.get("sender"),dict) else {}
         origin=_clean(row.get("agent_card_url") or sender.get("agent_id") or sender.get("agent") or "historical_a2a",300)
-        is_self="chatgpt-research-session" in origin.lower()
+        # Signed self traffic, plus the deploy smoke's fixed CI message id for
+        # rows logged before the flag existed (spoofing it only hides a sender).
+        is_self=("chatgpt-research-session" in origin.lower() or bool(row.get("self_verified"))
+                 or str(row.get("message_id") or "").startswith("musekey-ci-smoke"))
         verdict=classify_inbound_security(str(row.get("text") or ""))
         is_malicious=verdict.get("traffic_class")=="MALICIOUS_SOLICITATION"
         out.append({
