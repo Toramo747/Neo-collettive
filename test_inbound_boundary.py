@@ -41,7 +41,8 @@ class InboundBoundaryTests(unittest.TestCase):
         self.assertIn('guarded_methods={',source)
         self.assertIn('if rpc=="tools/call":',source)
         self.assertIn('known_tool=tool_name in MCP_TOOL_ACCESS',source)
-        self.assertIn('known_tool and access!="public_readonly" and not privileged',source)
+        self.assertIn('known_tool and access not in ("public_readonly","public_network") and not privileged',source)
+        self.assertIn('_consume_mcp_public_network_limit',source)
         self.assertIn('_consume_mcp_public_readonly_limit',source)
         self.assertIn('endpoint_verifier.consume_rate_limit',source)
         self.assertNotIn('AUTOPILOT_STATE["knowledge_ledger"]=ledger[-80:]\n        row["knowledge_id"]',source)
@@ -60,8 +61,8 @@ class InboundBoundaryTests(unittest.TestCase):
             "neo_ask_agents":"gated_effectful",
             "neo_collective":"gated_effectful",
             "neo_inspect_mcp":"gated_network",
-            "verify_mcp_endpoint":"gated_network",
-            "oxibay_doctor":"gated_network",
+            "verify_mcp_endpoint":"public_network",
+            "oxibay_doctor":"public_network",
             "neo_web_search":"gated_network",
             "neo_jarvis":"gated_effectful",
             "neo_director":"gated_effectful",

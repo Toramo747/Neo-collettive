@@ -254,6 +254,28 @@ def _record_usage(domain: str, live: bool, errors: list[str], *, usage_scope: st
         metrics["error_types"][code] += 1
 
 
+def pin_to_resolved_ip(url: str, target: dict[str, Any], headers: dict[str, str]) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """Connect to the IP that passed the SSRF check (no second DNS lookup).
+
+    Without pinning, httpx resolves the name again at connect time, so a
+    hostile DNS server could answer a public IP to the check and a private one
+    (127.0.0.1, 169.254.169.254) to the connection (DNS rebinding). TLS still
+    verifies the certificate against the real hostname via sni_hostname.
+    """
+    parsed = urlparse(url)
+    host = target["host"]
+    ip = str((target.get("resolved_ips") or [""])[0])
+    if not ip or _blocked_ip(ip):
+        raise VerificationError("blocked_resolved_ip", ip or "none")
+    ip_netloc = ("[" + ip + "]") if ":" in ip else ip
+    if parsed.port:
+        ip_netloc += ":" + str(parsed.port)
+    pinned = parsed._replace(netloc=ip_netloc).geturl()
+    out_headers = dict(headers)
+    out_headers["Host"] = host + (":" + str(parsed.port) if parsed.port else "")
+    return pinned, out_headers, {"sni_hostname": host}
+
+
 async def _bounded_request(
     client: httpx.AsyncClient,
     method: str,
@@ -287,12 +309,14 @@ async def _bounded_request(
             async with slot:
                 if request_counts is not None:
                     request_counts[target["host"]] += 1
+                pinned_url, pinned_headers, extensions = pin_to_resolved_ip(current, target, clean_headers)
                 async with client.stream(
                     method.upper(),
-                    current,
+                    pinned_url,
                     json=json_body if method.upper() == "POST" else None,
-                    headers=clean_headers,
+                    headers=pinned_headers,
                     follow_redirects=False,
+                    extensions=extensions,
                 ) as response:
                     latency_ms = round((time.perf_counter() - started) * 1000, 2)
                     if response.status_code in {301, 302, 303, 307, 308}:

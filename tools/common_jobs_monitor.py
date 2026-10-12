@@ -61,13 +61,15 @@ def summarize(jobs: list[dict], replies: list[dict], prod: dict) -> dict:
 
 def main() -> int:
     out_dir = Path(sys.argv[1]) / "common"
-    prod = {}
+    prod, tools = {}, {}
     if len(sys.argv) > 2 and Path(sys.argv[2]).exists():
         try:
             data = json.loads(Path(sys.argv[2]).read_text())
-            prod = dict((data.get("autopilot") or data).get("common_jobs") or {})
+            ap = data.get("autopilot") or data
+            prod = dict(ap.get("common_jobs") or {})
+            tools = dict(ap.get("public_tool_usage") or {})
         except Exception:
-            prod = {}
+            prod, tools = {}, {}
     errors = []
     try:
         jobs = rows(fetch("/api/jobs?status=all&limit=100"), "jobs")
@@ -88,6 +90,12 @@ def main() -> int:
     with hist.open("a") as fh:
         fh.write(json.dumps({"captured_at_utc": stamp, **summary}) + "\n")
     print("::notice title=Common job board::" + json.dumps(summary, separators=(",", ":")))
+    # Free public MCP verifier test: aggregate demand only (hashed origins are never printed).
+    free = {name: {"calls": int(r.get("calls") or 0), "distinct_origins": int(r.get("distinct_origins") or 0),
+                   "returning_origins": int(r.get("returning_origins") or 0), "by_category": r.get("by_category") or {}} for name, r in tools.items()}
+    with (out_dir / "free_tools_history.jsonl").open("a") as fh:
+        fh.write(json.dumps({"captured_at_utc": stamp, **free}) + "\n")
+    print("::notice title=Free MCP verifier usage::" + json.dumps(free, separators=(",", ":")))
     return 0
 
 

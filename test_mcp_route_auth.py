@@ -56,6 +56,9 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         cloud_mcp._save_local_state=lambda: None
         cloud_mcp._MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN.clear()
         cloud_mcp._MCP_PUBLIC_READONLY_GLOBAL_CALLS.clear()
+        cloud_mcp._MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.clear()
+        cloud_mcp._MCP_PUBLIC_NETWORK_GLOBAL_CALLS.clear()
+        self.old_usage=deepcopy(cloud_mcp.AUTOPILOT_STATE.get("public_tool_usage") or {})
         self.wrapper=cloud_mcp._InboundTrafficASGI(_OkMcpApp())
 
     def tearDown(self):
@@ -66,6 +69,9 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         cloud_mcp._save_local_state=self.old_save
         cloud_mcp._MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN.clear()
         cloud_mcp._MCP_PUBLIC_READONLY_GLOBAL_CALLS.clear()
+        cloud_mcp._MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.clear()
+        cloud_mcp._MCP_PUBLIC_NETWORK_GLOBAL_CALLS.clear()
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]=self.old_usage
 
     async def test_initialize_and_tools_list_are_public(self):
         for method in ("initialize","tools/list"):
@@ -99,12 +105,35 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status,429)
         self.assertEqual((data.get("error") or {}).get("code"),-32029)
 
+    async def test_free_verifier_is_public_counted_and_strictly_limited(self):
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
+        payload={"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{"url":"https://example.org/mcp"}}}
+        for _ in range(cloud_mcp.MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR):
+            status,_=await _call(self.wrapper,payload)
+            self.assertEqual(status,200)
+        status,data=await _call(self.wrapper,payload)
+        self.assertEqual(status,429)
+        usage=cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]["verify_mcp_endpoint"]
+        self.assertEqual(usage["calls"],cloud_mcp.MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR+1)
+        self.assertEqual(usage["distinct_origins"],1)
+        self.assertNotIn("198.51.100.20",json.dumps(usage))   # origins are hashed
+
+    async def test_admin_calls_are_not_counted_as_demand(self):
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
+        payload={"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"oxibay_doctor","arguments":{}}}
+        status,_=await _call(self.wrapper,payload,headers={"authorization":"Bearer synthetic-admin"})
+        self.assertEqual(status,200)
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE["public_tool_usage"],{})
+
     def test_tool_access_table_is_explicit(self):
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["neo_director_results"],"public_readonly")
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["neo_web_search"],"gated_network")
-        self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["oxibay_doctor"],"gated_network")
+        self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["oxibay_doctor"],"public_network")
+        self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["verify_mcp_endpoint"],"public_network")
+        public={n for n,a in cloud_mcp.MCP_TOOL_ACCESS.items() if a.startswith("public")}
+        self.assertEqual(public,{"neo_director_results","verify_mcp_endpoint","oxibay_doctor"})
         for name,access in cloud_mcp.MCP_TOOL_ACCESS.items():
-            self.assertIn(access,{"public_readonly","gated_network","gated_effectful"},name)
+            self.assertIn(access,{"public_readonly","public_network","gated_network","gated_effectful"},name)
 
 
 if __name__=="__main__":
