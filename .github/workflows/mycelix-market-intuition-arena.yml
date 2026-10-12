@@ -1,17 +1,39 @@
 name: MYCELIX Market Intuition Arena (continuous, private)
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "17 * * * *"   # watchdog only: restarts the loop if the chain broke
   workflow_dispatch:
+    inputs:
+      loop_minutes:
+        description: "Run generations back-to-back for this long, then re-dispatch (0 = single generation)"
+        required: false
+        default: "330"
 permissions:
   contents: read
-concurrency:
-  group: mycelix-market-intuition-arena
-  cancel-in-progress: false
+  actions: write
 jobs:
-  generation:
+  watchdog:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 3
+    steps:
+      - name: Restart the loop if no loop is running or queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          active=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mycelix-market-intuition-arena.yml --event workflow_dispatch --limit 20 --json status --jq '[.[]|select(.status!="completed")]|length')
+          if [ "$active" = "0" ]; then
+            gh workflow run mycelix-market-intuition-arena.yml --repo "$GITHUB_REPOSITORY" --ref main -f loop_minutes=330
+            echo "::notice title=Market Intuition watchdog::loop restarted"
+          fi
+  generation:
+    if: github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: mycelix-market-intuition-arena
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,17 +47,34 @@ jobs:
           path: private-labels
       # State, discoveries and texts stay in the private archive.
       # The log prints aggregate counts and generic problem terms only.
-      - name: Run one generation
-        run: python arena_market_intuition.py --private-dir private-labels
-      - name: Persist privately
+      # Continuous mode: GitHub's scheduler can stall for hours, so a dispatched
+      # run loops one generation every 30 minutes and then re-dispatches itself.
+      # Cron stays as a fallback. Public repository: no Actions cost.
+      - name: Generations (one every 30 minutes)
+        env:
+          LOOP_MINUTES: ${{ inputs.loop_minutes || '0' }}
         run: |
           set -euo pipefail
           git -C private-labels config user.name "MYCELIX Market Intuition"
           git -C private-labels config user.email "actions@users.noreply.github.com"
-          git -C private-labels add market-intuition
-          git -C private-labels commit --quiet -m "market intuition: generation" || exit 0
-          for attempt in 1 2 3; do
-            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
-            sleep $((attempt*4))
+          start=$(date +%s)
+          while true; do
+            t0=$(date +%s)
+            git -C private-labels pull --quiet --rebase || true
+            python arena_market_intuition.py --private-dir private-labels || echo "::warning::generation failed"
+            git -C private-labels add market-intuition
+            if git -C private-labels commit --quiet -m "market intuition: generation"; then
+              for attempt in 1 2 3; do
+                git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && break
+                sleep $((attempt*4))
+              done
+            fi
+            elapsed=$(( ($(date +%s) - start) / 60 ))
+            if [ "$elapsed" -ge "$((LOOP_MINUTES - 32))" ]; then break; fi
+            sleep $(( 1800 - ($(date +%s) - t0) > 0 ? 1800 - ($(date +%s) - t0) : 0 ))
           done
-          exit 1
+      - name: Re-dispatch next loop
+        if: inputs.loop_minutes != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run mycelix-market-intuition-arena.yml --repo "$GITHUB_REPOSITORY" --ref main -f loop_minutes="${{ inputs.loop_minutes }}"
