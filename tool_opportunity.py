@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+import market_inference
 from price_validation import CANONICAL_PRICE_REQUIREMENT, extract_price, marketplace_identity, product_pricing_page
 
 TOOL_OPPORTUNITY_SCHEMA_VERSION = 2
@@ -695,6 +696,8 @@ def analyze_tool_opportunities(
             "gate_pass":gate_pass,
             "gate_rule":"specific tool + target user + >=2 independent payment sellers/domains + >=2 competitors with real price+URL + documented gap + dissatisfaction + >=3 source domains + score >=60",
             "missing":missing,
+            # Shadow only (decision 2026-10-12): infer the market without competitor prices.
+            "market_inference":market_inference.assess(sources,thesis_specific=thesis_specific,now=observed_at),
         }
         opportunities.append(opportunity)
 
@@ -733,6 +736,9 @@ def analyze_tool_opportunities(
             if x.get("sources") and "specific_tool_name_and_target_user" not in (x.get("missing") or [])
         ),
         "qualified_candidates":sum(1 for x in opportunities if x.get("gate_pass")),
+        "market_inference_shadow_pass":sum(
+            1 for x in opportunities if (x.get("market_inference") or {}).get("shadow_gate_pass")
+        ),
     }
     return {
         "schema_v":TOOL_OPPORTUNITY_SCHEMA_VERSION,
