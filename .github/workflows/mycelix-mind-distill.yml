@@ -1,0 +1,82 @@
+name: MYCELIX Mind Distill (Kaggle GPU, private)
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "harvest | label | label-fetch"
+        required: true
+        default: harvest
+permissions:
+  contents: read
+concurrency:
+  group: mycelix-mind-distill
+  cancel-in-progress: false
+jobs:
+  distill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet "kaggle>=1.8.0"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      # Texts, labels and kernels stay private; logs print counts only.
+      - name: Run stage
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          STAGE: ${{ inputs.stage }}
+        run: |
+          set -uo pipefail
+          K="$KAGGLE_USERNAME/neo-mind-distill-label"
+          case "$STAGE" in
+            harvest)
+              python tools/mi_distill.py harvest private-labels || exit 1 ;;
+            label)
+              python tools/mi_deep.py quota private-labels || { echo "weekly GPU cap reached"; exit 0; }
+              python tools/mi_distill.py label-build private-labels kernel "$KAGGLE_USERNAME" || exit 1
+              start=$(date +%s)
+              kaggle kernels push -p kernel >/dev/null 2>&1 || { echo "::error title=Distill::push failed"; exit 1; }
+              status=""
+              for i in $(seq 1 640); do
+                sleep 30
+                status=$(kaggle kernels status "$K" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*' | head -1 || true)
+                [ -n "$status" ] && break
+                [ $(( ($(date +%s) - start) / 60 )) -ge 330 ] && break
+              done
+              minutes=$(( ($(date +%s) - start) / 60 ))
+              echo "::notice title=Distill label::status=${status:-still_running} wall_minutes=$minutes"
+              kaggle kernels output "$K" -p out >/dev/null 2>&1 || true
+              [ -f out/labels.json ] && python tools/mi_distill.py label-collect private-labels out/labels.json
+              python - "$minutes" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+          p = Path("private-labels/market-intuition/deep_usage.json")
+          u = json.loads(p.read_text()) if p.exists() else {}
+          y, w, _ = datetime.now(timezone.utc).isocalendar()
+          k = f"{y}-W{w:02d}"
+          u[k] = round(float(u.get(k, 0)) + float(sys.argv[1]), 1)
+          p.write_text(json.dumps(u))
+          PY
+              ;;
+            label-fetch)
+              kaggle kernels output "$K" -p out >/dev/null 2>&1 || true
+              [ -f out/labels.json ] && python tools/mi_distill.py label-collect private-labels out/labels.json ;;
+            *) echo "unknown stage"; exit 1 ;;
+          esac
+          rm -rf out kernel
+          git -C private-labels config user.name "MYCELIX Mind Distill"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add market-intuition
+          git -C private-labels commit --quiet -m "mind distill: $STAGE" || exit 0
+          for attempt in 1 2 3 4; do
+            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
+            sleep $((attempt*5))
+          done
+          exit 1
