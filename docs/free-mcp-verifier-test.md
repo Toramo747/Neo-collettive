@@ -47,3 +47,13 @@ Unchanged and verified: HTTPS on port 443 only, no userinfo, redirects
 re-validated per hop, 256 KB response cap, no credentials forwarded, never
 calls remote tools, results never written to the knowledge ledger or
 hypothesis queue, other network tools remain admin-only.
+
+## Go-live (2026-10-12, authorized by Andrea)
+
+Deployed as 0.99.55 and republished in the official MCP Registry ("Free,
+no-key, read-only MCP endpoint verification and diagnostics."). External smoke
+from a GitHub runner: anonymous `initialize` 200, anonymous `verify_mcp_endpoint`
+200 (live, all checks present, no other callers' domains in the output),
+anonymous gated tool 403, 11th call in the hour 429.
+**Baseline correction:** the two smoke runs came from 2 runner IPs; subtract
+2 origins and their 22 calls when applying the 4-week rule.
