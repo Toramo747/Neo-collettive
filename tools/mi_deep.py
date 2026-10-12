@@ -91,7 +91,8 @@ def build(private_dir: str, kernel_dir: str, username: str) -> int:
     kd = Path(kernel_dir)
     kd.mkdir(parents=True, exist_ok=True)
     (kd / "mind.py").write_text(
-        f"MODEL = {MODEL!r}\nSOURCES = {json.dumps(sources)}\nINPUT = {json.dumps(payload, ensure_ascii=False)}\n" + DRIVER)
+        f"import json as _json\nMODEL = {MODEL!r}\nSOURCES = _json.loads({json.dumps(sources)!r})\n"
+        f"INPUT = _json.loads({json.dumps(payload, ensure_ascii=False)!r})\n" + DRIVER)
     (kd / "kernel-metadata.json").write_text(json.dumps({
         "id": f"{username}/{SLUG}", "title": SLUG, "code_file": "mind.py", "language": "python",
         "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True,
