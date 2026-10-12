@@ -6,7 +6,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
@@ -18,17 +18,34 @@ jobs:
         run: |
           set -uo pipefail
           note() { echo "::warning title=Kaggle smoke $1::$(echo "$2" | tr '\n' ' ' | sed -E 's#https?://[^ ]+#<url>#g' | cut -c1-400)"; }
-          auth=$(kaggle kernels list --mine --page-size 1 2>&1); note "auth (rc=$?)" "$auth"
+          kaggle kernels list --mine --page-size 1 >/dev/null 2>&1; note auth "rc=$?"
           mkdir -p k && cd k
           cat > smoke.py <<'PY'
           import subprocess, json, time
           out = {"nvidia": subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip()}
+          def sh(cmd, timeout=900):
+              r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+              return r.returncode, (r.stderr or r.stdout)[-300:]
           t = time.time()
-          try:
-              subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True, capture_output=True, timeout=300)
-              out["ollama_install_s"] = round(time.time() - t)
-          except Exception as e:
-              out["ollama_error"] = type(e).__name__
+          out["zstd"] = sh("apt-get install -y -qq zstd >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq zstd)")[0]
+          rc, err = sh("curl -fsSL https://ollama.com/install.sh | sh")
+          out["ollama_install_rc"], out["ollama_install_s"] = rc, round(time.time() - t)
+          if rc:
+              out["ollama_install_tail"] = err
+          else:
+              subprocess.Popen("ollama serve", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+              time.sleep(8)
+              t = time.time(); rc, err = sh("ollama pull qwen2.5:14b-instruct-q4_K_M", 1500)
+              out["pull_rc"], out["pull_s"] = rc, round(time.time() - t)
+              if not rc:
+                  import urllib.request
+                  body = json.dumps({"model": "qwen2.5:14b-instruct-q4_K_M", "prompt": "List five everyday business chores people hate, one line each.",
+                                     "stream": False, "options": {"num_predict": 200}}).encode()
+                  t = time.time()
+                  r = json.loads(urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
+                                                         headers={"Content-Type": "application/json"}), timeout=600).read())
+                  out["gen_s"] = round(time.time() - t, 1)
+                  out["tok_per_s"] = round(r.get("eval_count", 0) / max(r.get("eval_duration", 1) / 1e9, 1e-6), 1)
           json.dump(out, open("/kaggle/working/smoke.json", "w"))
           print(out)
           PY
@@ -40,7 +57,7 @@ jobs:
                     open("kernel-metadata.json", "w"))
           PY
           push=$(kaggle kernels push -p . 2>&1); note "push (rc=$?)" "$push"
-          for i in $(seq 1 60); do
+          for i in $(seq 1 70); do
             s=$(kaggle kernels status "$KAGGLE_USERNAME/neo-smoke" 2>&1 | grep -oiE 'complete|error|running|queued|cancel[a-z]*' | head -1 || true)
             echo "status: $s"; [ -z "$s" ] && { note status "$(kaggle kernels status "$KAGGLE_USERNAME/neo-smoke" 2>&1)"; break; }
             case "$s" in complete|COMPLETE|error|ERROR|cancel*) break;; esac
