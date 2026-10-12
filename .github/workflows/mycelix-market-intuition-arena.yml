@@ -1,0 +1,41 @@
+name: MYCELIX Market Intuition Arena (continuous, private)
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mycelix-market-intuition-arena
+  cancel-in-progress: false
+jobs:
+  generation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Validate arena
+        run: python -m unittest -q test_arena_market_intuition test_market_inference
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      # State, discoveries and texts stay in the private archive.
+      # The log prints aggregate counts and generic problem terms only.
+      - name: Run one generation
+        run: python arena_market_intuition.py --private-dir private-labels
+      - name: Persist privately
+        run: |
+          set -euo pipefail
+          git -C private-labels config user.name "MYCELIX Market Intuition"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add market-intuition
+          git -C private-labels commit --quiet -m "market intuition: generation" || exit 0
+          for attempt in 1 2 3; do
+            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
+            sleep $((attempt*4))
+          done
+          exit 1
