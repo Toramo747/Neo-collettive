@@ -16,7 +16,9 @@ jobs:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          note() { echo "::warning title=Kaggle smoke $1::$(echo "$2" | tr '\n' ' ' | sed -E 's#https?://[^ ]+#<url>#g' | cut -c1-400)"; }
+          auth=$(kaggle kernels list --mine --page-size 1 2>&1); note "auth (rc=$?)" "$auth"
           mkdir -p k && cd k
           cat > smoke.py <<'PY'
           import subprocess, json, time
@@ -37,10 +39,10 @@ jobs:
                      "enable_internet": True, "dataset_sources": [], "competition_sources": [], "kernel_sources": []},
                     open("kernel-metadata.json", "w"))
           PY
-          kaggle kernels push -p . 2>&1 | sed -E 's#https?://[^ ]+#<url>#g'
+          push=$(kaggle kernels push -p . 2>&1); note "push (rc=$?)" "$push"
           for i in $(seq 1 60); do
             s=$(kaggle kernels status "$KAGGLE_USERNAME/neo-smoke" 2>&1 | grep -oiE 'complete|error|running|queued|cancel[a-z]*' | head -1 || true)
-            echo "status: $s"
+            echo "status: $s"; [ -z "$s" ] && { note status "$(kaggle kernels status "$KAGGLE_USERNAME/neo-smoke" 2>&1)"; break; }
             case "$s" in complete|COMPLETE|error|ERROR|cancel*) break;; esac
             sleep 30
           done
