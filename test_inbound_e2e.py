@@ -128,20 +128,31 @@ class InboundEndToEndTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("knowledge_ledger"),[])
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE.get("hypothesis_queue"),[])
 
-    async def test_network_capable_mcp_verify_tool_requires_auth(self):
+    async def test_free_verify_tool_is_public_and_gated_tools_still_require_auth(self):
+        # Policy since 2026-10-12 (free MCP verifier test): verify_mcp_endpoint is
+        # public under strict limits; other network-capable tools stay gated.
         seen={}
         async def downstream(scope,receive,send):
             seen["called"]=True
             await send({"type":"http.response.start","status":200,"headers":[(b"content-type",b"application/json")]})
             await send({"type":"http.response.body","body":b'{"ok":true}'})
         wrapper=cloud_mcp._InboundTrafficASGI(downstream)
-        payload={
+        free={
             "jsonrpc":"2.0","id":"e2e-read","method":"tools/call",
             "params":{"name":"verify_mcp_endpoint","arguments":{"url":"https://example.com/mcp"}},
         }
+        gated={
+            "jsonrpc":"2.0","id":"e2e-gated","method":"tools/call",
+            "params":{"name":"neo_web_search","arguments":{"query":"x"}},
+        }
+        cloud_mcp._MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.clear()
+        cloud_mcp._MCP_PUBLIC_NETWORK_GLOBAL_CALLS.clear()
         with patch.object(cloud_mcp,"_save_local_state",return_value=None), \
              patch.object(cloud_mcp.endpoint_verifier,"consume_rate_limit",return_value=None):
-            status,response=await asgi_request(wrapper,"/mcp","POST",payload)
+            status,_=await asgi_request(wrapper,"/mcp","POST",free)
+            self.assertEqual(status,200)
+            self.assertTrue(seen.pop("called",False))
+            status,response=await asgi_request(wrapper,"/mcp","POST",gated)
         self.assertEqual(status,403)
         self.assertFalse(seen.get("called",False))
         self.assertEqual((response.get("error") or {}).get("code"),-32003)

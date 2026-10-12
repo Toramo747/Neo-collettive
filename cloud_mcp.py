@@ -193,7 +193,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.54"  # commercial evidence memory repair and recovery
+VERSION = "0.99.55"  # free public MCP verifier test (verify_mcp_endpoint, oxibay_doctor)
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -351,6 +351,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "stagnation_cycles": 0,
     "agent_trust": {},
     "common_jobs": {},
+    "public_tool_usage": {},
     "build_history": [],
     "last_build": None,
     "measurement_history": [],
@@ -537,6 +538,7 @@ def _state_payload() -> dict:
         "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
         "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
         "common_jobs": AUTOPILOT_STATE.get("common_jobs") or {},
+        "public_tool_usage": AUTOPILOT_STATE.get("public_tool_usage") or {},
         "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
@@ -627,6 +629,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["agent_trust"] = payload.get("agent_trust") or {}
     if isinstance(payload.get("common_jobs"), dict):
         AUTOPILOT_STATE["common_jobs"] = payload.get("common_jobs") or {}
+    if isinstance(payload.get("public_tool_usage"), dict):
+        AUTOPILOT_STATE["public_tool_usage"] = payload.get("public_tool_usage") or {}
     if isinstance(payload.get("build_history"), list):
         AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
     if isinstance(payload.get("last_build"), dict):
@@ -10748,8 +10752,10 @@ MCP_TOOL_ACCESS = {
     "neo_ask_agents":"gated_effectful",
     "neo_collective":"gated_effectful",
     "neo_inspect_mcp":"gated_network",
-    "verify_mcp_endpoint":"gated_network",
-    "oxibay_doctor":"gated_network",
+    # Free public test (decision 2026-10-12): anyone may call these read-only
+    # verifiers without a key, under tight per-origin and global limits.
+    "verify_mcp_endpoint":"public_network",
+    "oxibay_doctor":"public_network",
     "neo_web_search":"gated_network",
     "neo_jarvis":"gated_effectful",
     "neo_director":"gated_effectful",
@@ -10769,6 +10775,78 @@ def _mcp_tool_access(name: str) -> str:
 
 MCP_PUBLIC_READONLY_PER_ORIGIN_PER_HOUR = 30
 MCP_PUBLIC_READONLY_GLOBAL_PER_DAY = 3000
+MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR = 10
+PUBLIC_TOOL_DEADLINE_SECONDS = 45.0
+MCP_PUBLIC_NETWORK_GLOBAL_PER_DAY = 500
+_MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN: dict[str, list[float]] = {}
+_MCP_PUBLIC_NETWORK_GLOBAL_CALLS: list[float] = []
+
+
+def _consume_mcp_public_network_limit(source: str) -> bool:
+    """Public tools that make outbound requests: stricter limits than read-only ones."""
+    global _MCP_PUBLIC_NETWORK_GLOBAL_CALLS
+    now=time.time()
+    _MCP_PUBLIC_NETWORK_GLOBAL_CALLS=[ts for ts in _MCP_PUBLIC_NETWORK_GLOBAL_CALLS if ts>now-86400.0]
+    if len(_MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN)>5000:
+        for k in list(_MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN):
+            if not any(ts>now-3600.0 for ts in _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN[k]):
+                _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.pop(k,None)
+    key=endpoint_verifier.caller_bucket(source or "unknown")
+    calls=[ts for ts in _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.get(key,[]) if ts>now-3600.0]
+    if len(calls)>=MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR or len(_MCP_PUBLIC_NETWORK_GLOBAL_CALLS)>=MCP_PUBLIC_NETWORK_GLOBAL_PER_DAY:
+        _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN[key]=calls
+        return False
+    calls.append(now)
+    _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN[key]=calls
+    _MCP_PUBLIC_NETWORK_GLOBAL_CALLS.append(now)
+    return True
+
+
+def _trusted_client_key(header_map: dict, client: Any) -> str:
+    """Rate-limit/usage key a caller cannot choose freely.
+
+    Origin, Referer and the FIRST X-Forwarded-For entry are client-controlled
+    (Render appends to X-Forwarded-For rather than replacing it), so they must
+    not key limits. Prefer headers set by the edge (Cloudflare), then the LAST
+    X-Forwarded-For hop, then the socket peer.
+    """
+    for name in ("cf-connecting-ip","true-client-ip"):
+        value=str(header_map.get(name) or "").strip()
+        if value:
+            return value[:64]
+    hops=[h.strip() for h in str(header_map.get("x-forwarded-for") or "").split(",") if h.strip()]
+    if hops:
+        return hops[-1][:64]
+    return str((client or ("",0))[0] or "unknown")[:64]
+
+
+def _record_public_tool_use(tool_name: str, source: str, category: str) -> None:
+    """Aggregate usage of the free public tools (the demand test): counts and hashed origins only."""
+    usage=dict(AUTOPILOT_STATE.get("public_tool_usage") or {})
+    row=dict(usage.get(tool_name) or {"calls":0,"origins":[],"by_category":{}})
+    now=datetime.now(timezone.utc).isoformat()
+    row["calls"]=int(row.get("calls") or 0)+1
+    bucket=endpoint_verifier.caller_bucket(source or "unknown")
+    origins=[o for o in row.get("origins") or [] if o!=bucket]+[bucket]
+    row["origins"]=origins[-500:]
+    row["distinct_origins"]=len(row["origins"])
+    # returning origins: hashed origin seen again on a different UTC day
+    first_day=dict(row.get("first_day") or {})
+    today=now[:10]
+    first_day.setdefault(bucket,today)
+    returning=set(row.get("returning") or [])
+    if first_day[bucket]!=today:
+        returning.add(bucket)
+    row["first_day"]=dict(list(first_day.items())[-500:])
+    row["returning"]=sorted(returning)[-500:]
+    row["returning_origins"]=len(row["returning"])
+    cats=dict(row.get("by_category") or {})
+    cats[category]=int(cats.get(category) or 0)+1
+    row["by_category"]=cats
+    row.setdefault("first_utc",now)
+    row["last_utc"]=now
+    usage[tool_name]=row
+    AUTOPILOT_STATE["public_tool_usage"]=usage
 _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN: dict[str, list[float]] = {}
 _MCP_PUBLIC_READONLY_GLOBAL_CALLS: list[float] = []
 
@@ -10830,7 +10908,7 @@ async def neo_inspect_mcp(query: str, limit: int = 4) -> dict:
 @mcp.tool(
     title="Verify MCP Endpoint",
     description=(
-        "Read-only verification of a public MCP HTTPS endpoint or official Registry server name. "
+        "Free, no API key. Read-only verification of a public MCP HTTPS endpoint or official Registry server name. "
         "Checks DNS/SSRF safety, TLS/HTTP reachability, initialize, tools/list schema sanity, "
         "latency and discovery metadata. Never invokes remote tools or forwards credentials."
     ),
@@ -10843,18 +10921,23 @@ async def verify_mcp_endpoint(
     """Verify a public MCP endpoint without tools/call or state-changing requests."""
     connection = getattr(ctx, "connection", None)
     caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
-    return await endpoint_verifier.verify_endpoint(
-        url=(url or None),
-        registry_name=(registry_name or None),
-        caller=caller,
-        client_version=VERSION,
-    )
+    # Overall deadline: per-read timeouts alone let a slow-drip server hold a
+    # public call open for a long time.
+    try:
+        return await asyncio.wait_for(endpoint_verifier.verify_endpoint(
+            url=(url or None),
+            registry_name=(registry_name or None),
+            caller=caller,
+            client_version=VERSION,
+        ),timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
+    except asyncio.TimeoutError:
+        return {"ok":False,"error":"verification_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
 
 
 @mcp.tool(
     title="OXIBAY Doctor",
     description=(
-        "Read-only MCP diagnostic. Reuses MYCELIX endpoint verification, classifies technical "
+        "Free, no API key. Read-only MCP diagnostic. Reuses MYCELIX endpoint verification, classifies technical "
         "failures, and optionally compares the requested capability with declared tool metadata. "
         "Never invokes remote tools, never forwards credentials, and never affects commercial gates."
     ),
@@ -10868,13 +10951,16 @@ async def oxibay_doctor(
     """Diagnose a public MCP endpoint without tools/call or production mutation."""
     connection = getattr(ctx, "connection", None)
     caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
-    return await oxibay_doctor_engine.diagnose_endpoint(
-        url=(url or None),
-        registry_name=(registry_name or None),
-        caller=caller,
-        client_version=VERSION,
-        expected_capability=expected_capability,
-    )
+    try:
+        return await asyncio.wait_for(oxibay_doctor_engine.diagnose_endpoint(
+            url=(url or None),
+            registry_name=(registry_name or None),
+            caller=caller,
+            client_version=VERSION,
+            expected_capability=expected_capability,
+        ),timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
+    except asyncio.TimeoutError:
+        return {"ok":False,"error":"diagnosis_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
 
 
 @mcp.tool()
@@ -14185,7 +14271,7 @@ class _InboundTrafficASGI:
             known_tool=tool_name in MCP_TOOL_ACCESS
             access=_mcp_tool_access(tool_name) if known_tool else "invalid_request"
             privileged=bool(self_verified or admin_header_authorized(header_map,NEO_ADMIN_TOKEN))
-            if known_tool and access!="public_readonly" and not privileged:
+            if known_tool and access not in ("public_readonly","public_network") and not privileged:
                 response={
                     "jsonrpc":"2.0","id":payload.get("id"),
                     "error":{"code":-32003,"message":"unauthorized_tool_call"},
@@ -14198,6 +14284,21 @@ class _InboundTrafficASGI:
                 return
             if not known_tool:
                 pass
+            elif access=="public_network" and not privileged:
+                limit_key=_trusted_client_key(header_map,client)
+                if category!="self_traffic":
+                    _record_public_tool_use(tool_name,limit_key,category)
+                if not _consume_mcp_public_network_limit(limit_key):
+                    response={
+                        "jsonrpc":"2.0","id":payload.get("id"),
+                        "error":{"code":-32029,"message":"rate_limited"},
+                    }
+                    raw=json.dumps(response,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+                    await send({"type":"http.response.start","status":429,"headers":[
+                        (b"content-type",b"application/json"),(b"content-length",str(len(raw)).encode("ascii")),
+                    ]})
+                    await send({"type":"http.response.body","body":raw})
+                    return
             elif access=="public_readonly":
                 if not _consume_mcp_public_readonly_limit(source):
                     response={

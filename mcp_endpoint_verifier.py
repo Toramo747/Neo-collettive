@@ -116,6 +116,13 @@ def _hostname(url: str) -> str:
     return (urlparse(url).hostname or "").lower().rstrip(".")
 
 
+_TRANSLATION_NETS = tuple(ipaddress.ip_network(n) for n in (
+    "64:ff9b::/96",      # NAT64 well-known prefix: may reach internal IPv4
+    "64:ff9b:1::/48",    # local-use NAT64
+    "::/96",             # deprecated IPv4-compatible (e.g. ::127.0.0.1 reports is_global)
+))
+
+
 def _blocked_ip(ip_text: str) -> bool:
     try:
         ip = ipaddress.ip_address(ip_text)
@@ -124,6 +131,12 @@ def _blocked_ip(ip_text: str) -> bool:
     # Fail closed: only globally routable addresses are eligible. This also
     # blocks RFC1918, loopback, link-local, CGNAT/shared space, documentation
     # ranges, IPv6 ULA and cloud metadata/link-local addresses.
+    if ip.version == 6:
+        if any(ip in net for net in _TRANSLATION_NETS):
+            return True
+        embedded = ip.ipv4_mapped or ip.sixtofour or (ip.teredo[1] if ip.teredo else None)
+        if embedded is not None and not embedded.is_global:
+            return True
     return not bool(ip.is_global)
 
 
@@ -139,7 +152,7 @@ async def resolve_public_ips(host: str) -> list[str]:
         direct = None
     if direct is not None:
         if _blocked_ip(str(direct)):
-            raise VerificationError("blocked_ip", str(direct))
+            raise VerificationError("blocked_ip")
         return [str(direct)]
 
     try:
@@ -151,7 +164,7 @@ async def resolve_public_ips(host: str) -> list[str]:
         raise VerificationError("dns_no_results", host_low)
     blocked = [ip for ip in ips if _blocked_ip(ip)]
     if blocked:
-        raise VerificationError("blocked_resolved_ip", ",".join(blocked[:4]))
+        raise VerificationError("blocked_resolved_ip")
     return ips
 
 
@@ -239,6 +252,14 @@ def usage_metrics_snapshot() -> dict[str, Any]:
     return _metrics_snapshot(_METRICS, "external")
 
 
+def public_usage_counts() -> dict[str, Any]:
+    """What a caller may see: totals only, never which domains other callers checked."""
+    snap = _metrics_snapshot(_METRICS, "external")
+    snap.pop("domains", None)
+    snap["domains_checked"] = len(_METRICS["domains"])
+    return snap
+
+
 def internal_usage_metrics_snapshot() -> dict[str, Any]:
     return _metrics_snapshot(_INTERNAL_METRICS, "internal_registry_health")
 
@@ -247,11 +268,35 @@ def _record_usage(domain: str, live: bool, errors: list[str], *, usage_scope: st
     metrics = _INTERNAL_METRICS if usage_scope == "internal_registry_health" else _METRICS
     metrics["calls"] += 1
     metrics["live" if live else "not_live"] += 1
+    if (domain or "unknown") not in metrics["domains"] and len(metrics["domains"]) >= 500:
+        domain = "other"
     row = metrics["domains"][domain or "unknown"]
     row["checks"] += 1
     row["live" if live else "not_live"] += 1
     for code in sorted(set(errors)):
         metrics["error_types"][code] += 1
+
+
+def pin_to_resolved_ip(url: str, target: dict[str, Any], headers: dict[str, str]) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """Connect to the IP that passed the SSRF check (no second DNS lookup).
+
+    Without pinning, httpx resolves the name again at connect time, so a
+    hostile DNS server could answer a public IP to the check and a private one
+    (127.0.0.1, 169.254.169.254) to the connection (DNS rebinding). TLS still
+    verifies the certificate against the real hostname via sni_hostname.
+    """
+    parsed = urlparse(url)
+    host = target["host"]
+    ip = str((target.get("resolved_ips") or [""])[0])
+    if not ip or _blocked_ip(ip):
+        raise VerificationError("blocked_resolved_ip")
+    ip_netloc = ("[" + ip + "]") if ":" in ip else ip
+    if parsed.port:
+        ip_netloc += ":" + str(parsed.port)
+    pinned = parsed._replace(netloc=ip_netloc).geturl()
+    out_headers = dict(headers)
+    out_headers["Host"] = host + (":" + str(parsed.port) if parsed.port else "")
+    return pinned, out_headers, {"sni_hostname": host}
 
 
 async def _bounded_request(
@@ -287,12 +332,14 @@ async def _bounded_request(
             async with slot:
                 if request_counts is not None:
                     request_counts[target["host"]] += 1
+                pinned_url, pinned_headers, extensions = pin_to_resolved_ip(current, target, clean_headers)
                 async with client.stream(
                     method.upper(),
-                    current,
+                    pinned_url,
                     json=json_body if method.upper() == "POST" else None,
-                    headers=clean_headers,
+                    headers=pinned_headers,
                     follow_redirects=False,
+                    extensions=extensions,
                 ) as response:
                     latency_ms = round((time.perf_counter() - started) * 1000, 2)
                     if response.status_code in {301, 302, 303, 307, 308}:
@@ -507,7 +554,7 @@ async def verify_endpoint(
                     "input": {"url": url, "registry_name": registry_name},
                     "checks": {"registry": {"ok": False, "error": exc.code, "detail": exc.detail}},
                     "errors": errors,
-                    "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
+                    "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else public_usage_counts(),
                 }
 
         if not requested_url:
@@ -520,7 +567,7 @@ async def verify_endpoint(
                 "input": {"url": url, "registry_name": registry_name},
                 "checks": {},
                 "errors": errors,
-                "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
+                "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else public_usage_counts(),
             }
 
         domain = _hostname(requested_url) or "unknown"
@@ -541,7 +588,7 @@ async def verify_endpoint(
                 "checks": checks,
                 "errors": errors,
                 "comparison": "registered_but_not_reachable" if registry else None,
-                "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
+                "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else public_usage_counts(),
             }
 
         initialize = {
@@ -710,5 +757,5 @@ async def verify_endpoint(
             "credentials_forwarded": False,
             "usage_scope": usage_scope,
             "request_counts_by_host": dict(request_counts),
-            "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else usage_metrics_snapshot(),
+            "usage_metrics": internal_usage_metrics_snapshot() if usage_scope == "internal_registry_health" else public_usage_counts(),
         }
