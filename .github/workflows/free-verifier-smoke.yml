@@ -10,16 +10,30 @@ jobs:
     steps:
       - name: Anonymous calls from outside, then check the per-origin limit
         run: |
-          set -uo pipefail
+          set +e
           U=https://neo-collettive.onrender.com/mcp
           H=(-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream')
           call() { curl -s -m 60 -o /tmp/body -w '%{http_code}' "$U" "${H[@]}" -d "$1"; }
           init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"free-verifier-smoke","version":"1"}}}'
           echo "::notice title=initialize::$(call "$init")"
           v='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{"url":"https://neo-collettive.onrender.com/mcp"}}}'
-          first=$(call "$v"); live=$(grep -o '"live": *[a-z]*' /tmp/body | head -1 | tr -d ' ')
-          leak=$(grep -c '"domains"' /tmp/body || true)
-          echo "::notice title=verify anonymous::http=$first $live domains_listed=$leak"
+          first=$(call "$v")
+          summary=$(python3 - <<'PY'
+          import json, re
+          raw = open("/tmp/body").read()
+          m = re.search(r"^data: (.*)$", raw, re.M)
+          d = json.loads(m.group(1) if m else raw)
+          txt = json.dumps(d)
+          res = d.get("result") or {}
+          sc = res.get("structuredContent") or {}
+          if not sc:
+              for c in res.get("content") or []:
+                  try: sc = json.loads(c.get("text") or "{}"); break
+                  except Exception: pass
+          print(f"is_error={res.get('isError')} live={sc.get('live')} status={sc.get('status')} checks={sorted((sc.get('checks') or {}).keys())[:8]} domains_listed={'\"domains\"' in txt} error={(d.get('error') or {}).get('message')}")
+          PY
+          )
+          echo "::notice title=verify anonymous::http=$first $summary"
           g='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"neo_web_search","arguments":{"query":"x"}}}'
           echo "::notice title=gated tool anonymous::http=$(call "$g")"
           codes=""
