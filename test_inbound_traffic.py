@@ -234,3 +234,14 @@ class InboundTrafficTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+
+class SelfMessageReconciliationTests(unittest.TestCase):
+    def test_signed_or_ci_smoke_messages_are_not_real_contacts(self):
+        from inbound_traffic import retroactive_from_inbound_messages
+        rows = retroactive_from_inbound_messages([
+            {"method": "message/send", "text": "hello", "received_at_utc": "2026-10-12T10:56:00+00:00", "message_id": "musekey-ci-smoke-msg"},
+            {"method": "message/send", "text": "hi", "received_at_utc": "2026-10-12T10:57:00+00:00", "message_id": "x1", "self_verified": True},
+            {"method": "message/send", "text": "real question", "received_at_utc": "2026-10-12T10:58:00+00:00", "message_id": "x2"},
+        ])
+        self.assertEqual([r["category"] for r in rows], ["self_traffic", "self_traffic", "real_contact"])

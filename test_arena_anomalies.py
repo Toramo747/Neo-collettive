@@ -106,3 +106,29 @@ class AnomalyTests(unittest.TestCase):
             r3 = a.run(Path(d), fetch=lambda q: feed, now=NOW, pause=0, classify=False)
             self.assertEqual(r3["anomalies"]["hubble_tension"]["trend"]["status"], "FIRST_OBSERVATION")
             self.assertEqual(r2["anomalies"]["hubble_tension"]["papers"], 0)
+
+
+class ControlAndRetryTests(unittest.TestCase):
+    def test_missing_control_is_not_calibrated(self):
+        import arena_anomalies as A
+        rows = {"hubble": {"control": False, "persistence": 0.4, "low_sample": False, "trend": {"status": "STABLE"}}}
+        ok, note = A.controls_check(rows, expected_controls=1)
+        self.assertIsNone(ok)
+        self.assertIn("not fetched", note)
+
+    def test_fetch_retries_then_succeeds(self):
+        import arena_anomalies as A
+        from unittest import mock
+        calls = {"n": 0}
+        class R:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b"<feed/>"
+        def fake(req, timeout=None):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise TimeoutError()
+            return R()
+        with mock.patch("urllib.request.urlopen", fake), mock.patch("time.sleep", lambda s: None):
+            self.assertEqual(A.fetch_atom("q"), "<feed/>")
+        self.assertEqual(calls["n"], 3)

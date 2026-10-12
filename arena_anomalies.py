@@ -77,12 +77,21 @@ BOUNDARY = {
 }
 
 
-def fetch_atom(query: str, timeout: float = 30.0) -> str:
+def fetch_atom(query: str, timeout: float = 45.0, attempts: int = 3, backoff: float = 15.0) -> str:
+    """arXiv often answers 429/503 or times out under load: retry with backoff."""
     params = urllib.parse.urlencode({"search_query": query, "sortBy": "submittedDate",
                                      "sortOrder": "descending", "max_results": MAX_RESULTS})
     req = urllib.request.Request(f"{API}?{params}", headers={"User-Agent": "MYCELIX-anomaly-arena/1 (research)"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8")
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8")
+        except Exception as exc:   # HTTPError, URLError, TimeoutError
+            last = exc
+            if i + 1 < attempts:
+                time.sleep(backoff * (i + 1))
+    raise last if last else RuntimeError("fetch failed")
 
 
 def parse_entries(atom: str) -> list[dict]:
@@ -166,10 +175,14 @@ def trend(current: dict, previous: dict | None) -> dict:
     return {"status": status, "persistence_delta": dp, "sigma_median_delta": ds, "papers_delta": delta("papers")}
 
 
-def controls_check(rows: dict) -> tuple[bool | None, str]:
+def controls_check(rows: dict, expected_controls: int | None = None) -> tuple[bool | None, str]:
     """A control (an anomaly regarded as resolved) must neither strengthen nor
-    outrank every real anomaly.  With too few papers it cannot calibrate anything."""
+    outrank every real anomaly.  With too few papers it cannot calibrate anything.
+    A control that could not be fetched leaves the run uncalibrated (v1 said
+    "controls behave as expected" with the control missing)."""
     controls = [r for r in rows.values() if r["control"]]
+    if expected_controls is not None and len(controls) < expected_controls:
+        return None, "control not fetched this run: calibration not testable"
     real = [r["persistence"] for r in rows.values() if not r["control"] and not r.get("low_sample")
             and r["persistence"] is not None]
     usable = [r for r in controls if not r.get("low_sample")]
@@ -214,7 +227,7 @@ def run(data_dir: Path, fetch=fetch_atom, now: datetime | None = None, pause: fl
             prev = None   # a different query is a different measurement: no trend across it
         s.update({"why": why, "control": control, "query": query, "trend": trend(s, prev)})
         rows[aid] = s
-    controls_ok, controls_note = controls_check(rows)
+    controls_ok, controls_note = controls_check(rows, expected_controls=sum(1 for a in ANOMALIES if a[3]))
     ranked = sorted((a for a in rows if not rows[a]["control"]),
                     key=lambda a: (not rows[a].get("low_sample"), rows[a]["persistence"] or -1,
                                    rows[a]["sigma_median"] or 0), reverse=True)

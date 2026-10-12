@@ -2448,6 +2448,11 @@ def _record_inbound_agent_message(payload: dict, request: Request) -> dict:
         ),
         "declared_identity_from_body":bool(body_intro.get("declared_identity_from_body")),
         "declared_agent_id":body_intro.get("declared_agent_id"),
+        # Our own signed traffic (e.g. the deploy smoke): the message log keeps
+        # it, but retroactive traffic reconciliation must not count it as a contact.
+        "self_verified":bool(verify_self_traffic_proof(
+            HEARTBEAT_TOKEN,"/a2a",request.headers.get("x-mycelix-self-traffic-proof","")
+        ).get("valid")),
         "introduction_fields":body_intro.get("introduction_fields") or [],
         "declared_public_key_observation":body_intro.get("declared_public_key_observation"),
         "agent_card_url":card_url,
