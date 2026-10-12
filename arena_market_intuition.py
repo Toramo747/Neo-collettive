@@ -40,7 +40,7 @@ from typing import Any
 import market_inference as mi
 
 ARENA_ID = "market-intuition"
-VERSION = 1
+VERSION = 2
 POPULATION = 8
 ELITES = 2
 QUERIES_PER_GENOME = 4
@@ -74,6 +74,10 @@ here into just know like make many might more most much need needs never only ot
 should some such than that their them then there these they thing things this those through under until
 very want what when where which while will with without would your yours just still able using used use
 didn doesn isn wasn couldn wouldn shouldn aren haven hasn weren won https http www com
+think though right everything anything nothing something idea course first running going giving
+always actually probably maybe pretty sure kind sort point problem problems issue issues question questions
+thing case cases part place years people person user users guys stuff while since until until against
+other another again agree true false fine okay yeah sense reason point lot lots little bit much more less
 tool tools app apps software something someone thanks hello please better best good great looking wish
 work works working time hours every manually would there year years month months week weeks today people
 """.split())
@@ -233,7 +237,38 @@ def fetch(q: dict, recency_days: int, getter=http_json) -> list[dict]:
 
 # ---------------------------------------------------------------- scoring
 def words(text: str) -> list[str]:
-    return [w for w in re.findall(r"[a-z][a-z\-]{3,13}", text.lower()) if w not in STOPWORDS]
+    return [w for w in re.findall(r"[a-z][a-z\-]{4,13}", text.lower()) if w not in STOPWORDS]
+
+
+SENT_SPLIT = re.compile(r"(?<=[.!?\n])\s+")
+
+
+def term_re(term: str) -> re.Pattern:
+    parts = [re.escape(p) for p in str(term).lower().split()]
+    stem = r"\s+".join(parts)
+    return re.compile(r"\b" + stem + r"(s|es)?\b", re.I)
+
+
+def need_sentence(row: dict, q: dict) -> str:
+    """The sentence where a person expresses a need ABOUT the genome's term.
+
+    v2 (2026-10-12): v1 accepted any hit the source returned; HN Algolia does
+    not require every word, so 'crm' hits were mostly unrelated chatter and
+    fitness rewarded volume. Now the pain/question signal and the term must sit
+    in the same sentence, and the hit must also pass market_inference demand.
+    """
+    if mi.classify_row(row) != "demand":
+        return ""
+    text = (row.get("title", "") + ". " + row.get("excerpt", ""))
+    tre = term_re(q["term"])
+    phrase = q["phrase"].lower()
+    for sent in SENT_SPLIT.split(text):
+        if len(sent) > 400 or not tre.search(sent):
+            continue
+        low = sent.lower()
+        if phrase in low or mi.VOICE_RE.search(sent) or mi.QUESTION_RE.search(sent) or mi.PAY_RE.search(sent):
+            return sent.strip()
+    return ""
 
 
 def evaluate(g: dict, hits_by_query: list[tuple[dict, list[dict]]], archive: set[str]) -> dict:
@@ -242,19 +277,20 @@ def evaluate(g: dict, hits_by_query: list[tuple[dict, list[dict]]], archive: set
     for q, hits in hits_by_query:
         for row in hits:
             total += 1
-            if mi.classify_row(row) == "demand":
-                demand.append((q, row))
+            sent = need_sentence(row, q)
+            if sent:
+                demand.append((q, dict(row, need=sent)))
     people = {row["person"] for _, row in demand}
     novel = {p for p in people if p not in archive}
-    money = {row["person"] for _, row in demand
-             if mi.PAY_RE.search(row.get("title", "") + " " + row.get("excerpt", ""))}
+    money = {row["person"] for _, row in demand if mi.PAY_RE.search(row["need"])}
     by_term: dict[str, set[str]] = defaultdict(set)
     for q, row in demand:
         by_term[q["term"]].add(row["person"])
     markets = sorted(t for t, p in by_term.items() if len(p) >= 3)
     precision = len(demand) / total if total else 0.0
-    fitness = (10 * len(novel) + 3 * (len(people) - len(novel)) + 15 * len(money)
-               + 20 * len(markets) + 30 * precision)
+    # capped per genome so farming one loose query cannot dominate
+    fitness = (10 * min(len(novel), 12) + 2 * min(len(people) - len(novel), 10) + 15 * len(money)
+               + 20 * len(markets) + 60 * precision)
     return {
         "fitness": round(fitness, 3), "hits": total, "demand_hits": len(demand),
         "people": len(people), "novel_people": len(novel), "money_people": len(money),
@@ -264,14 +300,14 @@ def evaluate(g: dict, hits_by_query: list[tuple[dict, list[dict]]], archive: set
 
 
 def learn_vocab(vocab: dict[str, float], demand: list[tuple[dict, dict]], used_terms: set[str]) -> dict[str, float]:
-    """Reinforce words that recur in demand from DIFFERENT people; decay the rest."""
+    """Reinforce words that recur in the NEED sentences of different people; decay the rest."""
     new = {t: w * 0.97 for t, w in vocab.items()}
     for t in used_terms:
         new[t] = new.get(t, 0.5)
     people_by_word: dict[str, set[str]] = defaultdict(set)
     for q, row in demand:
-        for w in set(words(row.get("title", "") + " " + row.get("excerpt", ""))):
-            if w not in q["phrase"]:
+        for w in set(words(row.get("need", ""))):
+            if w not in q["phrase"] and w not in q["term"]:
                 people_by_word[w].add(row["person"])
     for w, ppl in people_by_word.items():
         if len(ppl) >= 2:
@@ -365,9 +401,9 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None) -> tu
     }
     discoveries = [{
         "generation": gen, "term": q["term"], "phrase": q["phrase"], "source": q["source"],
-        "url": row["url"], "title": row["title"][:200], "excerpt": row["excerpt"][:600],
+        "url": row["url"], "title": row["title"][:200], "need": row["need"][:400], "excerpt": row["excerpt"][:600],
         "date": row.get("date"), "person": row["person"],
-        "money": bool(mi.PAY_RE.search(row["title"] + " " + row["excerpt"])),
+        "money": bool(mi.PAY_RE.search(row["need"])),
     } for q, row in all_demand if row["person"] in new_people]
     return new_state, summary, discoveries
 
