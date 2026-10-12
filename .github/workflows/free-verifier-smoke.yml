@@ -8,12 +8,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - name: Anonymous calls from outside, then check the per-origin limit
+        env:
+          SMOKE_SECRET: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
         run: |
           set +e
+          # Signed smoke proof: same anonymous path and limits, never counted as demand.
+          proof() { python3 -c "import os;from self_traffic_auth import make_self_traffic_proof as m;print(m(os.environ['SMOKE_SECRET'],'/mcp-smoke'))"; }
           U=https://neo-collettive.onrender.com/mcp
           H=(-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream')
-          call() { curl -s -m 60 -o /tmp/body -w '%{http_code}' "$U" "${H[@]}" -d "$1"; }
+          call() { curl -s -m 60 -o /tmp/body -w '%{http_code}' "$U" "${H[@]}" -H "X-MYCELIX-Smoke-Proof: $(proof)" -d "$1"; }
           init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"free-verifier-smoke","version":"1"}}}'
           echo "::notice title=initialize::$(call "$init")"
           v='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{"url":"https://neo-collettive.onrender.com/mcp"}}}'
