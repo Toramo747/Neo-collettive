@@ -121,14 +121,18 @@ jobs:
               kaggle kernels output "$T" -p out >/dev/null 2>&1 || true
               gguf=$(find out -name '*.gguf' | grep -i 'q4_k_m' | head -1)
               [ -n "$gguf" ] || gguf=$(find out -name '*.gguf' | head -1)
-              [ -n "$gguf" ] || { echo "::error title=Distill eval::no gguf in kernel output"; exit 1; }
+              [ -n "$gguf" ] || { echo "::error title=Distill eval::no gguf in kernel output: $(find out -maxdepth 2 | head -15 | tr '\n' ' ')"; exit 1; }
               timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
               nohup ollama serve >/tmp/ollama.log 2>&1 &
               for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 1; done
               ollama pull qwen2.5:3b-instruct-q4_K_M >/dev/null
+              echo "::notice title=Distill eval gguf::$(basename "$gguf") $(du -h "$gguf" | cut -f1)"
               ollama show --modelfile qwen2.5:3b-instruct-q4_K_M | sed -E "s#^FROM .*#FROM $PWD/$gguf#" > Modelfile.student
-              ollama create neo-mind-student -f Modelfile.student >/dev/null
-              python tools/mi_distill_eval.py private-labels qwen2.5:3b-instruct-q4_K_M neo-mind-student || exit 1
+              create=$(ollama create neo-mind-student -f Modelfile.student 2>&1 | tail -3 | tr '\n' ' ')
+              echo "::notice title=Distill eval create::${create:0:300}"
+              python tools/mi_distill_eval.py private-labels qwen2.5:3b-instruct-q4_K_M neo-mind-student 2> /tmp/eval.err
+              rc=$?
+              if [ $rc -ne 0 ]; then echo "::error title=Distill eval::$(tail -5 /tmp/eval.err | tr '\n' ' ' | cut -c1-500)"; exit 1; fi
               ;;
             *) echo "unknown stage"; exit 1 ;;
           esac
