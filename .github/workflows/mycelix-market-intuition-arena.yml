@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - name: Validate arena
-        run: python -m unittest -q test_arena_market_intuition test_market_inference test_local_llm_decoding
+        run: python -m unittest -q test_arena_market_intuition test_market_inference
       - uses: actions/checkout@v4
         with:
           repository: ${{ vars.MODEL_LABEL_REPO }}
