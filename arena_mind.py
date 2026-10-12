@@ -154,3 +154,30 @@ def think(model: str, *, needs: list[dict], market_map: dict, diary: list[str],
         "abandon_terms": [t for t in (clean_label(x, 3) for x in res.get("abandon_terms") or []) if t][:3],
         "ok": bool(res),
     }
+
+
+MERGE_SCHEMA = bounded_schema({
+    "type": "object",
+    "properties": {"merges": {"type": "array", "items": {"type": "object", "properties": {
+        "from": {"type": "string", "maxLength": 80}, "into": {"type": "string", "maxLength": 80}},
+        "required": ["from", "into"]}}},
+    "required": ["merges"],
+}, 80)
+
+
+def consolidate(model: str, names: list[str], gen: Callable = ollama_generate) -> list[dict]:
+    """Ask the model which problem names describe the SAME problem (synonyms)."""
+    if len(names) < 2:
+        return []
+    prompt = (
+        "These are names of problems people described. Some are the same problem worded differently. "
+        "Return JSON {\"merges\":[{\"from\":\"name\",\"into\":\"name\"}]} merging ONLY true synonyms "
+        "into the clearest existing name. Do not merge different problems.\n" + "\n".join("- " + n for n in names[:120]))
+    res = gen(model, prompt, MERGE_SCHEMA) or {}
+    allowed = set(names)
+    out = []
+    for m in res.get("merges") or []:
+        a, b = clean_label(m.get("from")), clean_label(m.get("into"))
+        if a in allowed and b in allowed and a != b:
+            out.append({"from": a, "into": b})
+    return out[:60]

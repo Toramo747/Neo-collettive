@@ -51,6 +51,7 @@ SE_QUERY_CAP = 6          # Stack Exchange anonymous quota is 300/day per IP
 VOCAB_CAP = 240
 ARCHIVE_CAP = 20000
 STAGNATION_WINDOW = 6
+DEEP_QUEUE_CAP = 300
 USER_AGENT = "MYCELIX-market-intuition-arena/1 (public read-only research)"
 
 PHRASES = (
@@ -487,6 +488,17 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
     }
     history.append(summary)
     champion = state.get("champion") or {}
+    # candidates for the deep mind (bigger model on Kaggle), judged in batches every few hours
+    judged = set(state.get("deep_judged") or [])
+    deep_queue = list(state.get("deep_queue") or [])
+    queued = {x["person"] for x in deep_queue}
+    for _, r in results:
+        for q, row in r["_demand"]:
+            if row["person"] not in judged and row["person"] not in queued:
+                queued.add(row["person"])
+                deep_queue.append({"person": row["person"], "need": row["need"][:300], "term": q["term"],
+                                   "small_problem": row.get("problem") or ""})
+    deep_queue = deep_queue[-DEEP_QUEUE_CAP:]
     if results and best["fitness"] > float(champion.get("fitness") or 0):
         champion = {"genome": results[0][0], "fitness": best["fitness"], "generation": gen}
     new_state = {
@@ -497,6 +509,9 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "market_map": dict(sorted(market_map.items(), key=lambda kv: -kv[1].get("people", 0))[:300]),
         "diary": diary[-60:], "idea_log": idea_log[-200:], "learned_phrases": list(LEARNED_PHRASES),
         "last_thought": thought,
+        "deep_queue": deep_queue,
+        "deep_judged": list(state.get("deep_judged") or [])[-5000:],
+        "deep_log": list(state.get("deep_log") or [])[-100:],
     }
     discoveries = [{
         "generation": gen, "term": q["term"], "phrase": q["phrase"], "source": q["source"],
@@ -508,6 +523,67 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
     return new_state, summary, discoveries
 
 
+def apply_deep(state: dict, inbox: dict) -> dict:
+    """Merge a deep-mind result (bigger model on Kaggle) into the arena state.
+
+    The deep verdict overrides the small mind for the people it judged; its
+    merges consolidate synonym problems; its ideas feed vocabulary and phrases.
+    """
+    st = dict(state)
+    mm = {k: dict(v, persons=list(v.get("persons") or [])) for k, v in (st.get("market_map") or {}).items()}
+    verdicts = [v for v in inbox.get("verdicts") or [] if isinstance(v, dict) and v.get("person")]
+    judged_people = {v["person"] for v in verdicts}
+    for entry in mm.values():
+        entry["persons"] = [p for p in entry["persons"] if p not in judged_people]
+    gen = int(st.get("generation") or 0)
+    for v in verdicts:
+        name = arena_mind.clean_label(v.get("problem"))
+        if v.get("real_need") and name:
+            e = mm.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": []})
+            e["persons"].append(v["person"])
+            e["pay"] = int(e.get("pay") or 0) + (1 if v.get("would_pay") == "yes" else 0)
+            e["last_gen"] = gen
+            e["deep"] = True
+    thought = inbox.get("thought") or {}
+    for m in thought.get("merges") or []:
+        a, b = arena_mind.clean_label(m.get("from")), arena_mind.clean_label(m.get("into"))
+        if a and b and a != b and a in mm:
+            src = mm.pop(a)
+            dst = mm.setdefault(b, {"people": 0, "pay": 0, "first_gen": src.get("first_gen", gen), "persons": []})
+            dst["persons"] = list(dict.fromkeys(dst["persons"] + src["persons"]))
+            dst["pay"] = int(dst.get("pay") or 0) + int(src.get("pay") or 0)
+            dst["last_gen"] = max(int(dst.get("last_gen") or 0), int(src.get("last_gen") or 0))
+    for k in list(mm):
+        mm[k]["persons"] = mm[k]["persons"][-200:]
+        mm[k]["people"] = len(mm[k]["persons"])
+        if not mm[k]["people"]:
+            mm.pop(k)
+    st["market_map"] = dict(sorted(mm.items(), key=lambda kv: -kv[1]["people"])[:300])
+    vocab = dict(st.get("vocabulary") or {})
+    for t in (arena_mind.clean_label(x, 3) for x in thought.get("next_terms") or []):
+        if t:
+            vocab[t] = max(vocab.get(t, 0.0), 4.0)
+    for t in (arena_mind.clean_label(x, 3) for x in thought.get("abandon_terms") or []):
+        if t in vocab:
+            vocab[t] = round(vocab[t] * 0.3, 4)
+    st["vocabulary"] = vocab
+    phrases = list(st.get("learned_phrases") or [])
+    for ph in (arena_mind.clean_label(x, 7) for x in thought.get("next_phrases") or []):
+        if ph and len(ph.split()) >= 2 and ph not in phrases and ph not in PHRASES:
+            phrases.append(ph)
+    st["learned_phrases"] = phrases[-30:]
+    obs, hyp = str(thought.get("observation") or "")[:400], str(thought.get("hypothesis") or "")[:400]
+    if obs or hyp:
+        st["diary"] = (list(st.get("diary") or []) + [f"DEEP gen {gen}: {obs} | {hyp}"])[-60:]
+    st["deep_judged"] = (list(st.get("deep_judged") or []) + sorted(judged_people))[-5000:]
+    st["deep_queue"] = [x for x in st.get("deep_queue") or [] if x.get("person") not in judged_people]
+    st["deep_log"] = (list(st.get("deep_log") or []) + [{
+        "generation": gen, "run": str(inbox.get("run_id") or "")[:40], "model": str(inbox.get("model") or "")[:60],
+        "judged": len(verdicts), "real": sum(1 for v in verdicts if v.get("real_need")),
+        "merges": len(thought.get("merges") or []), "minutes": inbox.get("minutes")}])[-100:]
+    return st
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--private-dir", required=True)
@@ -516,6 +592,15 @@ def main() -> int:
     base.mkdir(parents=True, exist_ok=True)
     state_path = base / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
+    inbox_dir, applied_dir = base / "deep_inbox", base / "deep_applied"
+    for f in sorted(inbox_dir.glob("*.json")) if inbox_dir.exists() else []:
+        try:
+            state = apply_deep(state, json.loads(f.read_text()))
+            applied_dir.mkdir(exist_ok=True)
+            f.rename(applied_dir / f.name)
+            print("::notice title=Market Intuition deep mind::applied one deep reflection")
+        except Exception as exc:
+            print("::warning title=Market Intuition deep mind::could not apply: " + type(exc).__name__)
     model = os.getenv("MI_LLM_MODEL", "").strip()
     if model and not arena_mind.available(model):
         print("::warning title=Market Intuition mind::local LLM not available, running without it")
