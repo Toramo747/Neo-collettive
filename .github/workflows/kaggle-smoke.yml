@@ -1,0 +1,48 @@
+name: Kaggle smoke test (credentials + GPU)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet "kaggle>=1.8.0"
+      - name: Push a tiny private GPU kernel and wait
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          mkdir -p k && cd k
+          cat > smoke.py <<'PY'
+          import subprocess, json, time
+          out = {"nvidia": subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"], capture_output=True, text=True).stdout.strip()}
+          t = time.time()
+          try:
+              subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True, capture_output=True, timeout=300)
+              out["ollama_install_s"] = round(time.time() - t)
+          except Exception as e:
+              out["ollama_error"] = type(e).__name__
+          json.dump(out, open("/kaggle/working/smoke.json", "w"))
+          print(out)
+          PY
+          python - <<'PY'
+          import json, os
+          json.dump({"id": os.environ["KAGGLE_USERNAME"] + "/neo-smoke", "title": "neo-smoke", "code_file": "smoke.py",
+                     "language": "python", "kernel_type": "script", "is_private": True, "enable_gpu": True,
+                     "enable_internet": True, "dataset_sources": [], "competition_sources": [], "kernel_sources": []},
+                    open("kernel-metadata.json", "w"))
+          PY
+          kaggle kernels push -p . 2>&1 | sed -E 's#https?://[^ ]+#<url>#g'
+          for i in $(seq 1 60); do
+            s=$(kaggle kernels status "$KAGGLE_USERNAME/neo-smoke" 2>&1 | grep -oiE 'complete|error|running|queued|cancel[a-z]*' | head -1 || true)
+            echo "status: $s"
+            case "$s" in complete|COMPLETE|error|ERROR|cancel*) break;; esac
+            sleep 30
+          done
+          kaggle kernels output "$KAGGLE_USERNAME/neo-smoke" -p out >/dev/null 2>&1 || true
+          if [ -f out/smoke.json ]; then echo "::notice title=Kaggle smoke::$(cat out/smoke.json)"; else echo "::warning title=Kaggle smoke::no output (status $s)"; fi
