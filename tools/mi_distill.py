@@ -36,7 +36,16 @@ def _dir(private_dir: str) -> Path:
     return d
 
 
-def harvest(private_dir: str, max_queries: int = 520, getter=ami.http_json) -> int:
+def _voice_sentence(row: dict) -> str:
+    if ami.mi.classify_row(row) != "demand":
+        return ""
+    for sent in ami.SENT_SPLIT.split(row.get("title", "") + ". " + row.get("excerpt", "")):
+        if 30 <= len(sent) <= 300 and (ami.mi.VOICE_RE.search(sent) or ami.mi.QUESTION_RE.search(sent) or ami.mi.PAY_RE.search(sent)):
+            return sent.strip()
+    return ""
+
+
+def harvest(private_dir: str, max_queries: int = 900, getter=ami.http_json) -> int:
     state_p = Path(private_dir) / "market-intuition" / "state.json"
     state = json.loads(state_p.read_text()) if state_p.exists() else {}
     vocab = sorted((state.get("vocabulary") or {}).items(), key=lambda kv: -kv[1])
@@ -45,7 +54,7 @@ def harvest(private_dir: str, max_queries: int = 520, getter=ami.http_json) -> i
     rng = random.Random(20261012)
     plan = []
     for term in terms:
-        for ph in rng.sample(phrases, min(4, len(phrases))):
+        for ph in rng.sample(phrases, min(8, len(phrases))):
             plan.append({"term": term, "phrase": ph, "source": rng.choice(("hn_comments", "hn_comments", "hn_stories"))})
     rng.shuffle(plan)
     plan = plan[:max_queries]
@@ -60,16 +69,22 @@ def harvest(private_dir: str, max_queries: int = 520, getter=ami.http_json) -> i
             if row["person"] in seen:
                 continue
             sent = ami.need_sentence(row, q)
+            kind = "arena_candidate"
+            if not sent:
+                # Broader pool: any first-person need/question sentence, so the
+                # student also learns what is NOT a real need (the teacher decides).
+                sent, kind = _voice_sentence(row), "voice_sentence"
             if sent:
                 seen.add(row["person"])
                 out.append({"id": hashlib.sha256((row["person"] + sent).encode()).hexdigest()[:16],
-                            "person": row["person"], "need": sent[:300], "term": q["term"]})
+                            "person": row["person"], "need": sent[:300], "term": q["term"], "kind": kind})
         if len(out) >= MAX_CANDIDATES:
             break
         if getter is ami.http_json:
             time.sleep(0.25)
     (_dir(private_dir) / "candidates.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in out))
-    print(f"::notice title=Distill harvest::queries={len(plan)} errors={errors} candidates={len(out)}")
+    arena = sum(1 for x in out if x["kind"] == "arena_candidate")
+    print(f"::notice title=Distill harvest::queries={len(plan)} errors={errors} candidates={len(out)} arena_like={arena}")
     return 0
 
 
