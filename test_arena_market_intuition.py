@@ -81,5 +81,48 @@ class NeedSentenceTests(unittest.TestCase):
         self.assertIn("CRM", a.need_sentence(on, q))
 
 
+
+class MindTests(unittest.TestCase):
+    def fake_mind(self, model, prompt, schema):
+        if "verdicts" in json.dumps(schema):
+            n = prompt.count("\n") - prompt.split("\n\n")[-1].count("\n") if False else len(prompt.split("\n\n")[-1].splitlines())
+            return {"verdicts": [{"i": i, "real_need": True, "problem": "Invoice Reconciliation!",
+                                  "would_pay": "yes" if i == 0 else "unknown"} for i in range(n)]}
+        return {"observation": "invoices recur", "hypothesis": "small firms reconcile by hand",
+                "assign": [{"i": 0, "problem": "invoice reconciliation"}],
+                "next_terms": ["invoice matching", "http://evil", "x" * 90],
+                "next_phrases": ["we still do this by hand"], "abandon_terms": ["crm"]}
+
+    POP = {"population": [a.clamp({"id": f"p{i}", "phrases": ["is there a tool", "tired of"],
+                                   "terms": ["invoices", "tax"], "sources": ["hn_comments", "hn_stories"]})
+                           for i in range(8)]}
+
+    def test_mind_judges_maps_and_proposes(self):
+        state, summary, disc = a.run_generation(dict(self.POP), getter=fake_getter, seed=7,
+                                                mind_model="fake", mind_gen=self.fake_mind)
+        self.assertTrue(summary["mind"]["used"])
+        self.assertIn("invoice reconciliation", state["market_map"])
+        self.assertGreaterEqual(state["market_map"]["invoice reconciliation"]["people"], 3)
+        self.assertIn("invoice matching", state["vocabulary"])
+        self.assertNotIn("http://evil", json.dumps(state))
+        self.assertIn("we still do this by hand", state["learned_phrases"])
+        self.assertTrue(any(g.get("origin") == "mind" for g in state["population"]))
+        self.assertTrue(state["diary"][-1].startswith("gen 1"))
+        self.assertTrue(any(d["problem"] == "invoice reconciliation" for d in disc))
+        self.assertGreater(summary["money_people"], 0)
+        # next generation: the idea genome's outcome is logged, learned phrase is usable
+        state2, _, _ = a.run_generation(state, getter=fake_getter, seed=8, mind_model="fake", mind_gen=self.fake_mind)
+        self.assertTrue(state2["idea_log"])
+
+    def test_mind_rejection_removes_demand(self):
+        def reject(model, prompt, schema):
+            if "verdicts" in json.dumps(schema):
+                return {"verdicts": [{"i": i, "real_need": False, "problem": "", "would_pay": "no"} for i in range(6)]}
+            return {}
+        state, summary, disc = a.run_generation(dict(self.POP), getter=fake_getter, seed=9, mind_model="fake", mind_gen=reject)
+        self.assertEqual(summary["demand_hits"], 0)
+        self.assertEqual(disc, [])
+
+
 if __name__ == "__main__":
     unittest.main()

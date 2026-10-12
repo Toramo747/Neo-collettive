@@ -21,3 +21,27 @@ for real markets gets once competitor-price validation is retired.
   promoted automatically.
 - **Known limits:** keyword classifiers, two sources only, HN skews to
   developers. A high fitness is a lead for human review, not proof of a market.
+
+## v3 — the mind (2026-10-12)
+
+Andrea asked for a spark of autonomy: the arena now has a local LLM "mind"
+(qwen2.5 3B via Ollama on the GitHub runner, zero cost). Each generation it:
+
+1. **judges** the candidate need sentences (real need? which problem? any
+   hint of paying?) and only confirmed needs count for fitness;
+2. **thinks**: writes an observation and a hypothesis into its diary, assigns
+   each need to a problem in its **market map** (problems with how many
+   different people share them), proposes up to 3 new search terms and 2 new
+   first-person phrases, and drops terms that keep failing;
+3. **learns from its ideas**: genomes born from its proposals are tracked and
+   their results are fed back into the next thought.
+
+Fitness adds 10 per need that belongs to a problem already shared by 3+
+different people. The mind's output is sanitized short strings only; it cannot
+run code, alter the fitness rules, reach production or publish. Diary, market
+map and discoveries stay private.
+
+Earlier fixes the same morning: v2 requires the need and the term in the same
+sentence (v1 rewarded unrelated chatter: 45 → 3 when replayed), broad
+retrieval with strict filtering, and a self-chaining loop because GitHub's
+scheduler had stopped firing.

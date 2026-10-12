@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - name: Validate arena
-        run: python -m unittest -q test_arena_market_intuition test_market_inference
+        run: python -m unittest -q test_arena_market_intuition test_market_inference test_local_llm_decoding
       - uses: actions/checkout@v4
         with:
           repository: ${{ vars.MODEL_LABEL_REPO }}
@@ -50,9 +50,21 @@ jobs:
       # Continuous mode: GitHub's scheduler can stall for hours, so a dispatched
       # run loops one generation every 30 minutes and then re-dispatches itself.
       # Cron stays as a fallback. Public repository: no Actions cost.
+      # The mind: a local LLM (Ollama, free) that judges needs, maps markets
+      # and proposes its own next searches. If it cannot start, the arena runs
+      # without it.
+      - name: Start local LLM (the mind)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+          nohup ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 1; done
+          timeout 480 ollama pull qwen2.5:3b-instruct-q4_K_M
       - name: Generations (one every 30 minutes)
         env:
           LOOP_MINUTES: ${{ inputs.loop_minutes || '0' }}
+          MI_LLM_MODEL: qwen2.5:3b-instruct-q4_K_M
         run: |
           set -euo pipefail
           git -C private-labels config user.name "MYCELIX Market Intuition"
