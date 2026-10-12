@@ -53,6 +53,10 @@ class DistillTests(unittest.TestCase):
             self.assertEqual(md.train_build(d, str(k), "u"), 0)
             src = (k / "main.py").read_text()
             compile(src, "main.py", "exec")
+            header = src.split("\nimport json, os, random", 1)[0]
+            ns = {}
+            exec(header, ns)            # booleans in labels must load (v1 wrote JSON 'false' as Python)
+            self.assertIs(ns["INPUT"]["train"][1]["label"]["real_need"], False)
             self.assertIn("You review sentences people wrote online", src)
             spec = importlib.util.spec_from_file_location("ev", Path(__file__).with_name("tools") / "mi_distill_eval.py")
             ev = importlib.util.module_from_spec(spec); spec.loader.exec_module(ev)

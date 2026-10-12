@@ -140,7 +140,8 @@ def label_build(private_dir: str, kernel_dir: str, username: str) -> int:
     cands = [json.loads(l) for l in (_dir(private_dir) / "candidates.jsonl").read_text().splitlines() if l.strip()]
     items = [{"id": c["id"], "need": c["need"]} for c in cands]
     sources = {n: (ROOT / n).read_text() for n in ("arena_mind.py", "local_llm_decoding.py")}
-    code = f"MODEL = {TEACHER!r}\nSOURCES = {json.dumps(sources)}\nINPUT = {json.dumps({'items': items}, ensure_ascii=False)}\n" + LABEL_DRIVER
+    code = (f"import json as _json\nMODEL = {TEACHER!r}\nSOURCES = _json.loads({json.dumps(sources)!r})\n"
+            f"INPUT = _json.loads({json.dumps({'items': items}, ensure_ascii=False)!r})\n" + LABEL_DRIVER)
     _kernel(Path(kernel_dir), username, LABEL_SLUG, code)
     print(f"::notice title=Distill label::items={len(items)}")
     return 0
@@ -210,7 +211,7 @@ def train_build(private_dir: str, kernel_dir: str, username: str) -> int:
     import arena_mind
     head = arena_mind.judge_prompt(["X"]).rsplit("\n\n", 1)[0] + "\n\n"
     code = (f"STUDENT = {STUDENT_HF!r}\nPROMPT_HEAD = {head!r}\n"
-            f"INPUT = {json.dumps({'train': [{'need': r['need'], 'label': r['label']} for r in train]}, ensure_ascii=False)}\n"
+            f"import json as _json\nINPUT = _json.loads({json.dumps({'train': [{'need': r['need'], 'label': r['label']} for r in train]}, ensure_ascii=False)!r})\n"
             + TRAIN_DRIVER)
     _kernel(Path(kernel_dir), username, TRAIN_SLUG, code)
     print(f"::notice title=Distill train::sentences={len(train)}")
