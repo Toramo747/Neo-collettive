@@ -27,6 +27,7 @@ import hashlib
 import html
 import json
 import math
+import os
 import random
 import re
 import time
@@ -37,10 +38,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import arena_mind
 import market_inference as mi
 
 ARENA_ID = "market-intuition"
-VERSION = 2
+VERSION = 3
 POPULATION = 8
 ELITES = 2
 QUERIES_PER_GENOME = 4
@@ -105,9 +107,17 @@ def clean(value: Any) -> str:
 
 
 # ---------------------------------------------------------------- genomes
+LEARNED_PHRASES: list[str] = []   # phrases the mind invented (bounded, sanitized)
+
+
+def all_phrases() -> tuple[str, ...]:
+    return PHRASES + tuple(p for p in LEARNED_PHRASES if p not in PHRASES)
+
+
 def clamp(g: dict) -> dict:
     g = dict(g)
-    g["phrases"] = [p for p in g.get("phrases", []) if p in PHRASES][:2] or [PHRASES[0]]
+    allowed = set(all_phrases())
+    g["phrases"] = [p for p in g.get("phrases", []) if p in allowed][:2] or [PHRASES[0]]
     g["terms"] = [str(t)[:40] for t in g.get("terms", []) if str(t).strip()][:2] or [SEED_TERMS[0]]
     g["sources"] = [s for s in g.get("sources", []) if s in SOURCES][:2] or ["hn_comments"]
     g["recency_days"] = int(min(365, max(14, int(g.get("recency_days", 120)))))
@@ -118,7 +128,7 @@ def clamp(g: dict) -> dict:
 def random_genome(rng: random.Random, vocab: dict[str, float], gid: str) -> dict:
     return clamp({
         "id": gid,
-        "phrases": rng.sample(PHRASES, 2),
+        "phrases": rng.sample(all_phrases(), 2),
         "terms": sample_terms(rng, vocab, 2),
         "sources": rng.sample(SOURCES, 2),
         "recency_days": rng.choice((30, 60, 120, 240, 365)),
@@ -152,7 +162,7 @@ def mutate(parent: dict, rng: random.Random, vocab: dict[str, float], gid: str) 
     g = clamp(g)
     rate = g["mutation_rate"]
     if rng.random() < rate:
-        g["phrases"][rng.randrange(len(g["phrases"]))] = rng.choice(PHRASES)
+        g["phrases"][rng.randrange(len(g["phrases"]))] = rng.choice(all_phrases())
     if rng.random() < rate * 1.5:
         g["terms"][rng.randrange(len(g["terms"]))] = sample_terms(rng, vocab, 1)[0]
     if rng.random() < rate:
@@ -272,7 +282,7 @@ def need_sentence(row: dict, q: dict) -> str:
     return ""
 
 
-def evaluate(g: dict, hits_by_query: list[tuple[dict, list[dict]]], archive: set[str]) -> dict:
+def collect(hits_by_query: list[tuple[dict, list[dict]]]) -> tuple[int, list[tuple[dict, dict]]]:
     total = 0
     demand = []
     for q, hits in hits_by_query:
@@ -281,23 +291,36 @@ def evaluate(g: dict, hits_by_query: list[tuple[dict, list[dict]]], archive: set
             sent = need_sentence(row, q)
             if sent:
                 demand.append((q, dict(row, need=sent)))
+    return total, demand
+
+
+def score(total: int, demand: list[tuple[dict, dict]], archive: set[str], market_map: dict | None = None) -> dict:
     people = {row["person"] for _, row in demand}
     novel = {p for p in people if p not in archive}
-    money = {row["person"] for _, row in demand if mi.PAY_RE.search(row["need"])}
+    money = {row["person"] for _, row in demand
+             if row.get("would_pay") == "yes" or mi.PAY_RE.search(row["need"])}
     by_term: dict[str, set[str]] = defaultdict(set)
     for q, row in demand:
-        by_term[q["term"]].add(row["person"])
+        by_term[row.get("problem") or q["term"]].add(row["person"])
     markets = sorted(t for t, p in by_term.items() if len(p) >= 3)
+    # the mind's market map: needs that join a problem shared by 3+ different people
+    in_market = sum(1 for _, row in demand
+                    if row.get("problem") and (market_map or {}).get(row["problem"], {}).get("people", 0) >= 3)
     precision = len(demand) / total if total else 0.0
     # capped per genome so farming one loose query cannot dominate
     fitness = (10 * min(len(novel), 12) + 2 * min(len(people) - len(novel), 10) + 15 * len(money)
-               + 20 * len(markets) + 60 * precision)
+               + 20 * len(markets) + 10 * min(in_market, 6) + 60 * precision)
     return {
         "fitness": round(fitness, 3), "hits": total, "demand_hits": len(demand),
         "people": len(people), "novel_people": len(novel), "money_people": len(money),
         "markets": markets, "precision": round(precision, 4),
-        "_demand": demand, "_novel": novel,
+        "_demand": demand, "_novel": novel, "_total": total,
     }
+
+
+def evaluate(g: dict, hits_by_query: list[tuple[dict, list[dict]]], archive: set[str]) -> dict:
+    total, demand = collect(hits_by_query)
+    return score(total, demand, archive)
 
 
 def learn_vocab(vocab: dict[str, float], demand: list[tuple[dict, dict]], used_terms: set[str]) -> dict[str, float]:
@@ -320,11 +343,13 @@ def learn_vocab(vocab: dict[str, float], demand: list[tuple[dict, dict]], used_t
 
 
 # ---------------------------------------------------------------- generation
-def run_generation(state: dict, getter=http_json, seed: int | None = None) -> tuple[dict, dict, list[dict]]:
+def run_generation(state: dict, getter=http_json, seed: int | None = None,
+                   mind_model: str | None = None, mind_gen=None) -> tuple[dict, dict, list[dict]]:
     gen = int(state.get("generation") or 0) + 1
     rng = random.Random(seed if seed is not None else int(time.time()) ^ gen)
     vocab = dict(state.get("vocabulary") or {t: 1.0 for t in SEED_TERMS})
     archive = set(state.get("archive") or [])
+    LEARNED_PHRASES[:] = list(state.get("learned_phrases") or [])
     pop = [clamp(g) for g in state.get("population") or []] or [
         random_genome(rng, vocab, f"g{gen}-r{i}") for i in range(POPULATION)]
 
@@ -347,6 +372,65 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None) -> tu
             time.sleep(0.2 if getter is http_json else 0)
         results.append((g, evaluate(g, pairs, archive)))
 
+    # ---- the mind: judge, think, map markets, propose ideas (optional)
+    market_map = {k: dict(v) for k, v in (state.get("market_map") or {}).items()}
+    diary = list(state.get("diary") or [])
+    idea_log = list(state.get("idea_log") or [])
+    thought: dict = {}
+    mind = {"used": False}
+    for g, r in results:
+        if g.get("origin") == "mind":
+            idea_log.append({"generation": gen, "term": "+".join(g["terms"]), "people": r["novel_people"]})
+    if mind_model:
+        gen_fn = mind_gen or arena_mind.ollama_generate
+        cands, seen = [], set()
+        for _, r in results:
+            for q, row in r["_demand"]:
+                if row["person"] not in seen:
+                    seen.add(row["person"])
+                    cands.append(row)
+        cands.sort(key=lambda row: row["person"] in archive)      # new people first
+        cands = cands[:arena_mind.MAX_JUDGED]
+        verdicts = arena_mind.judge(mind_model, [c["need"] for c in cands], gen=gen_fn)
+        by_person = {c["person"]: v for c, v in zip(cands, verdicts)}
+        real = [dict(c, **by_person[c["person"]]) for c in cands if by_person[c["person"]]["real_need"]]
+        stats = {"hits": sum(r["hits"] for _, r in results), "candidates": len(cands), "real_needs": len(real)}
+        thought = arena_mind.think(mind_model, needs=real, market_map=market_map, diary=diary,
+                                   idea_outcomes=idea_log, stats=stats, gen=gen_fn)
+        for a in thought.get("assign") or []:
+            if 0 <= a["i"] < len(real):
+                real[a["i"]]["problem"] = a["problem"]
+        for row in real:
+            name = row.get("problem")
+            if not name:
+                continue
+            entry = market_map.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": []})
+            if row["person"] not in entry["persons"]:
+                entry["persons"] = (entry["persons"] + [row["person"]])[-200:]
+                entry["people"] = len(entry["persons"])
+                entry["pay"] += 1 if row.get("would_pay") == "yes" else 0
+            entry["last_gen"] = gen
+        real_by_person = {row["person"]: row for row in real}
+        rescored = []
+        for g, r in results:
+            kept = [(q, dict(row, **{k: real_by_person[row["person"]].get(k) for k in ("problem", "would_pay")}))
+                    for q, row in r["_demand"] if row["person"] in real_by_person]
+            rescored.append((g, score(r["_total"], kept, archive, market_map)))
+        results = rescored
+        if thought.get("observation") or thought.get("hypothesis"):
+            diary.append(f"gen {gen}: {thought.get('observation', '')} | {thought.get('hypothesis', '')}")
+        for t in thought.get("next_terms") or []:
+            vocab[t] = max(vocab.get(t, 0.0), 3.0)
+        for t in thought.get("abandon_terms") or []:
+            if t in vocab:
+                vocab[t] = round(vocab[t] * 0.3, 4)
+        for ph in thought.get("next_phrases") or []:
+            if ph not in all_phrases():
+                LEARNED_PHRASES.append(ph)
+        del LEARNED_PHRASES[:-30]
+        mind = {"used": True, "judged": len(cands), "real_needs": len(real),
+                "think_ok": bool(thought.get("ok")), "ideas": len(thought.get("next_terms") or [])}
+
     results.sort(key=lambda x: x[1]["fitness"], reverse=True)
     all_demand = [d for _, r in results for d in r["_demand"]]
     vocab = learn_vocab(vocab, all_demand, {t for g, _ in results for t in g["terms"]})
@@ -364,10 +448,18 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None) -> tu
         a, b = rng.sample(results, 2) if len(results) > 1 else (results[0], results[0])
         return (a if a[1]["fitness"] >= b[1]["fitness"] else b)[0]
     i = 0
+    immigrants = max(immigrants, min(2, len(thought.get("next_terms") or [])))
     while len(nxt) < POPULATION - immigrants:
         child = crossover(tourney(), tourney(), rng, f"g{gen}-c{i}") if rng.random() < 0.4 else tourney()
         nxt.append(mutate(child, rng, vocab, f"g{gen}-m{i}"))
         i += 1
+    for k, term in enumerate((thought.get("next_terms") or [])[:2]):
+        if len(nxt) >= POPULATION:
+            break
+        idea = random_genome(rng, vocab, f"g{gen}-idea{k}")
+        idea["terms"] = [term, idea["terms"][-1]]
+        idea["origin"] = "mind"
+        nxt.append(clamp(idea) | {"origin": "mind"})
     while len(nxt) < POPULATION:
         nxt.append(random_genome(rng, vocab, f"g{gen}-r{len(nxt)}"))
 
@@ -389,6 +481,9 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None) -> tu
         "mean_mutation_rate": round(sum(g["mutation_rate"] for g in nxt) / len(nxt), 4),
         "vocab_size": len(vocab), "learned_terms": sum(1 for t in vocab if t not in SEED_TERMS),
         "stagnant": stagnant, "se_queries": se_used, "errors": dict(errors),
+        "mind": mind, "learned_phrases": len(LEARNED_PHRASES),
+        "problems_3plus": sum(1 for v in market_map.values() if v.get("people", 0) >= 3),
+        "problems_mapped": len(market_map),
     }
     history.append(summary)
     champion = state.get("champion") or {}
@@ -399,12 +494,16 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None) -> tu
         "vocabulary": vocab, "archive": archive_list, "history": history[-2000:],
         "champion": champion, "market_totals": dict(sorted(cumulative.items(), key=lambda kv: -kv[1])[:200]),
         "boundary": BOUNDARY,
+        "market_map": dict(sorted(market_map.items(), key=lambda kv: -kv[1].get("people", 0))[:300]),
+        "diary": diary[-60:], "idea_log": idea_log[-200:], "learned_phrases": list(LEARNED_PHRASES),
+        "last_thought": thought,
     }
     discoveries = [{
         "generation": gen, "term": q["term"], "phrase": q["phrase"], "source": q["source"],
         "url": row["url"], "title": row["title"][:200], "need": row["need"][:400], "excerpt": row["excerpt"][:600],
         "date": row.get("date"), "person": row["person"],
-        "money": bool(mi.PAY_RE.search(row["need"])),
+        "money": bool(row.get("would_pay") == "yes" or mi.PAY_RE.search(row["need"])),
+        "problem": row.get("problem"),
     } for q, row in all_demand if row["person"] in new_people]
     return new_state, summary, discoveries
 
@@ -417,7 +516,11 @@ def main() -> int:
     base.mkdir(parents=True, exist_ok=True)
     state_path = base / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
-    new_state, summary, discoveries = run_generation(state)
+    model = os.getenv("MI_LLM_MODEL", "").strip()
+    if model and not arena_mind.available(model):
+        print("::warning title=Market Intuition mind::local LLM not available, running without it")
+        model = ""
+    new_state, summary, discoveries = run_generation(state, mind_model=model or None)
     state_path.write_text(json.dumps(new_state, ensure_ascii=False, indent=1))
     with (base / "discoveries.jsonl").open("a") as fh:
         for d in discoveries:
@@ -429,6 +532,10 @@ def main() -> int:
                                       "novel_people", "archive_size", "money_people", "mean_mutation_rate",
                                       "vocab_size", "learned_terms", "stagnant")}
     public["errors"] = sum(summary["errors"].values())
+    public["mind"] = summary["mind"]
+    public["problems_mapped"] = summary["problems_mapped"]
+    public["problems_3plus"] = summary["problems_3plus"]
+    public["learned_phrases"] = summary["learned_phrases"]
     public["markets_with_3plus_people"] = len(summary["markets_this_gen"])
     print("::notice title=Market Intuition gen " + str(summary["generation"]) + "::" +
           json.dumps(public, separators=(",", ":")))
