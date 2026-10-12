@@ -69,9 +69,13 @@ jobs:
           git add data/arena/anomalies
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "anomaly arena observation [skip render]"
+          # Unrelated working-tree changes (e.g. files touched by the run) would
+          # block the rebase: keep only the arena commit.
+          git stash push --include-untracked --quiet -- . ':!data/arena/anomalies' >/dev/null 2>&1 || true
           for attempt in 1 2 3; do
             git fetch origin main
             if git rebase origin/main && git push origin HEAD:main; then exit 0; fi
+            echo "::warning title=Anomaly publish attempt $attempt::$(git status --porcelain | head -5 | tr '\n' ' ')"
             git rebase --abort >/dev/null 2>&1 || true
             sleep $((attempt*3))
           done
