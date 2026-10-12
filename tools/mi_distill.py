@@ -166,7 +166,59 @@ def label_collect(private_dir: str, output_json: str) -> int:
     return 0
 
 
+TRAIN_DRIVER = r'''
+import json, os, random, subprocess, sys, time
+T0 = time.time()
+W = "/kaggle/working"
+subprocess.run("pip install -q unsloth", shell=True, check=True)
+from unsloth import FastLanguageModel
+from datasets import Dataset
+from trl import SFTTrainer, SFTConfig
+model, tok = FastLanguageModel.from_pretrained(STUDENT, max_seq_length=1536, load_in_4bit=True)
+model = FastLanguageModel.get_peft_model(model, r=16, lora_alpha=16, lora_dropout=0,
+    target_modules=["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"],
+    use_gradient_checkpointing="unsloth", random_state=7)
+rows = INPUT["train"]
+rng = random.Random(7)
+texts = []
+for rep in range(4):                      # 4 different groupings of the same sentences
+    order = rows[:]
+    rng.shuffle(order)
+    for i in range(0, len(order), 6):
+        batch = order[i:i + 6]
+        prompt = PROMPT_HEAD + "\n".join(f"{j}: {r['need'][:300]}" for j, r in enumerate(batch))
+        target = json.dumps({"verdicts": [{"i": j, "real_need": bool(r["label"].get("real_need")),
+                  "problem": r["label"].get("problem") or "", "would_pay": r["label"].get("would_pay") or "unknown"}
+                  for j, r in enumerate(batch)]}, ensure_ascii=False)
+        msgs = [{"role": "user", "content": prompt}, {"role": "assistant", "content": target}]
+        texts.append(tok.apply_chat_template(msgs, tokenize=False))
+ds = Dataset.from_dict({"text": texts})
+trainer = SFTTrainer(model=model, tokenizer=tok, train_dataset=ds, args=SFTConfig(
+    dataset_text_field="text", max_seq_length=1536, per_device_train_batch_size=2,
+    gradient_accumulation_steps=4, num_train_epochs=2, learning_rate=2e-4, warmup_steps=10,
+    logging_steps=10, optim="adamw_8bit", seed=7, output_dir=W + "/out", report_to="none", fp16=True))
+stats = trainer.train()
+model.save_pretrained_gguf(W + "/student", tok, quantization_method="q4_k_m")
+json.dump({"examples": len(texts), "train_loss": float(stats.training_loss),
+           "minutes": round((time.time() - T0) / 60, 1)}, open(W + "/train.json", "w"))
+'''
+
+
+def train_build(private_dir: str, kernel_dir: str, username: str) -> int:
+    d = _dir(private_dir)
+    train = [json.loads(l) for l in (d / "train.jsonl").read_text().splitlines() if l.strip()]
+    import arena_mind
+    head = arena_mind.judge_prompt(["X"]).rsplit("\n\n", 1)[0] + "\n\n"
+    code = (f"STUDENT = {STUDENT_HF!r}\nPROMPT_HEAD = {head!r}\n"
+            f"INPUT = {json.dumps({'train': [{'need': r['need'], 'label': r['label']} for r in train]}, ensure_ascii=False)}\n"
+            + TRAIN_DRIVER)
+    _kernel(Path(kernel_dir), username, TRAIN_SLUG, code)
+    print(f"::notice title=Distill train::sentences={len(train)}")
+    return 0
+
+
 if __name__ == "__main__":
     cmd, *args = sys.argv[1:]
-    fn = {"harvest": harvest, "label-build": label_build, "label-collect": label_collect}[cmd]
+    fn = {"harvest": harvest, "label-build": label_build, "label-collect": label_collect,
+          "train-build": train_build}[cmd]
     raise SystemExit(fn(*args))

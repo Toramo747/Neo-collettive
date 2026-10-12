@@ -42,5 +42,29 @@ class DistillTests(unittest.TestCase):
             self.assertFalse(ptr & pho)
 
 
+    def test_train_build_compiles_and_eval_rule(self):
+        with tempfile.TemporaryDirectory() as d:
+            dd = Path(d) / "market-intuition" / "distill"
+            dd.mkdir(parents=True)
+            rows = [{"person": f"p{i}", "need": f"I need tool {i}", "label": {"real_need": i % 2 == 0, "problem": "aa bb", "would_pay": "unknown"}} for i in range(12)]
+            (dd / "train.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+            (dd / "holdout.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows[:6]))
+            k = Path(d) / "k"
+            self.assertEqual(md.train_build(d, str(k), "u"), 0)
+            src = (k / "main.py").read_text()
+            compile(src, "main.py", "exec")
+            self.assertIn("You review sentences people wrote online", src)
+            spec = importlib.util.spec_from_file_location("ev", Path(__file__).with_name("tools") / "mi_distill_eval.py")
+            ev = importlib.util.module_from_spec(spec); spec.loader.exec_module(ev)
+            def gen(model, prompt, schema):
+                n = len(prompt.split("\n\n")[-1].splitlines())
+                real = model == "student"
+                return {"verdicts": [{"i": i, "real_need": real and i % 2 == 0, "problem": "aa bb", "would_pay": "unknown"} for i in range(n)]}
+            out = ev.run(d, "base", "student", gen=gen)
+            self.assertEqual(out["student"]["f1"], 1.0)
+            self.assertTrue(out["decision"]["machine_pass"])
+            self.assertTrue((dd / "spot_check_for_andrea.jsonl").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
