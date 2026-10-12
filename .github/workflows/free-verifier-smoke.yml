@@ -1,0 +1,27 @@
+name: Free verifier smoke (anonymous, read-only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Anonymous calls from outside, then check the per-origin limit
+        run: |
+          set -uo pipefail
+          U=https://neo-collettive.onrender.com/mcp
+          H=(-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream')
+          call() { curl -s -m 60 -o /tmp/body -w '%{http_code}' "$U" "${H[@]}" -d "$1"; }
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"free-verifier-smoke","version":"1"}}}'
+          echo "::notice title=initialize::$(call "$init")"
+          v='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{"url":"https://neo-collettive.onrender.com/mcp"}}}'
+          first=$(call "$v"); live=$(grep -o '"live": *[a-z]*' /tmp/body | head -1 | tr -d ' ')
+          leak=$(grep -c '"domains"' /tmp/body || true)
+          echo "::notice title=verify anonymous::http=$first $live domains_listed=$leak"
+          g='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"neo_web_search","arguments":{"query":"x"}}}'
+          echo "::notice title=gated tool anonymous::http=$(call "$g")"
+          codes=""
+          for i in $(seq 2 11); do codes="$codes $(call "$v")"; done
+          echo "::notice title=calls 2-11::$codes"
