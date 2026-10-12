@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: "harvest | label | label-fetch | train | eval"
+        description: "harvest | label | label-fetch | train | train-log | eval"
         required: true
         default: harvest
 permissions:
@@ -97,6 +97,25 @@ jobs:
           p.write_text(json.dumps(u))
           PY
               ;;
+            train-log)
+              T="$KAGGLE_USERNAME/neo-mind-distill-train"
+              kaggle kernels output "$T" -p out >/dev/null 2>&1 || true
+              ls -la out | head -20
+              python - <<'PY'
+          import glob, json, re
+          for f in glob.glob("out/*.log"):
+              raw = open(f).read()
+              try:
+                  lines = [x.get("data", "") for x in json.loads(raw)]
+              except Exception:
+                  lines = raw.splitlines()
+              text = "".join(lines)
+              tail = [l for l in text.splitlines() if l.strip()][-25:]
+              for l in tail:
+                  l = re.sub(r"https?://\S+", "<url>", l)[:300]
+                  print("::warning title=train log::" + l)
+          PY
+              exit 0 ;;
             eval)
               T="$KAGGLE_USERNAME/neo-mind-distill-train"
               kaggle kernels output "$T" -p out >/dev/null 2>&1 || true
