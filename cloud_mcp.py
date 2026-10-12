@@ -4,6 +4,7 @@
 import asyncio
 from runtime_observation import OBSERVATION
 import neo_dialect
+import common_jobs
 import neo_dialect_security
 import neo_dialect_seti_probe
 import neo_dialect_council
@@ -281,6 +282,7 @@ SEARCH_PROVIDER_MODE = (os.getenv("NEO_SEARCH_PROVIDER") or "auto").strip().lowe
 SEARCH_MAX_CALLS_PER_CYCLE = max(0,min(100,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_CYCLE","10"))))
 SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_DAY","150"))))
 SEARCH_MIN_INTERVAL_MS = max(0,min(5000,int(os.getenv("NEO_SEARCH_MIN_INTERVAL_MS","1100"))))
+PRICE_VALIDATION_ENABLED = os.getenv("NEO_PRICE_VALIDATION_ENABLED","0")=="1"
 AGENT_PROBE_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_AGENT_PROBE_TIMEOUT_SECONDS","75"))))
 WEB_RESEARCH_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_WEB_RESEARCH_TIMEOUT_SECONDS","75"))))
 EVIDENCE_SCOUT_TIMEOUT_SECONDS = max(20.0,min(120.0,float(os.getenv("NEO_EVIDENCE_SCOUT_TIMEOUT_SECONDS","45"))))
@@ -348,6 +350,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "family_cooldowns": {},
     "stagnation_cycles": 0,
     "agent_trust": {},
+    "common_jobs": {},
     "build_history": [],
     "last_build": None,
     "measurement_history": [],
@@ -533,6 +536,7 @@ def _state_payload() -> dict:
         "stagnation_cycles": int(AUTOPILOT_STATE.get("stagnation_cycles") or 0),
         "cycles_completed": int(AUTOPILOT_STATE.get("cycles_completed") or 0),
         "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
+        "common_jobs": AUTOPILOT_STATE.get("common_jobs") or {},
         "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
@@ -621,6 +625,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["last_finished_utc"] = payload.get("last_finished_utc")
     if isinstance(payload.get("agent_trust"), dict):
         AUTOPILOT_STATE["agent_trust"] = payload.get("agent_trust") or {}
+    if isinstance(payload.get("common_jobs"), dict):
+        AUTOPILOT_STATE["common_jobs"] = payload.get("common_jobs") or {}
     if isinstance(payload.get("build_history"), list):
         AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
     if isinstance(payload.get("last_build"), dict):
@@ -3903,6 +3909,9 @@ def _update_agent_trust(tested: list[dict], stage: str = "general") -> dict:
         agent_id=str(answer.get("agent_id") or "").strip()
         if not agent_id:
             continue
+        if answer.get("transport")=="common_job_board":
+            # Async job post: neither success nor failure of the agent's answer.
+            continue
         old=dict(trust.get(agent_id) or {})
 
         observations=int(old.get("observations") or 0)+1
@@ -4060,6 +4069,42 @@ async def _neo_dialect_handshake(agent: dict, interface: peer_a2a.Interface) -> 
     return (answer.get("peer_context") if isinstance(answer.get("peer_context"),dict) else prior),profile
 
 
+async def _post_common_job(agent: dict, question: str) -> dict:
+    """Common (agents.dooza.ai): file the probe on its job board, never in the public room.
+
+    Results arrive later as replies, so the immediate answer is never evidence.
+    """
+    agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
+    name=agent.get("name") or agent_id or "Common"
+    base={"agent":name,"agent_id":agent_id,"transport":"common_job_board","quality_ok":False}
+    state,allowed=common_jobs.reserve_slot(AUTOPILOT_STATE.get("common_jobs"))
+    if not allowed:
+        AUTOPILOT_STATE["common_jobs"]=state
+        return {**base,"ok":False,"status":0,"quality_reason":"common_job_daily_cap_reached"}
+    payload=common_jobs.job_payload(question)
+    status=0
+    body:Any={}
+    try:
+        async with httpx.AsyncClient(timeout=_a2a_timeout("direct_message_send"),follow_redirects=False,trust_env=False) as client:
+            bounded=await endpoint_verifier._bounded_request(
+                client,"POST",common_jobs.COMMON_A2A_URL,json_body=payload,
+                headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":BRAND_NAME+"/"+VERSION},
+                max_redirects=endpoint_verifier.MAX_REDIRECTS,
+                user_agent=BRAND_NAME+"/"+VERSION,
+            )
+        status=int(bounded.get("status") or 0)
+        try:
+            body=json.loads(str(bounded.get("body") or ""))
+        except Exception:
+            body={"text":str(bounded.get("body") or "")[:2000]}
+    except Exception as exc:
+        body={"error":type(exc).__name__}
+    AUTOPILOT_STATE["common_jobs"]=common_jobs.record_outcome(state,status)
+    return {**base,"ok":200<=status<300,"status":status,"response":body,
+            "job_message_id":payload["params"]["message"]["messageId"],
+            "quality_reason":common_jobs.QUALITY_REASON}
+
+
 async def _ask_a2a_transport(agent: dict, question: str) -> dict:
     if agent.get("_peer_interface"):
         interface = peer_a2a.Interface(**agent["_peer_interface"])
@@ -4101,6 +4146,8 @@ async def _ask_a2a_transport(agent: dict, question: str) -> dict:
         if answer.get("quality_ok"):
             answer["quality_ok"], answer["quality_reason"] = _quality_check(answer, question)
         return answer
+    if common_jobs.is_common_agent(agent):
+        return await _post_common_job(agent,question)
     agent_id=str(agent.get("id") or agent.get("agent_id") or agent.get("slug") or "")
     name=agent.get("name") or agent_id or "unknown"
     attempts=[]
@@ -10115,12 +10162,15 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
 
     # Dedicated G5 validation phase. It has its own bounded query budget and
     # rotates only among families with persisted buyer voice. Discovery remains separate.
+    # Decision 2026-10-12: competitor-price validation is retired (prices of
+    # invented tools are never found). Its query budget is no longer spent;
+    # market_inference.py scores the market from indirect signals (shadow).
     price_plan=price_validation_plan(
         AUTOPILOT_STATE.get("commercial_evidence_memory") or [],
         cycle=cycle_no,
         category_configs=CATEGORY_CONFIGS,
         budget=PRICE_VALIDATION_QUERY_BUDGET,
-    )
+    ) if PRICE_VALIDATION_ENABLED else []
     price_groups=[]
     if price_plan:
         price_meta={
