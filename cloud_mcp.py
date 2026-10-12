@@ -10776,6 +10776,7 @@ def _mcp_tool_access(name: str) -> str:
 MCP_PUBLIC_READONLY_PER_ORIGIN_PER_HOUR = 30
 MCP_PUBLIC_READONLY_GLOBAL_PER_DAY = 3000
 MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR = 10
+PUBLIC_TOOL_DEADLINE_SECONDS = 45.0
 MCP_PUBLIC_NETWORK_GLOBAL_PER_DAY = 500
 _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN: dict[str, list[float]] = {}
 _MCP_PUBLIC_NETWORK_GLOBAL_CALLS: list[float] = []
@@ -10786,6 +10787,10 @@ def _consume_mcp_public_network_limit(source: str) -> bool:
     global _MCP_PUBLIC_NETWORK_GLOBAL_CALLS
     now=time.time()
     _MCP_PUBLIC_NETWORK_GLOBAL_CALLS=[ts for ts in _MCP_PUBLIC_NETWORK_GLOBAL_CALLS if ts>now-86400.0]
+    if len(_MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN)>5000:
+        for k in list(_MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN):
+            if not any(ts>now-3600.0 for ts in _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN[k]):
+                _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.pop(k,None)
     key=endpoint_verifier.caller_bucket(source or "unknown")
     calls=[ts for ts in _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN.get(key,[]) if ts>now-3600.0]
     if len(calls)>=MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR or len(_MCP_PUBLIC_NETWORK_GLOBAL_CALLS)>=MCP_PUBLIC_NETWORK_GLOBAL_PER_DAY:
@@ -10795,6 +10800,24 @@ def _consume_mcp_public_network_limit(source: str) -> bool:
     _MCP_PUBLIC_NETWORK_CALLS_BY_ORIGIN[key]=calls
     _MCP_PUBLIC_NETWORK_GLOBAL_CALLS.append(now)
     return True
+
+
+def _trusted_client_key(header_map: dict, client: Any) -> str:
+    """Rate-limit/usage key a caller cannot choose freely.
+
+    Origin, Referer and the FIRST X-Forwarded-For entry are client-controlled
+    (Render appends to X-Forwarded-For rather than replacing it), so they must
+    not key limits. Prefer headers set by the edge (Cloudflare), then the LAST
+    X-Forwarded-For hop, then the socket peer.
+    """
+    for name in ("cf-connecting-ip","true-client-ip"):
+        value=str(header_map.get(name) or "").strip()
+        if value:
+            return value[:64]
+    hops=[h.strip() for h in str(header_map.get("x-forwarded-for") or "").split(",") if h.strip()]
+    if hops:
+        return hops[-1][:64]
+    return str((client or ("",0))[0] or "unknown")[:64]
 
 
 def _record_public_tool_use(tool_name: str, source: str, category: str) -> None:
@@ -10898,12 +10921,17 @@ async def verify_mcp_endpoint(
     """Verify a public MCP endpoint without tools/call or state-changing requests."""
     connection = getattr(ctx, "connection", None)
     caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
-    return await endpoint_verifier.verify_endpoint(
-        url=(url or None),
-        registry_name=(registry_name or None),
-        caller=caller,
-        client_version=VERSION,
-    )
+    # Overall deadline: per-read timeouts alone let a slow-drip server hold a
+    # public call open for a long time.
+    try:
+        return await asyncio.wait_for(endpoint_verifier.verify_endpoint(
+            url=(url or None),
+            registry_name=(registry_name or None),
+            caller=caller,
+            client_version=VERSION,
+        ),timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
+    except asyncio.TimeoutError:
+        return {"ok":False,"error":"verification_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
 
 
 @mcp.tool(
@@ -10923,13 +10951,16 @@ async def oxibay_doctor(
     """Diagnose a public MCP endpoint without tools/call or production mutation."""
     connection = getattr(ctx, "connection", None)
     caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
-    return await oxibay_doctor_engine.diagnose_endpoint(
-        url=(url or None),
-        registry_name=(registry_name or None),
-        caller=caller,
-        client_version=VERSION,
-        expected_capability=expected_capability,
-    )
+    try:
+        return await asyncio.wait_for(oxibay_doctor_engine.diagnose_endpoint(
+            url=(url or None),
+            registry_name=(registry_name or None),
+            caller=caller,
+            client_version=VERSION,
+            expected_capability=expected_capability,
+        ),timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
+    except asyncio.TimeoutError:
+        return {"ok":False,"error":"diagnosis_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
 
 
 @mcp.tool()
@@ -14254,9 +14285,10 @@ class _InboundTrafficASGI:
             if not known_tool:
                 pass
             elif access=="public_network" and not privileged:
+                limit_key=_trusted_client_key(header_map,client)
                 if category!="self_traffic":
-                    _record_public_tool_use(tool_name,source,category)
-                if not _consume_mcp_public_network_limit(source):
+                    _record_public_tool_use(tool_name,limit_key,category)
+                if not _consume_mcp_public_network_limit(limit_key):
                     response={
                         "jsonrpc":"2.0","id":payload.get("id"),
                         "error":{"code":-32029,"message":"rate_limited"},

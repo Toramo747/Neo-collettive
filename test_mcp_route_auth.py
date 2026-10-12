@@ -118,12 +118,46 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage["distinct_origins"],1)
         self.assertNotIn("198.51.100.20",json.dumps(usage))   # origins are hashed
 
+    async def test_spoofed_origin_headers_cannot_dodge_the_limit_or_fake_demand(self):
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
+        payload={"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{}}}
+        limit=cloud_mcp.MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR
+        statuses=[]
+        for i in range(limit+3):
+            status,_=await _call(self.wrapper,payload,headers={
+                "origin":f"https://fake{i}.example","x-forwarded-for":f"203.0.113.{i}, 198.51.100.77"})
+            statuses.append(status)
+        self.assertEqual(statuses.count(200),limit)
+        self.assertEqual(cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]["verify_mcp_endpoint"]["distinct_origins"],1)
+
+    def test_trusted_key_prefers_edge_header_then_last_hop(self):
+        k=cloud_mcp._trusted_client_key
+        self.assertEqual(k({"cf-connecting-ip":"192.0.2.9","x-forwarded-for":"1.1.1.1, 2.2.2.2"},("3.3.3.3",1)),"192.0.2.9")
+        self.assertEqual(k({"x-forwarded-for":"1.1.1.1, 2.2.2.2","origin":"https://x"},("3.3.3.3",1)),"2.2.2.2")
+        self.assertEqual(k({},("3.3.3.3",1)),"3.3.3.3")
+
     async def test_admin_calls_are_not_counted_as_demand(self):
         cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
         payload={"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"oxibay_doctor","arguments":{}}}
         status,_=await _call(self.wrapper,payload,headers={"authorization":"Bearer synthetic-admin"})
         self.assertEqual(status,200)
         self.assertEqual(cloud_mcp.AUTOPILOT_STATE["public_tool_usage"],{})
+
+    async def test_public_tools_have_an_overall_deadline(self):
+        import asyncio
+        async def slow(**kw):
+            await asyncio.sleep(10)
+        old_deadline=cloud_mcp.PUBLIC_TOOL_DEADLINE_SECONDS
+        old_fn=cloud_mcp.endpoint_verifier.verify_endpoint
+        cloud_mcp.PUBLIC_TOOL_DEADLINE_SECONDS=0.05
+        cloud_mcp.endpoint_verifier.verify_endpoint=slow
+        try:
+            class Ctx: connection=None
+            out=await cloud_mcp.verify_mcp_endpoint(Ctx(),url="https://example.org/mcp")
+        finally:
+            cloud_mcp.PUBLIC_TOOL_DEADLINE_SECONDS=old_deadline
+            cloud_mcp.endpoint_verifier.verify_endpoint=old_fn
+        self.assertEqual(out["error"],"verification_deadline_exceeded")
 
     def test_tool_access_table_is_explicit(self):
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["neo_director_results"],"public_readonly")

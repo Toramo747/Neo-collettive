@@ -20,3 +20,30 @@ Rule fixed now, before results: after 4 weeks, a paid tier is worth building
 only if at least **10 distinct external origins** called a tool and at least
 **3 of them came back on a different day**. Fewer means no demand at this
 price (zero); the result is kept either way.
+
+## Security review before opening (2026-10-12)
+
+Andrea asked for a second security pass before deploy. Found and fixed:
+
+1. **Spoofable rate-limit key** (high): limits and usage were keyed on the
+   Origin/Referer headers or the first X-Forwarded-For hop, all chosen by the
+   caller, so one client could dodge the per-origin limit and fake "distinct
+   users". Now keyed on the edge header (CF-Connecting-IP / True-Client-IP),
+   else the last X-Forwarded-For hop, else the socket peer.
+2. **DNS rebinding** (high once public): connections pinned to the IP that
+   passed the SSRF check; TLS verified against the hostname.
+3. **IPv6 translation ranges** (medium): NAT64 `64:ff9b::/96`, `64:ff9b:1::/48`,
+   IPv4-compatible `::/96` and private IPv4 embedded in 6to4/Teredo/mapped
+   addresses are blocked (Python reports some of them as global).
+4. **Cross-user leak** (medium): every verification returned the list of
+   domains other callers had checked. Tool output now carries totals only; the
+   in-memory domain table is capped at 500.
+5. **Slow-drip hold** (medium): only per-read timeouts existed; a public call
+   now has an overall 45 s deadline.
+6. **Internal DNS oracle** (low): blocked addresses are no longer echoed in errors.
+7. Rate-limit table pruned to stay bounded.
+
+Unchanged and verified: HTTPS on port 443 only, no userinfo, redirects
+re-validated per hop, 256 KB response cap, no credentials forwarded, never
+calls remote tools, results never written to the knowledge ledger or
+hypothesis queue, other network tools remain admin-only.

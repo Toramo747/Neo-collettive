@@ -49,5 +49,33 @@ class PinningTests(unittest.TestCase):
         self.assertEqual(r["status"], 200)
 
 
+
+class HardeningTests(unittest.TestCase):
+    def test_translation_and_embedded_private_ipv6_are_blocked(self):
+        for ip in ("64:ff9b::7f00:1", "64:ff9b::a9fe:a9fe", "::127.0.0.1", "::ffff:10.0.0.1",
+                   "2002:7f00:1::", "64:ff9b:1::1", "169.254.169.254", "100.64.0.1"):
+            self.assertTrue(v._blocked_ip(ip), ip)
+        for ip in ("1.1.1.1", "2606:4700:4700::1111"):
+            self.assertFalse(v._blocked_ip(ip), ip)
+
+    def test_blocked_address_is_not_echoed(self):
+        async def run():
+            return await v.resolve_public_ips("10.1.2.3")
+        with self.assertRaises(v.VerificationError) as ctx:
+            asyncio.run(run())
+        self.assertNotIn("10.1.2.3", str(ctx.exception))
+
+    def test_tool_output_never_lists_other_callers_domains(self):
+        v._record_usage("someone-elses-server.example", True, [])
+        counts = v.public_usage_counts()
+        self.assertNotIn("domains", counts)
+        self.assertNotIn("someone-elses-server", str(counts))
+
+    def test_domain_metrics_are_capped(self):
+        for i in range(600):
+            v._record_usage(f"d{i}.example", False, [])
+        self.assertLessEqual(len(v._METRICS["domains"]), 501)
+
+
 if __name__ == "__main__":
     unittest.main()
