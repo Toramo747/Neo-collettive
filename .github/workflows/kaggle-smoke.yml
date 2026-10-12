@@ -35,6 +35,7 @@ jobs:
           else:
               import os
               os.environ["LD_LIBRARY_PATH"] = "/usr/local/nvidia/lib:/usr/local/nvidia/lib64:" + os.environ.get("LD_LIBRARY_PATH", "")
+              os.environ["CUDA_VISIBLE_DEVICES"] = "0"
               subprocess.Popen("ollama serve > /kaggle/working/serve.log 2>&1", shell=True)
               time.sleep(8)
               t = time.time(); rc, err = sh("ollama pull qwen2.5:14b-instruct-q4_K_M", 1500)
@@ -42,7 +43,7 @@ jobs:
               if not rc:
                   import urllib.request
                   body = json.dumps({"model": "qwen2.5:14b-instruct-q4_K_M", "prompt": "List five everyday business chores people hate, one line each.",
-                                     "stream": False, "options": {"num_predict": 200}}).encode()
+                                     "stream": False, "options": {"num_predict": 200, "num_ctx": 4096}}).encode()
                   t = time.time()
                   r = json.loads(urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
                                                          headers={"Content-Type": "application/json"}), timeout=600).read())
