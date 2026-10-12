@@ -37,7 +37,12 @@ Public HN Algolia only, read-only. Aggregate counts only (no text, URLs, ids). N
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-11 05:44 | training | 1 | 1 | 13 | 0 | 0.194 | 0.167 | 71 |
 | 2026-10-11 05:44 | holdout | 0 | 0 | 1 | 0 | 0.033 | 0.000 | 55 |
+| 2026-10-12 06:06 | training | 1 | 1 | 13 | 0 | 0.217 | 0.200 | 66 |
+| 2026-10-12 06:06 | holdout | 0 | 0 | 3 | 0 | 0.079 | 0.000 | 63 |
 
 ### Note after run 1 (amendment, declared openly)
 PROD_EQ retrieved only 7–8 stories for 120 requested hits: a bare topic phrase restricted to stories in 45 days finds almost nothing. On training, CHAMP's advantage is volume (13.98 vs 14.29 signals per 100 hits: same yield per hit). On holdout every arm is near zero (CHAMP 1 signal out of 83 hits).
 The original rule is degenerate when the baseline is 0 (1 >= 1.5 x 0). Amendment for runs 2–3, stated before running them: condition 1 also requires **CHAMP holdout `signal_hits` >= 5**. Run 1 passes the original rule only trivially and fails the amended one.
+
+### Run 2 (2026-10-12)
+Holdout: CHAMP 3 signals vs PROD_EQ 0. Fails the amended condition (CHAMP holdout `signal_hits` >= 5). Two runs out of three now fail it, so the rule cannot be met in 3/3 runs: **no promotion** whatever run 3 shows. Run 3 is still executed for the record.
