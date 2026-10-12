@@ -92,20 +92,24 @@ def clean_label(value: Any, max_words: int = 6) -> str:
     return text if WORD_RE.match(text or "") and "http" not in text else ""
 
 
+def judge_prompt(batch: list[str]) -> str:
+    """Exact judge prompt; also used to build the distillation training set."""
+    listing = "\n".join(f"{i}: {s[:300]}" for i, s in enumerate(batch))
+    return (
+        "You review sentences people wrote online. For each, decide if the WRITER has a real, "
+        "concrete need for a tool, service or solution (not an opinion, joke, job ad, vendor "
+        "pitch or abstract debate). Name the problem in at most 6 plain words, e.g. "
+        "'reconcile invoices with bank exports'. would_pay is 'yes' only if they hint at paying "
+        "or buying. Return JSON {\"verdicts\":[{\"i\":0,\"real_need\":true,\"problem\":\"...\","
+        "\"would_pay\":\"unknown\"}]} with one entry per sentence.\n\n" + listing)
+
+
 def judge(model: str, needs: list[str], gen: Callable = ollama_generate) -> list[dict]:
     """One verdict per need: {real_need, problem, would_pay}. Unknown => not real."""
     out = [{"real_need": False, "problem": "", "would_pay": "unknown", "judged": False} for _ in needs]
     for start in range(0, min(len(needs), MAX_JUDGED), JUDGE_BATCH):
         batch = needs[start:start + JUDGE_BATCH]
-        listing = "\n".join(f"{i}: {s[:300]}" for i, s in enumerate(batch))
-        prompt = (
-            "You review sentences people wrote online. For each, decide if the WRITER has a real, "
-            "concrete need for a tool, service or solution (not an opinion, joke, job ad, vendor "
-            "pitch or abstract debate). Name the problem in at most 6 plain words, e.g. "
-            "'reconcile invoices with bank exports'. would_pay is 'yes' only if they hint at paying "
-            "or buying. Return JSON {\"verdicts\":[{\"i\":0,\"real_need\":true,\"problem\":\"...\","
-            "\"would_pay\":\"unknown\"}]} with one entry per sentence.\n\n" + listing)
-        res = gen(model, prompt, JUDGE_SCHEMA)
+        res = gen(model, judge_prompt(batch), JUDGE_SCHEMA)
         for v in (res or {}).get("verdicts") or []:
             try:
                 i = int(v.get("i"))

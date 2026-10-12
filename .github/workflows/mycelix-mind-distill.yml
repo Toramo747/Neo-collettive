@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: "harvest | label | label-fetch"
+        description: "harvest | label | label-fetch | train | eval"
         required: true
         default: harvest
 permissions:
@@ -68,6 +68,49 @@ jobs:
             label-fetch)
               kaggle kernels output "$K" -p out >/dev/null 2>&1 || true
               [ -f out/labels.json ] && python tools/mi_distill.py label-collect private-labels out/labels.json ;;
+            train)
+              T="$KAGGLE_USERNAME/neo-mind-distill-train"
+              python tools/mi_deep.py quota private-labels || { echo "weekly GPU cap reached"; exit 0; }
+              python tools/mi_distill.py train-build private-labels kernel "$KAGGLE_USERNAME" || exit 1
+              start=$(date +%s)
+              kaggle kernels push -p kernel >/dev/null 2>&1 || { echo "::error title=Distill::push failed"; exit 1; }
+              status=""
+              for i in $(seq 1 640); do
+                sleep 30
+                status=$(kaggle kernels status "$T" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*' | head -1 || true)
+                [ -n "$status" ] && break
+                [ $(( ($(date +%s) - start) / 60 )) -ge 330 ] && break
+              done
+              minutes=$(( ($(date +%s) - start) / 60 ))
+              kaggle kernels output "$T" -p out --file-pattern 'train\.json' >/dev/null 2>&1 || kaggle kernels output "$T" -p out >/dev/null 2>&1 || true
+              summary=$(python -c "import json;d=json.load(open('out/train.json'));print(d)" 2>/dev/null || echo none)
+              echo "::notice title=Distill train::status=${status:-still_running} wall_minutes=$minutes summary=$summary"
+              python - "$minutes" <<'PY'
+          import json, sys
+          from pathlib import Path
+          from datetime import datetime, timezone
+          p = Path("private-labels/market-intuition/deep_usage.json")
+          u = json.loads(p.read_text()) if p.exists() else {}
+          y, w, _ = datetime.now(timezone.utc).isocalendar()
+          k = f"{y}-W{w:02d}"
+          u[k] = round(float(u.get(k, 0)) + float(sys.argv[1]), 1)
+          p.write_text(json.dumps(u))
+          PY
+              ;;
+            eval)
+              T="$KAGGLE_USERNAME/neo-mind-distill-train"
+              kaggle kernels output "$T" -p out >/dev/null 2>&1 || true
+              gguf=$(find out -name '*.gguf' | grep -i 'q4_k_m' | head -1)
+              [ -n "$gguf" ] || gguf=$(find out -name '*.gguf' | head -1)
+              [ -n "$gguf" ] || { echo "::error title=Distill eval::no gguf in kernel output"; exit 1; }
+              timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+              nohup ollama serve >/tmp/ollama.log 2>&1 &
+              for i in $(seq 1 30); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null && break; sleep 1; done
+              ollama pull qwen2.5:3b-instruct-q4_K_M >/dev/null
+              ollama show --modelfile qwen2.5:3b-instruct-q4_K_M | sed -E "s#^FROM .*#FROM $PWD/$gguf#" > Modelfile.student
+              ollama create neo-mind-student -f Modelfile.student >/dev/null
+              python tools/mi_distill_eval.py private-labels qwen2.5:3b-instruct-q4_K_M neo-mind-student || exit 1
+              ;;
             *) echo "unknown stage"; exit 1 ;;
           esac
           rm -rf out kernel
