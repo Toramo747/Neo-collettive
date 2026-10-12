@@ -59,6 +59,18 @@ class DeepMindTests(unittest.TestCase):
             (base / "deep_usage.json").write_text(json.dumps(usage))
             self.assertEqual(mi_deep.quota(d), 1)
 
+    def test_build_rejudges_members_of_big_problems(self):
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d) / "market-intuition"
+            base.mkdir()
+            (base / "state.json").write_text(json.dumps({"deep_queue": [], "deep_judged": ["p1"],
+                "market_map": {"vague": {"people": 3, "persons": ["p1", "p2", "p3"]}}}))
+            (base / "discoveries.jsonl").write_text("\n".join(json.dumps({"person": p, "need": "I need " + p}) for p in ("p1", "p2", "p3")))
+            self.assertEqual(mi_deep.build(d, str(Path(d) / "k"), "u"), 0)
+            src = (Path(d) / "k" / "mind.py").read_text()
+            self.assertIn("I need p2", src)
+            self.assertNotIn("I need p1", src)   # already judged by the deep mind
+
     def test_empty_queue_skips(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "market-intuition").mkdir()

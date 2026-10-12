@@ -124,5 +124,31 @@ class MindTests(unittest.TestCase):
         self.assertEqual(disc, [])
 
 
+
+class FixesTests(unittest.TestCase):
+    def test_pay_counts_distinct_people_and_migrates(self):
+        st = {"market_map": {"x": {"people": 3, "pay": 6, "persons": ["a", "b", "c"]}}}
+        state, _, _ = a.run_generation(st, getter=lambda u: {"hits": [], "items": []}, seed=1,
+                                       mind_model="fake", mind_gen=lambda m, p, s: {})
+        self.assertLessEqual(state["market_map"]["x"]["pay"], state["market_map"]["x"]["people"])
+        inbox = {"verdicts": [{"person": "a", "real_need": True, "problem": "db cost", "would_pay": "yes"}] * 2}
+        st2 = a.apply_deep({"market_map": {"db cost": {"people": 1, "pay": 0, "persons": ["b"], "payers": []}}}, inbox)
+        self.assertEqual(st2["market_map"]["db cost"]["pay"], 1)
+        self.assertEqual(st2["market_map"]["db cost"]["people"], 2)
+
+    def test_focus_terms_present_every_generation(self):
+        state, _, _ = a.run_generation({}, getter=fake_getter, seed=3)
+        focus = [g for g in state["population"] if g.get("origin") == "focus"]
+        self.assertEqual(len(focus), a.FOCUS_SLOTS)
+        self.assertTrue(all(g["terms"][0] in a.FOCUS_TERMS for g in focus))
+
+    def test_discoveries_have_one_row_per_person(self):
+        st = {"population": [a.clamp({"id": f"p{i}", "phrases": ["is there a tool", "tired of"],
+                                      "terms": ["invoices", "tax"], "sources": ["hn_comments", "hn_stories"]}) for i in range(8)]}
+        _, _, disc = a.run_generation(st, getter=fake_getter, seed=4)
+        people = [d["person"] for d in disc]
+        self.assertEqual(len(people), len(set(people)))
+
+
 if __name__ == "__main__":
     unittest.main()

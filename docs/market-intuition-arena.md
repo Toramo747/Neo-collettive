@@ -56,3 +56,17 @@ result lands in `deep_inbox/` and the next generation applies it (deep verdicts
 override the small mind). GPU use is tracked privately with a 25 h/week cap.
 Measured on Kaggle: 14B fully on GPU, ~3.5–5 tokens/s, so a session takes
 about 30–40 minutes.
+
+## Fixes and focus (2026-10-12 afternoon, authorized by Andrea)
+
+- `pay` now counts DIFFERENT people hinting at paying (`payers` list); v1 could
+  exceed the number of people (6 of 3) because deep reflections re-added them.
+  Old entries are clamped at load.
+- Discoveries keep one row per person per generation.
+- **Split vague problems:** each deep reflection also re-judges members of
+  problems with 3+ people that the 14B model has not judged yet, so lumped
+  labels (e.g. "automation code management": specs, salary, a broken monitor,
+  meeting transcription) get split into their real problems.
+- **Focus:** 2 genomes per generation search the first credible signal,
+  monitoring that costs too much ("database monitoring", "monitoring cost",
+  "observability pricing", "metadata monitoring"), to see if more people confirm it.

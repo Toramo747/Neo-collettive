@@ -64,6 +64,23 @@ json.dump({"model": MODEL, "verdicts": out_verdicts, "thought": thought,
 def build(private_dir: str, kernel_dir: str, username: str) -> int:
     state = json.loads((Path(private_dir) / "market-intuition" / "state.json").read_text())
     items = [{"person": x["person"], "need": x["need"]} for x in (state.get("deep_queue") or [])][-MAX_ITEMS:]
+    # Split vague problems: re-judge members of problems with 3+ people that the
+    # deep mind has not judged yet (the small mind tends to lump unrelated needs).
+    judged = set(state.get("deep_judged") or [])
+    big = {p for v in (state.get("market_map") or {}).values() if int(v.get("people") or 0) >= 3
+           for p in (v.get("persons") or []) if p not in judged}
+    have = {x["person"] for x in items}
+    disc = Path(private_dir) / "market-intuition" / "discoveries.jsonl"
+    if big and disc.exists():
+        for line in disc.read_text().splitlines():
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            p = d.get("person")
+            if p in big and p not in have and d.get("need") and len(items) < MAX_ITEMS:
+                items.append({"person": p, "need": str(d["need"])[:300]})
+                have.add(p)
     if not items:
         print("::notice title=Deep mind::queue empty, nothing to do")
         return 3

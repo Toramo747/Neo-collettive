@@ -52,6 +52,10 @@ VOCAB_CAP = 240
 ARCHIVE_CAP = 20000
 STAGNATION_WINDOW = 6
 DEEP_QUEUE_CAP = 300
+# Andrea's focus (2026-10-12): follow the first credible signal, monitoring that
+# costs too much (DBA "monitoring tax", "$45/month for 5 things").
+FOCUS_TERMS = ("database monitoring", "monitoring cost", "observability pricing", "metadata monitoring")
+FOCUS_SLOTS = 2
 USER_AGENT = "MYCELIX-market-intuition-arena/1 (public read-only research)"
 
 PHRASES = (
@@ -375,6 +379,10 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
 
     # ---- the mind: judge, think, map markets, propose ideas (optional)
     market_map = {k: dict(v) for k, v in (state.get("market_map") or {}).items()}
+    for v in market_map.values():
+        if "payers" not in v:   # migrate v1 counters: cannot exceed the people in the entry
+            v["pay"] = min(int(v.get("pay") or 0), len(v.get("persons") or []))
+            v["payers"] = list(v.get("persons") or [])[:v["pay"]]
     diary = list(state.get("diary") or [])
     idea_log = list(state.get("idea_log") or [])
     thought: dict = {}
@@ -405,11 +413,13 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
             name = row.get("problem")
             if not name:
                 continue
-            entry = market_map.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": []})
+            entry = market_map.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": [], "payers": []})
             if row["person"] not in entry["persons"]:
                 entry["persons"] = (entry["persons"] + [row["person"]])[-200:]
                 entry["people"] = len(entry["persons"])
-                entry["pay"] += 1 if row.get("would_pay") == "yes" else 0
+            if row.get("would_pay") == "yes":
+                entry["payers"] = list(entry.get("payers") or []) + [row["person"]]
+            _sync_pay(entry)
             entry["last_gen"] = gen
         real_by_person = {row["person"]: row for row in real}
         rescored = []
@@ -463,6 +473,17 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         nxt.append(clamp(idea) | {"origin": "mind"})
     while len(nxt) < POPULATION:
         nxt.append(random_genome(rng, vocab, f"g{gen}-r{len(nxt)}"))
+    focus = list(state.get("focus_terms") or FOCUS_TERMS)
+    for t in focus:
+        vocab[t] = max(vocab.get(t, 0.0), 3.0)
+    # focus slots replace bred children (after the elites), never elites or mind ideas
+    for k in range(min(FOCUS_SLOTS, len(focus))):
+        idx = ELITES + k
+        if idx >= len(nxt) or nxt[idx].get("origin") == "mind":
+            break
+        g = dict(nxt[idx])
+        g["terms"] = [rng.choice(focus), g["terms"][-1]]
+        nxt[idx] = clamp(g) | {"origin": "focus"}
 
     market_people: dict[str, set[str]] = defaultdict(set)
     for q, row in all_demand:
@@ -520,7 +541,17 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "money": bool(row.get("would_pay") == "yes" or mi.PAY_RE.search(row["need"])),
         "problem": row.get("problem"),
     } for q, row in all_demand if row["person"] in new_people]
+    seen_people: set[str] = set()
+    discoveries = [d for d in discoveries if not (d["person"] in seen_people or seen_people.add(d["person"]))]
     return new_state, summary, discoveries
+
+
+def _sync_pay(entry: dict) -> None:
+    """pay = number of DIFFERENT people hinting at paying (v1 double-counted)."""
+    persons = set(entry.get("persons") or [])
+    payers = [p for p in dict.fromkeys(entry.get("payers") or []) if p in persons]
+    entry["payers"] = payers
+    entry["pay"] = len(payers)
 
 
 def apply_deep(state: dict, inbox: dict) -> dict:
@@ -530,7 +561,7 @@ def apply_deep(state: dict, inbox: dict) -> dict:
     merges consolidate synonym problems; its ideas feed vocabulary and phrases.
     """
     st = dict(state)
-    mm = {k: dict(v, persons=list(v.get("persons") or [])) for k, v in (st.get("market_map") or {}).items()}
+    mm = {k: dict(v, persons=list(v.get("persons") or []), payers=list(v.get("payers") or [])) for k, v in (st.get("market_map") or {}).items()}
     verdicts = [v for v in inbox.get("verdicts") or [] if isinstance(v, dict) and v.get("person")]
     judged_people = {v["person"] for v in verdicts}
     for entry in mm.values():
@@ -539,9 +570,10 @@ def apply_deep(state: dict, inbox: dict) -> dict:
     for v in verdicts:
         name = arena_mind.clean_label(v.get("problem"))
         if v.get("real_need") and name:
-            e = mm.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": []})
+            e = mm.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": [], "payers": []})
             e["persons"].append(v["person"])
-            e["pay"] = int(e.get("pay") or 0) + (1 if v.get("would_pay") == "yes" else 0)
+            if v.get("would_pay") == "yes":
+                e["payers"].append(v["person"])
             e["last_gen"] = gen
             e["deep"] = True
     thought = inbox.get("thought") or {}
@@ -549,13 +581,14 @@ def apply_deep(state: dict, inbox: dict) -> dict:
         a, b = arena_mind.clean_label(m.get("from")), arena_mind.clean_label(m.get("into"))
         if a and b and a != b and a in mm:
             src = mm.pop(a)
-            dst = mm.setdefault(b, {"people": 0, "pay": 0, "first_gen": src.get("first_gen", gen), "persons": []})
+            dst = mm.setdefault(b, {"people": 0, "pay": 0, "first_gen": src.get("first_gen", gen), "persons": [], "payers": []})
             dst["persons"] = list(dict.fromkeys(dst["persons"] + src["persons"]))
-            dst["pay"] = int(dst.get("pay") or 0) + int(src.get("pay") or 0)
+            dst["payers"] = list(dict.fromkeys(list(dst.get("payers") or []) + list(src.get("payers") or [])))
             dst["last_gen"] = max(int(dst.get("last_gen") or 0), int(src.get("last_gen") or 0))
     for k in list(mm):
-        mm[k]["persons"] = mm[k]["persons"][-200:]
+        mm[k]["persons"] = list(dict.fromkeys(mm[k]["persons"]))[-200:]
         mm[k]["people"] = len(mm[k]["persons"])
+        _sync_pay(mm[k])
         if not mm[k]["people"]:
             mm.pop(k)
     st["market_map"] = dict(sorted(mm.items(), key=lambda kv: -kv[1]["people"])[:300])
