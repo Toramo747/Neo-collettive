@@ -24,5 +24,13 @@ Decision rule (fixed before the first run): recommend an arm for a production tr
 | 1 | **COMMENT10** | 320 | **91** | **0.284** | **31** | **103** |
 | 1 | ALL10_45D | 277 | 77 | 0.278 | 28 | 73 |
 | 1 | ALL30_45D | 705 | 185 | 0.262 | 28 | 195 |
+| 2 (2026-10-12 06:1x UTC) | PROD | 94 | 16 | 0.170 | 11 | 7 |
+| 2 | STORY10 | 311 | 43 | 0.138 | 24 | 31 |
+| 2 | ALL10 | 320 | 96 | 0.300 | 31 | 90 |
+| 2 | **COMMENT10** | 320 | **102** | **0.319** | **31** | **105** |
+| 2 | ALL10_45D | 275 | 86 | 0.313 | 28 | 70 |
+| 2 | ALL30_45D | 691 | 209 | 0.302 | 28 | 190 |
 
 Run 1 reading: with the same 32 requests, comments instead of stories multiply demand found by ~15x (6 → 91) and raise precision (0.06 → 0.28); production currently finds demand for 5 of 32 topics, comments for 31. Teacher and lexicon agree on the direction (lexicon 11 → 103), so this is not only a teacher bias (the teacher saw HN comments among its positives). COMMENT10 passes the rule in run 1; runs 2 and 3 pending.
+
+Run 2 reading: COMMENT10 again passes all three conditions against PROD (102 vs 16 teacher demand, ≥2x; precision 0.319 vs 0.170; topics 31 vs 11). PROD itself found more this time (6 → 16), the gap narrows from ~15x to ~6x but stays well above 2x. 2 of 3 runs pass; run 3 decides.
