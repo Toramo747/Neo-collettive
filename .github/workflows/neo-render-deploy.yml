@@ -393,7 +393,7 @@ jobs:
           PY
           elif [ "${code}" = "200" ]; then
             cat /tmp/predeploy-checkpoint.json
-            git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main
+            git fetch --quiet --force origin main:refs/remotes/origin/main
             git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
             if python - <<'PY'
           import json
@@ -423,7 +423,7 @@ jobs:
             then
               echo "Healthy durable checkpoint confirmed; memory integrity passed without publication freshness dependency."
             else
-              git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main
+              git fetch --quiet --force origin main:refs/remotes/origin/main
               git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
               git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
               python - <<'PY'
@@ -995,7 +995,7 @@ jobs:
           set -euo pipefail
           expected="$(cat /tmp/neo_version)"
           expect_engine_retry=0
-          git fetch --no-tags --depth=2 origin main >/dev/null 2>&1 || true
+          git fetch --no-tags origin main >/dev/null 2>&1 || true
           if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA^" "$GITHUB_SHA" 2>/dev/null | grep -qx 'seti_radar.py'; then
             expect_engine_retry=1
           fi
@@ -1243,6 +1243,8 @@ jobs:
         run: |
           set -euo pipefail
           [ -f /tmp/render-rollback-verified ] || exit 0
+          # never revert from a shallow repository (2026-10-13 empty-tree incident)
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then git fetch --unshallow origin main; fi
           git fetch origin main
           git checkout -B main origin/main
           python scripts/deploy_rollback.py "$FAILED_SHA"

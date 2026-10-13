@@ -79,3 +79,20 @@ class RollbackTests(unittest.TestCase):
         self.assertTrue(revert_failed(failed))
         self.assertEqual(Path('app.py').read_text(), 'base')
         self.assertEqual(Path('neo_cycle_floor.json').read_text(), '{"cycle":3}')
+
+
+    def test_parentless_failed_commit_is_never_reverted(self):
+        # a shallow fetch can make the failed commit look like a root commit
+        root = self.git('rev-list', '--max-parents=0', 'HEAD')
+        self.assertFalse(revert_failed(root))
+        self.assertEqual(Path('app.py').read_text(), 'base')
+
+    def test_shallow_repository_refuses_revert(self):
+        failed = self.commit('app.py', 'failed')
+        clone = Path(self.tmp.name) / 'shallow'
+        subprocess.check_call(['git', 'clone', '-q', '--depth=1', 'file://' + self.tmp.name, str(clone)])
+        os.chdir(clone)
+        self.git('config', 'user.name', 'Test')
+        self.git('config', 'user.email', 'test@example.invalid')
+        self.assertFalse(revert_failed(failed))
+        self.assertEqual(Path('app.py').read_text(), 'failed')

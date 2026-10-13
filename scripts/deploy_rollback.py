@@ -28,15 +28,35 @@ def rollback_allowed(failed, current='HEAD'):
     return True
 
 
+def _changed_paths(a, b):
+    return set(git('diff', '--name-only', a, b).splitlines())
+
+
 def revert_failed(failed):
-    """Revert only if HEAD still contains no newer application commit."""
+    """Revert only if HEAD still contains no newer application commit.
+
+    2026-10-13 incident: a shallow fetch (--depth=1) earlier in the deploy job
+    made the failed commit look parentless, so `git revert` produced the EMPTY
+    tree and deleted every file on main. Guards: never revert a commit whose
+    parent is not available, and never push a revert that touches paths the
+    failed commit did not change."""
+    if git('rev-parse', '--is-shallow-repository') == 'true':
+        return False
     if not rollback_allowed(failed):
         return False
     parents = git('rev-list', '--parents', '-n', '1', failed).split()[1:]
+    if not parents:
+        return False
     args = ['revert', '--no-edit']
     if len(parents) > 1:
         args += ['-m', '1']
+    before = git('rev-parse', 'HEAD')
     git(*args, failed)
+    expected = _changed_paths(parents[0], failed)
+    touched = _changed_paths(before, 'HEAD')
+    if not touched or not touched <= expected or not git('ls-tree', 'HEAD'):
+        git('reset', '--hard', before)
+        return False
     return True
 
 
