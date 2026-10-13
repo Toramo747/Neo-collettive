@@ -265,6 +265,16 @@ def term_re(term: str) -> re.Pattern:
     return re.compile(r"\b" + stem + r"(s|es)?\b", re.I)
 
 
+# 2026-10-13: job ads ("we're hiring", "full-time | remote") and abstract or
+# political topics are not product needs; they were feeding the mind noise.
+JOB_AD_RE = re.compile(
+    r"(\bwho is hiring\b|\b(we('| a)re|is|are) hiring\b|\b(full[- ]time|part[- ]time|onsite|on-site)\b\s*[|/,]|"
+    r"\b(apply|send (your )?(cv|resume))\b[^.]{0,40}\b(at|to|here)\b|\bsalary\b|\bvisa sponsorship\b)", re.I)
+ABSTRACT_RE = re.compile(
+    r"\b(climate change|global warming|politic\w*|election\w*|immigration|religio\w*|abortion|"
+    r"democra\w*|capitalis\w*|socialis\w*|geopolitic\w*|war in|the government)\b", re.I)
+
+
 def need_sentence(row: dict, q: dict) -> str:
     """The sentence where a person expresses a need ABOUT the genome's term.
 
@@ -276,10 +286,14 @@ def need_sentence(row: dict, q: dict) -> str:
     if mi.classify_row(row) != "demand":
         return ""
     text = (row.get("title", "") + ". " + row.get("excerpt", ""))
+    if JOB_AD_RE.search(text):
+        return ""
     tre = term_re(q["term"])
     phrase = q["phrase"].lower()
     for sent in SENT_SPLIT.split(text):
         if len(sent) > 400 or not tre.search(sent):
+            continue
+        if ABSTRACT_RE.search(sent):
             continue
         low = sent.lower()
         if phrase in low or mi.VOICE_RE.search(sent) or mi.QUESTION_RE.search(sent) or mi.PAY_RE.search(sent):
