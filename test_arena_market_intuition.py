@@ -80,6 +80,16 @@ class NeedSentenceTests(unittest.TestCase):
         self.assertEqual(a.need_sentence(off, q), "")
         self.assertIn("CRM", a.need_sentence(on, q))
 
+    def test_job_ads_and_abstract_topics_are_not_needs(self):
+        q = {"term": "crm", "phrase": "we need"}
+        base = {"url": "https://news.ycombinator.com/item?id=2", "domain": "news.ycombinator.com", "title": "", "signal_types": []}
+        ad = dict(base, excerpt="Acme | Full-time | Remote. We need a CRM engineer, we're hiring now.")
+        pol = dict(base, excerpt="We need a CRM for climate change politics and the election.")
+        ok = dict(base, excerpt="We need a CRM that imports email threads without manual copy paste.")
+        self.assertEqual(a.need_sentence(ad, q), "")
+        self.assertEqual(a.need_sentence(pol, q), "")
+        self.assertIn("CRM", a.need_sentence(ok, q))
+
 
 
 class MindTests(unittest.TestCase):
