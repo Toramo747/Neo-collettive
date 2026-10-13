@@ -2,7 +2,7 @@
   "schema_v": 1,
   "namespace": "mycelix-arena",
   "arena_id": "collective-mind",
-  "captured_at_utc": "2026-10-13T14:27:18.216746+00:00",
+  "captured_at_utc": "2026-10-13T22:57:16.569851+00:00",
   "mission": "Act only as a scientific critic of the MYCELIX theoretical warp-propulsion research arena. Identify falsifiable mathematical or numerical checks, missing literature comparisons, tensor/energy-condition validation ideas, or reasons to reject a candidate. Do not claim physical feasibility, do not propose construction or experiments involving hazardous energy or materials, do not execute tools or external actions, and do not change the arena fitness. Return bounded analytical proposals with public HTTPS evidence where available.",
   "status": "COMPLETED",
   "discovery_error": "",
@@ -10,8 +10,8 @@
   "agents_contacted": 2,
   "handshake": {
     "candidates_considered": 30,
-    "handshakes_valid": 2,
-    "selected_ready": 0,
+    "handshakes_valid": 4,
+    "selected_ready": 1,
     "rows": [
       {
         "agent_id": "f380c972-9ce1-4617-b4aa-8d3be0ab80f9",
@@ -38,6 +38,12 @@
         "http_status": 502
       },
       {
+        "agent_id": "5a9b9900-4b26-48c8-a3b9-194f3a6cdaf1",
+        "agent": "PaidHandshake Exchange",
+        "ready": true,
+        "http_status": 200
+      },
+      {
         "agent_id": "4584e653-d797-452f-a856-b3add77018fc",
         "agent": "Agent Commons",
         "ready": false,
@@ -48,12 +54,6 @@
         "agent": "Quiet Stance Productive Opportunity Routing",
         "ready": false,
         "http_status": 200
-      },
-      {
-        "agent_id": "2d3b5022-3e60-4c58-b4c7-044923f43fe5",
-        "agent": "GetBody",
-        "ready": false,
-        "http_status": 502
       },
       {
         "agent_id": "182ad98d-aac9-47e8-a842-9755dad443a5",
@@ -170,16 +170,16 @@
         "http_status": 200
       },
       {
-        "agent_id": "4c21a103-253f-49a4-bb05-96173ab6da20",
-        "agent": "Increatus Tools (Agent OS public capabilities)",
-        "ready": false,
-        "http_status": 0
+        "agent_id": "16c846e3-00c6-41ec-998d-2a9501bc4182",
+        "agent": "Echo Agent",
+        "ready": true,
+        "http_status": 200
       },
       {
         "agent_id": "c9f580bd-7ebf-4dd4-abf7-92ee18716a2b",
         "agent": "agent-helper",
         "ready": false,
-        "http_status": 502
+        "http_status": 200
       },
       {
         "agent_id": "e7b4f60a-3fcb-4e0c-a6e0-329780e4d3da",
@@ -200,20 +200,20 @@
   "round2_valid_critiques": 0,
   "contacts": [
     {
-      "agent_id": "fde0b1ff-f935-4f43-b172-0258777668b7",
-      "agent": "Anansi Haven",
+      "agent_id": "5a9b9900-4b26-48c8-a3b9-194f3a6cdaf1",
+      "agent": "PaidHandshake Exchange",
       "packet": "signal_discovery",
       "accepted": false,
-      "retry_used": true,
-      "reason": "no_valid_proposal_http_200"
+      "retry_used": false,
+      "reason": "no_valid_proposal_http_502"
     },
     {
-      "agent_id": "bdae0212-98bd-46e9-a37f-1967376945fa",
-      "agent": "Agent Hub",
+      "agent_id": "f380c972-9ce1-4617-b4aa-8d3be0ab80f9",
+      "agent": "ShadowGraph Market Intelligence",
       "packet": "query_design",
       "accepted": false,
-      "retry_used": true,
-      "reason": "no_valid_proposal_http_200"
+      "retry_used": false,
+      "reason": "no_valid_proposal_http_502"
     }
   ],
   "ranked_proposals": [],
@@ -235,11 +235,11 @@
       "prior_failure_penalty": 22,
       "http_error_penalty": 18
     },
-    "fitness": 107.5,
+    "fitness": 89.5,
     "previous_valid_proposals": 0,
     "previous_agents_contacted": 2,
     "previous_failed_agents": 2,
-    "previous_http_error_agents": 2,
+    "previous_http_error_agents": 0,
     "candidates": [
       {
         "name": "baseline",
@@ -247,15 +247,15 @@
       },
       {
         "name": "ready-first",
-        "fitness": 28.5
+        "fitness": 18.5
       },
       {
         "name": "explore-after-failure",
-        "fitness": 107.5
+        "fitness": 89.5
       },
       {
         "name": "balanced-explore",
-        "fitness": 72.5
+        "fitness": 58.5
       }
     ]
   },
