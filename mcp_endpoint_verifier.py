@@ -11,7 +11,6 @@ import asyncio
 import hashlib
 import ipaddress
 import json
-import secrets
 import socket
 import time
 from collections import Counter, defaultdict, deque
@@ -668,41 +667,16 @@ async def verify_endpoint(
                 # Some stateless implementations legitimately ignore this notification.
                 pass
             try:
-                # SEP-414 (W3C Trace Context in _meta): tools/list carries a fresh traceparent.
-                # Informational only: a server that rejects it is re-asked once without it,
-                # so the verdict never gets worse because of this probe.
-                traceparent = "00-" + secrets.token_hex(16) + "-" + secrets.token_hex(8) + "-01"
-                trace_check: dict[str, Any] = {"informational": True, "spec": "SEP-414"}
                 listing = {
                     "jsonrpc": "2.0",
                     "id": "verify-tools",
                     "method": "tools/list",
-                    "params": {"_meta": {"traceparent": traceparent}},
+                    "params": {},
                 }
-                listed = None
-                try:
-                    listed = await _bounded_request(
-                        client, "POST", requested_url, json_body=listing, headers=headers,
-                        user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
-                    )
-                except VerificationError:
-                    listed = None
-                accepted = bool(listed) and int(listed.get("status") or 0) in range(200, 300) and \
-                    isinstance(_json_payload(listed).get("result"), dict)
-                trace_check["accepted_in_meta"] = accepted
-                if accepted:
-                    hdrs = {str(k).lower(): str(v) for k, v in (listed.get("headers") or {}).items()}
-                    trace_id = traceparent.split("-")[1]
-                    trace_check["trace_header_returned"] = any(
-                        trace_id in hdrs.get(h, "") for h in ("traceresponse", "traceparent"))
-                else:
-                    listing = dict(listing, params={})
-                    listed = await _bounded_request(
-                        client, "POST", requested_url, json_body=listing, headers=headers,
-                        user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
-                    )
-                    trace_check["trace_header_returned"] = False
-                checks["trace_context"] = trace_check
+                listed = await _bounded_request(
+                    client, "POST", requested_url, json_body=listing, headers=headers,
+                    user_agent=user_agent, request_pacer=request_pacer, request_counts=request_counts,
+                )
                 payload = _json_payload(listed)
                 result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
                 tools = result.get("tools") if isinstance(result.get("tools"), list) else []
@@ -772,7 +746,6 @@ async def verify_endpoint(
                 "valid_input_schemas": valid_schemas,
                 "invalid_input_schemas": invalid_schemas,
                 "discovery_present":discovery.get("present"),
-                "trace_context_accepted":(checks.get("trace_context") or {}).get("accepted_in_meta"),
                 "initialize_latency_ms":init_latency,
                 "tools_list_latency_ms":tools_latency,
                 "discovery_latency_ms":discovery_latencies,
