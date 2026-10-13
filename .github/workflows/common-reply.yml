@@ -6,6 +6,10 @@ on:
         description: "spec | send"
         required: true
         default: spec
+      file:
+        description: "reply json under docs/"
+        required: false
+        default: docs/common-reply-zhuazhua.json
 permissions:
   contents: read
 jobs:
@@ -17,4 +21,4 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: |
-          if [ "${{ inputs.stage }}" = "send" ]; then python tools/common_reply.py send docs/common-reply-zhuazhua.json; else python tools/common_reply.py spec; fi
+          if [ "${{ inputs.stage }}" = "send" ]; then python tools/common_reply.py send "${{ inputs.file }}"; else python tools/common_reply.py spec; fi
