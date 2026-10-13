@@ -86,6 +86,43 @@ def available(model: str) -> bool:
         return False
 
 
+_META_WORDS = {"gen", "generation", "diary", "deep", "need", "needs", "problem", "problems", "misc", "other", "unknown", "none"}
+_GENERIC_SINGLE = {"automation", "monitoring", "management", "data", "tool", "tools", "software", "workflow", "security", "metadata"}
+
+
+def problem_label(value: Any) -> str:
+    """Problem names: plain words, 2-6 of them, no diary/meta fragments ("gen 45"),
+    no numbers-only tokens, hyphens/underscores read as spaces."""
+    text = re.sub(r"[-_/]+", " ", str(value or "").lower())
+    name = clean_label(text)
+    words = name.split()
+    if not words or len(words) < 2:
+        return ""
+    if words[0] in _META_WORDS or any(w.isdigit() for w in words):
+        return ""
+    if len(words) == 2 and all(w in _GENERIC_SINGLE for w in words):
+        return ""
+    return name
+
+
+def snap_problem(name: str, existing: list[str], threshold: float = 0.6) -> str:
+    """Reuse an existing map name when it is the same problem worded slightly differently."""
+    if not name or name in existing:
+        return name
+    a = set(name.split())
+    best, score = name, 0.0
+    for e in existing:
+        b = set(e.split())
+        if not b:
+            continue
+        j = len(a & b) / len(a | b)
+        if (a <= b or b <= a) and min(len(a), len(b)) >= 2:
+            j = max(j, 0.75)
+        if j > score:
+            best, score = e, j
+    return best if score >= threshold else name
+
+
 def clean_label(value: Any, max_words: int = 6) -> str:
     text = re.sub(r"[^a-z0-9 \-']", " ", str(value or "").lower())
     text = " ".join(text.split()[:max_words])
@@ -118,7 +155,7 @@ def judge(model: str, needs: list[str], gen: Callable = ollama_generate) -> list
             if 0 <= i < len(batch):
                 out[start + i] = {
                     "real_need": bool(v.get("real_need")),
-                    "problem": clean_label(v.get("problem")),
+                    "problem": problem_label(v.get("problem")),
                     "would_pay": v.get("would_pay") if v.get("would_pay") in ("yes", "no", "unknown") else "unknown",
                     "judged": True,
                 }
@@ -150,9 +187,9 @@ def think(model: str, *, needs: list[dict], market_map: dict, diary: list[str],
     return {
         "observation": str(res.get("observation") or "")[:300],
         "hypothesis": str(res.get("hypothesis") or "")[:300],
-        "assign": [{"i": int(a.get("i")), "problem": clean_label(a.get("problem"))}
+        "assign": [{"i": int(a.get("i")), "problem": problem_label(a.get("problem"))}
                    for a in res.get("assign") or []
-                   if isinstance(a, dict) and str(a.get("i", "")).lstrip("-").isdigit() and clean_label(a.get("problem"))],
+                   if isinstance(a, dict) and str(a.get("i", "")).lstrip("-").isdigit() and problem_label(a.get("problem"))],
         "next_terms": [t for t in (clean_label(x, 3) for x in res.get("next_terms") or []) if t][:3],
         "next_phrases": [p for p in (clean_label(x, 7) for x in res.get("next_phrases") or []) if len(p.split()) >= 2][:2],
         "abandon_terms": [t for t in (clean_label(x, 3) for x in res.get("abandon_terms") or []) if t][:3],
@@ -181,7 +218,7 @@ def consolidate(model: str, names: list[str], gen: Callable = ollama_generate) -
     allowed = set(names)
     out = []
     for m in res.get("merges") or []:
-        a, b = clean_label(m.get("from")), clean_label(m.get("into"))
+        a, b = problem_label(m.get("from")) or clean_label(m.get("from")), problem_label(m.get("into"))
         if a in allowed and b in allowed and a != b:
             out.append({"from": a, "into": b})
     return out[:60]

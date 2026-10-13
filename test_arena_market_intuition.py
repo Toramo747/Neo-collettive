@@ -127,10 +127,10 @@ class MindTests(unittest.TestCase):
 
 class FixesTests(unittest.TestCase):
     def test_pay_counts_distinct_people_and_migrates(self):
-        st = {"market_map": {"x": {"people": 3, "pay": 6, "persons": ["a", "b", "c"]}}}
+        st = {"market_map": {"db cost": {"people": 3, "pay": 6, "persons": ["a", "b", "c"]}}}
         state, _, _ = a.run_generation(st, getter=lambda u: {"hits": [], "items": []}, seed=1,
                                        mind_model="fake", mind_gen=lambda m, p, s: {})
-        self.assertLessEqual(state["market_map"]["x"]["pay"], state["market_map"]["x"]["people"])
+        self.assertLessEqual(state["market_map"]["db cost"]["pay"], state["market_map"]["db cost"]["people"])
         inbox = {"verdicts": [{"person": "a", "real_need": True, "problem": "db cost", "would_pay": "yes"}] * 2}
         st2 = a.apply_deep({"market_map": {"db cost": {"people": 1, "pay": 0, "persons": ["b"], "payers": []}}}, inbox)
         self.assertEqual(st2["market_map"]["db cost"]["pay"], 1)
@@ -148,6 +148,30 @@ class FixesTests(unittest.TestCase):
         _, _, disc = a.run_generation(st, getter=fake_getter, seed=4)
         people = [d["person"] for d in disc]
         self.assertEqual(len(people), len(set(people)))
+
+
+
+class LabelHygieneTests(unittest.TestCase):
+    def test_problem_labels(self):
+        import arena_mind as m
+        self.assertEqual(m.problem_label("gen 45"), "")
+        self.assertEqual(m.problem_label("automation"), "")
+        self.assertEqual(m.problem_label("automation management"), "")
+        self.assertEqual(m.problem_label("log-in-saas-apps-from-spreadsheets"), "log in saas apps from spreadsheets")
+        self.assertEqual(m.problem_label("metadata monitoring service"), "metadata monitoring service")
+
+    def test_snap_to_existing(self):
+        import arena_mind as m
+        existing = ["metadata monitoring", "security domain ip monitoring"]
+        self.assertEqual(m.snap_problem("metadata monitoring service", existing), "metadata monitoring")
+        self.assertEqual(m.snap_problem("metadata monitoring services", existing), "metadata monitoring")
+        self.assertEqual(m.snap_problem("invoice reconciliation", existing), "invoice reconciliation")
+
+    def test_bad_names_dropped_at_load(self):
+        st = {"market_map": {"gen 45": {"people": 3, "persons": ["a", "b", "c"]}, "db cost monitoring": {"people": 1, "persons": ["d"]}}}
+        state, _, _ = a.run_generation(st, getter=lambda u: {"hits": [], "items": []}, seed=1, mind_model="fake", mind_gen=lambda m, p, s: {})
+        self.assertNotIn("gen 45", state["market_map"])
+        self.assertIn("db cost monitoring", state["market_map"])
 
 
 if __name__ == "__main__":
