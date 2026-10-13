@@ -193,7 +193,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.55"  # free public MCP verifier test (verify_mcp_endpoint, oxibay_doctor)
+VERSION = "0.99.56"  # HN retrieval trial: comments, 10 per request
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -283,6 +283,7 @@ SEARCH_MAX_CALLS_PER_CYCLE = max(0,min(100,int(os.getenv("NEO_SEARCH_MAX_CALLS_P
 SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_DAY","150"))))
 SEARCH_MIN_INTERVAL_MS = max(0,min(5000,int(os.getenv("NEO_SEARCH_MIN_INTERVAL_MS","1100"))))
 PRICE_VALIDATION_ENABLED = os.getenv("NEO_PRICE_VALIDATION_ENABLED","0")=="1"
+HN_RETRIEVAL_MODE = (os.getenv("NEO_HN_RETRIEVAL_MODE","comment10") or "comment10").strip().lower()
 AGENT_PROBE_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_AGENT_PROBE_TIMEOUT_SECONDS","75"))))
 WEB_RESEARCH_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_WEB_RESEARCH_TIMEOUT_SECONDS","75"))))
 EVIDENCE_SCOUT_TIMEOUT_SECONDS = max(20.0,min(120.0,float(os.getenv("NEO_EVIDENCE_SCOUT_TIMEOUT_SECONDS","45"))))
@@ -7787,10 +7788,17 @@ async def _hn_query_search(query: str, limit: int = 4, meta: dict | None = None)
     if not seed:
         return []
     try:
+        # Production trial (HN retrieval shadow, 3/3 preregistered runs passed,
+        # docs/hn-retrieval-shadow.md): search comments, 10 per request. Stories
+        # (3 per request) found 6-16 teacher-confirmed demand hits per 32 topics,
+        # comments 91-102. NEO_HN_RETRIEVAL_MODE=story restores the old behaviour.
+        comment_mode=HN_RETRIEVAL_MODE=="comment10" or str(meta.get("role") or "")=="workaround_research"
+        if HN_RETRIEVAL_MODE=="comment10":
+            limit=max(limit,10)
         params={
             "query":seed,
-            "tags":"comment" if str(meta.get("role") or "")=="workaround_research" else "story",
-            "hitsPerPage":max(1,min(limit,8)),
+            "tags":"comment" if comment_mode else "story",
+            "hitsPerPage":max(1,min(limit,10)),
         }
         recency_days=max(0,int(meta.get("recency_days") or 0))
         if recency_days:
@@ -7802,7 +7810,10 @@ async def _hn_query_search(query: str, limit: int = 4, meta: dict | None = None)
             if not isinstance(x,dict):
                 continue
             story_id=x.get("story_id") or x.get("objectID") or ""
-            url=x.get("url") or ("https://news.ycombinator.com/item?id="+str(story_id))
+            # a comment is its own piece of evidence: link the comment, not the
+            # story, so different people in one thread are not collapsed together
+            item_id=x.get("objectID") if x.get("comment_text") else story_id
+            url=x.get("url") or ("https://news.ycombinator.com/item?id="+str(item_id or story_id))
             out.append({
                 "title":x.get("title") or x.get("story_title") or "",
                 "url":url,
