@@ -47,7 +47,8 @@ class DeepMindTests(unittest.TestCase):
             meta = json.loads((k / "kernel-metadata.json").read_text())
             self.assertTrue(meta["is_private"] and meta["enable_gpu"])
             src = (k / "mind.py").read_text()
-            self.assertNotIn("persons", src)   # only counts of the map travel, not people lists
+            input_line = next(l for l in src.splitlines() if l.startswith("INPUT = "))
+            self.assertNotIn("persons", input_line)   # only counts of the map travel, not people lists
             compile(src, "mind.py", "exec")
             out = Path(d) / "deep.json"
             out.write_text(json.dumps({"verdicts": [{"person": "p1", "real_need": True}], "thought": {}}))

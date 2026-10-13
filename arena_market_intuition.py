@@ -51,6 +51,7 @@ SE_QUERY_CAP = 6          # Stack Exchange anonymous quota is 300/day per IP
 VOCAB_CAP = 240
 ARCHIVE_CAP = 20000
 STAGNATION_WINDOW = 6
+STALE_PHRASE_GENS = 3
 DEEP_QUEUE_CAP = 300
 # Andrea's focus (2026-10-12): follow the first credible signal, monitoring that
 # costs too much (DBA "monitoring tax", "$45/month for 5 things").
@@ -395,12 +396,18 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
     market_map = {k: dict(v) for k, v in (state.get("market_map") or {}).items()}
     # label hygiene (2026-10-13): drop meta/one-word names such as "gen 45"
     for k in list(market_map):
-        if not arena_mind.problem_label(k):
-            market_map.pop(k)
+        good = arena_mind.problem_label(k)
+        v = market_map.pop(k)
+        if good:   # trimmed names ("... via c") keep their people under the clean name
+            if good in market_map:
+                arena_mind.fold_entry(market_map[good], k, v)
+            else:
+                market_map[good] = v
     for v in market_map.values():
         if "payers" not in v:   # migrate v1 counters: cannot exceed the people in the entry
             v["pay"] = min(int(v.get("pay") or 0), len(v.get("persons") or []))
             v["payers"] = list(v.get("persons") or [])[:v["pay"]]
+    market_map, map_merges = arena_mind.merge_similar(market_map)
     diary = list(state.get("diary") or [])
     idea_log = list(state.get("idea_log") or [])
     thought: dict = {}
@@ -492,6 +499,25 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         nxt.append(clamp(idea) | {"origin": "mind"})
     while len(nxt) < POPULATION:
         nxt.append(random_genome(rng, vocab, f"g{gen}-r{len(nxt)}"))
+    # stale phrases (2026-10-13): a phrase used for STALE_PHRASE_GENS generations in a
+    # row without finding a single new person is dropped (if the mind invented it)
+    # and swapped out of every genome for a phrase that is not stale.
+    phrase_dry = {k: int(v) for k, v in (state.get("phrase_dry") or {}).items()}
+    used_phrases = {p for g, _ in results for p in g["phrases"]}
+    fresh_phrases = {q["phrase"] for q, row in all_demand if row["person"] in new_people}
+    for ph in used_phrases:
+        phrase_dry[ph] = 0 if ph in fresh_phrases else phrase_dry.get(ph, 0) + 1
+    stale = {ph for ph, n in phrase_dry.items() if n >= STALE_PHRASE_GENS}
+    LEARNED_PHRASES[:] = [ph for ph in LEARNED_PHRASES if ph not in stale]
+    pool = [ph for ph in all_phrases() if ph not in stale] or list(all_phrases())
+    replaced_phrases = 0
+    for idx, g in enumerate(nxt):
+        if any(ph in stale for ph in g["phrases"]):
+            g = dict(g)
+            g["phrases"] = [rng.choice(pool) if ph in stale else ph for ph in g["phrases"]]
+            nxt[idx] = clamp(g)
+            replaced_phrases += 1
+    phrase_dry = {k: v for k, v in phrase_dry.items() if k in all_phrases() or k in PHRASES}
     focus = list(state.get("focus_terms") or FOCUS_TERMS)
     for t in focus:
         vocab[t] = max(vocab.get(t, 0.0), 3.0)
@@ -525,6 +551,7 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "mind": mind, "learned_phrases": len(LEARNED_PHRASES),
         "problems_3plus": sum(1 for v in market_map.values() if v.get("people", 0) >= 3),
         "problems_mapped": len(market_map),
+        "map_merges": map_merges, "stale_phrases": len(stale), "genomes_rephrased": replaced_phrases,
     }
     history.append(summary)
     champion = state.get("champion") or {}
@@ -549,6 +576,7 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "market_map": dict(sorted(market_map.items(), key=lambda kv: -kv[1].get("people", 0))[:300]),
         "diary": diary[-60:], "idea_log": idea_log[-200:], "learned_phrases": list(LEARNED_PHRASES),
         "last_thought": thought,
+        "phrase_dry": phrase_dry,
         "deep_queue": deep_queue,
         "deep_judged": list(state.get("deep_judged") or [])[-5000:],
         "deep_log": list(state.get("deep_log") or [])[-100:],

@@ -184,5 +184,34 @@ class LabelHygieneTests(unittest.TestCase):
         self.assertIn("db cost monitoring", state["market_map"])
 
 
+    def test_truncated_and_abstract_labels(self):
+        import arena_mind as m
+        self.assertEqual(m.problem_label("email address retrieval via c"), "email address retrieval")
+        self.assertEqual(m.problem_label("climate mitigation strategies"), "")
+
+    def test_similar_problems_merge_with_union_of_people(self):
+        import arena_mind as m
+        mm = {"metadata monitoring service subscription": {"people": 3, "persons": ["a", "b", "c"], "payers": ["a", "b"]},
+              "metadata monitoring services": {"people": 2, "persons": ["c", "d"], "payers": ["d"]},
+              "monitor metadata": {"people": 1, "persons": ["e"], "payers": []},
+              "security domain ip monitoring": {"people": 3, "persons": ["x", "y", "z"], "payers": []}}
+        out, n = m.merge_similar(mm)
+        self.assertEqual(n, 2)
+        e = out["metadata monitoring service subscription"]
+        self.assertEqual((e["people"], e["pay"]), (5, 3))
+        self.assertIn("monitor metadata", e["aliases"])
+        self.assertEqual(out["security domain ip monitoring"]["people"], 3)
+
+    def test_stale_phrase_is_replaced(self):
+        empty = lambda u: {"hits": [], "items": []}
+        stale = a.PHRASES[0]
+        pop = [a.clamp({"id": f"x{i}", "phrases": [stale, a.PHRASES[1]], "terms": ["tax"], "sources": ["hn_comments"]})
+               for i in range(a.POPULATION)]
+        st = {"population": pop, "phrase_dry": {stale: a.STALE_PHRASE_GENS - 1}}
+        state, summary, _ = a.run_generation(st, getter=empty, seed=1)
+        self.assertGreaterEqual(summary["stale_phrases"], 1)
+        self.assertTrue(all(stale not in g["phrases"] for g in state["population"]))
+
+
 if __name__ == "__main__":
     unittest.main()
