@@ -379,6 +379,10 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
 
     # ---- the mind: judge, think, map markets, propose ideas (optional)
     market_map = {k: dict(v) for k, v in (state.get("market_map") or {}).items()}
+    # label hygiene (2026-10-13): drop meta/one-word names such as "gen 45"
+    for k in list(market_map):
+        if not arena_mind.problem_label(k):
+            market_map.pop(k)
     for v in market_map.values():
         if "payers" not in v:   # migrate v1 counters: cannot exceed the people in the entry
             v["pay"] = min(int(v.get("pay") or 0), len(v.get("persons") or []))
@@ -410,7 +414,8 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
             if 0 <= a["i"] < len(real):
                 real[a["i"]]["problem"] = a["problem"]
         for row in real:
-            name = row.get("problem")
+            name = arena_mind.snap_problem(row.get("problem") or "", list(market_map))
+            row["problem"] = name
             if not name:
                 continue
             entry = market_map.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": [], "payers": []})
@@ -568,7 +573,7 @@ def apply_deep(state: dict, inbox: dict) -> dict:
         entry["persons"] = [p for p in entry["persons"] if p not in judged_people]
     gen = int(st.get("generation") or 0)
     for v in verdicts:
-        name = arena_mind.clean_label(v.get("problem"))
+        name = arena_mind.snap_problem(arena_mind.problem_label(v.get("problem")), list(mm))
         if v.get("real_need") and name:
             e = mm.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": [], "payers": []})
             e["persons"].append(v["person"])
@@ -578,7 +583,7 @@ def apply_deep(state: dict, inbox: dict) -> dict:
             e["deep"] = True
     thought = inbox.get("thought") or {}
     for m in thought.get("merges") or []:
-        a, b = arena_mind.clean_label(m.get("from")), arena_mind.clean_label(m.get("into"))
+        a, b = arena_mind.clean_label(m.get("from")), arena_mind.problem_label(m.get("into"))
         if a and b and a != b and a in mm:
             src = mm.pop(a)
             dst = mm.setdefault(b, {"people": 0, "pay": 0, "first_gen": src.get("first_gen", gen), "persons": [], "payers": []})
