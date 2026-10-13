@@ -1,0 +1,63 @@
+name: Probe external A2A peer
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_card_url:
+        description: "Maintainer-approved public HTTPS Agent Card URL"
+        required: true
+        type: string
+      confirm:
+        description: "Type PROBE exactly"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require explicit maintainer confirmation
+        env:
+          CONFIRM_TEXT: ${{ inputs.confirm }}
+        run: |
+          test "$CONFIRM_TEXT" = "PROBE" || {
+            echo "Blocked: confirmation must be exactly PROBE."
+            exit 1
+          }
+
+      - name: Validate source
+        run: |
+          python -m py_compile a2a_peer.py peer_quality.py tools/peer_candidate_probe.py
+
+      - name: Run bounded three-round dialogue
+        env:
+          AGENT_CARD_URL: ${{ inputs.agent_card_url }}
+        run: |
+          python tools/peer_candidate_probe.py             --card-url "$AGENT_CARD_URL"             --output peer_candidate_result.json
+
+      - name: Upload dialogue evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycelix-peer-dialogue
+          path: peer_candidate_result.json
+          retention-days: 30
+
+      - name: Summarize result
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r=json.load(open("peer_candidate_result.json",encoding="utf-8"))
+          print("## MYCELIX external peer result")
+          print()
+          print("- Status:", r.get("status"))
+          print("- Complete 3/3:", r.get("complete_3_of_3"))
+          print("- Collaborative rounds:", r.get("collaborative_rounds",0))
+          print("- Requests used:", r.get("requests_budget_used",0))
+          print("- Commercial evidence: false")
+          PY

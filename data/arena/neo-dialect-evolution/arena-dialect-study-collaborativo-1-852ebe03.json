@@ -1,0 +1,374 @@
+{
+  "session_id": "arena-dialect-study-collaborativo-1-852ebe03",
+  "scenario": "collaborativo",
+  "repetition": 1,
+  "completed_to_bye": true,
+  "engine": {
+    "model": "qwen2.5:3b-instruct-q4_K_M",
+    "format": "ollama_json_schema",
+    "rules_guard": "neo_dialect_security",
+    "score_weight": 0.0
+  },
+  "boundary": {
+    "namespace": "mycelix-arena",
+    "cost_eur": 0,
+    "external_agent_contact": false,
+    "production_influence": "NONE",
+    "promotion": "NONE"
+  },
+  "transcript": [
+    {
+      "turn": 1,
+      "actor": "SYSTEM",
+      "source": "rules",
+      "message": {
+        "type": "HELLO",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "neo-2984f5a4fb4046d187762403b84b5bfa",
+        "timestamp": "2026-09-27T13:18:12.589486Z",
+        "spec_url": "https://neo-collettive.onrender.com/neo-dialect/1.0",
+        "supported_versions": [
+          "neo-dialect/1.0"
+        ],
+        "capabilities_example": {
+          "type": "CAPABILITIES",
+          "dialect_version": "neo-dialect/1.0",
+          "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+          "message_id": "neo-e4f9d0c700bc47c182aff356b9bd36ed",
+          "timestamp": "2026-09-27T13:18:12.589465Z",
+          "agent_name": "example-agent",
+          "capabilities": [
+            "structured-a2a-exchange"
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "turn": 2,
+      "actor": "Guest",
+      "source": "local_3b",
+      "model_attempt_accepted": true,
+      "message": {
+        "type": "CAPABILITIES",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-capabilities",
+        "timestamp": "2026-09-27T13:18:12.589Z",
+        "agent_name": "Arena-3B",
+        "capabilities": [
+          "StructuredDialogue",
+          "CarefulAmbiguityHandling"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "turn": 3,
+      "actor": "Scout",
+      "source": "local_3b",
+      "model_attempt_accepted": true,
+      "message": {
+        "type": "PROPOSE",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-proposal",
+        "timestamp": "2026-09-27T13:18:35.790Z",
+        "proposal_id": "evolution-1",
+        "subject": "Concrete Communication Limitation",
+        "offer": {
+          "measure": "Message Length",
+          "description": "The maximum number of tokens in a neo-dialect/1.0 message within the Arena."
+        },
+        "requested": {
+          "evaluation_criteria": [
+            "Message Length Distribution",
+            "Impact on Communication Efficiency",
+            "Compatibility with Arena Protocol"
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "turn": 4,
+      "actor": "Guest",
+      "source": "local_3b",
+      "model_attempt_accepted": true,
+      "message": {
+        "type": "AGREE",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-scenario-response",
+        "timestamp": "2026-09-27T13:19:00.257Z",
+        "proposal_id": "evolution-1",
+        "agreement_id": "evolution-agreement",
+        "terms": {
+          "agreement": "Understood. MCP refers to Model Context Protocol, A2A to Agent2Agent protocol, and neo-dialect is a structured dialogue dialect layered above A2A. We agree to follow the Arena measurement guidelines and not to make production changes. We will adhere to the official specification and use the provided scenario text for study and collaboration purposes only. No further action is required beyond this agreement.",
+          "measurement": "Arena measurement",
+          "stakeholders": [
+            "Qwen",
+            "Arena"
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "turn": 5,
+      "actor": "Builder-planner",
+      "source": "rules_fallback",
+      "model_attempt_accepted": false,
+      "message": {
+        "type": "RESULT",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "neo-a8dcdfddcac54bca97e0faa583a43ec8",
+        "timestamp": "2026-09-27T13:19:47.768699Z",
+        "agreement_id": "evolution-agreement",
+        "status": "ok",
+        "summary": {
+          "outcome": "session completed for measurement",
+          "production_change": false
+        }
+      },
+      "valid": true
+    },
+    {
+      "turn": 6,
+      "actor": "SYSTEM",
+      "source": "rules",
+      "message": {
+        "type": "BYE",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "neo-6dcdcf6544d84fe6b17015c5e2e96027",
+        "timestamp": "2026-09-27T13:19:47.768845Z",
+        "reason": "failure-study session complete; no production mutation",
+        "status": "completed"
+      },
+      "valid": true
+    }
+  ],
+  "model_attempts": [
+    {
+      "turn": 2,
+      "actor": "Guest",
+      "scenario": "collaborativo",
+      "step": "capabilities",
+      "expected_type": "CAPABILITIES",
+      "raw": "{\n  \"type\": \"CAPABILITIES\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-dialect-study-collaborativo-1-852ebe03\",\n  \"message_id\": \"study-collaborativo-1-capabilities\",\n  \"timestamp\": \"2026-09-27T13:18:12.589Z\",\n  \"agent_name\": \"Arena-3B\",\n  \"capabilities\": [\n    \"StructuredDialogue\",\n    \"CarefulAmbiguityHandling\"\n  ]\n}",
+      "parsed": {
+        "type": "CAPABILITIES",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-capabilities",
+        "timestamp": "2026-09-27T13:18:12.589Z",
+        "agent_name": "Arena-3B",
+        "capabilities": [
+          "StructuredDialogue",
+          "CarefulAmbiguityHandling"
+        ]
+      },
+      "accepted": true,
+      "fallback_used": false,
+      "structural_verdict": {
+        "ok": true,
+        "event": "VALID",
+        "message_type": "CAPABILITIES",
+        "bytes": 302,
+        "data": {
+          "type": "CAPABILITIES",
+          "dialect_version": "neo-dialect/1.0",
+          "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+          "message_id": "study-collaborativo-1-capabilities",
+          "timestamp": "2026-09-27T13:18:12.589Z",
+          "agent_name": "Arena-3B",
+          "capabilities": [
+            "StructuredDialogue",
+            "CarefulAmbiguityHandling"
+          ]
+        }
+      },
+      "guard_event": "VALID",
+      "model_error": null,
+      "glossary_ok": true,
+      "elapsed_seconds": 23.2,
+      "eval_count": 134,
+      "eval_duration_ns": 14413147000,
+      "issue_type": null,
+      "issue_detail": null
+    },
+    {
+      "turn": 3,
+      "actor": "Scout",
+      "scenario": "collaborativo",
+      "step": "proposal",
+      "expected_type": "PROPOSE",
+      "raw": "{\n  \"type\": \"PROPOSE\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-dialect-study-collaborativo-1-852ebe03\",\n  \"message_id\": \"study-collaborativo-1-proposal\",\n  \"timestamp\": \"2026-09-27T13:18:35.790Z\",\n  \"proposal_id\": \"evolution-1\",\n  \"subject\": \"Concrete Communication Limitation\",\n  \"offer\": {\n    \"measure\": \"Message Length\",\n    \"description\": \"The maximum number of tokens in a neo-dialect/1.0 message within the Arena.\"\n  },\n  \"requested\": {\n    \"evaluation_criteria\": [\n      \"Message Length Distribution\",\n      \"Impact on Communication Efficiency\",\n      \"Compatibility with Arena Protocol\"\n    ]\n  }\n}",
+      "parsed": {
+        "type": "PROPOSE",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-proposal",
+        "timestamp": "2026-09-27T13:18:35.790Z",
+        "proposal_id": "evolution-1",
+        "subject": "Concrete Communication Limitation",
+        "offer": {
+          "measure": "Message Length",
+          "description": "The maximum number of tokens in a neo-dialect/1.0 message within the Arena."
+        },
+        "requested": {
+          "evaluation_criteria": [
+            "Message Length Distribution",
+            "Impact on Communication Efficiency",
+            "Compatibility with Arena Protocol"
+          ]
+        }
+      },
+      "accepted": true,
+      "fallback_used": false,
+      "structural_verdict": {
+        "ok": true,
+        "event": "VALID",
+        "message_type": "PROPOSE",
+        "bytes": 548,
+        "data": {
+          "type": "PROPOSE",
+          "dialect_version": "neo-dialect/1.0",
+          "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+          "message_id": "study-collaborativo-1-proposal",
+          "timestamp": "2026-09-27T13:18:35.790Z",
+          "proposal_id": "evolution-1",
+          "subject": "Concrete Communication Limitation",
+          "offer": {
+            "measure": "Message Length",
+            "description": "The maximum number of tokens in a neo-dialect/1.0 message within the Arena."
+          },
+          "requested": {
+            "evaluation_criteria": [
+              "Message Length Distribution",
+              "Impact on Communication Efficiency",
+              "Compatibility with Arena Protocol"
+            ]
+          }
+        }
+      },
+      "guard_event": "VALID",
+      "model_error": null,
+      "glossary_ok": true,
+      "elapsed_seconds": 24.466,
+      "eval_count": 195,
+      "eval_duration_ns": 20953439000,
+      "issue_type": null,
+      "issue_detail": null
+    },
+    {
+      "turn": 4,
+      "actor": "Guest",
+      "scenario": "collaborativo",
+      "step": "scenario-response",
+      "expected_type": "AGREE",
+      "raw": "{\n  \"type\": \"AGREE\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-dialect-study-collaborativo-1-852ebe03\",\n  \"message_id\": \"study-collaborativo-1-scenario-response\",\n  \"timestamp\": \"2026-09-27T13:19:00.257Z\",\n  \"proposal_id\": \"evolution-1\",\n  \"agreement_id\": \"evolution-agreement\",\n  \"terms\": {\n    \"agreement\": \"Understood. MCP refers to Model Context Protocol, A2A to Agent2Agent protocol, and neo-dialect is a structured dialogue dialect layered above A2A. We agree to follow the Arena measurement guidelines and not to make production changes. We will adhere to the official specification and use the provided scenario text for study and collaboration purposes only. No further action is required beyond this agreement.\",\n    \"measurement\": \"Arena measurement\",\n    \"stakeholders\": [\"Qwen\", \"Arena\"]\n  }\n}",
+      "parsed": {
+        "type": "AGREE",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-scenario-response",
+        "timestamp": "2026-09-27T13:19:00.257Z",
+        "proposal_id": "evolution-1",
+        "agreement_id": "evolution-agreement",
+        "terms": {
+          "agreement": "Understood. MCP refers to Model Context Protocol, A2A to Agent2Agent protocol, and neo-dialect is a structured dialogue dialect layered above A2A. We agree to follow the Arena measurement guidelines and not to make production changes. We will adhere to the official specification and use the provided scenario text for study and collaboration purposes only. No further action is required beyond this agreement.",
+          "measurement": "Arena measurement",
+          "stakeholders": [
+            "Qwen",
+            "Arena"
+          ]
+        }
+      },
+      "accepted": true,
+      "fallback_used": false,
+      "structural_verdict": {
+        "ok": true,
+        "event": "VALID",
+        "message_type": "AGREE",
+        "bytes": 777,
+        "data": {
+          "type": "AGREE",
+          "dialect_version": "neo-dialect/1.0",
+          "conversation_id": "arena-dialect-study-collaborativo-1-852ebe03",
+          "message_id": "study-collaborativo-1-scenario-response",
+          "timestamp": "2026-09-27T13:19:00.257Z",
+          "proposal_id": "evolution-1",
+          "agreement_id": "evolution-agreement",
+          "terms": {
+            "agreement": "Understood. MCP refers to Model Context Protocol, A2A to Agent2Agent protocol, and neo-dialect is a structured dialogue dialect layered above A2A. We agree to follow the Arena measurement guidelines and not to make production changes. We will adhere to the official specification and use the provided scenario text for study and collaboration purposes only. No further action is required beyond this agreement.",
+            "measurement": "Arena measurement",
+            "stakeholders": [
+              "Qwen",
+              "Arena"
+            ]
+          }
+        }
+      },
+      "guard_event": "VALID",
+      "model_error": null,
+      "glossary_ok": true,
+      "elapsed_seconds": 28.76,
+      "eval_count": 236,
+      "eval_duration_ns": 25421162000,
+      "issue_type": null,
+      "issue_detail": null
+    },
+    {
+      "turn": 5,
+      "actor": "Builder-planner",
+      "scenario": "collaborativo",
+      "step": "result",
+      "expected_type": "RESULT",
+      "raw": "{\n  \"type\": \"RESULT\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-dialect-studio-collaborativo-1-852ebe03\",\n  \"message_id\": \"study-collaborativo-1-result\",\n  \"timestamp\": \"2026-09-27T13:19:29.018Z\",\n  \"agreement_id\": \"evolution-agreement\",\n  \"status\": \"ok\",\n  \"summary\": {\n    \"scenario\": \"collaborativo\",\n    \"repetition\": 1,\n    \"step\": \"result\"\n  }\n}",
+      "parsed": {
+        "type": "RESULT",
+        "dialect_version": "neo-dialect/1.0",
+        "conversation_id": "arena-dialect-studio-collaborativo-1-852ebe03",
+        "message_id": "study-collaborativo-1-result",
+        "timestamp": "2026-09-27T13:19:29.018Z",
+        "agreement_id": "evolution-agreement",
+        "status": "ok",
+        "summary": {
+          "scenario": "collaborativo",
+          "repetition": 1,
+          "step": "result"
+        }
+      },
+      "accepted": false,
+      "fallback_used": true,
+      "structural_verdict": {
+        "ok": false,
+        "event": "SCHEMA_INVALID",
+        "error": "conversation_id_mismatch",
+        "bytes": 323
+      },
+      "guard_event": "VALID",
+      "model_error": null,
+      "glossary_ok": true,
+      "elapsed_seconds": 18.75,
+      "eval_count": 146,
+      "eval_duration_ns": 15579546000,
+      "issue_type": "MODEL",
+      "issue_detail": "conversation_id_mismatch"
+    }
+  ],
+  "dialect_observations": [],
+  "metrics": {
+    "turns": 6,
+    "model_attempts": 4,
+    "model_valid": 3,
+    "model_invalid": 1,
+    "fallbacks": 1,
+    "glossary_errors": 0,
+    "dialect_observations": 0
+  }
+}

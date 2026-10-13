@@ -1,0 +1,45 @@
+name: OSIXBAY Production Recovery Arena
+on:
+  push:
+    branches: [arena-production-recovery-20261003]
+    paths:
+      - arena_production_recovery.py
+      - test_arena_production_recovery.py
+      - .github/workflows/production-recovery-arena.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: production-recovery-arena
+  cancel-in-progress: false
+jobs:
+  diagnose-and-select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify production-source fault-injection harness
+        run: python -m unittest -q test_arena_production_recovery
+      - name: Evaluate candidates and sample own production read-only
+        env:
+          NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: python arena_production_recovery.py --live-read-only
+      - name: Assert isolation
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('artifacts/production-recovery/report.json'))
+          assert d['fault_injection_is_synthetic']
+          assert d['production_state_write'] is False and d['production_promoted'] is False
+          assert d['commercial_gate_influence']=='NONE'
+          assert d['heartbeat_completion_checks_changed'] is False
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-recovery-${{ github.run_id }}
+          path: artifacts/production-recovery/
+          retention-days: 30

@@ -1,0 +1,78 @@
+name: OSIXBAY Local A2A Evolution Experiment
+on:
+  push:
+    branches: [arena-local-a2a-evolution-20261003]
+    paths:
+      - arena_local_a2a_evolution.py
+      - arena_local_a2a_research.py
+      - .github/workflows/local-a2a-evolution-experiment.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: local-a2a-evolution-experiment
+  cancel-in-progress: false
+jobs:
+  implementation-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r requirements.lock
+      - run: python -m unittest -q test_arena_collective_mind test_arena_abstention_listing
+      - run: timeout 480 python arena_local_a2a_research.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-a2a-implementation-research-${{ github.run_id }}
+          path: artifacts/research/
+          retention-days: 30
+  local-policy-evolution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest -q test_arena_local_a2a_evolution
+      - name: Install bounded local runtime
+        run: |
+          set -euo pipefail
+          timeout 120 bash -c 'curl -fsSL https://ollama.com/install.sh | sh'
+          ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Pull explicit local candidates
+        run: |
+          set -euo pipefail
+          timeout 360 ollama pull qwen3.5:2b
+          timeout 480 ollama pull qwen3.5:4b
+      - name: Run bounded policy selection and held-out judge
+        run: timeout 1565 python arena_local_a2a_evolution.py --budget-seconds 1500
+      - name: Assert experiment isolation
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('artifacts/local-a2a-evolution.json'))
+          assert d['namespace']=='mycelix-arena'
+          assert d['production_influence']=='NONE' and d['promotion']=='NONE'
+          assert d['synthetic'] and not d['external_peer_proof']
+          assert d['paid_api_calls']==0
+          assert d['train_cases']==18 and d['holdout_cases']==12
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-a2a-evolution-${{ github.run_id }}
+          path: artifacts/local-a2a-evolution.json
+          retention-days: 30

@@ -1,0 +1,17 @@
+name: Jarvis runtime snapshot v2 (publication disabled)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publication-disabled:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm public runtime snapshot publication is disabled
+        run: |
+          echo "runtime/jarvis_diagnostics.json publication to runtime-snapshots is disabled."
+          echo "No runtime fetch, commit, push, secret read, or external contact is performed."

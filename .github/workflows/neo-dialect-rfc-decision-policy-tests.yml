@@ -1,0 +1,33 @@
+name: NEO Dialect RFC Decision Policy Tests
+
+on:
+  push:
+    paths:
+      - "docs/neo-dialect/rfc-decision-policy.md"
+      - "test_neo_dialect_rfc_decision_policy.py"
+      - ".github/workflows/neo-dialect-rfc-decision-policy-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate RFC decision policy
+        run: python -m unittest -v test_neo_dialect_rfc_decision_policy.py
+      - name: Assert production 1.0 remains untouched
+        run: |
+          set -euo pipefail
+          test -z "$(git diff --name-only HEAD^ HEAD -- docs/neo-dialect.md schemas/neo-dialect/1.0 neo_dialect.py)"
+      - name: Assert no 1.1 draft exists
+        run: |
+          set -euo pipefail
+          test ! -e schemas/neo-dialect/1.1-draft

@@ -1,0 +1,33 @@
+name: MYCELIX v0.99.18 result-shape validation
+
+on:
+  push:
+    branches: [mycelix-results-shape-guard-v09918]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile
+        run: python -m py_compile cloud_mcp.py aicomglobal_adapter.py
+      - name: Regression
+        run: python -m unittest -v test_result_shape_guard.py test_aicomglobal_adapter.py test_seti_radar.py
+      - name: Full suite
+        run: pytest -q
+      - name: Gate invariant
+        run: |
+          python - <<'PY'
+          src=open("cloud_mcp.py",encoding="utf-8").read()
+          for x in ('VERSION = "0.99.18"',"len(domains)>=3","len(fresh_domains)>=2","len(strong_domains)>=1",'"PAID_DEMAND" in tags','("BUY_INTENT" in tags or "PAIN" in tags)'):
+              assert x in src, x
+          print("gate_thresholds_unchanged=true")
+          print("result_shape_guard=true")
+          PY

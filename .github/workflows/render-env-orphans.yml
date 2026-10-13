@@ -1,0 +1,89 @@
+name: Render Env Backup and Orphan Plan
+# push on the branch: independent backup (private archive) + deletion PLAN only.
+# Deletion (mode=apply) runs only by manual dispatch with the plan_id and the
+# backup directory produced by a previous run. Never automatic.
+on:
+  push:
+    branches:
+      - fix/evidence-restart-continuity
+    paths:
+      - tools/render_env_orphans.py
+      - .github/workflows/render-env-orphans.yml
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan | apply (apply DELETES orphan env vars)"
+        required: true
+        default: plan
+      plan_id:
+        description: "plan_id printed by the plan step (apply only)"
+        required: false
+      backup_dir:
+        description: "env-backup-<stamp> directory in the private archive (apply only)"
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: render-env-orphans
+  cancel-in-progress: false
+
+jobs:
+  backup-and-plan:
+    if: github.event_name == 'push' || inputs.mode == 'plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet httpx
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Independent backup of persisted env (GET only)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+        run: |
+          mkdir -p private-labels/runtime-checkpoints/env-backups
+          python tools/render_env_orphans.py backup private-labels/runtime-checkpoints/env-backups | grep '^::'
+      - name: Persist backup in private archive
+        run: |
+          git -C private-labels config user.name "NEO Private Checkpoint Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add runtime-checkpoints/env-backups
+          git -C private-labels commit --quiet -m "private Render env backup (persisted NEO keys)"
+          git -C private-labels push --quiet
+      - name: Orphan deletion plan (no deletion)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+        run: python tools/render_env_orphans.py plan | grep '^::'
+
+  apply:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'apply'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet httpx
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Delete planned orphans (verified against backup manifest)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: srv-dampj8bm8hqs73ac0an0
+          BACKUP_DIR: ${{ inputs.backup_dir }}
+          PLAN_ID: ${{ inputs.plan_id }}
+        run: |
+          test -n "$PLAN_ID" && test -n "$BACKUP_DIR"
+          python tools/render_env_orphans.py apply "private-labels/runtime-checkpoints/env-backups/$BACKUP_DIR/manifest.json" "$PLAN_ID" | grep '^::'

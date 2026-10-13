@@ -1,0 +1,54 @@
+name: External proof validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloud_mcp.py"
+      - "neo_policy.json"
+      - "thesis_control.py"
+      - "outcome_control.py"
+      - "test_outcome_control.py"
+      - "test_thesis_control.py"
+      - "a2a_peer.py"
+      - "peer_quality.py"
+      - "seti_radar.py"
+      - "tools/peer_candidate_probe.py"
+      - ".github/workflows/peer-candidate-probe.yml"
+      - ".github/workflows/external-proof-validation.yml"
+
+  push:
+    branches: [fix/route-auth-default-deny, feat/public-projection]
+    paths:
+      - "cloud_mcp.py"
+      - "route_policy.py"
+      - "public_projection.py"
+      - "test_route_policy.py"
+      - "test_route_auth_runtime.py"
+      - "test_mcp_route_auth.py"
+      - "test_inbound_boundary.py"
+      - "test_inbound_e2e.py"
+      - "test_jarvis_auth.py"
+      - "test_public_projection.py"
+      - ".github/workflows/external-proof-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile changed runtime paths
+        run: |
+          python -m py_compile cloud_mcp.py thesis_control.py outcome_control.py tools/peer_candidate_probe.py
+
+      - name: Validate policy JSON
+        run: python -m json.tool neo_policy.json >/dev/null
+
+      - name: Run focused regression tests
+        run: |
+          python -m unittest -v             test_thesis_control.py             test_seti_radar.py             test_a2a_peer.py             test_peer_quality.py

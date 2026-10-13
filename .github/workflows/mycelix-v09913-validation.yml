@@ -1,0 +1,117 @@
+name: MYCELIX v0.99.13 validation
+on:
+  push:
+    branches: [mycelix-vendor-content-guard-v09913]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install -q -r requirements.txt pytest
+
+      - name: Compile changed modules
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py discovery_v3.py evidence_integrity.py ingestion_diagnostics.py query_builder.py quarantine_revalidation.py search_providers.py
+
+      - name: Run full pytest suite with network blocked
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import socket
+          import pytest
+
+          def blocked(*args, **kwargs):
+              raise RuntimeError("network disabled during tests")
+          socket.create_connection=blocked
+          socket.socket.connect=blocked
+
+          rc=pytest.main(["-q"])
+          raise SystemExit(rc)
+          PY
+
+      - name: Verify cycle-355 vendor migration and gate safety
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from evidence_integrity import migrate_evidence_memory
+
+          snapshot=json.load(open("neo_latest_result.json",encoding="utf-8"))
+          rows=(snapshot.get("autopilot") or {}).get("commercial_evidence_memory") or []
+          migrated,meta=migrate_evidence_memory(
+              rows,
+              enforce_family_match=True,
+              strong_pain_only=True,
+              seller_launch_guard=True,
+              vendor_content_guard=True,
+              web_buyer_voice_guard=True,
+          )
+          target="manual_data_entry:manual_data_entry"
+          vendor_domains={
+              "portagebay.com","cgtech.com.au","katprotech.com",
+              "artsyltech.com","powerfulplatform.net",
+          }
+          vendor=[r for r in migrated if r.get("domain") in vendor_domains]
+          if len(vendor)!=5:
+              raise SystemExit("expected five real cycle-355 vendor rows")
+          for row in vendor:
+              if "PAIN" in set(row.get("signal_types") or []):
+                  raise SystemExit("vendor PAIN survived: "+str(row.get("domain")))
+              if row.get("gate_eligible"):
+                  raise SystemExit("vendor row still gate eligible: "+str(row.get("domain")))
+              if row.get("signal_reverted")!="vendor_content":
+                  raise SystemExit("missing vendor_content reversion: "+str(row.get("domain")))
+
+          eligible=[
+              r for r in migrated
+              if r.get("problem_key")==target and r.get("gate_eligible")
+          ]
+          domains=sorted({str(r.get("domain") or "") for r in eligible if r.get("domain")})
+          strong=sorted({
+              str(r.get("domain") or "") for r in eligible
+              if r.get("domain") and r.get("strong_markers")
+          })
+          tags=sorted({
+              tag for r in eligible
+              for tag in (r.get("signal_types") or [])
+              if tag not in {"DISCONFIRM","COMPETITION"}
+          })
+          qualified=bool(
+              len(domains)>=3
+              and len(strong)>=1
+              and "PAID_DEMAND" in tags
+              and ("BUY_INTENT" in tags or "PAIN" in tags)
+          )
+          if qualified:
+              raise SystemExit("manual_data_entry:manual_data_entry would incorrectly pass")
+          print("vendor_rows_migrated=5")
+          print("problem_key="+target)
+          print("gate_domains="+json.dumps(domains))
+          print("strong_domains="+json.dumps(strong))
+          print("signal_types="+json.dumps(tags))
+          print("qualified=false")
+          print("migration_changed="+str(meta.get("changed")))
+          PY
+
+      - name: Verify version
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          source=open("cloud_mcp.py",encoding="utf-8").read()
+          m=re.search(r'^VERSION = "([^"]+)"',source,re.M)
+          if not m or m.group(1)!="0.99.13":
+              raise SystemExit("wrong VERSION")
+          print("version=0.99.13")
+          PY

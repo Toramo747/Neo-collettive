@@ -1,0 +1,72 @@
+{
+  "raw_bytes": 3145752,
+  "encoding_passes": 3,
+  "cpu_affinity_count": 1,
+  "synthetic": true,
+  "production_cause_proven": false,
+  "observation": {
+    "event_loop_stalls": 1,
+    "event_loop_max_lag_ms": 5349.813,
+    "phases": {
+      "checkpoint_json": {
+        "count": 4,
+        "max_duration_ms": 8.057,
+        "last_duration_ms": 6.204,
+        "last_process_cpu_ms": 6.21,
+        "last_thread_cpu_ms": 6.212
+      },
+      "checkpoint_zlib": {
+        "count": 4,
+        "max_duration_ms": 129.858,
+        "last_duration_ms": 124.153,
+        "last_process_cpu_ms": 124.133,
+        "last_thread_cpu_ms": 124.135
+      },
+      "checkpoint_lzma": {
+        "count": 4,
+        "max_duration_ms": 1894.88,
+        "last_duration_ms": 1418.776,
+        "last_process_cpu_ms": 1418.703,
+        "last_thread_cpu_ms": 1413.689
+      },
+      "checkpoint_decode": {
+        "count": 1,
+        "max_duration_ms": 63.468,
+        "last_duration_ms": 63.468,
+        "last_process_cpu_ms": 63.475,
+        "last_thread_cpu_ms": 63.47
+      },
+      "restore": {
+        "count": 1,
+        "max_duration_ms": 63.6,
+        "last_duration_ms": 63.6,
+        "last_process_cpu_ms": 63.601,
+        "last_thread_cpu_ms": 63.595
+      },
+      "autopilot": {
+        "count": 1,
+        "max_duration_ms": 5599.668,
+        "last_duration_ms": 5599.668,
+        "last_process_cpu_ms": 5599.314,
+        "last_thread_cpu_ms": 5584.932
+      }
+    },
+    "last_project_stack": [
+      {
+        "file": "state_codec.py",
+        "function": "encode_checkpoint",
+        "line": 22
+      },
+      {
+        "file": "scripts/reproduce_loop_stall.py",
+        "function": "replay",
+        "line": 29
+      },
+      {
+        "file": "scripts/reproduce_loop_stall.py",
+        "function": "<module>",
+        "line": 48
+      }
+    ]
+  }
+}

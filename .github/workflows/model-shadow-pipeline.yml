@@ -1,0 +1,44 @@
+name: Model Shadow Public CI
+
+on:
+  pull_request:
+    paths:
+      - "model_shadow.py"
+      - "model_judges.py"
+      - "model_shadow_registry.json"
+      - "tools/model_shadow_batch.py"
+      - "tools/model_shadow_privacy_check.py"
+      - "test_model_*.py"
+      - "docs/model-shadow-pipeline.md"
+      - "public_snapshot.py"
+      - "test_public_snapshot_privacy.py"
+      - ".github/workflows/model-shadow-pipeline.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile shadow sources
+        run: |
+          set -euo pipefail
+          python -m py_compile model_shadow.py model_judges.py tools/model_shadow_batch.py tools/model_shadow_privacy_check.py
+          python -m json.tool model_shadow_registry.json >/dev/null
+          python -m json.tool docs/private-label-archive-contract.json >/dev/null
+      - name: Gate privacy and runtime regression
+        run: |
+          set -euo pipefail
+          python -m unittest -v test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_public_snapshot_privacy.py test_route_policy.py

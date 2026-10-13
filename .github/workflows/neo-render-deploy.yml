@@ -1,0 +1,1252 @@
+# forced redeploy after bounded checkpoint continuity fix
+name: NEO Render Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      observation_deploy:
+        description: "Andrea-only: retain observation logs if surface smoke fails; automatic rollback disabled"
+        required: false
+        type: boolean
+        default: false
+      extended_validation:
+        description: "Run outbound/effectful extended post-deploy validation"
+        required: false
+        type: boolean
+        default: false
+      emergency_deploy:
+        description: "Andrea-only: bypass publication freshness; memory integrity checks remain mandatory"
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - "cloud_mcp.py"
+      # Runtime modules imported (transitively) by cloud_mcp.py; kept complete by test_deploy_filter_coverage.py
+      - "a2a_dialogue.py"
+      - "a2a_identity.py"
+      - "a2a_state_router.py"
+      - "aicomglobal_adapter.py"
+      - "arena_warp_propulsion.py"
+      - "candidate_observability.py"
+      - "demand_research_coverage.py"
+      - "evaluator_contract.py"
+      - "evaluator_paths.py"
+      - "evidence_reintegration.py"
+      - "evidence_restart_continuity.py"
+      - "human_authorized_replies.py"
+      - "inbound_boundary.py"
+      - "ingestion_diagnostics.py"
+      - "ingestion_drought.py"
+      - "maestro_teacher.py"
+      - "model_archive.py"
+      - "oxibay_doctor.py"
+      - "peer_quality.py"
+      - "price_validation.py"
+      - "common_jobs.py"
+      - "market_inference.py"
+      - "public_projection.py"
+      - "quarantine_revalidation.py"
+      - "render_saved_env.py"
+      - "runtime_observation.py"
+      - "search_providers.py"
+      - "self_traffic_auth.py"
+      - "state_codec.py"
+      - "state_generation_guard.py"
+      - "warp_metrics.py"
+      - "warp_physics.py"
+      - "warp_quantum.py"
+      - "warp_reference_search.py"
+      - "warp_tensor.py"
+      - "route_policy.py"
+      - "test_route_policy.py"
+      - "test_route_auth_runtime.py"
+      - "test_mcp_route_auth.py"
+      - "arena_core.py"
+      - "arena_micelio.py"
+      - "arena_evolution.py"
+      - "arena_registry_world.py"
+      - "arena_local_llm_probe.py"
+      - "test_arena_local_llm_probe.py"
+      - ".github/workflows/neo-arena-local-llm.yml"
+      - "test_arena_registry_world.py"
+      - "test_arena_evolution.py"
+      - "data/arena/evolution.json"
+      - "test_arena_micelio.py"
+      - "data/arena/micelio.json"
+      - "test_arena_core.py"
+      - ".github/workflows/neo-arena.yml"
+      - "a2a_peer.py"
+      - "test_a2a_peer.py"
+      - "test_peer_refusal.py"
+      - "inbound_security.py"
+      - "test_inbound_security.py"
+      - "venture_measurement.py"
+      - "test_venture_measurement.py"
+      - "test_discovery_v3.py"
+      - "discovery_v3.py"
+      - "query_builder.py"
+      - "test_query_builder.py"
+      - "evidence_integrity.py"
+      - "test_evidence_integrity.py"
+      - "evidence_memory_guard.py"
+      - "commercial_evidence_store.py"
+      - "test_memory_repair.py"
+      - "test_evidence_store_atomic.py"
+      - "arena_research_algorithm.py"
+      - "test_arena_research_algorithm.py"
+      - "data/arena/research-algorithm/control_cases.json"
+      - "test_a2a_discovery_startup.py"
+      - "hidden_control_gate.py"
+      - "hidden_challenge_control_gate.py"
+      - "challenge_track.py"
+      - "data/challenge/control_cases.json"
+      - "test_challenge_track.py"
+      - "test_hidden_challenge_control_gate.py"
+      - "test_commercial_gate_non_regression.py"
+      - "startup_guard.py"
+      - "test_hidden_control_gate.py"
+      - "gate_stability.py"
+      - "test_gate_stability.py"
+      - "test_runtime_boundary.py"
+      - "runtime_boundary.py"
+      - "runtime_profile.json"
+      - "state_recovery.py"
+      - "test_state_recovery.py"
+      - "state_compaction.py"
+      - "test_state_compaction.py"
+      - "public_snapshot.py"
+      - "test_public_snapshot_privacy.py"
+      - "model_shadow.py"
+      - "model_judges.py"
+      - "model_shadow_registry.json"
+      - "test_model_judges.py"
+      - "test_model_shadow_runtime.py"
+      - "test_model_shadow_gate_non_regression.py"
+      - "test_model_shadow_privacy.py"
+      - "tools/model_shadow_privacy_check.py"
+      - "runtime/model-shadow/student.json"
+      - "runtime/model-shadow/metrics.json"
+      - "inbound_interview.py"
+      - "test_inbound_interview.py"
+      - "trust_lab.py"
+      - "test_intent_discovery.py"
+      - "intent_discovery.py"
+      - "test_agent_demand.py"
+      - "agent_demand.py"
+      - "test_agent_chat.py"
+      - "inbound_traffic.py"
+      - "test_inbound_traffic.py"
+      - "agent_chat.py"
+      - "test_trust_lab.py"
+      - "inbound_recovery_seed.json"
+      - "seti_radar.py"
+      - "thesis_control.py"
+      - "outcome_control.py"
+      - "test_outcome_control.py"
+      - "test_thesis_control.py"
+      - "test_seti_radar.py"
+      - "tool_opportunity.py"
+      - "test_tool_opportunity.py"
+      - "neo_dialect.py"
+      - "neo_dialect_security.py"
+      - "neo_dialect_seti_probe.py"
+      - "neo_dialect_council.py"
+      - "dialect_peer_harness.py"
+      - "mcp_endpoint_verifier.py"
+      - "test_mcp_endpoint_verifier.py"
+      - "registry_health.py"
+      - "registry_health_scan.py"
+      - "test_registry_health.py"
+      - "test_arena_core.py"
+      - "data/registry-health/latest-summary.json"
+      - "data/registry-health/latest-servers.json"
+      - "verify_mcp_endpoint_live_probe.py"
+      - "server.json"
+      - "test_neo_dialect.py"
+      - "test_neo_dialect_security.py"
+      - "test_neo_dialect_seti_probe.py"
+      - "test_neo_dialect_council.py"
+      - "test_dialect_peer_harness.py"
+      - "docs/neo-dialect.md"
+      - "schemas/neo-dialect/1.0/**"
+      - "runtime/neo-dialect-peer-report.json"
+      - "requirements.lock"
+      - "neo_policy.json"
+      - "render.yaml"
+      - "Dockerfile"
+      - "requirements.txt"
+      - ".github/workflows/neo-render-deploy.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: neo-render-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OBSERVATION_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.observation_deploy && github.actor == 'Toramo747' && github.triggering_actor == 'Toramo747' }}
+      HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Authorize observation deploy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.observation_deploy }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_ACTOR" != "Toramo747" ] || [ "$GITHUB_TRIGGERING_ACTOR" != "Toramo747" ]; then
+            echo "observation_deploy denied: Andrea/Toramo747 only" >&2
+            exit 1
+          fi
+          echo "::warning::OBSERVATION_DEPLOY: authorized by Andrea; final surface-smoke failure will not roll back the service"
+
+      - name: Authorize emergency deploy
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.emergency_deploy }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_ACTOR" != "Toramo747" ]; then
+            echo "emergency_deploy denied: actor=$GITHUB_ACTOR is not Andrea/Toramo747" >&2
+            exit 1
+          fi
+          echo "::warning::EMERGENCY_DEPLOY actor=$GITHUB_ACTOR freshness_bypass=true memory_integrity=required"
+
+      - name: Validate source before deploy
+        run: |
+          set -euo pipefail
+          python -m py_compile cloud_mcp.py challenge_track.py hidden_challenge_control_gate.py model_shadow.py model_judges.py jarvis_service/app.py
+          python -m json.tool neo_policy.json >/dev/null
+          python -m json.tool runtime_profile.json >/dev/null
+          python -m json.tool model_shadow_registry.json >/dev/null
+          python - <<'PY'
+          import json
+          r=json.load(open("model_shadow_registry.json",encoding="utf-8"))
+          if r.get("mode")!="shadow" or r.get("promotion")!="manual_only":
+              raise SystemExit("model shadow promotion policy is not fail-closed")
+          student=r.get("student") or {}
+          if student.get("render_mode")!="shadow" or student.get("promotion")!="manual_only":
+              raise SystemExit("student shadow policy is not fail-closed")
+          print("model shadow policy: shadow/manual_only")
+          PY
+          python - <<'PY'
+          from runtime_boundary import load_runtime_profile
+          p=load_runtime_profile()
+          print("runtime_profile="+p["profile_id"]+" fingerprint="+p["config_fingerprint"])
+          PY
+          python - <<'PY'
+          import ast
+          for path in ("cloud_mcp.py","jarvis_service/app.py"):
+              tree=ast.parse(open(path,encoding="utf-8").read(),filename=path)
+              bad=[n.id for n in ast.walk(tree) if isinstance(n,ast.Name) and n.id in {"true","false","null"}]
+              if bad:
+                  raise SystemExit(f"{path}: JSON literal used as Python name: {sorted(set(bad))}")
+          print("source runtime-literal validation passed")
+          PY
+
+      - name: Install locked test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+          python -m pip install --disable-pip-version-check PyYAML==6.0.3
+
+      - name: Run regression tests
+        run: |
+          set -euo pipefail
+          python -m unittest -v test_checkpoint_observation_deploy.py test_runtime_observation.py test_deploy_rollback.py test_deploy_health.py test_memory_repair.py test_evidence_store_atomic.py test_evidence_integrity.py test_arena_research_algorithm.py test_a2a_discovery_startup.py test_hidden_control_gate.py test_hidden_challenge_control_gate.py test_challenge_track.py test_commercial_gate_non_regression.py test_gate_stability.py test_seti_radar.py test_tool_opportunity.py test_thesis_control.py test_outcome_control.py test_discovery_v3.py test_query_builder.py test_state_recovery.py test_state_compaction.py test_public_snapshot_privacy.py test_model_judges.py test_model_shadow_runtime.py test_model_shadow_gate_non_regression.py test_model_shadow_privacy.py test_route_policy.py test_inbound_interview.py test_trust_lab.py test_intent_discovery.py test_agent_demand.py test_agent_chat.py test_inbound_traffic.py test_runtime_boundary.py test_a2a_peer.py test_peer_refusal.py test_inbound_security.py test_venture_measurement.py test_neo_dialect.py test_neo_dialect_security.py test_neo_dialect_seti_probe.py test_neo_dialect_council.py test_dialect_peer_harness.py test_mcp_endpoint_verifier.py test_registry_health.py test_arena_core.py test_arena_micelio.py test_arena_evolution.py test_arena_registry_world.py
+
+      - name: Require all public commercial controls
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from arena_research_algorithm import evaluate_control_cases
+          data=json.load(open("data/arena/research-algorithm/control_cases.json",encoding="utf-8"))
+          result=evaluate_control_cases(data.get("cases") or [])
+          print(json.dumps(result,indent=2))
+          cases=int(result.get("cases") or 0)
+          correct=int(result.get("correct") or 0)
+          family_cases=int(result.get("family_cases") or 0)
+          family_correct=int(result.get("family_correct") or 0)
+          if cases < 6 or correct != cases:
+              raise SystemExit(f"commercial control gate failed: {correct}/{cases}; require all cases with cases>=6")
+          if family_correct != family_cases:
+              raise SystemExit(f"commercial family control gate failed: {family_correct}/{family_cases}")
+          PY
+
+      - name: Require all public challenge controls
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from challenge_track import evaluate_public_control_cases
+          data=json.load(open("data/challenge/control_cases.json",encoding="utf-8"))
+          result=evaluate_public_control_cases(data.get("cases") or [])
+          print(json.dumps(result,indent=2))
+          cases=int(result.get("cases") or 0)
+          correct=int(result.get("correct") or 0)
+          if cases < 12 or correct != cases:
+              raise SystemExit(f"challenge control gate failed: {correct}/{cases}; require all cases with cases>=12")
+          PY
+
+      - name: Build Docker image in GitHub CI
+        run: |
+          set -euo pipefail
+          docker build --pull -t neo-ci .
+
+      - name: Smoke test production container startup
+        run: |
+          set -euo pipefail
+          docker rm -f neo-ci-runtime >/dev/null 2>&1 || true
+          docker run -d --name neo-ci-runtime --network none -e PORT=10000 -e NEO_AUTOPILOT_ENABLED=false neo-ci >/tmp/neo-ci-container-id
+          ready=0
+          for i in $(seq 1 30); do
+            if docker exec neo-ci-runtime python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:10000/livez",timeout=2).read().decode())' >/tmp/neo-ci-livez.json 2>/dev/null; then
+              ready=1
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' neo-ci-runtime 2>/dev/null || echo false)" != "true" ]; then
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "production container failed startup smoke" >&2
+            docker inspect neo-ci-runtime || true
+            docker logs neo-ci-runtime || true
+            exit 1
+          fi
+          cat /tmp/neo-ci-livez.json
+          docker logs neo-ci-runtime || true
+          docker rm -f neo-ci-runtime >/dev/null
+
+      - name: Resolve expected NEO version
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          s=open("cloud_mcp.py",encoding="utf-8").read()
+          m=re.search(r'^VERSION = "([^"]+)"',s,re.M)
+          if not m:
+              raise SystemExit("VERSION not found")
+          open("/tmp/neo_version","w").write(m.group(1))
+          print("expected_version="+m.group(1))
+          PY
+
+      - name: Validate Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          [ -n "$RENDER_DEPLOY_HOOK" ] || { echo "Missing GitHub secret: RENDER_DEPLOY_HOOK"; exit 2; }
+
+      - name: Force durable checkpoint before deploy
+        env:
+          EMERGENCY_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.emergency_deploy }}
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/checkpoint-status"
+          health_target="https://neo-collettive.onrender.com/health"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          health_proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${health_target}" --marker github-actions-deploy)"
+          code="$(curl -X POST --show-error --silent --max-time 45 --output /tmp/predeploy-checkpoint.json --write-out '%{http_code}' \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" \
+            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
+            "${target}")"
+          curl --fail --show-error --silent --max-time 30 \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" \
+            -H "X-MYCELIX-Self-Traffic-Proof: ${health_proof}" \
+            "${health_target}" > /tmp/predeploy-health.json
+          if [ "${code}" = "404" ] || [ "${code}" = "405" ]; then
+            echo "Runtime predates forced-checkpoint POST; validating existing durable checkpoint"
+            curl --fail --show-error --silent --max-time 30 "${target}" > /tmp/predeploy-checkpoint.json
+            EMERGENCY_DEPLOY="${EMERGENCY_DEPLOY}" python - <<'PY'
+          import json,os
+          from datetime import datetime,timezone
+          d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))
+          if d.get("ok") is not True:
+              raise SystemExit("existing pre-deploy checkpoint is not healthy")
+          stored=int(d.get("stored_bytes") or 0)
+          limit=int(d.get("limit_bytes") or 0)
+          if stored <= 0 or limit <= 0 or stored >= limit:
+              raise SystemExit(f"existing pre-deploy checkpoint lacks safety margin: {stored}/{limit}")
+          if os.environ.get("EMERGENCY_DEPLOY") == "true":
+              print("EMERGENCY_DEPLOY legacy checkpoint integrity passed; publication freshness bypassed")
+              raise SystemExit(0)
+          raw=str(d.get("last_checkpoint_utc") or "")
+          try:
+              ts=datetime.fromisoformat(raw.replace("Z","+00:00"))
+              if ts.tzinfo is None: ts=ts.replace(tzinfo=timezone.utc)
+          except Exception:
+              raise SystemExit("existing pre-deploy checkpoint timestamp invalid")
+          age=(datetime.now(timezone.utc)-ts.astimezone(timezone.utc)).total_seconds()
+          if age < 0 or age > 600:
+              raise SystemExit(f"existing pre-deploy checkpoint too old: {age:.0f}s")
+          print("bootstrap_checkpoint_age_seconds="+str(int(age)))
+          PY
+          elif [ "${code}" = "200" ]; then
+            cat /tmp/predeploy-checkpoint.json
+            git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main
+            git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
+            if python - <<'PY'
+          import json
+          d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))
+          snapshot=json.load(open("/tmp/predeploy-public-snapshot.json",encoding="utf-8"))
+          cycles=int(d.get("cycles_completed") or 0)
+          current_evidence=int(d.get("commercial_evidence_items") or 0)
+          published=int((((snapshot.get("autopilot") or {}).get("select_diagnostics") or {}).get("persistent_evidence_items")) or 0)
+          stored=int(d.get("stored_bytes") or 0)
+          limit=int(d.get("limit_bytes") or 0)
+          if cycles < 1:
+              raise SystemExit("pre-deploy checkpoint missing cycle state")
+          if d.get("ok") is not True:
+              raise SystemExit("pre-deploy checkpoint is not healthy")
+          if stored <= 0 or limit <= 0 or stored >= limit:
+              raise SystemExit(f"pre-deploy checkpoint lacks safety margin: {stored}/{limit}")
+          if published < 1:
+              raise SystemExit("published snapshot missing persistent evidence count")
+          if current_evidence < published:
+              raise SystemExit(f"pre-deploy evidence regressed: current={current_evidence} published={published}")
+          print("checkpoint_cycles="+str(cycles))
+          print("checkpoint_evidence_items="+str(current_evidence))
+          print("published_evidence_floor="+str(published))
+          print("checkpoint_store_write_verified=true")
+          raise SystemExit(0)
+          PY
+            then
+              echo "Healthy durable checkpoint confirmed; memory integrity passed without publication freshness dependency."
+            else
+              git fetch --quiet --depth=1 --force origin main:refs/remotes/origin/main
+              git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
+              git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
+              python - <<'PY'
+          import json
+          from datetime import datetime,timezone
+          
+          d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))
+          cycles=int(d.get("cycles_completed") or 0)
+          if cycles < 1:
+              raise SystemExit("pre-deploy checkpoint missing cycle state")
+          
+          stored_raw=d.get("stored_bytes")
+          stored=int(stored_raw or 0)
+          limit=int(d.get("limit_bytes") or 0)
+          health=json.load(open("/tmp/predeploy-health.json",encoding="utf-8"))
+          source_commit=str(health.get("commit") or "")
+          legacy_overflow_bootstrap=(
+              stored_raw is None
+              and limit == 100000
+              and source_commit == "678f8e302237f3e9c6b403f80c2930aab860a3c3"
+          )
+          explicit_overflow=(limit > 0 and stored > limit)
+          if not (explicit_overflow or legacy_overflow_bootstrap):
+              raise SystemExit("pre-deploy checkpoint failed for non-overflow reason")
+          
+          snapshot=json.load(open("/tmp/predeploy-public-snapshot.json",encoding="utf-8"))
+          floor=json.load(open("/tmp/predeploy-cycle-floor.json",encoding="utf-8"))
+          snapshot_cycles=int((snapshot.get("autopilot") or {}).get("cycles_completed") or 0)
+          floor_cycles=int(floor.get("cycles_completed") or 0)
+          diag=(snapshot.get("autopilot") or {}).get("select_diagnostics") or {}
+          memory=(snapshot.get("autopilot") or {}).get("evidence_memory") or {}
+          evidence=int(diag.get("persistent_evidence_items") or 0)
+          evidence_in=int(memory.get("evidence_in") or 0)
+          evidence_out=int(memory.get("evidence_out") or 0)
+          blocked=int(memory.get("evidence_regression_blocked") or 0)
+          repaired=int(memory.get("timestamp_repaired") or 0)
+          if evidence < 108 or evidence_in != evidence or evidence_out != evidence or blocked != 0 or repaired != 0:
+              raise SystemExit(
+                  "overflow bootstrap evidence guard failed: "
+                  f"persistent={evidence} in={evidence_in} out={evidence_out} "
+                  f"blocked={blocked} repaired={repaired}"
+              )
+          raw=str(snapshot.get("captured_at_utc") or "")
+          try:
+              ts=datetime.fromisoformat(raw.replace("Z","+00:00"))
+              if ts.tzinfo is None:
+                  ts=ts.replace(tzinfo=timezone.utc)
+          except Exception:
+              raise SystemExit("overflow bootstrap snapshot timestamp invalid")
+          age=(datetime.now(timezone.utc)-ts.astimezone(timezone.utc)).total_seconds()
+          if age < 0 or age > 5400:
+              raise SystemExit(f"overflow bootstrap snapshot too old: {age:.0f}s")
+          current_evidence=int(d.get("commercial_evidence_items") or 0)
+          publication_lag=cycles-snapshot_cycles
+          floor_lag=cycles-floor_cycles
+          if publication_lag < 0 or floor_lag < 0:
+              raise SystemExit(
+                  f"overflow bootstrap runtime behind published state: runtime={cycles} snapshot={snapshot_cycles} floor={floor_cycles}"
+              )
+          if floor_cycles < snapshot_cycles:
+              raise SystemExit(
+                  f"overflow bootstrap cycle floor behind published snapshot: floor={floor_cycles} snapshot={snapshot_cycles}"
+              )
+          if current_evidence < evidence or current_evidence < 108:
+              raise SystemExit(
+                  f"overflow bootstrap current evidence regressed: current={current_evidence} published={evidence}"
+              )
+          open("/tmp/checkpoint-overflow-bootstrap","w").write(
+              json.dumps({
+                  "runtime_cycles":cycles,
+                  "snapshot_cycles":snapshot_cycles,
+                  "floor_cycles":floor_cycles,
+                  "stored_bytes":stored if stored_raw is not None else None,
+                  "limit_bytes":limit,
+                  "legacy_overflow_bootstrap":legacy_overflow_bootstrap,
+                  "source_commit":source_commit,
+                  "evidence":evidence,
+                  "current_evidence":current_evidence,
+                  "publication_lag":publication_lag,
+                  "snapshot_freshness_limit_seconds":5400,
+              },separators=(",",":"))
+          )
+          print(
+              "overflow_bootstrap_authorized "
+              f"runtime_cycles={cycles} snapshot_cycles={snapshot_cycles} "
+              f"stored_bytes={stored_raw} limit_bytes={limit} snapshot_age_seconds={int(age)} "
+              f"legacy={legacy_overflow_bootstrap} evidence={evidence} "
+              f"current_evidence={current_evidence} publication_lag={publication_lag}"
+          )
+          
+          PY
+            fi
+          else
+            cat /tmp/predeploy-checkpoint.json || true
+            echo "pre-deploy checkpoint HTTP ${code}" >&2
+            exit 22
+          fi
+
+      - name: Capture previous production commit
+        run: |
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          commit=str(json.load(open("/tmp/predeploy-health.json")).get("commit") or "")
+          if not re.fullmatch(r"[0-9a-f]{40}",commit):
+              raise SystemExit("Previous production commit unavailable; deploy blocked")
+          Path("/tmp/previous-production-commit").write_text(commit)
+          PY
+
+      - name: Trigger Render deploy
+        id: render_trigger
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          sep='?'
+          case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          touch /tmp/render-deploy-attempted
+          deploy_url="${RENDER_DEPLOY_HOOK}${sep}ref=${GITHUB_SHA}"
+          curl --fail --show-error --silent --max-time 60 "$deploy_url" > /tmp/deploy.txt
+          cat /tmp/deploy.txt || true
+
+      - name: Wait for expected NEO version
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          render_ready=1
+          for i in $(seq 1 40); do
+            if [ "$render_ready" -eq 1 ] && curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/health' --marker github-actions-deploy)" --max-time 30 \
+              "https://neo-collettive.onrender.com/health" > /tmp/health.json; then
+              cat /tmp/health.json
+              if EXPECTED="$expected" python - <<'PY'
+          import json,os,sys
+          d=json.load(open("/tmp/health.json",encoding="utf-8"))
+          profile=d.get("runtime_profile") or {}
+          ok=(
+              str(d.get("version") or "") == os.environ["EXPECTED"]
+              and str(d.get("commit") or "") == os.environ.get("GITHUB_SHA","")
+              and str(profile.get("profile_id") or "") == "mycelix-prod-main"
+              and str(profile.get("deployment_role") or "") == "production"
+          )
+          sys.exit(0 if ok else 1)
+          PY
+              then
+                echo "NEO v$expected is live on commit $GITHUB_SHA"
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "Timed out waiting for NEO v$expected"
+          cat /tmp/health.json || true
+          exit 5
+
+      - name: Wait for first completed autopilot cycle
+        continue-on-error: ${{ env.OBSERVATION_DEPLOY == 'true' }}
+        run: python scripts/wait_first_autopilot_cycle.py
+
+      - name: Verify repaired commercial evidence memory
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/checkpoint-status"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          code="$(curl -X POST --show-error --silent --max-time 45 --output /tmp/postrepair-checkpoint.json --write-out '%{http_code}' \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" \
+            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
+            "${target}")"
+          [ "${code}" = "200" ] || { cat /tmp/postrepair-checkpoint.json || true; exit 22; }
+          cat /tmp/postrepair-checkpoint.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/postrepair-checkpoint.json",encoding="utf-8"))
+          if d.get("ok") is not True:
+              raise SystemExit("post-repair checkpoint is not healthy")
+          cycles=int(d.get("cycles_completed") or 0)
+          evidence=int(d.get("commercial_evidence_items") or 0)
+          if cycles < 2626:
+              raise SystemExit(f"post-repair cycle regression: {cycles}")
+          if evidence < 90:
+              raise SystemExit(f"post-repair evidence recovery below verified floor: {evidence}<90")
+          print(f"post_repair_memory_verified cycles={cycles} evidence_items={evidence}")
+          PY
+
+      - name: Require hidden challenge control when configured on Render
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/health"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          curl --fail --silent --show-error --max-time 30 \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" \
+            -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" \
+            "${target}" > /tmp/hidden-challenge-health.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/hidden-challenge-health.json",encoding="utf-8"))
+          h=d.get("hidden_challenge_control") or {}
+          required=bool(h.get("required"))
+          ok=bool(h.get("ok"))
+          cases=int(h.get("cases") or 0)
+          correct=int(h.get("correct") or 0)
+          print({"required":required,"cases":cases,"correct":correct,"ok":ok})
+          if required and (not ok or cases < 1 or correct != cases):
+              raise SystemExit("hidden challenge control failed on Render")
+          PY
+
+      - name: Capture public health if version wait fails
+        if: failure()
+        run: |
+          set +e
+          curl --silent --show-error --max-time 30 "https://neo-collettive.onrender.com/health" -o /tmp/runtime-health.json
+          curl --silent --show-error --max-time 30 "https://neo-collettive.onrender.com/api/checkpoint-status" -o /tmp/checkpoint-status.json
+          python - <<'PY'
+          import json
+          for path in ("/tmp/runtime-health.json","/tmp/checkpoint-status.json"):
+              try:
+                  d=json.load(open(path,encoding="utf-8"))
+              except Exception:
+                  continue
+              print(path, {k:d.get(k) for k in ("status","version","commit","ok","stored_bytes","limit_bytes","last_checkpoint_utc")})
+          PY
+
+      - name: Verify autopilot runtime
+        run: |
+          cat > /tmp/neo-surface-smoke-0.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" \
+            "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/status.json
+          cat /tmp/status.json
+          EXPECTED="$expected" python - <<'PY'
+          import json,os
+          d=json.load(open("/tmp/status.json",encoding="utf-8"))
+          ap=d.get("autopilot") or {}
+          if str(d.get("neo_version") or "") != os.environ["EXPECTED"]:
+              raise SystemExit("wrong runtime version")
+          if not ap.get("enabled"):
+              raise SystemExit("autopilot disabled")
+          print("autopilot enabled; cycles_completed="+str(ap.get("cycles_completed")))
+          PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-0.sh
+
+      - name: Smoke test autonomous subsystems
+        run: |
+          cat > /tmp/neo-surface-smoke-1.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" \
+            "https://neo-collettive.onrender.com/api/memory/status" > /tmp/memory.json
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/builder/status' --marker github-actions-deploy)" \
+            "https://neo-collettive.onrender.com/api/builder/status" > /tmp/builder.json
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/autonomy/status' --marker github-actions-deploy)" \
+            "https://neo-collettive.onrender.com/api/autonomy/status" > /tmp/autonomy.json
+          python - <<'PY'
+          import json
+          m=json.load(open("/tmp/memory.json",encoding="utf-8"))
+          b=json.load(open("/tmp/builder.json",encoding="utf-8"))
+          a=json.load(open("/tmp/autonomy.json",encoding="utf-8"))
+          if not m.get("ok"):
+              raise SystemExit("memory endpoint unhealthy")
+          if not b.get("ok"):
+              raise SystemExit("builder endpoint unhealthy")
+          policy=b.get("policy") or {}
+          if not policy.get("enabled"):
+              raise SystemExit("autonomous builder disabled")
+          if not policy.get("allowed_families"):
+              raise SystemExit("builder has no allowed families")
+          if b.get("external_actions_allowed") is not False:
+              raise SystemExit("external action guardrail missing")
+          if not a.get("ok"):
+              raise SystemExit("autonomy endpoint unhealthy")
+          guard=a.get("guardrails") or {}
+          if any(bool(guard.get(k)) for k in ("spending","payments","contracts","commercial_outreach","external_publishing","personal_accounts")):
+              raise SystemExit("autonomy guardrails unsafe")
+          print("memory, builder and autonomy smoke tests passed")
+          PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-1.sh
+
+      - name: Smoke test A2A discovery surface
+        run: |
+          cat > /tmp/neo-surface-smoke-2.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)"             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          curl --max-time 30 --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/inbound/agents' --marker github-actions-deploy)"             "https://neo-collettive.onrender.com/api/inbound/agents" > /tmp/inbound.json
+          python - <<'PY'
+          import json
+          card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
+          inbound=json.load(open("/tmp/inbound.json",encoding="utf-8"))
+          interfaces=card.get("supportedInterfaces") or []
+          versions={str(x.get("protocolVersion") or "") for x in interfaces if isinstance(x,dict)}
+          bindings={str(x.get("protocolBinding") or "") for x in interfaces if isinstance(x,dict)}
+          if "1.0" not in versions or "0.3" not in versions:
+              raise SystemExit("A2A card does not advertise both 1.0 and 0.3")
+          if "JSONRPC" not in bindings:
+              raise SystemExit("A2A card missing JSONRPC binding")
+          if any(k in card for k in ("protocolVersion","preferredTransport","url")):
+              raise SystemExit("legacy top-level A2A fields leaked into v1 Agent Card")
+          skills={str(x.get("id") or "") for x in (card.get("skills") or []) if isinstance(x,dict)}
+          if "introduce-agent" not in skills or "evidence-validation" not in skills:
+              raise SystemExit("A2A discovery skills missing")
+          if not inbound.get("ok"):
+              raise SystemExit("inbound diagnostics unhealthy")
+          discovery=inbound.get("a2a_discovery") or {}
+          if discovery.get("registry_enabled") is not True:
+              raise SystemExit("public registry advertisement not enabled")
+          print("A2A v1 discovery surface smoke test passed")
+          PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-2.sh
+
+      - name: Smoke test neo-dialect surface
+        run: |
+          cat > /tmp/neo-surface-smoke-3.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/neo-dialect/1.0' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/neo-dialect/1.0" > /tmp/neo-dialect.md
+          grep -q "neo-dialect/1.0" /tmp/neo-dialect.md
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/.well-known/agent-card.json' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/.well-known/agent-card.json" > /tmp/agent-card.json
+          council_status="$(curl --output /dev/null --write-out '%{http_code}' --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/council' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/api/council")"
+          if [ "$council_status" != "401" ]; then
+            echo "Expected admin-only /api/council to reject HMAC-only access with 401; got $council_status" >&2
+            exit 1
+          fi
+          curl --fail --show-error --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/council/neo-dialect/example' --marker github-actions-deploy)" --max-time 30             "https://neo-collettive.onrender.com/council/neo-dialect/example" > /tmp/dialect-example.json
+          python - <<'PY'
+          import json
+          card=json.load(open("/tmp/agent-card.json",encoding="utf-8"))
+          example=json.load(open("/tmp/dialect-example.json",encoding="utf-8"))
+          extensions=((card.get("capabilities") or {}).get("extensions") or [])
+          if not any(str(x.get("params",{}).get("dialect_version") or "")=="neo-dialect/1.0" for x in extensions if isinstance(x,dict)):
+              raise SystemExit("neo-dialect extension missing from Agent Card")
+          if str(example.get("dialect_version") or "")!="neo-dialect/1.0":
+              raise SystemExit("neo-dialect example version missing")
+          types=[x.get("message",{}).get("type") for x in (example.get("transcript") or [])]
+          if types != ["HELLO","CAPABILITIES","PROPOSE","COUNTER","AGREE","RESULT","BYE"]:
+              raise SystemExit("neo-dialect example transcript incomplete")
+          print("neo-dialect smoke passed")
+          PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-3.sh
+
+      - name: Smoke test Registry Health static pages
+        run: |
+          cat > /tmp/neo-surface-smoke-4.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health' --marker github-actions-deploy)" --max-time 30 \
+            "https://neo-collettive.onrender.com/registry-health" > /tmp/registry-health.html
+          curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/registry-health/about' --marker github-actions-deploy)" --max-time 30 \
+            "https://neo-collettive.onrender.com/registry-health/about" > /tmp/registry-health-about.html
+          grep -q "MCP Registry Health" /tmp/registry-health.html
+          grep -q "Disabled pending Andrea Gava" /tmp/registry-health.html
+          grep -q "Opt-out and corrections" /tmp/registry-health-about.html
+          if grep -q "Per-server observations" /tmp/registry-health.html; then
+            echo "Per-server table unexpectedly enabled" >&2
+            exit 1
+          fi
+          echo "Registry Health aggregate/about surfaces healthy; server table disabled"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-4.sh
+
+      - name: Smoke test NEO Arena read-only surface
+        run: python scripts/retry_deploy_smoke.py scripts/smoke_arena_surface.sh
+
+      - name: Bootstrap first Arena session for v0.99.34
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          if [ "$expected" != "0.99.34" ]; then exit 0; fi
+          existing="$(gh run list --workflow neo-arena.yml --limit 10 --json databaseId --jq 'length' 2>/dev/null || echo 0)"
+          if [ "$existing" -eq 0 ]; then
+            gh workflow run neo-arena.yml --ref main \
+              -f topic='quale tool MCP gratuito sarebbe più utile agli sviluppatori' \
+              -f participants='Scout,Analyst,Critic,Builder-planner,Guest' \
+              -f guest_personality='scettico' \
+              -f max_turns='20' \
+              -f andrea_message=''
+            echo "First Arena session dispatched"
+          fi
+
+      - name: Require healthy post-deploy checkpoint
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/checkpoint-status"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          curl -X POST --fail --silent --show-error --max-time 45             -H "X-MYCELIX-Self-Traffic: github-actions-deploy"             -H "X-MYCELIX-Self-Traffic-Proof: ${proof}"             "${target}" > /tmp/checkpoint-status.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/checkpoint-status.json",encoding="utf-8"))
+          stored=int(d.get("stored_bytes") or 0)
+          limit=int(d.get("limit_bytes") or 0)
+          print({
+              "ok":d.get("ok"),
+              "stored_bytes":stored,
+              "limit_bytes":limit,
+              "last_checkpoint_utc":d.get("last_checkpoint_utc"),
+          })
+          if d.get("ok") is not True:
+              raise SystemExit("post-deploy checkpoint is not healthy")
+          if stored <= 0 or limit <= 0 or stored >= limit:
+              raise SystemExit(f"post-deploy checkpoint lacks safety margin: {stored}/{limit}")
+          PY
+
+      - name: Verify Pathwren remains 100/100
+        run: |
+          cat > /tmp/neo-surface-smoke-7.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import httpx
+
+          payload={
+              "jsonrpc":"2.0",
+              "id":"mycelix-pathwren-release",
+              "method":"message/send",
+              "params":{"message":{
+                  "role":"ROLE_USER",
+                  "messageId":"mycelix-pathwren-release-msg",
+                  "parts":[{"text":json.dumps({
+                      "skill":"score_card",
+                      "url":"https://neo-collettive.onrender.com/mcp"
+                  })}],
+              }},
+          }
+          r=httpx.post(
+              "https://www.pathwren.workers.dev/a2a/score",
+              json=payload,
+              headers={"Content-Type":"application/json","Accept":"application/json"},
+              timeout=30,
+          )
+          r.raise_for_status()
+          response_bytes=r.content
+          with open("/tmp/pathwren-full-response.json","wb") as fh:
+              fh.write(response_bytes)
+          data=r.json()
+          print("pathwren_full_response_bytes="+str(len(response_bytes)))
+          found=[]
+          def walk(value):
+              if isinstance(value,dict):
+                  verdict=value.get("verdict")
+                  if isinstance(verdict,dict) and "score" in verdict:
+                      found.append(verdict)
+                  for v in value.values():
+                      walk(v)
+              elif isinstance(value,list):
+                  for v in value:
+                      walk(v)
+          walk(data)
+          if not found:
+              raise SystemExit("Pathwren verdict missing")
+          verdict=found[0]
+          print(json.dumps(verdict,ensure_ascii=False,indent=2))
+          if int(verdict.get("score") or -1)!=100:
+              raise SystemExit("Pathwren score regressed below 100")
+          if int(verdict.get("warnings") or 0)!=0:
+              raise SystemExit("Pathwren warnings regressed above zero")
+          PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-7.sh
+
+      - name: Preserve full Pathwren response as private Actions artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pathwren-full-response-${{ github.run_id }}
+          path: /tmp/pathwren-full-response.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Standard post-deploy smoke
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          cat > /tmp/neo-surface-smoke-6.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          livez_code="$(curl --silent --show-error --output /tmp/release-livez.json --max-time 30 --write-out '%{http_code}' "https://neo-collettive.onrender.com/livez")"
+          mcp_payload='{"jsonrpc":"2.0","id":"release-smoke-init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mycelix-release-smoke","version":"1"}}}'
+          mcp_code="$(curl --silent --show-error --output /tmp/release-mcp.json --max-time 30 --write-out '%{http_code}'               -X POST -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream"               -H "X-MYCELIX-Self-Traffic: github-actions-deploy"               -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/mcp' --marker github-actions-deploy)"               --data "$mcp_payload" "https://neo-collettive.onrender.com/mcp")"
+          heartbeat_code="$(curl --silent --show-error --output /tmp/release-heartbeat.json --max-time 30 --write-out '%{http_code}'             -H "X-MYCELIX-Self-Traffic: github-actions-heartbeat"             -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/heartbeat' --marker github-actions-heartbeat)"             "https://neo-collettive.onrender.com/api/heartbeat")"
+          echo "livez_http=$livez_code"
+          echo "mcp_initialize_http=$mcp_code"
+          echo "heartbeat_hmac_only_http=$heartbeat_code"
+          test "$livez_code" = "200"
+          test "$mcp_code" = "200"
+          test "$heartbeat_code" = "200"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-6.sh
+
+      - name: Synthetic A2A unverified-dialogue smoke
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          cat > /tmp/neo-surface-smoke-8.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from urllib.parse import urlparse
+          from self_traffic_auth import make_self_traffic_proof
+
+          url="https://neo-collettive.onrender.com/a2a"
+          marker="github-actions-deploy"
+          proof=make_self_traffic_proof(
+              os.environ["HEARTBEAT_TOKEN"],
+              urlparse(url).path or "/",
+          )
+          payload={
+              "jsonrpc":"2.0",
+              "id":"musekey-ci-smoke",
+              "method":"message/send",
+              "params":{
+                  "contextId":"ci-musekey-unverified-smoke",
+                  "message":{
+                      "role":"user",
+                      "messageId":"musekey-ci-smoke-msg",
+                      "parts":[{"kind":"text","text":(
+                          "agent_id: musekey\n"
+                          "identity: MuseKey synthetic CI peer\n"
+                          "capabilities: technical critique, research discussion\n"
+                          "protocol: A2A JSON-RPC\n"
+                          "limitations: no external actions without review\n"
+                          "documentation: https://example.invalid/musekey\n"
+                          "How should an agent distinguish retrieved memory from learned parameters?"
+                      )}]
+                  }
+              }
+          }
+          req=urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode(),
+              headers={
+                  "Content-Type":"application/json",
+                  "A2A-Version":"0.3",
+                  "X-MYCELIX-Self-Traffic":marker,
+                  "X-MYCELIX-Self-Traffic-Proof":proof,
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(req,timeout=30) as resp:
+              status=resp.status
+              data=json.load(resp)
+          result=data.get("result") or {}
+          metadata=result.get("metadata") or {}
+          parts=result.get("parts") or []
+          reply=" ".join(str(x.get("text") or "") for x in parts if isinstance(x,dict))
+          print("a2a_http="+str(status))
+          print("identity_status="+str(metadata.get("identity_status")))
+          print("admission_status="+str(metadata.get("admission_status")))
+          print("response_reason="+str(metadata.get("response_reason")))
+          if status!=200:
+              raise SystemExit("A2A smoke HTTP != 200")
+          if metadata.get("identity_status")!="SELF_DECLARED_UNVERIFIED":
+              raise SystemExit("body introduction was not kept unverified")
+          if str(metadata.get("admission_status") or "").upper()=="ADMITTED":
+              raise SystemExit("unverified body introduction was admitted")
+          if "provide an agent_id" in reply.lower():
+              raise SystemExit("reply incorrectly requested repeated identity")
+          if not reply.strip():
+              raise SystemExit("substantive reply missing")
+          PY
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-8.sh
+
+      - name: Verify post-deploy SETI readiness
+        run: |
+          cat > /tmp/neo-surface-smoke-9.sh <<'NEO_SMOKE_BODY_215'
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          expect_engine_retry=0
+          git fetch --no-tags --depth=2 origin main >/dev/null 2>&1 || true
+          if git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA^" "$GITHUB_SHA" 2>/dev/null | grep -qx 'seti_radar.py'; then
+            expect_engine_retry=1
+          fi
+          echo "expect_seti_engine_retry=$expect_engine_retry"
+          for i in $(seq 1 1); do
+            curl --fail --silent --show-error -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/memory/status' --marker github-actions-deploy)" --max-time 30 \
+              "https://neo-collettive.onrender.com/api/memory/status" > /tmp/seti-status.json
+            if EXPECTED="$expected" EXPECT_ENGINE_RETRY="$expect_engine_retry" python - <<'PY'
+          import json,os,sys
+          d=json.load(open("/tmp/seti-status.json",encoding="utf-8"))
+          s=d.get("seti_summary") or {}
+          expect_retry=os.environ.get("EXPECT_ENGINE_RETRY")=="1"
+          ok=(
+              str(d.get("neo_version") or "")==os.environ["EXPECTED"]
+              and bool(s.get("ready_now_computed_at"))
+              and (not expect_retry or bool(s.get("engine_upgrade_retry")))
+          )
+          if ok:
+              counts=s.get("interview_readiness_reason_counts") or {}
+              if int(counts.get("ready") or 0)!=int(s.get("interview_ready_now") or 0):
+                  raise SystemExit("SETI readiness invariant failed: ready count")
+              if sum(int(v or 0) for v in counts.values())!=int(s.get("eligible_candidates") or 0):
+                  raise SystemExit("SETI readiness invariant failed: eligible total")
+              if s.get("interview_readiness_invariant_ok") is not True:
+                  raise SystemExit("SETI readiness invariant flag false")
+              print(json.dumps({
+                  "interview_ready_now":s.get("interview_ready_now"),
+                  "ready_now_computed_at":s.get("ready_now_computed_at"),
+                  "blocked_auth":s.get("blocked_auth"),
+                  "in_cooldown":s.get("in_cooldown"),
+                  "attempted_this_cycle":s.get("attempted_this_cycle"),
+                  "last_interview_status":s.get("last_interview_status"),
+                  "failure_reason_counts":s.get("interview_failure_reason_counts"),
+                  "reason_counts":s.get("interview_readiness_reason_counts"),
+                  "candidate_states":s.get("interview_candidate_states"),
+                  "invariant_ok":s.get("interview_readiness_invariant_ok"),
+                  "admitted_count":s.get("interview_admitted_count"),
+              },ensure_ascii=False,indent=2))
+              sys.exit(0)
+          sys.exit(1)
+          PY
+            then
+              break
+            fi
+            if [ "$i" -eq 1 ]; then
+              echo "SETI readiness telemetry not observed or invariant failed" >&2
+              cat /tmp/seti-status.json
+              exit 8
+            fi
+            sleep 10
+          done
+          seti_interviews_status="$(curl --output /dev/null --write-out '%{http_code}' --silent -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url 'https://neo-collettive.onrender.com/api/seti/interviews' --marker github-actions-deploy)" --max-time 30 "https://neo-collettive.onrender.com/api/seti/interviews")"
+          if [ "$seti_interviews_status" != "401" ]; then
+            echo "Expected admin-only /api/seti/interviews to reject HMAC-only access with 401; got $seti_interviews_status" >&2
+            exit 1
+          fi
+          echo "SETI readiness public telemetry healthy; private interviews remain admin-only"
+          NEO_SMOKE_BODY_215
+          python scripts/retry_deploy_smoke.py /tmp/neo-surface-smoke-9.sh
+
+      - name: Verify three consecutive ingestion observation cycles
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: python scripts/verify_ingestion_deploy.py
+
+      - name: All required deployment surfaces verified
+        run: |
+          if [ -f /tmp/neo-observation-smoke-failed ]; then
+            echo "::warning::OBSERVATION_DEPLOY completed with failed surface smokes; inspect logs before any further action"
+          else
+            echo "All required post-deploy checks passed"
+          fi
+
+      - name: Dispatch post-deploy public snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dispatched=0
+          for attempt in $(seq 1 5); do
+            if gh workflow run mycelix-heartbeat-v3.yml --ref main; then
+              dispatched=1
+              break
+            fi
+            echo "Heartbeat dispatch attempt ${attempt}/5 failed; retrying" >&2
+            sleep 5
+          done
+          if [ "${dispatched}" != "1" ]; then
+            echo "Post-deploy heartbeat dispatch failed after 5 attempts" >&2
+            exit 22
+          fi
+          echo "Post-deploy heartbeat snapshot workflow dispatched"
+
+      - name: Run three market validation cycles
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
+        env:
+          HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          target="https://neo-collettive.onrender.com/api/market/run-cycles?count=3"
+          args=(-X POST --fail --show-error --silent --max-time 600)
+          args+=(-H "X-MYCELIX-Self-Traffic: github-actions-heartbeat")
+          args+=(-H "X-MYCELIX-Self-Traffic-Proof: $(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-heartbeat)")
+          curl "${args[@]}" \
+            "${target}" \
+            > /tmp/market-cycles.json
+          cat /tmp/market-cycles.json
+          python - <<'PY'
+          import json
+          d=json.load(open("/tmp/market-cycles.json",encoding="utf-8"))
+          if not d.get("ok"):
+              raise SystemExit("market cycle validation returned ok=false")
+          if int(d.get("cycles_executed") or 0) != 3:
+              raise SystemExit("expected exactly 3 completed market cycles")
+          expected=open("/tmp/neo_version",encoding="utf-8").read().strip()
+          if str(d.get("neo_version") or "") != expected:
+              raise SystemExit(f"market cycles did not run on expected version {expected}")
+          print("market_validation_cycles=3")
+          print("quality_gate="+str(bool(d.get("quality_gate"))).lower())
+          PY
+
+      - name: Dispatch zero-cost local LLM probe for v0.99.39
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          if [ "$expected" != "0.99.39" ]; then
+            exit 0
+          fi
+          gh workflow run neo-arena-local-llm.yml --ref main
+          echo "Local LLM diagnostic dispatched as workflow_dispatch"
+
+      - name: Dispatch local LLM comparison for v0.99.42
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          if [ "$expected" != "0.99.42" ]; then
+            echo "LLM comparison applies only to v0.99.42"
+            exit 0
+          fi
+          existing="$(gh run list --workflow neo-arena-local-llm-compare.yml --event workflow_dispatch --limit 50 --json headSha --jq --arg sha "$GITHUB_SHA" '[.[] | select(.headSha == $sha)] | length' 2>/dev/null || echo 0)"
+          if [ "$existing" -gt 0 ]; then
+            echo "LLM comparison already dispatched for this commit"
+            exit 0
+          fi
+          gh workflow run neo-arena-local-llm-compare.yml --ref main
+          echo "Local LLM comparison dispatched via workflow_dispatch"
+
+      - name: Dispatch fresh Jarvis snapshot
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run jarvis-runtime-snapshot-v2.yml --ref main
+          echo "Jarvis runtime snapshot workflow dispatched"
+
+      - name: Dispatch authorized 30-minute Registry Health SAMPLE once
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          message="$(git log -1 --pretty=%B "$GITHUB_SHA")"
+          if ! printf '%s\n' "$message" | grep -Fq '[registry-sample-once]'; then
+            echo "No one-shot Registry Health SAMPLE authorization marker"
+            exit 0
+          fi
+          existing="$(gh run list --workflow registry-health-scan.yml --event workflow_dispatch --limit 100 --json headSha --jq --arg sha "$GITHUB_SHA" '[.[] | select(.headSha == $sha)] | length' 2>/dev/null || echo 0)"
+          if [ "$existing" -gt 0 ]; then
+            echo "Registry Health SAMPLE already dispatched for this commit"
+            exit 0
+          fi
+          gh workflow run registry-health-scan.yml --ref main \
+            -f phase=first \
+            -f scan_date='' \
+            -f mode=sample \
+            -f max_minutes=30 \
+            -f sample_from_scan_date=''
+          echo "Authorized Registry Health SAMPLE phase=first max_minutes=30 dispatched once"
+
+      - name: Dispatch authorized Registry Health scan for v0.99.40
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.extended_validation }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected="$(cat /tmp/neo_version)"
+          if [ "$expected" != "0.99.40" ]; then
+            echo "Authorized Registry Health scan applies only to v0.99.40"
+            exit 0
+          fi
+          existing="$(gh run list --workflow registry-health-scan.yml --event workflow_dispatch --limit 50 --json headSha --jq --arg sha "$GITHUB_SHA" '[.[] | select(.headSha == $sha)] | length' 2>/dev/null || echo 0)"
+          if [ "$existing" -gt 0 ]; then
+            echo "Authorized Registry Health scan already dispatched for this commit"
+            exit 0
+          fi
+          gh workflow run registry-health-scan.yml --ref main -f phase=first -f scan_date=''
+          echo "Authorized Registry Health phase=first dispatched via workflow_dispatch"
+
+      - name: Restore previous Render production commit
+        if: ${{ failure() && env.OBSERVATION_DEPLOY != 'true' }}
+        env:
+          FAILED_SHA: ${{ github.sha }}
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          set -euo pipefail
+          [ -f /tmp/render-deploy-attempted ] || exit 0
+          git fetch origin main
+          if ! python scripts/deploy_rollback.py "$FAILED_SHA" --current origin/main; then
+            echo "Newer application commit exists; automatic rollback blocked"
+            exit 1
+          fi
+          previous="$(cat /tmp/previous-production-commit)"
+          sep='?'
+          case "$RENDER_DEPLOY_HOOK" in *\?*) sep='&' ;; esac
+          curl --fail --silent --show-error --max-time 60 "${RENDER_DEPLOY_HOOK}${sep}ref=${previous}" > /tmp/rollback-deploy.json
+          for i in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 15 'https://neo-collettive.onrender.com/health' > /tmp/rollback-health.json; then
+              if PREVIOUS="$previous" python - <<'PY'
+          import json,os,sys
+          d=json.load(open('/tmp/rollback-health.json'))
+          sys.exit(0 if d.get('commit') == os.environ['PREVIOUS'] else 1)
+          PY
+              then
+                echo "Previous Render production commit restored: $previous"
+                touch /tmp/render-rollback-verified
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Render rollback could not be verified" >&2
+          exit 1
+
+      - name: Roll back failed application commit
+        if: ${{ failure() && env.OBSERVATION_DEPLOY != 'true' }}
+        env:
+          FAILED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [ -f /tmp/render-rollback-verified ] || exit 0
+          git fetch origin main
+          git checkout -B main origin/main
+          python scripts/deploy_rollback.py "$FAILED_SHA"
+          git config user.name "NEO Safe Rollback"
+          git config user.email "actions@users.noreply.github.com"
+          python scripts/deploy_rollback.py "$FAILED_SHA" --revert
+          git push origin HEAD:main

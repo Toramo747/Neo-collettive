@@ -1,0 +1,433 @@
+{
+  "schema_v": 1,
+  "purpose": "public_challenge_gate_control",
+  "raw_external_text": false,
+  "cases": [
+    {
+      "id": "challenge-ready-01",
+      "category": "persistent_open_problem",
+      "now_epoch": 1800000000,
+      "expect_ready": true,
+      "evidence": [
+        {
+          "challenge_key": "c01",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1790000000,
+          "workaround": true,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c01",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c01",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1792000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-ready-02",
+      "category": "bounty_supported",
+      "now_epoch": 1800000000,
+      "expect_ready": true,
+      "evidence": [
+        {
+          "challenge_key": "c02",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "feasible",
+          "reward": true,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c02",
+          "requester_key": "r2",
+          "domain": "algora.io",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "feasible",
+          "reward": true,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c02",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-ready-03",
+      "category": "persistent_feature_request",
+      "now_epoch": 1800000000,
+      "expect_ready": true,
+      "evidence": [
+        {
+          "challenge_key": "c03",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1788000000,
+          "workaround": true,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c03",
+          "requester_key": "r2",
+          "domain": "news.ycombinator.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c03",
+          "requester_key": "r3",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1792000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-01",
+      "category": "too_few_requesters",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c04",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c04",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-02",
+      "category": "one_domain_only",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c05",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c05",
+          "requester_key": "r2",
+          "domain": "github.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c05",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-03",
+      "category": "too_new",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c06",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1798000000,
+          "workaround": true,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c06",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1798100000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c06",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1798200000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-04",
+      "category": "no_workaround",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c07",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c07",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c07",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-05",
+      "category": "hard_problem",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c08",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "hard",
+          "reward": true,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c08",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "hard",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c08",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "hard",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-06",
+      "category": "already_resolved",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c09",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": true
+        },
+        {
+          "challenge_key": "c09",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": true
+        },
+        {
+          "challenge_key": "c09",
+          "requester_key": "r3",
+          "domain": "github.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-07",
+      "category": "trivial_single_request",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c10",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "id": "challenge-notready-08",
+      "category": "solved_answer_available",
+      "now_epoch": 1800000000,
+      "expect_ready": false,
+      "evidence": [
+        {
+          "challenge_key": "c11",
+          "requester_key": "r1",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": true
+        },
+        {
+          "challenge_key": "c11",
+          "requester_key": "r2",
+          "domain": "github.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": true
+        },
+        {
+          "challenge_key": "c11",
+          "requester_key": "r3",
+          "domain": "news.ycombinator.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "feasible",
+          "reward": false,
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "id": "challenge-ready-04",
+      "category": "unknown_feasibility_allowed",
+      "now_epoch": 1800000000,
+      "expect_ready": true,
+      "evidence": [
+        {
+          "challenge_key": "c12",
+          "requester_key": "r1",
+          "domain": "github.com",
+          "created_at_epoch": 1789000000,
+          "workaround": true,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c12",
+          "requester_key": "r2",
+          "domain": "stackoverflow.com",
+          "created_at_epoch": 1790000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        },
+        {
+          "challenge_key": "c12",
+          "requester_key": "r3",
+          "domain": "news.ycombinator.com",
+          "created_at_epoch": 1791000000,
+          "workaround": false,
+          "feasibility": "unknown",
+          "reward": false,
+          "resolved": false
+        }
+      ]
+    }
+  ]
+}
