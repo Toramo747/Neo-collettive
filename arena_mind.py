@@ -90,12 +90,25 @@ _META_WORDS = {"gen", "generation", "diary", "deep", "need", "needs", "problem",
 _GENERIC_SINGLE = {"automation", "monitoring", "management", "data", "tool", "tools", "software", "workflow", "security", "metadata"}
 
 
+_DANGLING = {"via", "for", "of", "with", "to", "the", "a", "an", "and", "or", "in", "on", "by", "from"}
+# abstract / political debates are not product needs (2026-10-13)
+ABSTRACT_RE = re.compile(
+    r"\b(climate|global warming|politic\w*|election\w*|immigration|religio\w*|abortion|"
+    r"democra\w*|capitalis\w*|socialis\w*|geopolitic\w*|war|government)\b", re.I)
+
+
 def problem_label(value: Any) -> str:
     """Problem names: plain words, 2-6 of them, no diary/meta fragments ("gen 45"),
-    no numbers-only tokens, hyphens/underscores read as spaces."""
+    no numbers-only tokens, hyphens/underscores read as spaces. Truncated tails
+    ("... via c") are trimmed; abstract/political topics are rejected."""
     text = re.sub(r"[-_/]+", " ", str(value or "").lower())
     name = clean_label(text)
     words = name.split()
+    while words and (len(words[-1]) == 1 or words[-1] in _DANGLING):
+        words.pop()
+    name = " ".join(words)
+    if ABSTRACT_RE.search(name):
+        return ""
     if not words or len(words) < 2:
         return ""
     if words[0] in _META_WORDS or any(w.isdigit() for w in words):
@@ -105,14 +118,56 @@ def problem_label(value: Any) -> str:
     return name
 
 
+def _stem(word: str) -> str:
+    if len(word) > 6 and word.endswith("ing"):
+        return word[:-3]
+    if len(word) > 4 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
+
+
+def _stems(name: str) -> set[str]:
+    return {_stem(w) for w in name.split()}
+
+
+def merge_similar(market_map: dict) -> tuple[dict, int]:
+    """Fold entries that are the same problem worded differently into the biggest one
+    (people and payers are unions, never sums). Returns (map, merges)."""
+    out: dict = {}
+    merges = 0
+    for name, v in sorted(market_map.items(), key=lambda kv: (-kv[1].get("people", 0), kv[0])):
+        target = snap_problem(name, list(out))
+        if target in out and target != name:
+            fold_entry(out[target], name, v)
+            merges += 1
+        else:
+            out[name] = dict(v)
+    return out, merges
+
+
+def fold_entry(e: dict, name: str, v: dict) -> None:
+    """Union entry v (called `name`) into e in place."""
+    e["persons"] = list(dict.fromkeys(list(e.get("persons") or []) + list(v.get("persons") or [])))[-200:]
+    e["payers"] = list(dict.fromkeys(list(e.get("payers") or []) + list(v.get("payers") or [])))
+    e["payers"] = [p for p in e["payers"] if p in e["persons"]]
+    e["people"], e["pay"] = len(e["persons"]), len(e["payers"])
+    firsts = [int(x["first_gen"]) for x in (e, v) if x.get("first_gen")]
+    lasts = [int(x["last_gen"]) for x in (e, v) if x.get("last_gen")]
+    if firsts:
+        e["first_gen"] = min(firsts)
+    if lasts:
+        e["last_gen"] = max(lasts)
+    e["aliases"] = sorted(set(e.get("aliases") or []) | {name} | set(v.get("aliases") or []))[:12]
+
+
 def snap_problem(name: str, existing: list[str], threshold: float = 0.6) -> str:
     """Reuse an existing map name when it is the same problem worded slightly differently."""
     if not name or name in existing:
         return name
-    a = set(name.split())
+    a = _stems(name)
     best, score = name, 0.0
     for e in existing:
-        b = set(e.split())
+        b = _stems(e)
         if not b:
             continue
         j = len(a & b) / len(a | b)
