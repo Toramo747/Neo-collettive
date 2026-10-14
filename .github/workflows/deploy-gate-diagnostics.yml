@@ -1,0 +1,46 @@
+name: Deploy gate diagnostics (read-only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          python - <<'PY'
+          # Prints only numeric/boolean aggregates the deploy gates check (no text, no ids).
+          import json, os, sys, urllib.request
+          sys.path.insert(0, "scripts"); sys.path.insert(0, ".")
+          import verify_ingestion_deploy as v
+          O = "https://neo-collettive.onrender.com"
+          def get(path, auth=False):
+              h = {"X-MYCELIX-Self-Traffic": "github-actions-deploy"}
+              if auth: h["Authorization"] = "Bearer " + os.environ["NEO_ADMIN_TOKEN"]
+              with urllib.request.urlopen(urllib.request.Request(O + path, headers=h), timeout=30) as r:
+                  return json.load(r)
+          cp = get("/api/checkpoint-status")
+          print("::notice title=checkpoint::" + json.dumps({k: cp.get(k) for k in ("ok", "stored_bytes", "limit_bytes", "cycles_completed", "commercial_evidence_items", "last_checkpoint_utc")}))
+          st = get("/api/autopilot/status", auth=True)
+          s = v.project(st)
+          if s is None:
+              print("::notice title=ingestion sample::none (running or no latest_result)")
+          else:
+              d = s["ingestion_drought"]
+              out = {"cycle": s["cycle"], "evidence_out": s["evidence_out"], "stored_bytes": s["stored_bytes"],
+                     "drought_rows": len(d.get("rows") or []), "measurement_reliable": d.get("measurement_reliable"),
+                     "unjoined_total": d.get("unjoined_total")}
+              try:
+                  v.accept(s); out["accept"] = "ok"
+              except Exception as e:
+                  out["accept"] = str(e)
+              print("::notice title=ingestion sample::" + json.dumps(out))
+          h = get("/health")
+          print("::notice title=health::" + json.dumps({"neo_version": h.get("neo_version") or h.get("version"), "commit": str(h.get("commit") or "")[:7]}))
+          PY
