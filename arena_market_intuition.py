@@ -56,7 +56,7 @@ BANNED_TERMS = ("pay", "agent", "metadata", "monitoring", "automation")  # too g
 DEEP_QUEUE_CAP = 300
 # Andrea's focus (2026-10-12): follow the first credible signal, monitoring that
 # costs too much (DBA "monitoring tax", "$45/month for 5 things").
-FOCUS_TERMS = ("database monitoring", "monitoring cost", "observability pricing", "metadata monitoring")
+FOCUS_TERMS = ("agent quality drop", "llm regression alert", "eval in production", "agent silent failure")  # 2026-10-14: validate the one real lead
 FOCUS_SLOTS = 2
 USER_AGENT = "MYCELIX-market-intuition-arena/1 (public read-only research)"
 
