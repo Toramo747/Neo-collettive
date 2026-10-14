@@ -1,0 +1,43 @@
+name: MYCELIX Collective Mind on Common (private)
+on:
+  schedule:
+    - cron: "11 8 * * *"     # post the day's tasks
+    - cron: "41 */6 * * *"   # collect + verify replies
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "post | collect"
+        required: true
+        default: collect
+permissions:
+  contents: read
+concurrency:
+  group: collective-common
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - run: |
+          set -euo pipefail
+          stage="${{ inputs.stage }}"
+          if [ -z "$stage" ]; then
+            if [ "${{ github.event.schedule }}" = "11 8 * * *" ]; then stage=post; else stage=collect; fi
+          fi
+          if [ "$stage" = "post" ]; then python tools/collective_common.py post private-labels; fi
+          python tools/collective_common.py collect private-labels
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add collective
+          git -C private-labels commit --quiet -m "ops: collective mind on Common" || exit 0
+          git -C private-labels pull --quiet --rebase
+          git -C private-labels push --quiet
