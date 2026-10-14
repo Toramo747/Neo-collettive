@@ -14,12 +14,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-# A newer saved generation whose own checkpoint has not been refreshed for this
-# long belongs to a writer that is gone (2026-10-13 incident: a rolled-back
-# deploy wrote once, then stopped; the surviving instance was blocked from
-# saving for ~10 hours and every later deploy failed its checkpoint gates).
-ABANDONED_AFTER_SECONDS = 1200
-
 GUARD_FIELD = "state_generation"
 WRITER_FIELD = "state_writer_id"
 
@@ -31,18 +25,6 @@ def state_generation_of(payload: Any) -> int:
         return max(0, int(payload.get(GUARD_FIELD) or 0))
     except (TypeError, ValueError):
         return 0
-
-
-def _saved_checkpoint_age_seconds(payload: dict, now: datetime) -> float | None:
-    raw = ((payload.get("last_checkpoint") or {}).get("checkpoint_utc")
-           or payload.get("state_saved_at_utc") or "")
-    try:
-        ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
-    return (now - ts).total_seconds()
 
 
 def check_write_allowed(
@@ -74,13 +56,8 @@ def check_write_allowed(
         # Our own earlier write whose response was lost: adopt it.
         return {"allowed": True, "status": "own_write_adopted", "loaded_generation": saved, "saved_generation": saved}
     if saved > loaded:
-        age = _saved_checkpoint_age_seconds(saved_payload, now or datetime.now(timezone.utc))
-        if age is not None and age >= ABANDONED_AFTER_SECONDS:
-            # The newer writer stopped writing long ago: this live process is the
-            # only writer left. Continue the lineage on top of the saved generation.
-            return {"allowed": True, "status": "abandoned_newer_generation_adopted",
-                    "loaded_generation": saved, "saved_generation": saved,
-                    "abandoned_age_seconds": int(age)}
+        # Age does not prove writer death. Restore the durable payload before
+        # continuing its lineage; never relabel stale in-memory state.
         return {"allowed": False, "status": "stale_generation_write_blocked",
                 "loaded_generation": loaded, "saved_generation": saved}
     return {"allowed": True, "status": "ok", "loaded_generation": loaded, "saved_generation": saved}

@@ -34,6 +34,26 @@ class PinningTests(unittest.TestCase):
         self.assertEqual(seen["host_header"], "example.org")
         self.assertEqual(seen["sni"], "example.org")
 
+    def test_bounded_request_retains_trace_headers_but_not_cookies(self):
+        def handler(request):
+            return httpx.Response(200, json={"result": {}}, headers={
+                "traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01",
+                "traceresponse": "echoed-trace", "set-cookie": "private=secret"})
+
+        async def fake_validate(url):
+            return {"host": "example.org", "resolved_ips": ["93.184.215.14"]}
+
+        async def run():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                return await v._bounded_request(client, "POST", "https://example.org/mcp", json_body={})
+
+        from unittest.mock import patch
+        with patch.object(v, "validate_public_https", fake_validate):
+            result = asyncio.run(run())
+        self.assertEqual(result["headers"]["traceresponse"], "echoed-trace")
+        self.assertIn("a" * 32, result["headers"]["traceparent"])
+        self.assertNotIn("set-cookie", result["headers"])
+
     def test_ipv6_and_blocked_ip(self):
         url, headers, ext = v.pin_to_resolved_ip("https://h.example/x", {"host": "h.example", "resolved_ips": ["2606:4700::1111"]}, {})
         self.assertTrue(url.startswith("https://[2606:4700::1111]/"))

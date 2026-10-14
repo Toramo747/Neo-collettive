@@ -396,6 +396,7 @@ jobs:
             cat /tmp/predeploy-checkpoint.json
             git fetch --quiet --force origin main:refs/remotes/origin/main
             git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
+            git show origin/main:neo_cycle_floor.json > /tmp/predeploy-cycle-floor.json
             if python - <<'PY'
           import json
           d=json.load(open("/tmp/predeploy-checkpoint.json",encoding="utf-8"))

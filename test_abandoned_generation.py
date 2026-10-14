@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from state_generation_guard import ABANDONED_AFTER_SECONDS, check_write_allowed
+from state_generation_guard import check_write_allowed
 
 NOW = datetime(2026, 10, 14, 2, 0, tzinfo=timezone.utc)
 
@@ -21,11 +21,11 @@ class AbandonedGenerationTests(unittest.TestCase):
         self.assertFalse(g["allowed"])
         self.assertEqual(g["status"], "stale_generation_write_blocked")
 
-    def test_abandoned_newer_writer_is_adopted(self):
-        g = run(10, saved(12, ABANDONED_AFTER_SECONDS + 5))
-        self.assertTrue(g["allowed"])
-        self.assertEqual(g["status"], "abandoned_newer_generation_adopted")
-        self.assertEqual(g["loaded_generation"], 12)
+    def test_old_newer_writer_stays_blocked(self):
+        g = run(10, saved(12, 24 * 3600))
+        self.assertFalse(g["allowed"])
+        self.assertEqual(g["status"], "stale_generation_write_blocked")
+        self.assertEqual(g["loaded_generation"], 10)
 
     def test_missing_timestamp_stays_blocked(self):
         g = run(10, {"state_generation": 12, "state_writer_id": "other"})
