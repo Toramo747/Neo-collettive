@@ -65,3 +65,21 @@ jobs:
           h = get("/health")
           print("::notice title=health::" + json.dumps({"neo_version": h.get("neo_version") or h.get("version"), "commit": str(h.get("commit") or "")[:7]}))
           PY
+      - name: A2A registry position of Common (read-only)
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          def get(q):
+              with urllib.request.urlopen(urllib.request.Request("https://a2aregistry.org/api/agents?" + q, headers={"Accept": "application/json", "User-Agent": "NEO-diag/1"}), timeout=30) as r:
+                  d = json.load(r)
+              return d.get("agents") or d.get("items") or d.get("data") or (d if isinstance(d, list) else [])
+          for q in ("limit=12&task_verified=true", "limit=100&task_verified=true", "limit=100&search=common"):
+              rows = get(q)
+              pos = [i for i, a in enumerate(rows) if "common" in str(a.get("name", "")).lower() or "dooza" in json.dumps(a).lower()]
+              info = {}
+              if pos:
+                  a = rows[pos[0]]
+                  info = {k: a.get(k) for k in ("name", "task_verified", "conformance", "updated_at", "created_at", "last_verified_at", "verified_at") if k in a}
+              print("::notice title=registry " + q + "::" + json.dumps({"rows": len(rows), "common_positions": pos, "common": info}))
+          PY
+
