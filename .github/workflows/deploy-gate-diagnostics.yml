@@ -35,6 +35,20 @@ jobs:
                 "reason_type": reason.split(":", 1)[0], "reason_has_size_word": any(w in reason.lower() for w in ("byte", "size", "limit", "large", "exceed")),
                 "raw_bytes": lc.get("raw_bytes"), "stored_bytes": lc.get("stored_bytes"),
                 "compaction_numbers": {k: v2 for k, v2 in comp.items() if isinstance(v2, (int, float, bool))}}))
+          ap = st.get("autopilot") or {}
+          def brief(o, depth=0):
+              if isinstance(o, dict):
+                  return {k: brief(x, depth + 1) for k, x in list(o.items())[:12]} if depth < 2 else f"dict[{len(o)}]"
+              if isinstance(o, list):
+                  return f"list[{len(o)}]"
+              if isinstance(o, str):
+                  return o[:40] if any(w in o for w in ("20", "ok", "error", "skip")) else f"str[{len(o)}]"
+              return o
+          keys = {k: brief(x) for k, x in ap.items() if any(w in k.lower() for w in ("a2a", "agent", "common", "collab", "dialog"))}
+          print("::notice title=a2a state::" + json.dumps(keys, default=str)[:3500])
+          lr = ap.get("latest_result") or {}
+          lk = {k: brief(x) for k, x in lr.items() if any(w in k.lower() for w in ("a2a", "agent", "collab", "research"))}
+          print("::notice title=latest result a2a::" + json.dumps(lk, default=str)[:3500])
           s = v.project(st)
           if s is None:
               print("::notice title=ingestion sample::none (running or no latest_result)")
