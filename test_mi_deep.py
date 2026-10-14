@@ -17,7 +17,7 @@ class DeepMindTests(unittest.TestCase):
             "invoice reconcile": {"people": 2, "pay": 0, "persons": ["p1", "p2"]},
             "reconciling invoices": {"people": 1, "pay": 0, "persons": ["p3"]},
             "noise thing": {"people": 1, "pay": 0, "persons": ["p4"]}},
-            "deep_queue": [{"person": "p4", "need": "x"}, {"person": "p5", "need": "y"}],
+            "deep_queue": [{"person": "p4", "need": "x"}, {"person": "p5", "need": "We reconcile every invoice by hand, we would pay for a fix"}],
             "vocabulary": {"crm": 1.0}}
         inbox = {"run_id": "r1", "model": "m", "minutes": 30, "verdicts": [
             {"person": "p4", "real_need": False, "problem": "", "would_pay": "no"},

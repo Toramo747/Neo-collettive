@@ -158,6 +158,9 @@ def fold_entry(e: dict, name: str, v: dict) -> None:
     if lasts:
         e["last_gen"] = max(lasts)
     e["aliases"] = sorted(set(e.get("aliases") or []) | {name} | set(v.get("aliases") or []))[:12]
+    if e.get("needs") or v.get("needs"):
+        e["needs"] = {p: n for p, n in {**dict(v.get("needs") or {}), **dict(e.get("needs") or {})}.items()
+                      if p in e["persons"]}
 
 
 def snap_problem(name: str, existing: list[str], threshold: float = 0.6) -> str:
@@ -277,3 +280,65 @@ def consolidate(model: str, names: list[str], gen: Callable = ollama_generate) -
         if a in allowed and b in allowed and a != b:
             out.append({"from": a, "into": b})
     return out[:60]
+
+
+# ---- honest map (2026-10-14): Andrea found 'X would pay' counts and groups inflated.
+# A payer needs a real first-person sentence about paying for a tool/service; a person
+# joins a problem only if their sentence shares the problem's specific words.
+_PAY_RE = re.compile(
+    r"\b(i|we)\s*(would|'d|will|'ll)\s+(happily\s+|gladly\s+|definitely\s+)?pay\b|\btake my money\b|"
+    r"\b(budget for|willing to pay|we pay for|i pay for|i'm paying|we're paying|paid plan|subscription)\b", re.I)
+_PAY_NOT = re.compile(
+    r"\bpay\s+(a lot|dearly|the price|attention|for it later|a penalty|in terms|heavily in|a cost|with my|with our)", re.I)
+_NAME_GENERIC = {"service", "services", "tool", "tools", "software", "system", "systems", "solution", "solutions",
+                 "platform", "issue", "issues", "problem", "problems", "using", "use", "based", "specific", "multiple",
+                 "data", "need", "needs", "way", "better", "new", "management", "manage", "automation", "process",
+                 "subscription", "pay", "for", "of", "the", "and", "to", "in", "on", "with", "from", "a", "an"}
+
+
+def strict_pay(sentence: str) -> bool:
+    s = str(sentence or "")
+    if not _PAY_RE.search(s) or _PAY_NOT.search(s):
+        return False
+    if re.search(r"\b(not|n't|never|won't|wouldn't)\s+(be\s+)?(willing\s+to\s+)?pay\b|\btax(es)?\b|\btax money\b", s, re.I):
+        return False
+    # "So I would pay $45/month for ...?" is a complaint about a price, not an intent to buy
+    if re.search(r"\bwould pay\b", s, re.I) and s.strip().endswith("?"):
+        return False
+    return True
+
+
+def coherent(name: str, sentence: str) -> bool:
+    core = {w[:6] for w in str(name or "").split() if w not in _NAME_GENERIC and len(w) > 2}
+    if not core:
+        return False
+    # 6-letter prefixes: "reconciling" ~ "reconciliation", "invoices" ~ "invoice"
+    words = {w[:6] for w in re.findall(r"[a-z0-9]+", str(sentence or "").lower()) if len(w) > 2}
+    return len(core & words) >= min(2, len(core))
+
+
+def rebuild_map(market_map: dict, needs: dict) -> tuple[dict, dict]:
+    """Re-derive persons/payers of every entry from the people's own sentences."""
+    out, stats = {}, {"entries_before": len(market_map), "persons_before": 0, "persons_after": 0,
+                      "payers_before": 0, "payers_after": 0, "unknown_need": 0}
+    for name, v in market_map.items():
+        persons = list(v.get("persons") or [])
+        stats["persons_before"] += len(persons)
+        stats["payers_before"] += len(v.get("payers") or [])
+        keep = []
+        for p in persons:
+            need = needs.get(p)
+            if need is None:
+                stats["unknown_need"] += 1
+            elif coherent(name, need):
+                keep.append(p)
+        if not keep:
+            continue
+        payers = [p for p in keep if strict_pay(needs.get(p, ""))]
+        e = dict(v, persons=keep, payers=payers, people=len(keep), pay=len(payers),
+                 needs={p: needs[p][:300] for p in keep})
+        out[name] = e
+        stats["persons_after"] += len(keep)
+        stats["payers_after"] += len(payers)
+    stats["entries_after"] = len(out)
+    return out, stats

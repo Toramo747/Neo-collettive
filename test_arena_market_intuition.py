@@ -142,7 +142,8 @@ class FixesTests(unittest.TestCase):
                                        mind_model="fake", mind_gen=lambda m, p, s: {})
         self.assertLessEqual(state["market_map"]["db cost"]["pay"], state["market_map"]["db cost"]["people"])
         inbox = {"verdicts": [{"person": "a", "real_need": True, "problem": "db cost", "would_pay": "yes"}] * 2}
-        st2 = a.apply_deep({"market_map": {"db cost": {"people": 1, "pay": 0, "persons": ["b"], "payers": []}}}, inbox)
+        st2 = a.apply_deep({"market_map": {"db cost": {"people": 1, "pay": 0, "persons": ["b"], "payers": []}},
+                            "deep_queue": [{"person": "a", "need": "We would pay for anything that cuts our db cost"}]}, inbox)
         self.assertEqual(st2["market_map"]["db cost"]["pay"], 1)
         self.assertEqual(st2["market_map"]["db cost"]["people"], 2)
 
@@ -207,10 +208,34 @@ class LabelHygieneTests(unittest.TestCase):
         stale = a.PHRASES[0]
         pop = [a.clamp({"id": f"x{i}", "phrases": [stale, a.PHRASES[1]], "terms": ["tax"], "sources": ["hn_comments"]})
                for i in range(a.POPULATION)]
-        st = {"population": pop, "phrase_dry": {stale: a.STALE_PHRASE_GENS - 1}}
+        # a generation where nobody is found does not make phrases staler (2026-10-14)
+        st0 = {"population": pop, "phrase_dry": {stale: 1}}
+        s0, _, _ = a.run_generation(st0, getter=empty, seed=1)
+        self.assertEqual(s0["phrase_dry"].get(stale), 1)
+        st = {"population": pop, "phrase_dry": {stale: a.STALE_PHRASE_GENS}}
         state, summary, _ = a.run_generation(st, getter=empty, seed=1)
         self.assertGreaterEqual(summary["stale_phrases"], 1)
         self.assertTrue(all(stale not in g["phrases"] for g in state["population"]))
+
+
+    def test_strict_pay_and_coherence(self):
+        import arena_mind as m
+        self.assertFalse(m.strict_pay("Obviously that means I'd pay a lot in terms of memory footprint"))
+        self.assertFalse(m.strict_pay("So I would pay $45/month for metadata monitoring on just 5 things?"))
+        self.assertTrue(m.strict_pay("I would happily pay for a tool that alerts me when quality drops"))
+        self.assertFalse(m.coherent("metadata monitoring", "How do you fix Eclipse Metadata breaking between OSes"))
+        self.assertTrue(m.coherent("invoice reconciliation", "I spend hours reconciling invoices by hand"))
+
+    def test_rebuild_map_drops_incoherent_people_and_fake_payers(self):
+        import arena_mind as m
+        mm = {"metadata monitoring": {"people": 3, "pay": 2, "persons": ["a", "b", "c"], "payers": ["a", "b"]}}
+        needs = {"a": "Is there metadata monitoring that alerts on schema changes? I would pay for it",
+                 "b": "Eclipse metadata breaks when I switch OS, I'd pay a lot in terms of time",
+                 "c": "We need monitoring of dataset metadata drift"}
+        out, stats = m.rebuild_map(mm, needs)
+        e = out["metadata monitoring"]
+        self.assertEqual((e["people"], e["pay"]), (2, 1))
+        self.assertEqual(stats["persons_before"], 3)
 
 
 if __name__ == "__main__":

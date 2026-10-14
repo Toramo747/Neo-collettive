@@ -52,6 +52,7 @@ VOCAB_CAP = 240
 ARCHIVE_CAP = 20000
 STAGNATION_WINDOW = 6
 STALE_PHRASE_GENS = 3
+BANNED_TERMS = ("pay", "agent", "metadata", "monitoring", "automation")  # too generic to be a market
 DEEP_QUEUE_CAP = 300
 # Andrea's focus (2026-10-12): follow the first credible signal, monitoring that
 # costs too much (DBA "monitoring tax", "$45/month for 5 things").
@@ -317,8 +318,7 @@ def collect(hits_by_query: list[tuple[dict, list[dict]]]) -> tuple[int, list[tup
 def score(total: int, demand: list[tuple[dict, dict]], archive: set[str], market_map: dict | None = None) -> dict:
     people = {row["person"] for _, row in demand}
     novel = {p for p in people if p not in archive}
-    money = {row["person"] for _, row in demand
-             if row.get("would_pay") == "yes" or mi.PAY_RE.search(row["need"])}
+    money = {row["person"] for _, row in demand if arena_mind.strict_pay(row["need"])}
     by_term: dict[str, set[str]] = defaultdict(set)
     for q, row in demand:
         by_term[row.get("problem") or q["term"]].add(row["person"])
@@ -427,7 +427,8 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         cands = cands[:arena_mind.MAX_JUDGED]
         verdicts = arena_mind.judge(mind_model, [c["need"] for c in cands], gen=gen_fn)
         by_person = {c["person"]: v for c, v in zip(cands, verdicts)}
-        real = [dict(c, **by_person[c["person"]]) for c in cands if by_person[c["person"]]["real_need"]]
+        real = [dict(c, **by_person[c["person"]], judge_problem=by_person[c["person"]].get("problem"))
+                for c in cands if by_person[c["person"]]["real_need"]]
         stats = {"hits": sum(r["hits"] for _, r in results), "candidates": len(cands), "real_needs": len(real)}
         thought = arena_mind.think(mind_model, needs=real, market_map=market_map, diary=diary,
                                    idea_outcomes=idea_log, stats=stats, gen=gen_fn)
@@ -436,6 +437,11 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
                 real[a["i"]]["problem"] = a["problem"]
         for row in real:
             name = arena_mind.snap_problem(row.get("problem") or "", list(market_map))
+            if name and not arena_mind.coherent(name, row["need"]):
+                # the snapped/assigned name does not match what the person wrote:
+                # fall back to the judge's own label, else leave the person unmapped
+                own = arena_mind.problem_label(row.get("judge_problem"))
+                name = own if own and arena_mind.coherent(own, row["need"]) else ""
             row["problem"] = name
             if not name:
                 continue
@@ -443,7 +449,8 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
             if row["person"] not in entry["persons"]:
                 entry["persons"] = (entry["persons"] + [row["person"]])[-200:]
                 entry["people"] = len(entry["persons"])
-            if row.get("would_pay") == "yes":
+            entry.setdefault("needs", {})[row["person"]] = row["need"][:300]
+            if arena_mind.strict_pay(row["need"]):
                 entry["payers"] = list(entry.get("payers") or []) + [row["person"]]
             _sync_pay(entry)
             entry["last_gen"] = gen
@@ -471,6 +478,8 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
     results.sort(key=lambda x: x[1]["fitness"], reverse=True)
     all_demand = [d for _, r in results for d in r["_demand"]]
     vocab = learn_vocab(vocab, all_demand, {t for g, _ in results for t in g["terms"]})
+    for banned in BANNED_TERMS:
+        vocab.pop(banned, None)
     new_people = set().union(*(r["_novel"] for _, r in results)) if results else set()
     archive_list = (list(state.get("archive") or []) + sorted(new_people - archive))[-ARCHIVE_CAP:]
 
@@ -480,7 +489,11 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
                 all(x["novel_people"] == 0 for x in history[-STAGNATION_WINDOW:]))
     immigrants = 3 if stagnant else 1
 
-    nxt = [dict(g, id=g["id"]) for g, _ in results[:ELITES]]
+    # elites are dropped while the search is stagnant, so a stuck champion cannot
+    # keep the population converged (2026-10-14: same elite for 7+ generations)
+    nxt = [] if stagnant else [dict(g, id=g["id"]) for g, _ in results[:ELITES]]
+    if stagnant:
+        immigrants = max(immigrants, 4)
     def tourney() -> dict:
         a, b = rng.sample(results, 2) if len(results) > 1 else (results[0], results[0])
         return (a if a[1]["fitness"] >= b[1]["fitness"] else b)[0]
@@ -506,7 +519,12 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
     used_phrases = {p for g, _ in results for p in g["phrases"]}
     fresh_phrases = {q["phrase"] for q, row in all_demand if row["person"] in new_people}
     for ph in used_phrases:
-        phrase_dry[ph] = 0 if ph in fresh_phrases else phrase_dry.get(ph, 0) + 1
+        if ph in fresh_phrases:
+            phrase_dry[ph] = 0
+        elif fresh_phrases:
+            # only a phrase that stays dry while others find people is stale; in a
+            # generation where nobody is found, the terms are the problem (2026-10-14)
+            phrase_dry[ph] = phrase_dry.get(ph, 0) + 1
     stale = {ph for ph, n in phrase_dry.items() if n >= STALE_PHRASE_GENS}
     LEARNED_PHRASES[:] = [ph for ph in LEARNED_PHRASES if ph not in stale]
     pool = [ph for ph in all_phrases() if ph not in stale] or list(all_phrases())
@@ -577,6 +595,7 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "diary": diary[-60:], "idea_log": idea_log[-200:], "learned_phrases": list(LEARNED_PHRASES),
         "last_thought": thought,
         "phrase_dry": phrase_dry,
+        "map_version": state.get("map_version") or (2 if not state.get("market_map") else None),
         "deep_queue": deep_queue,
         "deep_judged": list(state.get("deep_judged") or [])[-5000:],
         "deep_log": list(state.get("deep_log") or [])[-100:],
@@ -585,7 +604,7 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "generation": gen, "term": q["term"], "phrase": q["phrase"], "source": q["source"],
         "url": row["url"], "title": row["title"][:200], "need": row["need"][:400], "excerpt": row["excerpt"][:600],
         "date": row.get("date"), "person": row["person"],
-        "money": bool(row.get("would_pay") == "yes" or mi.PAY_RE.search(row["need"])),
+        "money": arena_mind.strict_pay(row["need"]),
         "problem": row.get("problem"),
     } for q, row in all_demand if row["person"] in new_people]
     seen_people: set[str] = set()
@@ -610,16 +629,19 @@ def apply_deep(state: dict, inbox: dict) -> dict:
     st = dict(state)
     mm = {k: dict(v, persons=list(v.get("persons") or []), payers=list(v.get("payers") or [])) for k, v in (st.get("market_map") or {}).items()}
     verdicts = [v for v in inbox.get("verdicts") or [] if isinstance(v, dict) and v.get("person")]
+    queued_needs = {x.get("person"): x.get("need") or "" for x in st.get("deep_queue") or []}
     judged_people = {v["person"] for v in verdicts}
     for entry in mm.values():
         entry["persons"] = [p for p in entry["persons"] if p not in judged_people]
     gen = int(st.get("generation") or 0)
     for v in verdicts:
         name = arena_mind.snap_problem(arena_mind.problem_label(v.get("problem")), list(mm))
-        if v.get("real_need") and name:
+        need = queued_needs.get(v["person"]) or ""
+        if v.get("real_need") and name and need and arena_mind.coherent(name, need):
             e = mm.setdefault(name, {"people": 0, "pay": 0, "first_gen": gen, "persons": [], "payers": []})
             e["persons"].append(v["person"])
-            if v.get("would_pay") == "yes":
+            e.setdefault("needs", {})[v["person"]] = need[:300]
+            if arena_mind.strict_pay(need):
                 e["payers"].append(v["person"])
             e["last_gen"] = gen
             e["deep"] = True
@@ -681,6 +703,22 @@ def main() -> int:
             print("::notice title=Market Intuition deep mind::applied one deep reflection")
         except Exception as exc:
             print("::warning title=Market Intuition deep mind::could not apply: " + type(exc).__name__)
+    if state.get("map_version") != 2 and state.get("market_map"):
+        needs: dict = {}
+        disc = base / "discoveries.jsonl"
+        for line in (disc.read_text().splitlines() if disc.exists() else []):
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            needs.setdefault(d.get("person"), d.get("need") or "")
+        for x in state.get("deep_queue") or []:
+            needs.setdefault(x.get("person"), x.get("need") or "")
+        rebuilt, stats = arena_mind.rebuild_map(state["market_map"], needs)
+        rebuilt, merges = arena_mind.merge_similar(rebuilt)
+        state = dict(state, market_map=rebuilt, map_version=2)
+        stats["merges"] = merges
+        print("::notice title=Market Intuition honest map::" + json.dumps(stats, separators=(",", ":")))
     model = os.getenv("MI_LLM_MODEL", "").strip()
     if model and not arena_mind.available(model):
         print("::warning title=Market Intuition mind::local LLM not available, running without it")
