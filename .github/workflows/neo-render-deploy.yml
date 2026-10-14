@@ -350,6 +350,7 @@ jobs:
       - name: Force durable checkpoint before deploy
         env:
           EMERGENCY_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.emergency_deploy }}
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
           target="https://neo-collettive.onrender.com/api/checkpoint-status"
@@ -422,6 +423,8 @@ jobs:
           PY
             then
               echo "Healthy durable checkpoint confirmed; memory integrity passed without publication freshness dependency."
+            elif [ "${EMERGENCY_DEPLOY}" = "true" ] && python scripts/continuity_block_bootstrap.py; then
+              echo "::warning::EMERGENCY_DEPLOY: running instance is continuity-blocked; runtime memory integrity verified, deploying the fix"
             else
               git fetch --quiet --force origin main:refs/remotes/origin/main
               git show origin/main:neo_latest_result.json > /tmp/predeploy-public-snapshot.json
