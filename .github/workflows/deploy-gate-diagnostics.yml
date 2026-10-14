@@ -28,6 +28,13 @@ jobs:
           cp = get("/api/checkpoint-status")
           print("::notice title=checkpoint::" + json.dumps({k: cp.get(k) for k in ("ok", "stored_bytes", "limit_bytes", "cycles_completed", "commercial_evidence_items", "last_checkpoint_utc")}))
           st = get("/api/autopilot/status", auth=True)
+          lc = (st.get("autopilot") or {}).get("last_checkpoint") or {}
+          reason = str(lc.get("reason") or "")
+          comp = lc.get("compaction") or {}
+          print("::notice title=last checkpoint::" + json.dumps({"ok": lc.get("ok"), "status": lc.get("status"),
+                "reason_type": reason.split(":", 1)[0], "reason_has_size_word": any(w in reason.lower() for w in ("byte", "size", "limit", "large", "exceed")),
+                "raw_bytes": lc.get("raw_bytes"), "stored_bytes": lc.get("stored_bytes"),
+                "compaction_numbers": {k: v2 for k, v2 in comp.items() if isinstance(v2, (int, float, bool))}}))
           s = v.project(st)
           if s is None:
               print("::notice title=ingestion sample::none (running or no latest_result)")
