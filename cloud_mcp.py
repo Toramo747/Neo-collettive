@@ -193,7 +193,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.56"  # HN retrieval trial: comments, 10 per request
+VERSION = "0.99.57"  # checkpoint: adopt abandoned newer generation; verifier SEP-414 probe
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -1756,7 +1756,7 @@ async def _checkpoint_state_to_render() -> dict:
         }
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
-    if guard.get("status")=="own_write_adopted":
+    if guard.get("status") in ("own_write_adopted","abandoned_newer_generation_adopted"):
         AUTOPILOT_STATE["state_generation"]=int(guard.get("loaded_generation") or 0)
     new_state_generation=next_generation(int(AUTOPILOT_STATE.get("state_generation") or 0))
 
