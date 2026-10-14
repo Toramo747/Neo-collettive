@@ -1,0 +1,27 @@
+name: Verify agent evidence quotes (private)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - run: |
+          set -euo pipefail
+          python tools/verify_quotes.py private-labels
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/verify_results.json
+          git -C private-labels commit --quiet -m "ops: quote verification" || exit 0
+          git -C private-labels pull --quiet --rebase
+          git -C private-labels push --quiet
