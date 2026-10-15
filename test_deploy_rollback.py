@@ -30,6 +30,12 @@ class RollbackTests(unittest.TestCase):
         self.git('commit', '-qm', 'test')
         return self.git('rev-parse', 'HEAD')
 
+    def test_snapshot_only_failed_commit_is_never_reverted(self):
+        data = self.commit('data/arena/a2a-recovery/state.json', '{"gen": 2}')
+        self.assertFalse(revert_failed(data))
+        self.assertEqual(self.git('rev-parse', 'HEAD'), data)
+        self.assertEqual(Path('data/arena/a2a-recovery/state.json').read_text(), '{"gen": 2}')
+
     def test_same_commit_allowed(self):
         self.assertTrue(rollback_allowed(self.failed))
 

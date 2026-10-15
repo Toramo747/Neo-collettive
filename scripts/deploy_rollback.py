@@ -44,6 +44,11 @@ def revert_failed(failed):
         return False
     if not rollback_allowed(failed):
         return False
+    # 2026-10-15: a manual deploy dispatched while an arena data commit was the
+    # head of main "failed" on that commit, and the rollback reverted arena data.
+    # A snapshot/arena-only commit is never the application change to undo.
+    if snapshot_only(git('diff-tree', '--no-commit-id', '--name-only', '-r', '--root', failed).splitlines()):
+        return False
     parents = git('rev-list', '--parents', '-n', '1', failed).split()[1:]
     if not parents:
         return False
