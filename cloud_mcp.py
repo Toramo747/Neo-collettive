@@ -193,7 +193,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.58"  # local state saves debounced off the request path (event-loop stalls); #315 continuity
+VERSION = "0.99.59"  # lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -3466,11 +3466,11 @@ async def _advertise_public_agent() -> dict:
             }
         return "a2a_registry",row
 
-    # A2A Recovery Arena champion g0-6:
-    # concurrent registries, 3s per-registry cap, AllAgents-first result order.
+    # A2A Recovery Arena champion g16-7 (2026-10-15, Andrea): concurrent
+    # registries, 3s per-registry cap, community-first result order.
     registry_rows=await asyncio.gather(
-        advertise_allagents(),
         advertise_community(),
+        advertise_allagents(),
         advertise_global(),
     )
     registries={name:row for name,row in registry_rows}
@@ -3893,6 +3893,39 @@ def _trusted_agent_rows(min_accepted: int = 1, limit: int = 12, stage: str = "ge
         reverse=True
     )
     return [(agent_id,row) for agent_id,row,_,_ in rows[:max(1,limit)]]
+
+
+# 2026-10-15 (Andrea): lightweight probes only see the registry's top 12
+# task-verified agents, so agents that already worked for NEO dropped out when
+# others ranked higher (Common, 13th since 13/10). Keep them reachable: Common's
+# job board plus the single best historical performer, bounded so probes stay light.
+LIGHTWEIGHT_PINNED_ENABLED = True
+LIGHTWEIGHT_PINNED_TIMEOUT_SECONDS = 5.0
+COMMON_PINNED_AGENT = {
+    "id": "agent-commons",
+    "name": "Agent Commons",
+    "url": common_jobs.COMMON_A2A_URL,
+    "description": "Agent Commons public job board: research jobs answered by other agents with public credit",
+}
+
+
+async def _lightweight_pinned_agents(candidates: list[dict], exclude_ids: set[str], stage: str) -> list[dict]:
+    if not LIGHTWEIGHT_PINNED_ENABLED:
+        return []
+    out: list[dict] = []
+    if not any(common_jobs.is_common_agent(a) for a in candidates if isinstance(a, dict)):
+        out.append(dict(COMMON_PINNED_AGENT, _pinned=True, _matched_queries=["pinned_common_job_board"]))
+    try:
+        trusted = await asyncio.wait_for(
+            _trusted_agent_details(limit=1, exclude_ids=exclude_ids, stage=stage),
+            timeout=LIGHTWEIGHT_PINNED_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        trusted = []
+    for agent in trusted:
+        if isinstance(agent, dict):
+            out.append(dict(agent, _pinned=True))
+    return out
 
 
 async def _trusted_agent_details(limit: int = 8, exclude_ids: set[str] | None = None, stage: str = "general") -> list[dict]:
@@ -4319,7 +4352,7 @@ async def ask_agents_data(
         for a in candidates if isinstance(a,dict)
     }
     trusted_pool=(
-        []
+        await _lightweight_pinned_agents(candidates,existing_ids,trust_stage)
         if lightweight
         else await _trusted_agent_details(limit=max_agents*2,exclude_ids=existing_ids,stage=trust_stage)
     )
@@ -4340,6 +4373,9 @@ async def ask_agents_data(
         if agent.get("_trusted_pool"):
             score += 6
             reasons.append("historically accepted trusted-pool agent for "+trust_stage)
+        if agent.get("_pinned"):
+            score += 6
+            reasons.append("pinned: worked for NEO before, kept outside the registry top-12")
         if agent.get("_seti_admitted"):
             score += 3
             reasons.append("provisional SETI-admitted agent; low initial trust")
