@@ -49,7 +49,7 @@ jobs:
               if isinstance(o, dict):
                   for k, v in o.items():
                       p = path + "/" + k
-                      if k in ("market_inference", "candidate_counts", "tool_opportunities"):
+                      if k in ("market_inference", "candidate_counts", "tool_opportunities", "council_history"):
                           found[p] = v
                       elif len(found) < 400:
                           walk(v, p)
@@ -60,7 +60,7 @@ jobs:
           os.makedirs("private-labels/market-inference", exist_ok=True)
           out = {"exported_at_utc": datetime.now(timezone.utc).isoformat(), "paths": found}
           json.dump(out, open("private-labels/market-inference/shadow-export.json", "w"), indent=1)
-          mi = [v for p, v in found.items() if p.endswith("/market_inference") and isinstance(v, dict)]
+          mi = [o.get("market_inference") for c in (found.get("/council_history") or []) for o in (c.get("top5") or []) if isinstance(o, dict) and isinstance(o.get("market_inference"), dict)]
           print("::notice title=shadow aggregate::" + json.dumps({
               "paths": len(found), "assessments": len(mi),
               "shadow_pass": sum(1 for v in mi if v.get("shadow_gate_pass"))}))
