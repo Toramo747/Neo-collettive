@@ -32,8 +32,9 @@ class A2ADiscoveryStartupTests(unittest.TestCase):
         allagents=body.index("advertise_allagents()",gather)
         community=body.index("advertise_community()",gather)
         global_registry=body.index("advertise_global()",gather)
-        self.assertLess(allagents,community)
-        self.assertLess(community,global_registry)
+        # Champion g16-7 (2026-10-15): community-first ordering.
+        self.assertLess(community,allagents)
+        self.assertLess(allagents,global_registry)
 
     def test_registry_clients_share_bounded_arena_timeout(self):
         body=self.body
