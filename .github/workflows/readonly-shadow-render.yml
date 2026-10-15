@@ -1,0 +1,73 @@
+name: Read-only shadow export and Render deploy status
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render deploy status (read-only; statuses and public commit ids only)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(
+              "https://api.render.com/v1/services/srv-dampj8bm8hqs73ac0an0/deploys?limit=6",
+              headers={"Authorization": "Bearer " + os.environ["RENDER_API_KEY"], "Accept": "application/json"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              rows = json.load(r)
+          for row in rows:
+              d = row.get("deploy") or row
+              print("::notice title=render deploy::" + json.dumps({
+                  "commit": str((d.get("commit") or {}).get("id") or "")[:8],
+                  "status": d.get("status"), "trigger": d.get("trigger"),
+                  "created": d.get("createdAt"), "finished": d.get("finishedAt")}))
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Export market-inference shadow data to the private archive only
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          h = {"X-MYCELIX-Self-Traffic": "github-actions-deploy",
+               "Authorization": "Bearer " + os.environ["NEO_ADMIN_TOKEN"]}
+          with urllib.request.urlopen(urllib.request.Request(
+                  "https://neo-collettive.onrender.com/api/autopilot/status", headers=h), timeout=60) as r:
+              ap = json.load(r).get("autopilot") or {}
+          found = {}
+          def walk(o, path):
+              if isinstance(o, dict):
+                  for k, v in o.items():
+                      p = path + "/" + k
+                      if k in ("market_inference", "candidate_counts", "tool_opportunities"):
+                          found[p] = v
+                      elif len(found) < 400:
+                          walk(v, p)
+              elif isinstance(o, list):
+                  for i, v in enumerate(o):
+                      walk(v, f"{path}[{i}]")
+          walk(ap, "")
+          os.makedirs("private-labels/market-inference", exist_ok=True)
+          out = {"exported_at_utc": datetime.now(timezone.utc).isoformat(), "paths": found}
+          json.dump(out, open("private-labels/market-inference/shadow-export.json", "w"), indent=1)
+          mi = [v for p, v in found.items() if p.endswith("/market_inference") and isinstance(v, dict)]
+          print("::notice title=shadow aggregate::" + json.dumps({
+              "paths": len(found), "assessments": len(mi),
+              "shadow_pass": sum(1 for v in mi if v.get("shadow_gate_pass"))}))
+          PY
+          cd private-labels
+          git config user.name "NEO Private Shadow Export"
+          git config user.email "actions@users.noreply.github.com"
+          git add market-inference/shadow-export.json
+          git commit --quiet -m "market-inference shadow export" || true
+          git push --quiet
