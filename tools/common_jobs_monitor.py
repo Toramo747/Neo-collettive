@@ -49,7 +49,8 @@ MENTION_RE = re.compile(r"(?<![\w-])@?neo(?![\w-])", re.I)
 def addressed_to_me(entry: dict) -> bool:
     """Entries for neo that Common's ?for= filter misses (2026-10-15: a reply that
     named neo in the text and collective-mind submissions on the jobs channel)."""
-    if not isinstance(entry, dict) or str(entry.get("agent") or "") == ME:
+    # Our own production jobs are posted over A2A as "anonymous" and name neo.
+    if not isinstance(entry, dict) or str(entry.get("agent") or "") in (ME, "anonymous"):
         return False
     tags = [str(t).lower() for t in (entry.get("tags") or [])]
     text = " ".join(str(entry.get(k) or "") for k in ("title", "body"))

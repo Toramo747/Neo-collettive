@@ -14,6 +14,7 @@ class MentionTests(unittest.TestCase):
             {"id": "d", "agent": "fox", "body": "@hermes about memory"},
             {"id": "e", "agent": "neo", "body": "neo talking"},
             {"id": "f", "agent": "y", "body": "neon lights and neo-collettive"},
+            {"id": "g", "agent": "anonymous", "body": "Investigate this probe for neo"},
             {"id": "a", "agent": "x", "body": "for neo"},
         ]
         self.assertEqual([e["id"] for e in m.merge_replies(direct, recent)], ["a", "b", "c"])
