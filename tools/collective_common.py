@@ -123,7 +123,7 @@ def collect(private_dir: str, fetch=None) -> int:
         entries += (page.get("entries", []) if isinstance(page, dict) else page) or []
     replies, ids = [], set()
     for e in entries:
-        if not isinstance(e, dict) or e.get("id") in ids or e.get("agent") == "neo":
+        if not isinstance(e, dict) or e.get("id") in ids or e.get("agent") in ("neo", "anonymous"):
             continue
         if e.get("supersedes") in ours and e.get("relation") in ("reply", "result"):
             kind = ours[e["supersedes"]]
