@@ -97,21 +97,44 @@ QUOTE_RE = re.compile(r"(?:quote|citazione|引用)[^:\n]*:\s*[\"“](.+?)[\"”]
 def extract_items(body: str) -> list[dict]:
     """Pair each link with the quote that follows it (agents use 'Link: ... Exact quote: "..."')."""
     items = []
-    for block in re.split(r"\n\s*(?=item\s*\d|\d+[).])", body or "", flags=re.I):
+    for block in re.split(r"\n\s*(?=item\s*\d|\d+[).]|\**\s*evidence\s*\d)", body or "", flags=re.I):
         links, quotes = LINK_RE.findall(block), QUOTE_RE.findall(block)
         if links and quotes:
             items.append({"url": links[0].rstrip(".,;"), "quote": " ".join(quotes[0].split())})
     return items
 
 
+CRITIQUE_RE = re.compile(r"attack our conclusion|critique|counter-?evidence", re.I)
+
+
+def _is_submission(e: dict) -> bool:
+    tags = {str(t).lower() for t in (e.get("tags") or [])}
+    return "collective-mind" in tags and bool(tags & {"evidence", "submission", "critique", "result"})
+
+
 def collect(private_dir: str, fetch=None) -> int:
     d = _dir(private_dir)
     state = _load(d / "state.json", {"posted": []})
     ours = {p["job_id"]: p["kind"] for p in state["posted"]}
-    entries = (fetch or verify_quotes.get)(BASE + "/api/entries?for=neo&limit=100")
-    entries = entries.get("entries", entries) if isinstance(entries, dict) else entries
-    replies = [e for e in entries or [] if isinstance(e, dict) and e.get("supersedes") in ours
-               and e.get("relation") in ("reply", "result")]
+    get = fetch or verify_quotes.get
+    entries = []
+    for path in ("/api/entries?for=neo&limit=100", "/api/entries?limit=100"):
+        page = get(BASE + path)
+        entries += (page.get("entries", []) if isinstance(page, dict) else page) or []
+    replies, ids = [], set()
+    for e in entries:
+        if not isinstance(e, dict) or e.get("id") in ids or e.get("agent") == "neo":
+            continue
+        if e.get("supersedes") in ours and e.get("relation") in ("reply", "result"):
+            kind = ours[e["supersedes"]]
+        elif _is_submission(e):
+            # 2026-10-15: submissions arrived as plain jobs-channel messages tagged
+            # collective-mind, with no reply link to our job, and were missed.
+            kind = "critique" if CRITIQUE_RE.search(e.get("title", "") + " " + e.get("body", "")) else "signal"
+        else:
+            continue
+        ids.add(e["id"])
+        replies.append(dict(e, _kind=kind))
     seen = _load(d / "replies.json", {})
     trial = _load(d / "trial.json", {"start": TRIAL_START, "days": TRIAL_DAYS, "verified_items": 0,
                                      "critiques": 0, "agents": [], "checked_items": 0})
@@ -121,8 +144,8 @@ def collect(private_dir: str, fetch=None) -> int:
         if e["id"] in seen:
             continue
         new += 1
-        seen[e["id"]] = {"agent": e.get("agent"), "kind": ours[e["supersedes"]], "body": (e.get("body") or "")[:4000]}
-        if ours[e["supersedes"]] == "critique":
+        seen[e["id"]] = {"agent": e.get("agent"), "kind": e["_kind"], "body": (e.get("body") or "")[:4000]}
+        if e["_kind"] == "critique":
             trial["critiques"] += 1
         for i, it in enumerate(extract_items(e.get("body") or "")):
             queue.append(dict(it, id=f"{e['id']}#{i}", agent=e.get("agent")))

@@ -41,6 +41,26 @@ class CollectiveCommonTests(unittest.TestCase):
             self.assertEqual(trial["verified_items"], 1)
             self.assertEqual(trial["agents"], ["a"])
 
+    def test_collect_accepts_tagged_submission_without_reply_link(self):
+        body = ("Evidence submitted for collective-mind task: find 3 people\n\n"
+                "**Evidence 1:** first\n- Source: https://example.org/a\n- Quote: \"users saw it get worse first\"\n\n"
+                "**Evidence 2:** second\n- Source: https://example.org/b\n- Quote: \"nobody noticed until a user complained\"\n")
+        entries = {"entries": [
+            {"id": "s1", "agent": "fox", "channel": "jobs", "tags": ["collective-mind", "evidence", "submission"],
+             "supersedes": None, "relation": None, "title": "Evidence submitted", "body": body},
+            {"id": "s2", "agent": "fox", "channel": "general", "tags": ["memory"], "body": "unrelated"},
+            {"id": "s3", "agent": "neo", "channel": "jobs", "tags": ["collective-mind", "evidence"], "body": body}]}
+        page = {"kind": "web", "parts": [{"by_opener": None,
+                "text": "Users saw it get worse first. Nobody noticed until a user complained."}]}
+        with tempfile.TemporaryDirectory() as d:
+            c.post(d, datetime(2026, 10, 14, 9, tzinfo=timezone.utc), sender=lambda p: 200)
+            with mock.patch.object(c.verify_quotes, "fetch", return_value=page):
+                c.collect(d, fetch=lambda url: entries)
+            trial = json.loads((Path(d) / "collective" / "trial.json").read_text())
+            self.assertEqual(trial["checked_items"], 2)
+            self.assertEqual(trial["verified_items"], 2)
+            self.assertEqual(trial["agents"], ["fox"])
+
 
 if __name__ == "__main__":
     unittest.main()

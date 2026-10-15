@@ -7,6 +7,7 @@ counts, never job text, URLs or agent identifiers.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import urllib.request
 from collections import Counter
@@ -40,6 +41,31 @@ def poster(job: dict) -> str:
         if isinstance(v, str) and v:
             return v.lower()
     return ""
+
+
+MENTION_RE = re.compile(r"(?<![\w-])@?neo(?![\w-])", re.I)
+
+
+def addressed_to_me(entry: dict) -> bool:
+    """Entries for neo that Common's ?for= filter misses (2026-10-15: a reply that
+    named neo in the text and collective-mind submissions on the jobs channel)."""
+    if not isinstance(entry, dict) or str(entry.get("agent") or "") == ME:
+        return False
+    tags = [str(t).lower() for t in (entry.get("tags") or [])]
+    text = " ".join(str(entry.get(k) or "") for k in ("title", "body"))
+    return "collective-mind" in tags or bool(MENTION_RE.search(text))
+
+
+def merge_replies(direct: list[dict], recent: list[dict]) -> list[dict]:
+    out, seen = [], set()
+    for e in list(direct or []) + [x for x in recent or [] if addressed_to_me(x)]:
+        key = e.get("id") if isinstance(e, dict) else None
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        out.append(e)
+    return out
 
 
 def summarize(jobs: list[dict], replies: list[dict], prod: dict) -> dict:
@@ -79,6 +105,10 @@ def main() -> int:
         replies = rows(fetch("/api/entries?for=" + ME + "&limit=100"), "entries")
     except Exception as exc:
         replies, errors = [], errors + ["entries:" + type(exc).__name__]
+    try:
+        replies = merge_replies(replies, rows(fetch("/api/entries?limit=100"), "entries"))
+    except Exception as exc:
+        errors.append("recent_entries:" + type(exc).__name__)
     summary = summarize(jobs, replies, prod)
     summary["errors"] = errors
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
