@@ -30,7 +30,7 @@ concurrency:
 jobs:
   backup-and-plan:
     if: github.event_name == 'push' || inputs.mode == 'plan'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
 
   apply:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'apply'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

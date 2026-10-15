@@ -28,10 +28,27 @@ class WatchdogPublicationTests(unittest.TestCase):
             result = Path(directory, 'primary-active')
             return result.read_text() if result.exists() else None
 
-    def freshness(self, age):
+    def freshness(self, age, dispatched=False, runtime_age=None):
         script = self.script('Fail if runtime snapshot is older than 90 minutes', 'PY')
-        stamp = (datetime.now(timezone.utc) - timedelta(minutes=age)).isoformat()
-        return self.run_script(script, {'snapshot.json': {'captured_at_utc': stamp}})
+        now = datetime.now(timezone.utc)
+        stamp = (now - timedelta(minutes=age)).isoformat()
+        files = {'snapshot.json': {'captured_at_utc': stamp}}
+        if dispatched:
+            files['recovery_dispatched'] = 1
+        if runtime_age is not None:
+            files['status.json'] = {'last_checkpoint_utc': (now - timedelta(minutes=runtime_age)).isoformat()}
+        return self.run_script(script, files)
+
+    def test_dispatched_recovery_in_flight_warns_instead_of_failing(self):
+        self.freshness(200, dispatched=True, runtime_age=2)
+
+    def test_dispatched_recovery_older_than_eight_hours_fails(self):
+        with self.assertRaisesRegex(SystemExit, 'no runtime snapshot published for more than 90 minutes'):
+            self.freshness(481, dispatched=True, runtime_age=2)
+
+    def test_stale_runtime_checkpoint_fails_even_with_fresh_snapshot(self):
+        with self.assertRaisesRegex(SystemExit, 'runtime checkpoint is missing or older than 90 minutes'):
+            self.freshness(5, runtime_age=91)
 
     def test_recent_published_snapshot_passes(self):
         self.freshness(89)
