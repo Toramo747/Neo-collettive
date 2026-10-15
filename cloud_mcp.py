@@ -193,7 +193,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.57"  # checkpoint: adopt abandoned newer generation; verifier SEP-414 probe
+VERSION = "0.99.58"  # local state saves debounced off the request path (event-loop stalls); #315 continuity
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -1705,8 +1705,28 @@ def _restore_state() -> str:
     return "fresh"
 
 
+# 2026-10-15: on the free instance (~0.1 vCPU) one full local snapshot costs
+# ~0.35 s CPU but ~2.3 s wall, and it ran on every inbound /mcp request and
+# several times per cycle, stalling the event loop up to 8.6 s and failing
+# Render's 5 s health check. The durable checkpoint is the Render env var,
+# written every cycle; this /tmp file only helps an in-container restart.
+LOCAL_STATE_MIN_INTERVAL_SECONDS = float(os.getenv("NEO_LOCAL_STATE_MIN_INTERVAL_SECONDS", "300"))
+_LAST_LOCAL_STATE_SAVE = 0.0
+
+
+def _save_local_state(force: bool = False) -> None:
+    global _LAST_LOCAL_STATE_SAVE
+    now = time.monotonic()
+    if (not force and _LAST_LOCAL_STATE_SAVE
+            and now - _LAST_LOCAL_STATE_SAVE < LOCAL_STATE_MIN_INTERVAL_SECONDS):
+        AUTOPILOT_STATE["local_state_saves_deferred"] = int(AUTOPILOT_STATE.get("local_state_saves_deferred") or 0) + 1
+        return
+    _LAST_LOCAL_STATE_SAVE = now
+    _write_local_state()
+
+
 @OBSERVATION.timed("checkpoint_local_write")
-def _save_local_state() -> None:
+def _write_local_state() -> None:
     try:
         with open(STATE_SNAPSHOT_PATH, "w", encoding="utf-8") as fh:
             payload = _state_payload()
@@ -13188,7 +13208,7 @@ async def _autopilot_cycle() -> None:
             AUTOPILOT_STATE["outcome_history"]=outcome_history[-40:]
             AUTOPILOT_STATE["last_finished_utc"] = datetime.now(timezone.utc).isoformat()
             completed=True
-            _save_local_state()
+            _save_local_state(force=True)
             AUTOPILOT_STATE["last_checkpoint"] = await asyncio.wait_for(_checkpoint_state_to_render(),timeout=30.0)
         except Exception as e:
             tb=traceback.extract_tb(e.__traceback__)
