@@ -14,7 +14,7 @@ permissions:
 jobs:
   watchdog:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:
       - name: Restart the loop if no loop is running or queued
@@ -32,7 +32,7 @@ jobs:
     concurrency:
       group: mycelix-market-intuition-arena
       cancel-in-progress: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4

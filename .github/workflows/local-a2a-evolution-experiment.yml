@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   implementation-research:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
           path: artifacts/research/
           retention-days: 30
   local-policy-evolution:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       OLLAMA_NUM_PARALLEL: '1'
