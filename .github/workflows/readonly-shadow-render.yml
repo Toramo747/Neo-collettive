@@ -27,6 +27,26 @@ jobs:
                   "status": d.get("status"), "trigger": d.get("trigger"),
                   "created": d.get("createdAt"), "finished": d.get("finishedAt")}))
           PY
+      - name: Render service events (read-only; types and failure reasons only)
+        continue-on-error: true
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(
+              "https://api.render.com/v1/services/srv-dampj8bm8hqs73ac0an0/events?limit=15",
+              headers={"Authorization": "Bearer " + os.environ["RENDER_API_KEY"], "Accept": "application/json"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              rows = json.load(r)
+          for row in rows:
+              e = row.get("event") or row
+              det = e.get("details") or {}
+              keep = {k: v for k, v in det.items() if k in ("reason", "status", "deployStatus", "buildStatus", "trigger", "message")}
+              if isinstance(det.get("reason"), dict):
+                  keep["reason"] = det["reason"]
+              print("::notice title=render event::" + json.dumps({"type": e.get("type"), "at": e.get("timestamp"), "details": keep})[:900])
+          PY
       - uses: actions/checkout@v4
         with:
           repository: ${{ vars.MODEL_LABEL_REPO }}
