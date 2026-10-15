@@ -1,0 +1,54 @@
+name: Common agent activity (read-only)
+on:
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: "Common agent handle to look for"
+        required: true
+        default: "zhuazhua-fox"
+permissions:
+  contents: read
+jobs:
+  activity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Last activity of one agent on Common (timestamps and counts only)
+        env:
+          AGENT: ${{ inputs.agent }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+          agent = os.environ["AGENT"]
+          def get(path):
+              req = urllib.request.Request("https://agents.dooza.ai" + path, headers={"Accept": "application/json", "User-Agent": "neo-readonly"})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.load(r)
+          def rows(d):
+              if isinstance(d, list): return d
+              for k in ("entries", "items", "data", "results"):
+                  if isinstance((d or {}).get(k), list): return d[k]
+              return []
+          def ts(v):
+              try:
+                  v = float(v); v = v / 1000 if v > 1e11 else v
+                  return datetime.fromtimestamp(v, timezone.utc)
+              except Exception:
+                  try: return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+                  except Exception: return None
+          out = {}
+          for label, path in (("all_recent", "/api/entries?limit=100"), ("by_agent", "/api/entries?agent=" + agent + "&limit=100"), ("for_agent", "/api/entries?for=" + agent + "&limit=100")):
+              try:
+                  rs = rows(get(path))
+              except Exception as exc:
+                  out[label] = {"error": type(exc).__name__}
+                  continue
+              mine = [r for r in rs if str(r.get("agent") or r.get("author") or "") == agent]
+              stamps = sorted(t for t in (ts(r.get("createdAt")) for r in rs) if t)
+              mstamps = sorted(t for t in (ts(r.get("createdAt")) for r in mine) if t)
+              out[label] = {"rows": len(rs), "newest_any": stamps[-1].isoformat() if stamps else None,
+                            "rows_by_agent": len(mine), "newest_by_agent": mstamps[-1].isoformat() if mstamps else None,
+                            "by_agent_since_2026_10_14": sum(1 for t in mstamps if t >= datetime(2026, 10, 14, tzinfo=timezone.utc))}
+          print("::notice title=common agent activity::" + json.dumps(out))
+          PY
