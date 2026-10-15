@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
       - name: Last activity of one agent on Common (timestamps and counts only)
         env:
           AGENT: ${{ inputs.agent }}
@@ -51,4 +56,17 @@ jobs:
                             "rows_by_agent": len(mine), "newest_by_agent": mstamps[-1].isoformat() if mstamps else None,
                             "by_agent_since_2026_10_14": sum(1 for t in mstamps if t >= datetime(2026, 10, 14, tzinfo=timezone.utc))}
           print("::notice title=common agent activity::" + json.dumps(out))
+          try:
+              recent = [r for r in rows(get("/api/entries?agent=" + agent + "&limit=100"))
+                        if (ts(r.get("createdAt")) or datetime(1970, 1, 1, tzinfo=timezone.utc)) >= datetime(2026, 10, 13, tzinfo=timezone.utc)]
+          except Exception:
+              recent = []
+          os.makedirs("private-labels/common", exist_ok=True)
+          json.dump({"agent": agent, "entries": recent}, open("private-labels/common/agent-activity.json", "w"), indent=1)
           PY
+          cd private-labels
+          git config user.name "NEO Common Activity"
+          git config user.email "actions@users.noreply.github.com"
+          git add common/agent-activity.json
+          git commit --quiet -m "common agent activity (private)" || true
+          git push --quiet
