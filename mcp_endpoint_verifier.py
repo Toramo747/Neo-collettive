@@ -373,6 +373,8 @@ async def _bounded_request(
                             "content-type": response.headers.get("content-type"),
                             "mcp-session-id": response.headers.get("mcp-session-id"),
                             "mcp-protocol-version": response.headers.get("mcp-protocol-version"),
+                            "traceparent": response.headers.get("traceparent"),
+                            "traceresponse": response.headers.get("traceresponse"),
                         },
                         "body": text,
                         "bytes": total,
