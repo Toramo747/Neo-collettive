@@ -61,7 +61,10 @@ jobs:
       - name: Last checkpoint reason (public status, sanitized)
         run: |
           set -uo pipefail
-          curl --silent --max-time 45 -o /tmp/ap.json https://neo-collettive.onrender.com/api/autopilot/status || true
+          t="https://neo-collettive.onrender.com/api/autopilot/status"
+          pr="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${t}" --marker github-actions-deploy)"
+          c="$(curl --silent --max-time 60 -o /tmp/ap.json -w '%{http_code}' -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: ${pr}" "${t}")" || true
+          echo "::notice title=autopilot status http::${c} bytes=$(wc -c </tmp/ap.json 2>/dev/null || echo 0) head=$(head -c 40 /tmp/ap.json | tr -dc 'a-zA-Z0-9{}:<> ')"
           python - <<'PY'
           import json, re
           try:
