@@ -58,12 +58,14 @@ jobs:
           if cur<published: reasons.append(f"evidence regressed current={cur} published={published}")
           print("::notice title=predeploy verdict::"+(json.dumps(reasons) if reasons else "would pass"))
           PY
-      - name: Last checkpoint reason (public status, sanitized)
+      - name: Last checkpoint reason (sanitized)
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
         run: |
           set -uo pipefail
           t="https://neo-collettive.onrender.com/api/autopilot/status"
           pr="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${t}" --marker github-actions-deploy)"
-          c="$(curl --silent --max-time 60 -o /tmp/ap.json -w '%{http_code}' -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: ${pr}" "${t}")" || true
+          c="$(curl --silent --max-time 60 -o /tmp/ap.json -w '%{http_code}' -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: ${pr}" -H "Authorization: Bearer ${NEO_ADMIN_TOKEN}" "${t}")" || true
           echo "::notice title=autopilot status http::${c} bytes=$(wc -c </tmp/ap.json 2>/dev/null || echo 0) head=$(head -c 40 /tmp/ap.json | tr -dc 'a-zA-Z0-9{}:<> ')"
           python - <<'PY'
           import json, re
