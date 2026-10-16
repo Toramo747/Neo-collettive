@@ -77,6 +77,14 @@ jobs:
                   for i, v in enumerate(o):
                       walk(v, f"{path}[{i}]")
           walk(ap, "")
+          ev = ap.get("commercial_evidence_memory")
+          ev = ev if isinstance(ev, list) else []
+          found["/commercial_evidence_memory"] = ev
+          hn = [r for r in ev if isinstance(r, dict) and "ycombinator" in str(r.get("domain") or r.get("url") or "")]
+          print("::notice title=evidence aggregate::" + json.dumps({
+              "rows": len(ev), "hn_rows": len(hn),
+              "hn_gate_eligible": sum(1 for r in hn if r.get("gate_eligible")),
+              "gate_eligible": sum(1 for r in ev if isinstance(r, dict) and r.get("gate_eligible"))}))
           os.makedirs("private-labels/market-inference", exist_ok=True)
           out = {"exported_at_utc": datetime.now(timezone.utc).isoformat(), "paths": found}
           json.dump(out, open("private-labels/market-inference/shadow-export.json", "w"), indent=1)
