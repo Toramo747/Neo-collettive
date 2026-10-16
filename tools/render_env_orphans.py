@@ -136,16 +136,51 @@ def backup(out_dir: str, env: dict[str, str]) -> dict:
             "manifest_sha256": sha((root / "manifest.json").read_text(encoding="utf-8"))}
 
 
+PACE_SECONDS = 1.2  # Render API rate limit: the first apply hit 429 after ~200 calls
+
+
+def _with_backoff(fn, attempts: int = 6):
+    import time
+    for i in range(attempts):
+        try:
+            return fn()
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429 or i == attempts - 1:
+                raise
+            wait = exc.headers.get("Retry-After") if exc.headers else None
+            try:
+                wait_s = min(120.0, float(wait)) if wait else 15.0 * (i + 1)
+            except ValueError:
+                wait_s = 15.0 * (i + 1)
+            time.sleep(wait_s)
+
+
 def _delete(key: str) -> None:
+    import time
     url = f"{API}/services/{SERVICE}/env-vars/{urllib.parse.quote(key, safe='')}"
-    req = urllib.request.Request(url, method="DELETE", headers={"Authorization": f"Bearer {TOKEN}"})
-    urllib.request.build_opener(inv._NoRedirect).open(req, timeout=30).close()
-    try:
-        inv._get(url)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return
-        raise
+
+    def do_delete():
+        req = urllib.request.Request(url, method="DELETE", headers={"Authorization": f"Bearer {TOKEN}"})
+        try:
+            urllib.request.build_opener(inv._NoRedirect).open(req, timeout=30).close()
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:  # already gone (e.g. a retried call) is fine
+                raise
+
+    def check():
+        try:
+            inv._get(url)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return True
+            raise
+        return False
+
+    _with_backoff(do_delete)
+    time.sleep(PACE_SECONDS)
+    if _with_backoff(check):
+        time.sleep(PACE_SECONDS)
+        return
     raise ValueError("delete_not_effective")
 
 
