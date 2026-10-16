@@ -274,8 +274,18 @@ jobs:
           actual_profile=str(runtime_profile.get("profile_id") or "")
           actual_role=str(runtime_profile.get("deployment_role") or "")
 
+          def vtuple(v):
+              parts=re.findall(r"\d+",v)
+              if not parts:
+                  raise SystemExit(f"version not comparable: {v!r}")
+              return tuple(int(x) for x in parts)
           if actual_version!=expected_version:
-              raise SystemExit(f"runtime/repository version mismatch: runtime={actual_version} repo={expected_version}")
+              # A runtime OLDER than main is a pending deploy (e.g. Render deploys
+              # paused): keep publishing and warn. A runtime NEWER than main is not
+              # this repository's build and still fails.
+              if vtuple(actual_version)>vtuple(expected_version):
+                  raise SystemExit(f"runtime/repository version mismatch: runtime={actual_version} newer than repo={expected_version}")
+              print(f"::warning title=deploy lag::runtime {actual_version} is older than repository {expected_version}; publishing snapshot while the deploy is pending")
           if actual_profile!=expected_profile:
               raise SystemExit(f"runtime/repository profile mismatch: runtime={actual_profile} repo={expected_profile}")
           if actual_role!=expected_role:
