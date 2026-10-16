@@ -155,8 +155,7 @@ def collect(private_dir: str, fetch=None) -> int:
         row = {"id": q["id"], "agent": q["agent"], "url": q["url"]}
         try:
             page = verify_quotes.fetch(q["url"])
-            want = verify_quotes.norm(q["quote"])
-            hit = [p for p in page["parts"] if want and want in verify_quotes.norm(p["text"])]
+            hit = [p for p in page["parts"] if verify_quotes.quote_in(q["quote"], p["text"])]
             row.update(exists=True, quote_found=bool(hit), by_opener=(hit[0]["by_opener"] if hit else False),
                        vendor=bool(page.get("show_hn")))
         except Exception as exc:
