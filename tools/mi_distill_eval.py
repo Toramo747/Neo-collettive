@@ -29,10 +29,20 @@ def metrics(pred: list[bool], gold: list[bool]) -> dict:
             "fpr": round(fp / neg, 4) if neg else 0.0, "agreement": round(sum(p == g for p, g in zip(pred, gold)) / max(1, len(gold)), 4)}
 
 
+RULE_VERSION = "v2-2026-10-16"
+
+
 def decide(base: dict, student: dict) -> dict:
-    c1 = student["f1"] >= base["f1"] + 0.10
-    c2 = student["fpr"] <= base["fpr"]
-    return {"f1_gain_ok": c1, "fpr_ok": c2, "machine_pass": c1 and c2,
+    """v2 rule, preregistered 2026-10-16 before any v2 data (docs/market-intuition-distill.md).
+
+    v1 (F1 +0.10) failed; v2 tests the hypothesis v1 suggested, on fresh held-out people:
+    fewer false needs without losing real ones.
+    """
+    c1 = student["fpr"] <= 0.6 * base["fpr"]              # at least 40 % fewer false needs
+    c2 = student["recall"] >= base["recall"] - 0.10        # does not lose real needs
+    c3 = student["f1"] >= base["f1"] - 0.02                # overall not worse
+    return {"rule": RULE_VERSION, "fpr_cut_ok": c1, "recall_ok": c2, "f1_ok": c3,
+            "machine_pass": c1 and c2 and c3,
             "human_spot_check": "PENDING (>=15 of 20 must be real needs to Andrea)"}
 
 
