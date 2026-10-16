@@ -193,7 +193,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.59"  # lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
+VERSION = "0.99.60"  # degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -1753,6 +1753,16 @@ async def _checkpoint_generation_guard() -> dict:
     return await asyncio.to_thread(check_write_allowed,loaded,saved_value,_decode_state_env,STATE_WRITER_ID)
 
 
+def _guard_block_degraded_is_recoverable(state: dict, original_ref) -> bool:
+    """Degraded only because a past guard check blocked a write, store inline."""
+    status=state.get("evidence_store_status") or {}
+    return (
+        bool(state.get("evidence_store_degraded"))
+        and str(status.get("reason") or "")=="stale_generation_write_blocked"
+        and not is_external_reference(original_ref)
+    )
+
+
 @OBSERVATION.timed("checkpoint")
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
@@ -1785,6 +1795,11 @@ async def _checkpoint_state_to_render() -> dict:
     payload[STATE_WRITER_FIELD]=STATE_WRITER_ID
     degraded=bool(AUTOPILOT_STATE.get("evidence_store_degraded"))
     original_ref=AUTOPILOT_STATE.get("commercial_evidence_store_reference")
+    if degraded and _guard_block_degraded_is_recoverable(AUTOPILOT_STATE,original_ref):
+        # The guard allows writing again and evidence is inline: the degraded
+        # branch could never succeed (it needs an external original reference),
+        # so the service stayed stuck. Resume the normal merge-and-write path.
+        degraded=False
     previous_archive_ref=AUTOPILOT_STATE.get("commercial_evidence_archive_reference")
     previous_challenge_ref=AUTOPILOT_STATE.get("challenge_track_store_reference")
     evidence_rows=[x for x in (payload.get("commercial_evidence_memory") or []) if isinstance(x,dict)] if isinstance(payload.get("commercial_evidence_memory"),list) else [x for x in (AUTOPILOT_STATE.get("commercial_evidence_memory") or []) if isinstance(x,dict)]
