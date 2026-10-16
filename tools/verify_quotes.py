@@ -27,6 +27,33 @@ def norm(text: str) -> str:
     return " ".join(text.lower().split())
 
 
+ELLIPSIS_RE = re.compile(r"\s*(?:\.\.\.+|…)\s*")
+
+
+def quote_segments(quote: str) -> list[str]:
+    """Agents often cut quotes with '...' mid-sentence (2026-10-16: a real quote
+    was rejected for that). Split on ellipses, drop the partial word next to a
+    cut, and require every remaining segment of 3+ words to be on the page."""
+    raw = (quote or "").strip().strip('"“”')
+    parts = ELLIPSIS_RE.split(raw)
+    segs = []
+    for i, part in enumerate(parts):
+        words = norm(part).split()
+        if i > 0 and words:                       # text after a cut may start mid-word
+            words = words[1:]
+        if i < len(parts) - 1 and words:          # text before a cut may end mid-word
+            words = words[:-1]
+        if len(words) >= 3:
+            segs.append(" ".join(words))
+    return segs or ([norm(raw)] if norm(raw) else [])
+
+
+def quote_in(quote: str, text: str) -> bool:
+    segs = quote_segments(quote)
+    hay = norm(text)
+    return bool(segs) and all(s in hay for s in segs)
+
+
 def fetch(url: str) -> dict:
     m = re.match(r"https://github\.com/([^/]+)/([^/]+)/issues/(\d+)", url)
     if m:
@@ -56,8 +83,7 @@ def main() -> int:
         row = {"id": q["id"], "url": q["url"]}
         try:
             page = fetch(q["url"])
-            want = norm(q["quote"])
-            hit = [p for p in page["parts"] if want and want in norm(p["text"])]
+            hit = [p for p in page["parts"] if quote_in(q["quote"], p["text"])]
             row.update({"exists": True, "kind": page["kind"], "created": page.get("created"),
                         "quote_found": bool(hit), "quote_by_opener": bool(hit and hit[0]["by_opener"]),
                         "show_hn": page.get("show_hn")})
