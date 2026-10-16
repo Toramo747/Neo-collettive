@@ -22,6 +22,7 @@ jobs:
           git -C private-labels config user.name "NEO Ops Bot"
           git -C private-labels config user.email "actions@users.noreply.github.com"
           git -C private-labels add common/verify_results.json
+          [ -d private-labels/common/page_text ] && git -C private-labels add common/page_text || true
           git -C private-labels commit --quiet -m "ops: quote verification" || exit 0
           git -C private-labels pull --quiet --rebase
           git -C private-labels push --quiet

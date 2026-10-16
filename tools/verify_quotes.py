@@ -75,6 +75,25 @@ def fetch(url: str) -> dict:
         return {"kind": "web", "parts": [{"by_opener": None, "text": r.read().decode("utf-8", "replace")}]}
 
 
+def html_to_text(html: str) -> str:
+    html = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", html)
+    html = re.sub(r"(?i)<br\s*/?>|</(p|div|li|h[1-6]|tr|blockquote)>", "\n", html)
+    text = re.sub(r"<[^>]+>", " ", html)
+    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", '"'), ("&#39;", "'"), ("&nbsp;", " ")):
+        text = text.replace(a, b)
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in text.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
+
+
+def save_text(d: Path, item_id: str, page: dict) -> None:
+    """Private archive only: keep the readable page text for a human check."""
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", item_id)[:80]
+    out = d / "page_text"
+    out.mkdir(exist_ok=True)
+    body = "\n\n".join(html_to_text(p["text"]) if page["kind"] == "web" else p["text"] for p in page["parts"])
+    (out / f"{safe}.txt").write_text(body[:200_000])
+
+
 def main() -> int:
     d = Path(sys.argv[1]) / "common"
     queue = json.loads((d / "verify_queue.json").read_text())
@@ -84,6 +103,8 @@ def main() -> int:
         try:
             page = fetch(q["url"])
             hit = [p for p in page["parts"] if quote_in(q["quote"], p["text"])]
+            if q.get("save_text"):
+                save_text(d, q["id"], page)
             row.update({"exists": True, "kind": page["kind"], "created": page.get("created"),
                         "quote_found": bool(hit), "quote_by_opener": bool(hit and hit[0]["by_opener"]),
                         "show_hn": page.get("show_hn")})
