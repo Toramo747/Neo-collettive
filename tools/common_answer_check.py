@@ -135,7 +135,8 @@ def main() -> int:
         pass
     tl, sid, ms = call("tools/list", {}, sid)
     tools = {t["name"]: t for t in ((tl or {}).get("result") or {}).get("tools", [])}
-    report["tools"] = {"count": len(tools), "names": sorted(tools), "read_only_present": [t for t in READ_ONLY if t in tools]}
+    report["tools"] = {"count": len(tools), "names": sorted(tools), "read_only_present": [t for t in READ_ONLY if t in tools],
+                       "read_only_schemas": {t: tools[t].get("inputSchema") for t in READ_ONLY if t in tools}}
 
     answers = {}
     plan = {
@@ -166,6 +167,17 @@ def main() -> int:
             report["calls"].append({"tool": name, "args": args, "ms": round(ms), "error": bool(err)})
         except Exception as exc:
             report["calls"].append({"tool": name, "args": args, "error": type(exc).__name__})
+    # Same read tools again with an explicit limit, when the schema offers one.
+    for name in ("read_entries", "list_jobs", "list_agents"):
+        props = ((tools.get(name, {}).get("inputSchema") or {}).get("properties") or {})
+        if name in READ_ONLY and "limit" in props:
+            args = {k: v for k, v in {**plan[name], "limit": 100}.items() if k in props}
+            try:
+                res, sid, ms = call("tools/call", {"name": name, "arguments": args}, sid)
+                answers[name + "@limit100"] = tool_text(res)
+                report["calls"].append({"tool": name, "args": args, "ms": round(ms), "error": bool((res or {}).get("error"))})
+            except Exception as exc:
+                report["calls"].append({"tool": name, "args": args, "error": type(exc).__name__})
     rest_after = {}
     for name, rest_path in (("jobs", "/api/jobs"), ("entries_jobs", "/api/entries?channel=jobs&limit=100"),
                             ("agents", "/api/agents"), ("channels", "/api/channels"),
