@@ -66,3 +66,28 @@ Decision rule (fixed now): on the fresh held-out people, against the teacher,
 All four → the student replaces the small mind. Otherwise negative, recorded,
 and no v3 on the same idea without new evidence. Applying v2 to v1's numbers
 would fail rule 2 (0.621 < 0.642).
+
+### v2 result — 2026-10-16
+
+Harvest 2,207 candidates; train 2,719 sentences (831 reused from v1); held-out
+319 sentences from people absent from v1. Training: 47 min, loss 1.08.
+
+| held-out (n=319) | base-3B | student |
+|---|---|---|
+| F1 | 0.528 | 0.580 |
+| precision | 0.471 | 0.571 |
+| recall | 0.600 | 0.589 |
+| false-positive rate | 0.286 | **0.188** |
+| agreement | 0.680 | 0.746 |
+| valid JSON | 99.7 % | 98.4 % |
+
+1. FPR ≤ 0.6 × base (≤ 0.171): **failed** (0.188, −34 % instead of −40 %).
+2. recall ≥ base − 0.10 (≥ 0.500): passed.
+3. F1 ≥ base − 0.02 (≥ 0.508): passed (+0.052).
+4. Andrea spot-check: not run (machine rule already failed).
+
+Machine verdict: **not adopted**; the base model stays. The student is better
+on every metric except valid JSON, and the v1 direction (fewer false needs,
+recall kept) is confirmed on new people, but the preregistered 40 % cut was not
+reached. Per the rule: negative, recorded, no v3 on the same idea without new
+evidence. Any change to the threshold is Andrea's decision, not a re-run.
