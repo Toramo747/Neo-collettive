@@ -1,0 +1,60 @@
+name: Pre-deploy checkpoint diagnosis (no deploy)
+# Runs only the "Force durable checkpoint before deploy" checks of
+# neo-render-deploy.yml and annotates WHY they fail. It never deploys.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Checkpoint and health, annotated
+        run: |
+          set -uo pipefail
+          target="https://neo-collettive.onrender.com/api/checkpoint-status"
+          health_target="https://neo-collettive.onrender.com/health"
+          proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${target}" --marker github-actions-deploy)"
+          health_proof="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "${health_target}" --marker github-actions-deploy)"
+          t0=$(date +%s)
+          code="$(curl -X POST --silent --max-time 45 --output /tmp/cp.json --write-out '%{http_code}' \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: ${proof}" "${target}")"
+          rc=$?
+          t1=$(date +%s)
+          hcode="$(curl --silent --max-time 30 --output /tmp/health.json --write-out '%{http_code}' \
+            -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: ${health_proof}" "${health_target}")"
+          hrc=$?
+          echo "::notice title=predeploy http::{\"post_code\":\"${code}\",\"post_curl_rc\":${rc},\"post_seconds\":$((t1-t0)),\"health_code\":\"${hcode}\",\"health_curl_rc\":${hrc}}"
+          git show origin/main:neo_latest_result.json > /tmp/snap.json
+          python - <<'PY'
+          import json
+          def load(p):
+              try: return json.load(open(p,encoding="utf-8"))
+              except Exception as exc: return {"_unreadable": type(exc).__name__}
+          d=load("/tmp/cp.json"); h=load("/tmp/health.json"); s=load("/tmp/snap.json")
+          published=int((((s.get("autopilot") or {}).get("select_diagnostics") or {}).get("persistent_evidence_items")) or 0)
+          out={
+              "ok": d.get("ok"), "cycles": d.get("cycles_completed"),
+              "evidence_current": d.get("commercial_evidence_items"), "evidence_published": published,
+              "stored_bytes": d.get("stored_bytes"), "limit_bytes": d.get("limit_bytes"),
+              "last_checkpoint_utc": d.get("last_checkpoint_utc"), "cp_keys": sorted(d)[:25],
+              "health_status": h.get("status"), "health_version": h.get("neo_version") or h.get("version"),
+          }
+          print("::notice title=predeploy checkpoint::"+json.dumps(out))
+          reasons=[]
+          cycles=int(d.get("cycles_completed") or 0); stored=int(d.get("stored_bytes") or 0); limit=int(d.get("limit_bytes") or 0)
+          cur=int(d.get("commercial_evidence_items") or 0)
+          if cycles<1: reasons.append("missing cycle state")
+          if d.get("ok") is not True: reasons.append("checkpoint not ok")
+          if stored<=0 or limit<=0 or stored>=limit: reasons.append(f"no safety margin {stored}/{limit}")
+          if published<1: reasons.append("published snapshot has no evidence count")
+          if cur<published: reasons.append(f"evidence regressed current={cur} published={published}")
+          print("::notice title=predeploy verdict::"+(json.dumps(reasons) if reasons else "would pass"))
+          PY
