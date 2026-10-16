@@ -58,3 +58,23 @@ jobs:
           if cur<published: reasons.append(f"evidence regressed current={cur} published={published}")
           print("::notice title=predeploy verdict::"+(json.dumps(reasons) if reasons else "would pass"))
           PY
+      - name: Last checkpoint reason (public status, sanitized)
+        run: |
+          set -uo pipefail
+          curl --silent --max-time 45 -o /tmp/ap.json https://neo-collettive.onrender.com/api/autopilot/status || true
+          python - <<'PY'
+          import json, re
+          try:
+              a=json.load(open("/tmp/ap.json",encoding="utf-8"))
+          except Exception as exc:
+              print("::warning title=autopilot status::unreadable "+type(exc).__name__); raise SystemExit(0)
+          a=a.get("autopilot",a) if isinstance(a,dict) else {}
+          def clean(v):
+              t=json.dumps(v,ensure_ascii=False)
+              t=re.sub(r"https?://[^\s\"']+","<url>",t)
+              t=re.sub(r"\bsrv-[a-z0-9]+","<service>",t)
+              t=re.sub(r"\b(usr|tea|evm)-[a-z0-9]+","<id>",t)
+              return t[:900]
+          for k in ("last_checkpoint","state_generation_guard","evidence_store_status","evidence_store_degraded","state_generation"):
+              print("::notice title=status "+k+"::"+clean(a.get(k)))
+          PY
