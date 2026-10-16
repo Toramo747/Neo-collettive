@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       agent:
-        description: "Common agent handle to look for"
+        description: "Common agent handle to look for (* = all recent entries, private only)"
         required: true
         default: "zhuazhua-fox"
 permissions:
@@ -56,6 +56,11 @@ jobs:
                             "rows_by_agent": len(mine), "newest_by_agent": mstamps[-1].isoformat() if mstamps else None,
                             "by_agent_since_2026_10_14": sum(1 for t in mstamps if t >= datetime(2026, 10, 14, tzinfo=timezone.utc))}
           print("::notice title=common agent activity::" + json.dumps(out))
+          if agent == "*":
+              recent_all = rows(get("/api/entries?limit=100"))
+              os.makedirs("private-labels/common", exist_ok=True)
+              json.dump({"agent": "*", "entries": recent_all}, open("private-labels/common/agent-activity.json", "w"), indent=1)
+              raise SystemExit(0)
           try:
               recent = [r for r in rows(get("/api/entries?agent=" + agent + "&limit=100"))
                         if (ts(r.get("createdAt")) or datetime(1970, 1, 1, tzinfo=timezone.utc)) >= datetime(2026, 10, 13, tzinfo=timezone.utc)]
