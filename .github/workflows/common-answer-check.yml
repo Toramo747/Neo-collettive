@@ -1,0 +1,28 @@
+name: Common answer-quality check (read-only, private)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - run: |
+          set -euo pipefail
+          python tools/common_answer_check.py private-labels
+          cd private-labels
+          git config user.name "NEO Ops Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add common/answer-check
+          git commit --quiet -m "ops: common answer check (private)" || exit 0
+          git pull --quiet --rebase
+          git push --quiet
