@@ -69,6 +69,36 @@ class DistillTests(unittest.TestCase):
             self.assertTrue(out["decision"]["machine_pass"])
             self.assertTrue((dd / "spot_check_for_andrea.jsonl").exists())
 
+    def test_v2_archives_v1_reuses_it_for_training_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "market-intuition").mkdir()
+            (Path(d) / "market-intuition" / "state.json").write_text(json.dumps({"vocabulary": {"invoices": 2.0}}))
+            dd = Path(d) / "market-intuition" / "distill"
+            dd.mkdir()
+            v1 = [{"id": f"o{i}", "person": f"old{i}", "need": "n", "label": {"real_need": True}} for i in range(5)]
+            (dd / "candidates.jsonl").write_text("x\n")
+            (dd / "train.jsonl").write_text("".join(json.dumps(r) + "\n" for r in v1[:4]))
+            (dd / "holdout.jsonl").write_text(json.dumps(v1[4]) + "\n")
+            self.assertEqual(md.harvest(d, max_queries=1000, getter=getter), 0)
+            self.assertTrue((dd / "v1" / "train.jsonl").exists())
+            cands = [json.loads(l) for l in (dd / "candidates.jsonl").read_text().splitlines()]
+            out = Path(d) / "labels.json"
+            out.write_text(json.dumps({"labels": [{"id": c["id"], "judged": True, "real_need": True} for c in cands]}))
+            md.label_collect(d, str(out))
+            tr = [json.loads(l) for l in (dd / "train.jsonl").read_text().splitlines()]
+            ho = [json.loads(l) for l in (dd / "holdout.jsonl").read_text().splitlines() if l.strip()]
+            self.assertEqual(sum(1 for r in tr if r["person"].startswith("old")), 5)
+            self.assertFalse(any(r["person"].startswith("old") for r in ho))
+
+    def test_v2_rule_needs_fpr_cut_and_kept_recall(self):
+        spec = importlib.util.spec_from_file_location("ev2", Path(__file__).with_name("tools") / "mi_distill_eval.py")
+        ev = importlib.util.module_from_spec(spec); spec.loader.exec_module(ev)
+        base = {"fpr": 0.254, "recall": 0.742, "f1": 0.616}
+        v1_student = {"fpr": 0.145, "recall": 0.621, "f1": 0.621}
+        self.assertFalse(ev.decide(base, v1_student)["machine_pass"])
+        good = {"fpr": 0.14, "recall": 0.70, "f1": 0.63}
+        self.assertTrue(ev.decide(base, good)["machine_pass"])
+
 
 if __name__ == "__main__":
     unittest.main()

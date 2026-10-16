@@ -46,3 +46,23 @@ passed. Machine verdict: not adopted; the base model stays. The student trades
 recall for precision (43 % fewer false needs), which may matter for the arena,
 but changing the rule after seeing the result is not allowed: any new attempt
 needs a new preregistration.
+
+
+## v2 — preregistered 2026-10-16 (Andrea), before any v2 data
+
+Why a second attempt: v1 cut false needs by 43 % (FPR 0.254 → 0.145) but lost
+recall (0.742 → 0.621) and missed the F1 rule. That hypothesis came from v1's
+result, so v2 must test it on **people never seen before**.
+
+Changes: fresh harvest (same pipeline); v1's 1,198 labeled sentences are reused
+**for training only**; the v2 held-out set contains only people absent from all
+v1 data. Same teacher (14B), student, prompt, training recipe.
+
+Decision rule (fixed now): on the fresh held-out people, against the teacher,
+1. student false-positive rate ≤ 0.6 × base-3B's (≥ 40 % fewer false needs), **and**
+2. student recall ≥ base recall − 0.10 (keeps real needs), **and**
+3. student F1 ≥ base F1 − 0.02 (overall not worse), **and**
+4. Andrea spot-checks 20 held-out sentences the student marks real: ≥ 15 real.
+All four → the student replaces the small mind. Otherwise negative, recorded,
+and no v3 on the same idea without new evidence. Applying v2 to v1's numbers
+would fail rule 2 (0.621 < 0.642).

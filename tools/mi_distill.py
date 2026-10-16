@@ -45,7 +45,30 @@ def _voice_sentence(row: dict) -> str:
     return ""
 
 
+def _archive_v1(private_dir: str) -> None:
+    """v2 (2026-10-16): keep the v1 data apart; it may train but never evaluate v2."""
+    d = _dir(private_dir)
+    v1 = d / "v1"
+    if v1.exists() or not (d / "candidates.jsonl").exists():
+        return
+    v1.mkdir()
+    for name in ("candidates.jsonl", "train.jsonl", "holdout.jsonl", "eval_report.json", "spot_check_for_andrea.jsonl"):
+        if (d / name).exists():
+            (d / name).rename(v1 / name)
+
+
+def _v1_rows(private_dir: str) -> list[dict]:
+    v1 = _dir(private_dir) / "v1"
+    rows = []
+    for name in ("train.jsonl", "holdout.jsonl"):
+        p = v1 / name
+        if p.exists():
+            rows += [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+    return rows
+
+
 def harvest(private_dir: str, max_queries: int = 900, getter=ami.http_json) -> int:
+    _archive_v1(private_dir)
     state_p = Path(private_dir) / "market-intuition" / "state.json"
     state = json.loads(state_p.read_text()) if state_p.exists() else {}
     vocab = sorted((state.get("vocabulary") or {}).items(), key=lambda kv: -kv[1])
@@ -154,15 +177,20 @@ def label_collect(private_dir: str, output_json: str) -> int:
     cands = [json.loads(l) for l in (d / "candidates.jsonl").read_text().splitlines() if l.strip()]
     rows = [dict(c, label=labels[c["id"]]) for c in cands if c["id"] in labels]
     rng = random.Random(7)
-    persons = sorted({r["person"] for r in rows})
+    prior = _v1_rows(private_dir)
+    prior_people = {r["person"] for r in prior}
+    # Held-out people are fresh: never seen by v1 training or v1 evaluation.
+    persons = sorted({r["person"] for r in rows} - prior_people)
     rng.shuffle(persons)
     hold = set(persons[: int(len(persons) * HOLDOUT_FRACTION)])
+    seen_ids = {r["id"] for r in rows}
     train = [r for r in rows if r["person"] not in hold]
+    train += [r for r in prior if r["person"] not in hold and r.get("id") not in seen_ids]
     test = [r for r in rows if r["person"] in hold]
     (d / "train.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in train))
     (d / "holdout.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in test))
     real = sum(1 for r in rows if r["label"].get("real_need"))
-    print(f"::notice title=Distill labels::labeled={len(rows)} real={real} train={len(train)} holdout={len(test)} "
+    print(f"::notice title=Distill labels::labeled={len(rows)} real={real} train={len(train)} v1_reused={len(train) - sum(1 for r in rows if r['person'] not in hold)} holdout={len(test)} "
           f"partial={bool(data.get('partial'))} minutes={data.get('minutes')}")
     return 0
 
