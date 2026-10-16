@@ -79,5 +79,29 @@ class OrphanPlanTests(unittest.TestCase):
                 orph.apply(str(mpath), plan["plan_id"], self.env)
 
 
+    def test_apply_deletes_only_approved_backed_up_subset(self):
+        plan = orph.compute_plan(self.env)
+        keys = plan["delete_keys"]
+        manifest = {"keys": {k: {"sha256": orph.sha(self.env[k])} for k in keys}}
+        env2 = dict(self.env)
+        # a new orphan appears after the backup (not in manifest)
+        first = keys[0]
+        new_key = first[: first.rfind("_") + 1] + "9" if first[-1].isdigit() else first + "_9"
+        env2[new_key] = self.env[first]
+        deleted = []
+        with tempfile.TemporaryDirectory() as d:
+            mpath = Path(d) / "m.json"
+            mpath.write_text(json.dumps(manifest))
+            orig = orph._delete
+            orph._delete = deleted.append
+            try:
+                out = orph.apply(str(mpath), plan["plan_id"], env2)
+            finally:
+                orph._delete = orig
+        self.assertEqual(sorted(deleted), sorted(keys))
+        self.assertNotIn(new_key, deleted)
+        self.assertTrue(out["apply_ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -184,17 +184,31 @@ def _delete(key: str) -> None:
     raise ValueError("delete_not_effective")
 
 
+def _plan_id_of(keys: list[str], env: dict[str, str]) -> str:
+    return hashlib.sha256("\n".join(f"{k}:{sha(env[k])}" for k in sorted(keys)).encode()).hexdigest()[:16]
+
+
 def apply(manifest_path: str, plan_id: str, env: dict[str, str]) -> dict:
     plan = compute_plan(env)
-    if not plan["plan_id"] or plan["plan_id"] != plan_id:
-        raise ValueError("plan_changed")
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    for key in plan["delete_keys"]:
-        if (manifest.get("keys") or {}).get(key, {}).get("sha256") != sha(env[key]):
+    backed = manifest.get("keys") or {}
+    in_backup = [k for k in plan["delete_keys"] if backed.get(k, {}).get("sha256") == sha(env[k])]
+    if plan["plan_id"] and plan["plan_id"] == plan_id:
+        if len(in_backup) != len(plan["delete_keys"]):
             raise ValueError("backup_missing_or_stale_for_key")
-    for key in plan["delete_keys"]:
+        keys = plan["delete_keys"]
+    elif in_backup and _plan_id_of(in_backup, env) == plan_id:
+        # The running service keeps leaving new orphan keys (failed partial writes)
+        # between plan and apply. Delete exactly the approved, backed-up set and
+        # leave anything created after the backup for a later plan.
+        keys = in_backup
+    else:
+        raise ValueError("plan_changed")
+    for key in keys:
         _delete(key)
-    return {"apply_ok": True, "deleted_keys": len(plan["delete_keys"]), "bytes_freed": plan["bytes_freed"]}
+    return {"apply_ok": True, "deleted_keys": len(keys),
+            "bytes_freed": sum(len(env[k].encode("utf-8")) for k in keys),
+            "left_for_next_plan": len(plan["delete_keys"]) - len(keys)}
 
 
 def main(argv: list[str]) -> int:
