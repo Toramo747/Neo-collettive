@@ -1,0 +1,80 @@
+name: Zero Cost Local Qwen Benchmark
+
+on:
+  push:
+    branches: [experiment/zero-cost-llm-arena-benchmark]
+    paths:
+      - ".github/workflows/zero-cost-local-qwen-benchmark.yml"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Choose one bounded CPU model; no paid GPU"
+        required: true
+        default: "qwen2.5:0.5b-instruct"
+        type: choice
+        options:
+          - "qwen2.5:0.5b-instruct"
+          - "qwen3.5:4b-q4_K_M"
+          - "qwen3.5:9b-q4_K_M"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-benchmark:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate offline fixtures
+        run: |
+          python -m unittest -v test_arena_free_model_benchmark
+          python arena_free_model_benchmark.py
+      - name: Install Ollama on runner
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 90 https://ollama.com/install.sh -o /tmp/install-ollama.sh
+          bash /tmp/install-ollama.sh
+          ollama serve >/tmp/ollama.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl --noproxy '*' -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null && break
+            sleep 2
+          done
+          curl --noproxy '*' -fsS --max-time 5 http://127.0.0.1:11434/api/tags >/dev/null
+      - name: Pull exactly the selected public model
+        env:
+          MODEL: ${{ inputs.model || 'qwen3.5:4b-q4_K_M' }}
+        run: |
+          set -euo pipefail
+          # Public GitHub runners have finite RAM; fail closed for oversized models.
+          free_kib=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
+          if [ "$MODEL" = 'qwen3.5:9b-q4_K_M' ] && [ "$free_kib" -lt 10000000 ]; then
+            echo 'Insufficient free runner RAM for 9B; no download or inference attempted.'
+            exit 1
+          fi
+          timeout 900 ollama pull "$MODEL"
+          ollama list
+      - name: Run synthetic evaluation (CPU only)
+        env:
+          MODEL: ${{ inputs.model || 'qwen3.5:4b-q4_K_M' }}
+        run: |
+          set -euo pipefail
+          timeout 1700 python arena_free_model_benchmark.py --execute --models "$MODEL" --per-case-timeout 100 --max-seconds 1600 --out /tmp/oxibay-qwen-evaluation.json
+          python - <<'PY'
+          import json
+          p=json.load(open("/tmp/oxibay-qwen-evaluation.json"))
+          print({"models":len(p["results"]), "all_completed":p["all_models_compared_completely"],
+                 "correct":p["results"][0].get("decision_correct"), "cases":p["results"][0].get("cases_completed")})
+          PY
+      - name: Save sanitized benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oxibay-free-model-${{ github.run_id }}
+          path: /tmp/oxibay-qwen-evaluation.json
+          if-no-files-found: warn
+          retention-days: 14
