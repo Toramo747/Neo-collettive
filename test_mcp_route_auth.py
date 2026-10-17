@@ -135,6 +135,7 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(k({"cf-connecting-ip":"192.0.2.9","x-forwarded-for":"1.1.1.1, 2.2.2.2"},("3.3.3.3",1)),"192.0.2.9")
         self.assertEqual(k({"x-forwarded-for":"1.1.1.1, 2.2.2.2","origin":"https://x"},("3.3.3.3",1)),"2.2.2.2")
         self.assertEqual(k({},("3.3.3.3",1)),"3.3.3.3")
+        self.assertEqual(k({"true-client-ip":"9.9.9.9","x-forwarded-for":"1.1.1.1, 2.2.2.2"},("3.3.3.3",1)),"2.2.2.2")
 
     async def test_signed_smoke_uses_public_path_but_is_not_demand(self):
         cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}

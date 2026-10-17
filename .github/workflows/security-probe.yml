@@ -20,7 +20,6 @@ jobs:
             c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$B$p"); out="$out POST$p=$c"
           done
           c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$B/api/autopilot/status?token=x"); out="$out query-token=$c"
-          c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -H 'X-NEO-Heartbeat-Token: wrong' "$B/api/heartbeat"); out="$out legacy-hdr=$c"
           c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer wrong' "$B/api/autopilot/status"); out="$out bad-bearer=$c"
           echo "::notice title=anonymous probe::$out"
           # Spoofed client IP headers after the limit: 429 = limiter holds, 401 = limiter bypassed

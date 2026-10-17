@@ -195,7 +195,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.63"  # bounded challenge gate state and council history; memory chunks in a dedicated GitHub repo (optional); public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
+VERSION = "0.99.64"  # auth limiter and public-tool limits keyed on the platform-appended client IP (audit 17/10); bounded challenge gate state and council history; memory chunks in a dedicated GitHub repo (optional); public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -10984,7 +10984,7 @@ def _trusted_client_key(header_map: dict, client: Any) -> str:
     not key limits. Prefer headers set by the edge (Cloudflare), then the LAST
     X-Forwarded-For hop, then the socket peer.
     """
-    for name in ("cf-connecting-ip","true-client-ip"):
+    for name in ("cf-connecting-ip",):  # set by the edge; True-Client-IP is client-controllable (17/10 audit)
         value=str(header_map.get(name) or "").strip()
         if value:
             return value[:64]

@@ -136,12 +136,18 @@ def scope_headers(scope) -> dict[str, str]:
 
 
 def scope_origin(scope, headers: dict[str, str]) -> str:
-    forwarded = str(headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    if forwarded:
-        return forwarded[:160]
-    real = str(headers.get("x-real-ip") or "").strip()
-    if real:
-        return real[:160]
+    """Client identity for the failed-auth limiter.
+
+    The FIRST X-Forwarded-For hop is whatever the client sent: the 17/10 audit
+    bypassed the limiter by rotating it. Use the edge header, then the LAST hop
+    (appended by the platform proxy), then the socket peer.
+    """
+    edge = str(headers.get("cf-connecting-ip") or "").strip()
+    if edge:
+        return edge[:160]
+    hops = [h.strip() for h in str(headers.get("x-forwarded-for") or "").split(",") if h.strip()]
+    if hops:
+        return hops[-1][:160]
     client = scope.get("client") or ("", 0)
     return str(client[0] or "unknown")[:160]
 
