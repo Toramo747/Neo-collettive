@@ -1,0 +1,42 @@
+name: IPD File Access Audit (public shadow)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Verify audit invariants
+        run: python -m unittest -v test_demand_pressure test_demand_pressure_hn_shadow test_demand_pressure_file_access_audit
+      - name: Execute 4 bounded public queries
+        run: timeout 240 python experiments/demand-pressure/file_access_audit.py --execute
+      - name: Verify privacy and commercial isolation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          x=json.loads(Path('/tmp/oxibay-ipd-file-access-audit-aggregates.json').read_text())
+          assert x['queries_planned']==4
+          assert x['human_reviewed_cases']==x['independently_verified_buyers']==0
+          assert x['commercial_gate_influence']=='NONE'
+          assert x['production_state_write'] is False
+          assert x['source_identifiers_persisted'] is False
+          assert x['requester_identifiers_persisted'] is False
+          assert x['raw_content_persisted'] is False
+          print({'audit':x['status'],'candidates':x.get('candidate_counts',{}).get('candidate_threads'),'same_count':x.get('candidate_count_matches_prior_aggregate')})
+          PY
+          git diff --exit-code -- data/arena neo_latest_result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ipd-file-access-review-aggregate
+          path: /tmp/oxibay-ipd-file-access-audit-aggregates.json
+          retention-days: 7
