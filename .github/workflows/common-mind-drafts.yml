@@ -4,7 +4,7 @@ name: Common Mind Drafts (Kaggle GPU, private, drafts only)
 # This workflow never posts anything.
 on:
   schedule:
-    - cron: "41 6,12,18 * * *"
+    - cron: "41 */2 * * *"  # also collects a run left in the Kaggle GPU queue
   workflow_dispatch:
     inputs:
       replay:
@@ -37,26 +37,40 @@ jobs:
           REPLAY: ${{ inputs.replay || '' }}
         run: |
           set -uo pipefail
+          K="$KAGGLE_USERNAME/neo-common-mind"
+          kstatus() { kaggle kernels status "$K" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*|queued|running' | head -1 | tr 'A-Z' 'a-z' || true; }
+          collect_output() {
+            rm -rf out; kaggle kernels output "$K" -p out >/dev/null 2>&1 || true
+            [ -f out/drafts.json ] && python tools/common_deep.py collect private-labels out/drafts.json "$1" "$REPLAY"
+          }
+          # 1. A run left behind by the GPU queue: collect it, or wait for it (never push over it).
+          prev=$(kstatus)
+          echo "::notice title=Common mind::previous kernel status=${prev:-none}"
+          case "$prev" in
+            queued|running) echo "::notice title=Common mind::previous run still ${prev}; it will be collected next time"; exit 0 ;;
+            complete) collect_output 0 ;;
+          esac
+          # 2. New run.
+          minutes=0
           python tools/common_deep.py pending private-labels "$REPLAY"; rc=$?
-          [ "$rc" = "3" ] && exit 0
-          python tools/mi_deep.py quota private-labels || { echo "weekly cap reached"; exit 0; }
-          python tools/common_deep.py build private-labels kernel "$KAGGLE_USERNAME" "$REPLAY"; rc=$?
-          [ "$rc" = "3" ] && exit 0
-          [ "$rc" = "0" ] || exit 1
-          start=$(date +%s)
-          kaggle kernels push -p kernel >/dev/null 2>&1 || { echo "::error title=Common mind::push failed"; exit 1; }
-          status=""
-          for i in $(seq 1 100); do
-            sleep 30
-            status=$(kaggle kernels status "$KAGGLE_USERNAME/neo-common-mind" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*' | head -1 || true)
-            [ -n "$status" ] && break
-          done
-          minutes=$(( ($(date +%s) - start) / 60 ))
-          echo "::notice title=Common mind::status=${status:-timeout} wall_minutes=$minutes"
-          kaggle kernels output "$KAGGLE_USERNAME/neo-common-mind" -p out >/dev/null 2>&1 || true
-          [ -f out/drafts.json ] || { echo "::warning title=Common mind::no output"; exit 0; }
-          python tools/common_deep.py collect private-labels out/drafts.json "$minutes" "$REPLAY"
-          python - "$minutes" <<'PY'
+          if [ "$rc" = "0" ] && python tools/mi_deep.py quota private-labels; then
+            python tools/common_deep.py build private-labels kernel "$KAGGLE_USERNAME" "$REPLAY"; rc=$?
+            if [ "$rc" = "0" ]; then
+              start=$(date +%s)
+              kaggle kernels push -p kernel >/dev/null 2>&1 || { echo "::error title=Common mind::push failed"; exit 1; }
+              status=""
+              for i in $(seq 1 60); do
+                sleep 30
+                status=$(kstatus)
+                case "$status" in complete|error|cancel*) break ;; esac
+              done
+              minutes=$(( ($(date +%s) - start) / 60 ))
+              echo "::notice title=Common mind::status=${status:-unknown} wall_minutes=$minutes"
+              if [ "$status" = "complete" ]; then collect_output "$minutes"
+              else echo "::warning title=Common mind::kernel ${status:-unknown} after ${minutes} min (GPU queue); output collected on the next run"; fi
+            fi
+          fi
+          python - "$minutes" <<'PY2'
           import json, sys
           from datetime import datetime, timezone
           from pathlib import Path
@@ -64,7 +78,7 @@ jobs:
           u = json.loads(p.read_text()) if p.exists() else {}
           y, w, _ = datetime.now(timezone.utc).isocalendar(); k = f"{y}-W{w:02d}"
           u[k] = round(float(u.get(k, 0)) + float(sys.argv[1]), 1); p.write_text(json.dumps(u))
-          PY
+          PY2
           rm -rf out kernel
           git -C private-labels config user.name "NEO Common Mind"
           git -C private-labels config user.email "actions@users.noreply.github.com"

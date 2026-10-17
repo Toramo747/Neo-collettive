@@ -70,5 +70,34 @@ class Selection(unittest.TestCase):
             self.assertIn("first", items[0]["earlier"])
 
 
+class Collect(unittest.TestCase):
+    def test_output_is_collected_once_and_marks_covers(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "drafts.json"
+            out.write_text(json.dumps({"run_tag": "T1", "replay": False, "drafts": [
+                {"id": "a2", "agent": "hermes", "covers": ["a1", "a2"], "source_body": "@neo hi?",
+                 "should_reply": True, "category": "factual", "body": "@hermes Yes.",
+                 "grounding_checked": True, "unsupported": []}]}))
+            self.assertEqual(cd.collect(d, str(out), "3"), 0)
+            base = Path(d) / "common" / "drafts"
+            self.assertEqual(json.loads((base / "handled.json").read_text()), ["a1", "a2"])
+            files = sorted(p.name for p in base.glob("2*.json"))
+            self.assertEqual(len(files), 1)
+            cd.collect(d, str(out), "0")
+            self.assertEqual(len(list(base.glob("2*.json"))), 1)
+
+    def test_replay_output_does_not_mark_handled(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "drafts.json"
+            out.write_text(json.dumps({"run_tag": "T2-replay", "replay": True, "drafts": [
+                {"id": "a2", "agent": "hermes", "covers": ["a2"], "should_reply": False}]}))
+            cd.collect(d, str(out), "1")
+            self.assertFalse((Path(d) / "common" / "drafts" / "handled.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

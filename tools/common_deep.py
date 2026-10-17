@@ -85,7 +85,8 @@ for item in INPUT["items"]:
         "Explain your choice in 'why' (one line)."
     )
     r = arena_mind.ollama_generate(MODEL, prompt, SCHEMA, timeout=300) or {}
-    row = {"id": item["id"], "agent": item["agent"], **{k: r.get(k) for k in ("should_reply", "category", "body", "why")}}
+    row = {"id": item["id"], "agent": item["agent"], "covers": item.get("covers") or [item["id"]],
+           "source_body": item["body"], **{k: r.get(k) for k in ("should_reply", "category", "body", "why")}}
     if row.get("should_reply") and str(row.get("body") or "").strip():
         check = (
             "You check a draft reply for invented facts.\n<facts>\n" + INPUT["voice"] + "\n</facts>\n"
@@ -98,7 +99,8 @@ for item in INPUT["items"]:
         row["grounding_checked"] = isinstance(g, dict)
         row["unsupported"] = [str(x)[:300] for x in ((g or {}).get("unsupported") or []) if str(x).strip()][:6]
     out.append(row)
-json.dump({"model": MODEL, "drafts": out, "kernel_minutes": round((time.time() - T0) / 60, 1)}, open(W + "/drafts.json", "w"))
+json.dump({"model": MODEL, "run_tag": INPUT.get("run_tag"), "replay": INPUT.get("replay", False),
+           "drafts": out, "kernel_minutes": round((time.time() - T0) / 60, 1)}, open(W + "/drafts.json", "w"))
 '''
 
 
@@ -203,7 +205,9 @@ def build(private_dir: str, kernel_dir: str, username: str, replay: str = "") ->
     if not items:
         print("::notice title=Common mind::nothing to draft")
         return 3
-    payload = {"items": items, "voice": (ROOT / "docs" / "common-voice.md").read_text()}
+    tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ("-replay" if replay else "")
+    payload = {"items": items, "voice": (ROOT / "docs" / "common-voice.md").read_text(),
+               "run_tag": tag, "replay": bool(replay)}
     sources = {n: (ROOT / n).read_text() for n in ("arena_mind.py", "local_llm_decoding.py")}
     kd = Path(kernel_dir)
     kd.mkdir(parents=True, exist_ok=True)
@@ -220,15 +224,26 @@ def build(private_dir: str, kernel_dir: str, username: str, replay: str = "") ->
 
 
 def collect(private_dir: str, output_json: str, minutes: str, replay: str = "") -> int:
+    """Store the drafts of one kernel run. Safe to call again on the same output:
+    a run_tag is collected once (the kernel may finish after the workflow gave up
+    waiting, 17/10: GPU queue > 50 min; the next workflow run collects it)."""
     base = Path(private_dir) / "common" / "drafts"
     base.mkdir(parents=True, exist_ok=True)
     data = json.loads(Path(output_json).read_text())
-    pend = pending_items(private_dir, replay=bool(replay))
+    tag = str(data.get("run_tag") or "")
+    seen_path = base / "collected.json"
+    seen = set(json.loads(seen_path.read_text())) if seen_path.exists() else set()
+    if tag and tag in seen:
+        print(f"::notice title=Common mind::run {tag} already collected")
+        return 0
+    replay = "1" if data.get("replay") else ("" if tag else replay)
+    pend = [] if tag else pending_items(private_dir, replay=bool(replay))
     sources = {x["id"]: x["body"] for x in pend}
     covers = {x["id"]: x.get("covers") or [x["id"]] for x in pend}
     drafts = []
     for d in data.get("drafts") or []:
-        issues = guard(d, sources.get(d.get("id"), ""))
+        covers.setdefault(d.get("id"), d.get("covers") or [d.get("id")])
+        issues = guard(d, d.get("source_body") or sources.get(d.get("id"), ""))
         drafts.append(dict(d, issues=issues, status=("skip" if not d.get("should_reply") else
                                                       "blocked" if issues else "ready")))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -241,7 +256,9 @@ def collect(private_dir: str, output_json: str, minutes: str, replay: str = "") 
         for d in drafts:
             handled |= {x for x in covers.get(d.get("id"), [d.get("id")]) if x}
         (base / "handled.json").write_text(json.dumps(sorted(handled)))
-    print("::notice title=Common mind result::" + json.dumps({
+    if tag:
+        seen_path.write_text(json.dumps(sorted(seen | {tag})))
+    print("::notice title=Common mind result::" + json.dumps({"run_tag": tag,
         "drafts": len(drafts), "ready": sum(d["status"] == "ready" for d in drafts),
         "blocked": sum(d["status"] == "blocked" for d in drafts), "skip": sum(d["status"] == "skip" for d in drafts),
         "kernel_minutes": data.get("kernel_minutes"), "wall_minutes": float(minutes)}))
