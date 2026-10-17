@@ -274,6 +274,7 @@ jobs:
               lines=[l for l in block.splitlines() if l.strip()][-6:]
               print("::warning title=failure detail::" + " | ".join(l.strip()[:200] for l in lines)[:900])
           PY
+            tail -5 /tmp/regression.txt | tr -dc 'a-zA-Z0-9 ._:=()/,-\n' | sed 's/^/::error title=regression tail::/'
           fi
           tail -3 /tmp/regression.txt
           exit $rc
