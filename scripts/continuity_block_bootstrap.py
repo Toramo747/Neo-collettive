@@ -19,15 +19,21 @@ ORIGIN = "https://neo-collettive.onrender.com"
 
 def validate_runtime(state: dict, snapshot: dict, cycle_floor: dict) -> dict:
     reason = str((state.get("last_checkpoint") or {}).get("reason") or "")
+    store_reason = str((state.get("evidence_store_status") or {}).get("reason") or "")
+    # 2026-10-17: the same continuity block leaves the store "degraded", and with
+    # an inline store every later checkpoint fails with this message instead.
+    blocked = reason == "stale_generation_write_blocked" or (
+        reason == "RuntimeError:degraded evidence store missing original reference"
+        and store_reason == "stale_generation_write_blocked")
     evidence = int((state.get("evidence_memory_telemetry") or {}).get("evidence_out") or 0)
     cycles = int(state.get("cycles_completed") or 0)
     published = snapshot.get("autopilot") or {}
     evidence_floor = int((published.get("select_diagnostics") or {}).get("persistent_evidence_items") or 0)
     floor = max(int(cycle_floor.get("cycles_completed") or 0), int(published.get("cycles_completed") or 0))
-    return {"reason_is_continuity_block": reason == "stale_generation_write_blocked",
+    return {"reason_is_continuity_block": blocked,
             "evidence_out": evidence, "evidence_floor": evidence_floor,
             "cycles": cycles, "cycle_floor": floor,
-            "allowed": reason == "stale_generation_write_blocked" and evidence_floor > 0
+            "allowed": blocked and evidence_floor > 0
                        and floor > 0 and evidence >= evidence_floor and cycles >= floor}
 
 

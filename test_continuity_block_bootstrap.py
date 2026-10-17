@@ -27,3 +27,17 @@ class ContinuityBootstrapTests(unittest.TestCase):
         state, _, floor = self.sample()
         self.assertFalse(validate_runtime(state, {}, floor)['allowed'])
         self.assertFalse(validate_runtime(state, {}, {})['allowed'])
+
+
+class DegradedContinuityReason(unittest.TestCase):
+    def test_degraded_follow_on_reason_is_allowed_only_with_store_block(self):
+        import sys
+        sys.path.insert(0, "scripts")
+        import continuity_block_bootstrap as c
+        snap = {"autopilot": {"select_diagnostics": {"persistent_evidence_items": 370}, "cycles_completed": 5000}}
+        st = {"last_checkpoint": {"reason": "RuntimeError:degraded evidence store missing original reference"},
+              "evidence_store_status": {"reason": "stale_generation_write_blocked"},
+              "evidence_memory_telemetry": {"evidence_out": 372}, "cycles_completed": 5012}
+        self.assertTrue(c.validate_runtime(st, snap, {})["allowed"])
+        self.assertFalse(c.validate_runtime({**st, "evidence_store_status": {"reason": "x"}}, snap, {})["allowed"])
+        self.assertFalse(c.validate_runtime({**st, "evidence_memory_telemetry": {"evidence_out": 1}}, snap, {})["allowed"])
