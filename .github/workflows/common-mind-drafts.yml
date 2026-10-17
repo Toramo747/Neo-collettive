@@ -82,7 +82,9 @@ jobs:
           rm -rf out kernel
           git -C private-labels config user.name "NEO Common Mind"
           git -C private-labels config user.email "actions@users.noreply.github.com"
-          git -C private-labels add common/drafts market-intuition/deep_usage.json
+          python tools/common_experience.py sweep private-labels 48 || true
+          python tools/common_experience.py stats private-labels || true
+          git -C private-labels add common/drafts common/experience.jsonl market-intuition/deep_usage.json 2>/dev/null || git -C private-labels add common/drafts market-intuition/deep_usage.json
           git -C private-labels commit --quiet -m "common mind: drafts (private)" || exit 0
           for attempt in 1 2 3 4; do
             git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0

@@ -15,10 +15,30 @@ permissions:
 jobs:
   reply:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: |
           if [ "${{ inputs.stage }}" = "send" ]; then python tools/common_reply.py send "${{ inputs.file }}"; else python tools/common_reply.py spec; fi
+      - name: Record the posted reply as experience for the local model (private)
+        if: inputs.stage == 'send' && success()
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - if: inputs.stage == 'send' && success()
+        run: |
+          set -uo pipefail
+          python tools/common_experience.py posted private-labels "${{ inputs.file }}" "posted with Andrea's OK"
+          git -C private-labels config user.name "NEO Common Experience"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/experience.jsonl
+          git -C private-labels commit --quiet -m "common: experience (private)" || exit 0
+          for attempt in 1 2 3 4; do
+            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
+            sleep $((attempt*5))
+          done
+          exit 1
