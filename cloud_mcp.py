@@ -1447,6 +1447,18 @@ async def _write_challenge_track_store(
         "Accept":"application/json",
         "Content-Type":"application/json",
     }
+    result=await _write_challenge_chunks(reference,chunks,headers)
+    if result.get("ok") is not True:
+        # Never leave a partial generation behind: on a failed write the
+        # chunks already stored are orphans that refill the env (16/10).
+        prev_gen=generation_id(previous_reference) if isinstance(previous_reference,dict) else ""
+        if generation_id(reference)!=prev_gen:
+            await _delete_challenge_track_generation({**reference,"chunk_count":len(chunks)})
+        return result
+    return {"ok":True,"reference":reference,"chunk_count":len(chunks)}
+
+
+async def _write_challenge_chunks(reference: dict[str, Any], chunks: list[str], headers: dict) -> dict:
     try:
         async with httpx.AsyncClient(timeout=min(TIMEOUT,12),follow_redirects=False) as client:
             for index,chunk in enumerate(chunks):
@@ -1468,7 +1480,7 @@ async def _write_challenge_track_store(
                     return {"ok":False,"reason":"render_challenge_store_verify_mismatch","chunk_index":index}
     except Exception as exc:
         return {"ok":False,"reason":type(exc).__name__+":"+str(exc)[:180]}
-    return {"ok":True,"reference":reference,"chunk_count":len(chunks)}
+    return {"ok":True}
 
 
 @OBSERVATION.timed("evidence_store_write")
@@ -1763,6 +1775,34 @@ def _guard_block_degraded_is_recoverable(state: dict, original_ref) -> bool:
     )
 
 
+async def _discard_uncommitted_generations(challenge_ref, active_ref, archive_ref) -> None:
+    """A checkpoint that failed after writing external generations must delete
+    them: nothing references them, and on 16/10 they refilled the Render env
+    (300 keys) overnight. A generation still referenced by the committed state
+    (same content -> same generation id) is never deleted."""
+    committed=[
+        AUTOPILOT_STATE.get("challenge_track_store_reference"),
+        AUTOPILOT_STATE.get("commercial_evidence_store_reference"),
+        AUTOPILOT_STATE.get("commercial_evidence_archive_reference"),
+    ]
+
+    def still_referenced(ref) -> bool:
+        gen=generation_id(ref)
+        if not gen:
+            return True  # unknown identity: be safe, keep it
+        return any(isinstance(c,dict) and _reference_contains_generation(c,gen) for c in committed)
+
+    try:
+        if isinstance(challenge_ref,dict) and not still_referenced(challenge_ref):
+            await _delete_challenge_track_generation(challenge_ref)
+        if isinstance(active_ref,dict) and not still_referenced(active_ref):
+            await _delete_evidence_generation(active_ref)
+        if isinstance(archive_ref,dict) and not still_referenced(archive_ref):
+            await _delete_evidence_generation(archive_ref)
+    except Exception:
+        return
+
+
 @OBSERVATION.timed("checkpoint")
 async def _checkpoint_state_to_render() -> dict:
     if not RENDER_API_KEY or not RENDER_SERVICE_ID:
@@ -1951,6 +1991,7 @@ async def _checkpoint_state_to_render() -> dict:
             "limit_bytes":STATE_ENV_MAX_BYTES,
             "compaction":compaction_meta,
         }
+        await _discard_uncommitted_generations(new_challenge_ref,new_active_ref,new_archive_ref)
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
 
@@ -1982,6 +2023,7 @@ async def _checkpoint_state_to_render() -> dict:
             if echoed is not None and echoed!=value:
                 result["ok"]=False
                 result["reason"]="render_state_verify_mismatch"
+                await _discard_uncommitted_generations(new_challenge_ref,new_active_ref,new_archive_ref)
                 AUTOPILOT_STATE["last_checkpoint"]=result
                 return result
             result["state_generation"]=new_state_generation
@@ -2020,6 +2062,8 @@ async def _checkpoint_state_to_render() -> dict:
                 stale_generation=generation_id(stale_ref)
                 if stale_generation and not _reference_contains_generation(new_challenge_ref,stale_generation):
                     await _delete_challenge_track_generation(stale_ref)
+        else:
+            await _discard_uncommitted_generations(new_challenge_ref,new_active_ref,new_archive_ref)
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
     except Exception as e:
@@ -2030,6 +2074,7 @@ async def _checkpoint_state_to_render() -> dict:
             "limit_bytes":STATE_ENV_MAX_BYTES,
             "compaction":compaction_meta,
         }
+        await _discard_uncommitted_generations(new_challenge_ref,new_active_ref,new_archive_ref)
         AUTOPILOT_STATE["last_checkpoint"]=result
         return result
 
