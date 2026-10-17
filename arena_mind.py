@@ -286,8 +286,14 @@ def consolidate(model: str, names: list[str], gen: Callable = ollama_generate) -
 # A payer needs a real first-person sentence about paying for a tool/service; a person
 # joins a problem only if their sentence shares the problem's specific words.
 _PAY_RE = re.compile(
-    r"\b(i|we)\s*(would|'d|will|'ll)\s+(happily\s+|gladly\s+|definitely\s+)?pay\b|\btake my money\b|"
-    r"\b(budget for|willing to pay|we pay for|i pay for|i'm paying|we're paying|paid plan|subscription)\b", re.I)
+    # First person only: the speaker's own willingness or spending. Third-person
+    # ("execs will be willing to pay"), bare "subscription"/"paid plan" and complaints
+    # about subscriptions are not payers (17/10: 12 of 12 such "payers" were false).
+    r"\b(i|we)\s*(would|'d|will|'ll)\s+(happily\s+|gladly\s+|definitely\s+|totally\s+)?pay\b|\btake my money\b|"
+    r"\b(i|we)\s*('m|am|'re|are)\s+(\w+\s+)?(happy|willing|ready|glad)\s+to\s+pay\b|"
+    r"\b(i|we)\s+(already\s+|currently\s+)?pay\s+(for|\$|€|£)|\b(i'm|we're|i am|we are)\s+(already\s+|currently\s+)?paying\b|"
+    r"\b(i|we)\s*(have|'ve)\s+(a\s+|the\s+|some\s+)?budget\s+for\b|\bour\s+budget\s+for\b|"
+    r"\b(i|we)\s+(bought|purchased)\b", re.I)
 _PAY_NOT = re.compile(
     r"\bpay\s+(a lot|dearly|the price|attention|for it later|a penalty|in terms|heavily in|a cost|with my|with our)", re.I)
 _NAME_GENERIC = {"service", "services", "tool", "tools", "software", "system", "systems", "solution", "solutions",
@@ -305,7 +311,19 @@ def strict_pay(sentence: str) -> bool:
     # "So I would pay $45/month for ...?" is a complaint about a price, not an intent to buy
     if re.search(r"\bwould pay\b", s, re.I) and s.strip().endswith("?"):
         return False
+    # Paying to get rid of something, or complaining about a subscription push, is not intent.
+    if re.search(r"\b(annoying|aggressive|pushing|forced|just to wrap|tired of|sick of|frustrated)\b", s, re.I) and re.search(r"\bsubscri", s, re.I):
+        return False
     return True
+
+
+def distinct_payers(market_map: dict) -> list[str]:
+    """Each person counts once, however many problem entries quote them."""
+    seen: dict[str, None] = {}
+    for v in (market_map or {}).values():
+        for p in v.get("payers") or []:
+            seen.setdefault(p, None)
+    return list(seen)
 
 
 def coherent(name: str, sentence: str) -> bool:

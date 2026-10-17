@@ -595,7 +595,7 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "diary": diary[-60:], "idea_log": idea_log[-200:], "learned_phrases": list(LEARNED_PHRASES),
         "last_thought": thought,
         "phrase_dry": phrase_dry,
-        "map_version": state.get("map_version") or (2 if not state.get("market_map") else None),
+        "map_version": state.get("map_version") or (3 if not state.get("market_map") else None),
         "deep_queue": deep_queue,
         "deep_judged": list(state.get("deep_judged") or [])[-5000:],
         "deep_log": list(state.get("deep_log") or [])[-100:],
@@ -703,7 +703,7 @@ def main() -> int:
             print("::notice title=Market Intuition deep mind::applied one deep reflection")
         except Exception as exc:
             print("::warning title=Market Intuition deep mind::could not apply: " + type(exc).__name__)
-    if state.get("map_version") != 2 and state.get("market_map"):
+    if state.get("map_version") != 3 and state.get("market_map"):
         needs: dict = {}
         disc = base / "discoveries.jsonl"
         for line in (disc.read_text().splitlines() if disc.exists() else []):
@@ -716,8 +716,9 @@ def main() -> int:
             needs.setdefault(x.get("person"), x.get("need") or "")
         rebuilt, stats = arena_mind.rebuild_map(state["market_map"], needs)
         rebuilt, merges = arena_mind.merge_similar(rebuilt)
-        state = dict(state, market_map=rebuilt, map_version=2)
+        state = dict(state, market_map=rebuilt, map_version=3)
         stats["merges"] = merges
+        stats["distinct_payers"] = len(arena_mind.distinct_payers(rebuilt))
         print("::notice title=Market Intuition honest map::" + json.dumps(stats, separators=(",", ":")))
     model = os.getenv("MI_LLM_MODEL", "").strip()
     if model and not arena_mind.available(model):

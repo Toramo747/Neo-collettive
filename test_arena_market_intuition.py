@@ -240,3 +240,26 @@ class LabelHygieneTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StrictPayFirstPersonOnly(unittest.TestCase):
+    def test_false_payers_of_17_october_are_rejected(self):
+        import arena_mind as m
+        for s in ("execs and overworked infra teams will be willing to pay for",
+                  "The iOS app started to get annoying with its extra subscription features",
+                  "not as aggressive as quizlet in pushing users to get a subscription",
+                  "Then I try to override the Ocp-Apim-Subscription-Key",
+                  "I was frustrated by two things: $20/mo subscription layers just to wrap basic API access"):
+            self.assertFalse(m.strict_pay(s), s)
+
+    def test_first_person_intent_is_kept(self):
+        import arena_mind as m
+        for s in ("I would happily pay $10/month for a tool that does this",
+                  "We're willing to pay for a hosted version", "We pay for Datadog but it misses this",
+                  "We have budget for this next quarter"):
+            self.assertTrue(m.strict_pay(s), s)
+
+    def test_distinct_payers_counts_a_person_once(self):
+        import arena_mind as m
+        mm = {"a": {"payers": ["p1"]}, "b": {"payers": ["p1", "p2"]}}
+        self.assertEqual(m.distinct_payers(mm), ["p1", "p2"])
