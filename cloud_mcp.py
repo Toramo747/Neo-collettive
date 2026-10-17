@@ -10,6 +10,7 @@ import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import quote_verifier
+import github_chunk_store
 import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
@@ -194,7 +195,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.61"  # public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
+VERSION = "0.99.62"  # memory chunks in a dedicated GitHub repo (optional); public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -222,12 +223,41 @@ def _boot_env():
     return _BOOT_ENV
 
 
+GH_CHUNKS = github_chunk_store.from_env()
+
+
 def _persisted_env(key: str) -> str | None:
+    # Big memory chunks live in the dedicated GitHub repo when configured; older
+    # generations still in Render env are read from there (fallback).
+    if GH_CHUNKS is not None and github_chunk_store.is_chunk_key(key):
+        value = GH_CHUNKS.get(key)
+        if value is not None:
+            return value
     return _boot_env().get(key)
 
 
 def _persisted_env_items():
-    return _boot_env().items()
+    if GH_CHUNKS is None:
+        return _boot_env().items()
+    items = dict(_boot_env().items())
+    if GH_CHUNKS is not None:
+        for key in GH_CHUNKS.keys():
+            value = GH_CHUNKS.get(key)
+            if value is not None:
+                items[key] = value
+    return items.items()
+
+
+async def _gh_put_chunks(values: dict[str, str]) -> bool:
+    return GH_CHUNKS is not None and await GH_CHUNKS.put_many(values)
+
+
+async def _gh_delete_chunks(keys: list[str]) -> None:
+    if GH_CHUNKS is not None:
+        try:
+            await GH_CHUNKS.delete_many(keys)
+        except Exception:
+            return
 JARVIS_RENDER_SERVICE_ID = (os.getenv("JARVIS_RENDER_SERVICE_ID") or "").strip()
 JARVIS_URL = (os.getenv("JARVIS_URL") or "").strip()
 JARVIS_API_KEY = (os.getenv("JARVIS_API_KEY") or "").strip()
@@ -1448,6 +1478,8 @@ async def _write_challenge_track_store(
         "Accept":"application/json",
         "Content-Type":"application/json",
     }
+    if GH_CHUNKS is not None and await _gh_put_chunks({_challenge_track_env_key(i,reference):c for i,c in enumerate(chunks)}):
+        return {"ok":True,"reference":reference,"chunk_count":len(chunks),"backend":"github"}
     result=await _write_challenge_chunks(reference,chunks,headers)
     if result.get("ok") is not True:
         # Never leave a partial generation behind: on a failed write the
@@ -1500,6 +1532,9 @@ async def _write_commercial_evidence_store(
         store=store,
         previous_generation=previous_reference,
     )
+    if GH_CHUNKS is not None and await _gh_put_chunks(
+            {_commercial_evidence_env_key(i,reference,archive=archive):c for i,c in enumerate(chunks)}):
+        return {"ok":True,"reference":reference,"evidence_count":len(rows),"chunk_count":len(chunks),"backend":"github"}
     headers={
         "Authorization":f"Bearer {RENDER_API_KEY}",
         "Accept":"application/json",
@@ -1535,6 +1570,9 @@ async def _write_commercial_evidence_store(
 
 async def _delete_evidence_generation(reference: dict[str, Any] | None) -> None:
     ref=reference if isinstance(reference,dict) else {}
+    if is_external_reference(ref):
+        await _gh_delete_chunks([_commercial_evidence_env_key(i,ref,archive=ref.get("store")=="render_env_archive_v1")
+                                 for i in range(max(0,int(ref.get("chunk_count") or 0)))])
     if not is_external_reference(ref) or not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return
     headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
@@ -1575,6 +1613,8 @@ def _discarded_ancestor_generations(
 
 async def _delete_challenge_track_generation(reference: dict[str, Any] | None) -> None:
     ref=reference if isinstance(reference,dict) else {}
+    if is_external_reference(ref):
+        await _gh_delete_chunks([_challenge_track_env_key(i,ref) for i in range(max(0,int(ref.get("chunk_count") or 0)))])
     if not is_external_reference(ref) or not RENDER_API_KEY or not RENDER_SERVICE_ID:
         return
     headers={"Authorization":f"Bearer {RENDER_API_KEY}","Accept":"application/json"}
