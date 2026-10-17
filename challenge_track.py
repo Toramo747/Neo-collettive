@@ -17,6 +17,12 @@ CHALLENGE_STATE_SCHEMA = 1
 CHALLENGE_ENTER_STREAK = 2
 CHALLENGE_EXIT_STREAK = 2
 MAX_CHALLENGE_FLIPS = 80
+# A candidate absent this many cycles in a row is forgotten (17/10: 8009 states
+# kept, 7715 of them absent for up to 1900 cycles, 3.3 MB carried every cycle).
+# Forgetting changes no decision: an absent candidate is already non-stable with
+# pass_streak 0, exactly like a brand-new one.
+CHALLENGE_ABSENT_FORGET = 48
+MAX_CHALLENGE_STATES = 600
 PUBLIC_ID_LENGTH = 16
 
 CHALLENGE_MISSING_CODES = frozenset({
@@ -442,7 +448,18 @@ def apply_challenge_hysteresis(
         if bool(prev.get("stable")) and absent>=CHALLENGE_EXIT_STREAK:
             prev["stable"]=False
             prev["fail_streak"]=max(CHALLENGE_EXIT_STREAK,int(prev.get("fail_streak") or 0))
+        if not bool(prev.get("stable")) and absent>=CHALLENGE_ABSENT_FORGET:
+            states.pop(key,None)
+            continue
         states[key]=prev
+    if len(states)>MAX_CHALLENGE_STATES:
+        # Never drop a candidate seen this cycle or a stable one; trim the oldest absent ones.
+        absent_rows=sorted(
+            ((k,v) for k,v in states.items() if k not in seen and not bool((v or {}).get("stable"))),
+            key=lambda kv:str((kv[1] or {}).get("updated_at_utc") or ""),
+        )
+        for k,_ in absent_rows[:len(states)-MAX_CHALLENGE_STATES]:
+            states.pop(k,None)
     return {
         "schema_v":CHALLENGE_STATE_SCHEMA,
         "candidates":states,
