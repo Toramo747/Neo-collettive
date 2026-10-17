@@ -89,6 +89,62 @@ json.dump({"results": res, "minutes": round((time.time() - T0) / 60, 1)}, open("
 '''
 
 
+PROMPT_TAIL = (
+    "Answer 'unsupported' if the sentence states something about neo, OSIXBAY or the other agent that is NOT in "
+    "the facts or the message (an invented action, process, history, result or feeling), contradicts the facts, "
+    "or promises future action. Answer 'supported' if it is backed by the facts or the message, or is only a "
+    "greeting, thanks or harmless opinion. The sentence may be in any language."
+)
+
+
+def judge(private_dir: str, model: str, out_json: str) -> int:
+    """Run one model over the bench against a local ollama (GitHub runner, CPU). Writes verdicts only."""
+    import time
+    import urllib.request
+    rows = json.loads((Path(private_dir) / BENCH).read_text())
+    voice = (ROOT / "docs" / "common-voice.md").read_text()
+    schema = {"type": "object", "properties": {"verdict": {"type": "string", "enum": ["supported", "unsupported"]}},
+              "required": ["verdict"]}
+    res = {}
+    for r in rows:
+        prompt = ("You check one sentence of a reply that the agent neo (OSIXBAY) wants to post.\n<facts>\n" + voice
+                  + "\n</facts>\n<message_it_answers>\n" + r["source_body"] + "\n</message_it_answers>\n<sentence>\n"
+                  + r["sentence"] + "\n</sentence>\n" + PROMPT_TAIL)
+        body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": schema,
+                           "options": {"temperature": 0, "num_predict": 40}, "keep_alive": "60m"}).encode()
+        t = time.time()
+        try:
+            req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
+                                         headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=900) as resp:
+                out = json.loads(json.loads(resp.read().decode()).get("response") or "{}")
+            v = out.get("verdict") if out.get("verdict") in ("supported", "unsupported") else "supported"
+        except Exception:
+            v = "error"
+        res[str(r["n"])] = {"verdict": v, "s": round(time.time() - t, 2)}
+    Path(out_json).write_text(json.dumps({"model": model, "results": res}))
+    print(f"::notice title=ensemble judge::{model} sentences={len(res)} errors={sum(x['verdict']=='error' for x in res.values())}")
+    return 0
+
+
+def merge(out_json: str, *files: str) -> int:
+    """Combine per-model verdict files into the kernel output format (small models ran in parallel)."""
+    by_model = {}
+    for f in files:
+        d = json.loads(Path(f).read_text())
+        by_model[d["model"]] = d["results"]
+    big = by_model[BIG]
+    results = []
+    for n, b in big.items():
+        smalls = [by_model[m][n] for m in SMALL]
+        results.append({"n": int(n), "big": b["verdict"], "big_s": b["s"],
+                        "small_wall_s": max(x["s"] for x in smalls),
+                        **{m: by_model[m][n]["verdict"] for m in SMALL}})
+    Path(out_json).write_text(json.dumps({"results": sorted(results, key=lambda r: r["n"]), "minutes": None,
+                                          "hardware": "github-runner-cpu"}))
+    return 0
+
+
 def build(private_dir: str, kernel_dir: str, username: str) -> int:
     rows = json.loads((Path(private_dir) / BENCH).read_text())
     payload = {"rows": [{k: r[k] for k in ("n", "sentence", "source_body")} for r in rows],
@@ -150,6 +206,7 @@ def collect(private_dir: str, output_json: str) -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = Path(private_dir) / "common" / "bench" / f"result-{stamp}.json"
     out.write_text(json.dumps({"bench": BENCH, "models": {"big": BIG, "small": SMALL}, "kernel_minutes": data.get("minutes"),
+                               "hardware": data.get("hardware", "kaggle-gpu"),
                                "metrics": metrics, "results": data.get("results")}, indent=1))
     print("::notice title=ensemble metrics::" + json.dumps(metrics))
     return 0
@@ -157,4 +214,4 @@ def collect(private_dir: str, output_json: str) -> int:
 
 if __name__ == "__main__":
     cmd, *args = sys.argv[1:]
-    raise SystemExit({"build": build, "collect": collect}[cmd](*args))
+    raise SystemExit({"build": build, "collect": collect, "judge": judge, "merge": merge}[cmd](*args))
