@@ -48,7 +48,28 @@ def sha(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def compute_plan(env: dict[str, str]) -> dict:
+def remote_chunks(env: dict[str, str]) -> dict[str, str]:
+    """Chunks held in the private GitHub state repo (v0.99.62+), read-only.
+
+    Used only to VERIFY the referenced heads; they are never deletion candidates
+    here. Config comes from the same Render env the service uses; never logged.
+    """
+    token = (env.get("NEO_STATE_GITHUB_TOKEN") or "").strip()
+    repo = (env.get("NEO_STATE_GITHUB_REPO") or "").strip()
+    if not token or "/" not in repo:
+        return {}
+    import github_chunk_store as gcs
+    store = gcs.GitHubChunkStore(repo, token, branch=(env.get("NEO_STATE_GITHUB_BRANCH") or "main").strip() or "main")
+    out = {}
+    for key in store.keys():
+        value = store.get(key)
+        if value is None:
+            raise ValueError("remote_chunk_unreadable")
+        out[key] = value
+    return out
+
+
+def compute_plan(env: dict[str, str], remote: dict[str, str] | None = None) -> dict:
     from state_codec import decode_checkpoint
 
     state = decode_checkpoint(env.get("NEO_STATE_JSON") or "") if env.get("NEO_STATE_JSON") else None
@@ -63,16 +84,30 @@ def compute_plan(env: dict[str, str]) -> dict:
     if not referenced:
         raise ValueError("no_referenced_generation")
 
-    groups: dict[tuple[str, str], dict[int, str]] = {}
-    for key, value in env.items():
-        m = inv.GEN_RE.match(key)
-        if m:
-            groups.setdefault((m.group(1), m.group(2)), {})[int(m.group(3))] = key
+    def _groups(src: dict[str, str]) -> dict[tuple[str, str], dict[int, str]]:
+        g: dict[tuple[str, str], dict[int, str]] = {}
+        for key in src:
+            m = inv.GEN_RE.match(key)
+            if m:
+                g.setdefault((m.group(1), m.group(2)), {})[int(m.group(3))] = key
+        return g
+
+    groups = _groups(env)                      # deletion candidates: Render env only
+    lookup = {**(remote or {}), **env}         # verification: env + GitHub state repo
+    all_groups = _groups(lookup)
+
+    def _verify(prefix: str, gen: str | None) -> list:
+        keys = all_groups.get((prefix, gen), {}) if gen else {}
+        ok, digest, decoded = inv.decode_generation([lookup[keys[i]] for i in sorted(keys)]) if keys else (False, "", [])
+        if not ok or digest[:12] != gen:
+            raise ValueError("current_head_unverifiable")
+        return decoded
+
     head = (inv.referenced_generations(active_ref) or [None])[0]
-    head_keys = groups.get(("NEO_EVIDENCE_", head), {}) if head else {}
-    ok, digest, head_rows = inv.decode_generation([env[head_keys[i]] for i in sorted(head_keys)]) if head_keys else (False, "", [])
-    if not ok or digest[:12] != head:
-        raise ValueError("current_head_unverifiable")
+    head_rows = _verify("NEO_EVIDENCE_", head)
+    ch_head = (inv.referenced_generations(state.get("challenge_track_store_reference")) or [None])[0]
+    if ch_head:
+        _verify("NEO_CHALLENGE_TRACK_", ch_head)  # never clean while the live track is unreadable
     current_ids = {inv.identity(r) for r in head_rows if isinstance(r, dict)}
 
     # Missing identities per orphan evidence generation (intact only).
@@ -188,8 +223,8 @@ def _plan_id_of(keys: list[str], env: dict[str, str]) -> str:
     return hashlib.sha256("\n".join(f"{k}:{sha(env[k])}" for k in sorted(keys)).encode()).hexdigest()[:16]
 
 
-def apply(manifest_path: str, plan_id: str, env: dict[str, str]) -> dict:
-    plan = compute_plan(env)
+def apply(manifest_path: str, plan_id: str, env: dict[str, str], remote: dict[str, str] | None = None) -> dict:
+    plan = compute_plan(env, remote)
     manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     backed = manifest.get("keys") or {}
     in_backup = [k for k in plan["delete_keys"] if backed.get(k, {}).get("sha256") == sha(env[k])]
@@ -221,10 +256,10 @@ def main(argv: list[str]) -> int:
     if mode == "backup":
         out = backup(argv[2], env)
     elif mode == "plan":
-        plan = compute_plan(env)
+        plan = compute_plan(env, remote_chunks(env))
         out = {k: v for k, v in plan.items() if k != "delete_keys"}
     elif mode == "apply":
-        out = apply(argv[2], argv[3], env)
+        out = apply(argv[2], argv[3], env, remote_chunks(env))
     else:
         raise ValueError("unknown_mode")
     print(json.dumps(out, separators=(",", ":"), sort_keys=True))
