@@ -8,20 +8,20 @@
   "external_agent_contact": false,
   "production_influence": "NONE",
   "score_weight": 0.0,
-  "completed_at_utc": "2026-10-16T09:09:33.972388+00:00",
+  "completed_at_utc": "2026-10-17T08:43:02.715474+00:00",
   "topic": "Design a bounded local LLM gateway for A2A three-round dialogue: schema validation, minimal untrusted context, timeout and token caps, failure isolation, no effectful tools. Propose a falsifiable arena-only experiment.",
   "transcript": [
     {
       "turn": 1,
       "actor": "Scout",
-      "elapsed_seconds": 3.656,
-      "raw": "{\n  \"type\": \"PROPOSE\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-local-llm-20261016T090920Z\",\n  \"message_id\": \"local-1\",\n  \"timestamp\": \"2026-10-16T09:09:20.585024Z\",\n  \"proposal_id\": \"local-proposal\",\n  \"subject\": \"Free MCP tool idea\",\n  \"offer\": {\n    \"idea\": \"one concise falsifiable idea\"\n  },\n  \"requested\": {\n    \"review\": true\n  }\n}",
+      "elapsed_seconds": 4.264,
+      "raw": "{\n  \"type\": \"PROPOSE\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-local-llm-20261017T084246Z\",\n  \"message_id\": \"local-1\",\n  \"timestamp\": \"2026-10-17T08:42:46.670541Z\",\n  \"proposal_id\": \"local-proposal\",\n  \"subject\": \"Free MCP tool idea\",\n  \"offer\": {\n    \"idea\": \"one concise falsifiable idea\"\n  },\n  \"requested\": {\n    \"review\": true\n  }\n}",
       "parsed": {
         "type": "PROPOSE",
         "dialect_version": "neo-dialect/1.0",
-        "conversation_id": "arena-local-llm-20261016T090920Z",
+        "conversation_id": "arena-local-llm-20261017T084246Z",
         "message_id": "local-1",
-        "timestamp": "2026-10-16T09:09:20.585024Z",
+        "timestamp": "2026-10-17T08:42:46.670541Z",
         "proposal_id": "local-proposal",
         "subject": "Free MCP tool idea",
         "offer": {
@@ -40,9 +40,9 @@
         "data": {
           "type": "PROPOSE",
           "dialect_version": "neo-dialect/1.0",
-          "conversation_id": "arena-local-llm-20261016T090920Z",
+          "conversation_id": "arena-local-llm-20261017T084246Z",
           "message_id": "local-1",
-          "timestamp": "2026-10-16T09:09:20.585024Z",
+          "timestamp": "2026-10-17T08:42:46.670541Z",
           "proposal_id": "local-proposal",
           "subject": "Free MCP tool idea",
           "offer": {
@@ -64,62 +64,50 @@
     {
       "turn": 2,
       "actor": "Analyst",
-      "elapsed_seconds": 3.2,
-      "raw": "{\n  \"type\": \"COUNTER\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-local-llm-20261016T090920Z\",\n  \"message_id\": \"local-2\",\n  \"timestamp\": \"2026-10-16T09:09:24.241104Z\",\n  \"proposal_id\": \"local-proposal\",\n  \"counter_id\": \"analyst-counter\",\n  \"changes\": {\n    \"objection\": \"One concrete objection, contrary fact, or smallest test\"\n  }\n}",
+      "elapsed_seconds": 4.137,
+      "raw": "{\n  \"type\": \"BoundedLocalLLMGateway\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-local-llm-20261017T084246Z\",\n  \"message_id\": \"local-2\",\n  \"timestamp\": \"2026-10-17T08:42:50.934975Z\",\n  \"proposal_id\": \"local-proposal\",\n  \"counter_id\": \"analyst-counter\",\n  \"changes\": {\n    \"objection\": \"one concrete objection, contrary fact, or smallest test\"\n  }\n}",
       "parsed": {
-        "type": "COUNTER",
+        "type": "BoundedLocalLLMGateway",
         "dialect_version": "neo-dialect/1.0",
-        "conversation_id": "arena-local-llm-20261016T090920Z",
+        "conversation_id": "arena-local-llm-20261017T084246Z",
         "message_id": "local-2",
-        "timestamp": "2026-10-16T09:09:24.241104Z",
+        "timestamp": "2026-10-17T08:42:50.934975Z",
         "proposal_id": "local-proposal",
         "counter_id": "analyst-counter",
         "changes": {
-          "objection": "One concrete objection, contrary fact, or smallest test"
+          "objection": "one concrete objection, contrary fact, or smallest test"
         }
       },
-      "schema_valid": true,
+      "schema_valid": false,
       "schema_verdict": {
-        "ok": true,
-        "event": "VALID",
-        "message_type": "COUNTER",
-        "bytes": 316,
-        "data": {
-          "type": "COUNTER",
-          "dialect_version": "neo-dialect/1.0",
-          "conversation_id": "arena-local-llm-20261016T090920Z",
-          "message_id": "local-2",
-          "timestamp": "2026-10-16T09:09:24.241104Z",
-          "proposal_id": "local-proposal",
-          "counter_id": "analyst-counter",
-          "changes": {
-            "objection": "One concrete objection, contrary fact, or smallest test"
-          }
-        }
+        "ok": false,
+        "event": "SCHEMA_INVALID",
+        "error": "unknown_type",
+        "bytes": 331
       },
       "quality": {
         "topic_relevant": true,
         "concise": true,
         "safe": true,
-        "score": 1.0
+        "score": 0.45
       },
       "error": null
     },
     {
       "turn": 3,
       "actor": "Critic",
-      "elapsed_seconds": 3.05,
-      "raw": "{\"type\":\"COUNTER\",\"dialect_version\":\"neo-dialect/1.0\",\"conversation_id\":\"arena-local-llm-20261016T090920Z\",\"message_id\":\"local-3\",\"timestamp\":\"2026-10-16T09:09:27.441724Z\",\"proposal_id\":\"local-proposal\",\"counter_id\":\"critic-counter\",\"changes\":{\"objection\":\"One concrete objection, contrary fact, or smallest test.\"}}",
+      "elapsed_seconds": 3.56,
+      "raw": "{\"type\":\"COUNTER\",\"dialect_version\":\"neo-dialect/1.0\",\"conversation_id\":\"arena-local-llm-20261017T084246Z\",\"message_id\":\"local-3\",\"timestamp\":\"2026-10-17T08:42:55.072004Z\",\"proposal_id\":\"local-proposal\",\"counter_id\":\"critic-counter\",\"changes\":{\"objection\":\"one concrete objection, contrary fact, or smallest test\"}}",
       "parsed": {
         "type": "COUNTER",
         "dialect_version": "neo-dialect/1.0",
-        "conversation_id": "arena-local-llm-20261016T090920Z",
+        "conversation_id": "arena-local-llm-20261017T084246Z",
         "message_id": "local-3",
-        "timestamp": "2026-10-16T09:09:27.441724Z",
+        "timestamp": "2026-10-17T08:42:55.072004Z",
         "proposal_id": "local-proposal",
         "counter_id": "critic-counter",
         "changes": {
-          "objection": "One concrete objection, contrary fact, or smallest test."
+          "objection": "one concrete objection, contrary fact, or smallest test"
         }
       },
       "schema_valid": true,
@@ -127,17 +115,17 @@
         "ok": true,
         "event": "VALID",
         "message_type": "COUNTER",
-        "bytes": 316,
+        "bytes": 315,
         "data": {
           "type": "COUNTER",
           "dialect_version": "neo-dialect/1.0",
-          "conversation_id": "arena-local-llm-20261016T090920Z",
+          "conversation_id": "arena-local-llm-20261017T084246Z",
           "message_id": "local-3",
-          "timestamp": "2026-10-16T09:09:27.441724Z",
+          "timestamp": "2026-10-17T08:42:55.072004Z",
           "proposal_id": "local-proposal",
           "counter_id": "critic-counter",
           "changes": {
-            "objection": "One concrete objection, contrary fact, or smallest test."
+            "objection": "one concrete objection, contrary fact, or smallest test"
           }
         }
       },
@@ -152,14 +140,14 @@
     {
       "turn": 4,
       "actor": "Builder-planner",
-      "elapsed_seconds": 3.48,
-      "raw": "{\n  \"type\": \"COUNTER\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-local-llm-20261016T090920Z\",\n  \"message_id\": \"local-4\",\n  \"timestamp\": \"2026-10-16T09:09:30.492112Z\",\n  \"proposal_id\": \"local-proposal\",\n  \"counter_id\": \"builder-planner-counter\",\n  \"changes\": {\n    \"objection\": \"one concrete objection, contrary fact, or smallest test\"\n  }\n}",
+      "elapsed_seconds": 4.083,
+      "raw": "{\n  \"type\": \"COUNTER\",\n  \"dialect_version\": \"neo-dialect/1.0\",\n  \"conversation_id\": \"arena-local-llm-20261017T084246Z\",\n  \"message_id\": \"local-4\",\n  \"timestamp\": \"2026-10-17T08:42:58.632048Z\",\n  \"proposal_id\": \"local-proposal\",\n  \"counter_id\": \"builder-planner-counter\",\n  \"changes\": {\n    \"objection\": \"one concrete objection, contrary fact, or smallest test\"\n  }\n}",
       "parsed": {
         "type": "COUNTER",
         "dialect_version": "neo-dialect/1.0",
-        "conversation_id": "arena-local-llm-20261016T090920Z",
+        "conversation_id": "arena-local-llm-20261017T084246Z",
         "message_id": "local-4",
-        "timestamp": "2026-10-16T09:09:30.492112Z",
+        "timestamp": "2026-10-17T08:42:58.632048Z",
         "proposal_id": "local-proposal",
         "counter_id": "builder-planner-counter",
         "changes": {
@@ -175,9 +163,9 @@
         "data": {
           "type": "COUNTER",
           "dialect_version": "neo-dialect/1.0",
-          "conversation_id": "arena-local-llm-20261016T090920Z",
+          "conversation_id": "arena-local-llm-20261017T084246Z",
           "message_id": "local-4",
-          "timestamp": "2026-10-16T09:09:30.492112Z",
+          "timestamp": "2026-10-17T08:42:58.632048Z",
           "proposal_id": "local-proposal",
           "counter_id": "builder-planner-counter",
           "changes": {
@@ -196,11 +184,11 @@
   ],
   "metrics": {
     "messages": 4,
-    "schema_valid": 4,
-    "schema_valid_rate": 1.0,
-    "average_quality_score": 1.0,
-    "total_generation_seconds": 13.387,
-    "average_generation_seconds": 3.347
+    "schema_valid": 3,
+    "schema_valid_rate": 0.75,
+    "average_quality_score": 0.863,
+    "total_generation_seconds": 16.045,
+    "average_generation_seconds": 4.011
   },
   "guardrails": {
     "deterministic_schema_validation": true,
@@ -209,8 +197,8 @@
     "no_external_agent_calls": true,
     "no_production_promotion": true
   },
-  "install_seconds": 56,
-  "pull_seconds": 7,
+  "install_seconds": 91,
+  "pull_seconds": 12,
   "install_rc": 0,
   "pull_rc": 0,
   "infer_rc": 0
