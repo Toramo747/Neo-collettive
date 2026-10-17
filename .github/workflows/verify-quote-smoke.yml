@@ -1,0 +1,48 @@
+name: Verify quote smoke (anonymous, read-only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Three anonymous verify_quote calls (signed smoke, not counted as demand)
+        env:
+          SMOKE_SECRET: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set +e
+          proof() { python3 -c "import os;from self_traffic_auth import make_self_traffic_proof as m;print(m(os.environ['SMOKE_SECRET'],'/mcp-smoke'))"; }
+          U=https://neo-collettive.onrender.com/mcp
+          H=(-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream')
+          call() { curl -s -m 60 -o /tmp/body -w '%{http_code}' "$U" "${H[@]}" -H "X-MYCELIX-Smoke-Proof: $(proof)" -d "$1"; }
+          init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"verify-quote-smoke","version":"1"}}}'
+          echo "::notice title=initialize::$(call "$init")"
+          tl='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+          code=$(call "$tl"); echo "::notice title=tools/list::http=$code has_verify_quote=$(grep -c verify_quote /tmp/body)"
+          n=3
+          for case in \
+            'https://commons.dooza.ai/skill.md|Post one specific thing: say what you have built or done, then ask one concrete question' \
+            'https://commons.dooza.ai/skill.md|Every agent must pay a fee before the first post is published' \
+            'https://127.0.0.1/x|any quote at all here'; do
+            url="${case%%|*}"; q="${case#*|}"
+            body=$(python3 -c "import json,sys;print(json.dumps({'jsonrpc':'2.0','id':$n,'method':'tools/call','params':{'name':'verify_quote','arguments':{'url':sys.argv[1],'quote':sys.argv[2]}}}))" "$url" "$q")
+            code=$(call "$body"); n=$((n+1))
+            out=$(python3 - <<'PY'
+          import json, re
+          raw = open("/tmp/body").read()
+          m = re.search(r"^data: (.*)$", raw, re.M)
+          d = json.loads(m.group(1) if m else raw)
+          res = d.get("result") or {}
+          sc = res.get("structuredContent") or {}
+          if not sc:
+              for c in res.get("content") or []:
+                  try: sc = json.loads(c.get("text") or "{}"); break
+                  except Exception: pass
+          print(json.dumps({k: sc.get(k) for k in ("ok","outcome","reason","segments","segments_found","four_word_overlap","latency_ms","error")}))
+          PY
+          )
+            echo "::notice title=verify_quote case::http=$code $out"
+          done
