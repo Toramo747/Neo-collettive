@@ -35,6 +35,14 @@ jobs:
               return rows
           rows=sorted(walk(a,"",0),reverse=True)[:25]
           print("::notice title=status top keys (bytes)::"+" | ".join(f"{p}={n}" for n,p in rows))
+          ap=a.get("autopilot",a)
+          g=((ap.get("challenge_track") or {}).get("gate_state") or {})
+          c=g.get("candidates") or {}
+          import collections
+          ab=collections.Counter(min(int((v or {}).get("absent_streak") or 0)//100*100,5000) for v in c.values())
+          print("::notice title=gate candidates::total=%d stable=%d absent0=%d absent_by_100=%s flips=%d" % (len(c), sum(bool((v or {}).get("stable")) for v in c.values()), sum(int((v or {}).get("absent_streak") or 0)==0 for v in c.values()), json.dumps(sorted(ab.items())), len(g.get("flips") or [])))
+          ch=ap.get("council_history") or []
+          print("::notice title=council_history::entries=%d bytes_each=%s" % (len(ch), [len(json.dumps(x)) for x in ch][:20]))
           for k in ("process","runtime","memory","resources","loop","timings","cycle_timings"):
               for src in (a, a.get("autopilot",{}) if isinstance(a.get("autopilot"),dict) else {}):
                   if k in src: print("::notice title=status "+k+"::"+json.dumps(src[k])[:800])
