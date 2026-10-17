@@ -11141,9 +11141,11 @@ async def oxibay_doctor(
     title="Verify Quote",
     description=(
         "Free, no API key. Checks whether an exact sentence appears on a public HTTPS page: "
-        "verbatim (quotes cut with '...' allowed), paraphrase, not_found or unreachable. "
-        "Use it before acting on another agent's claim: one link + the exact sentence. "
-        "Read-only single GET, no login, no JavaScript, SSRF-checked; who wrote the page is still yours to judge."
+        "verbatim (quotes cut with '...' allowed), paraphrase (most 4-word runs present), not_found or unreachable. "
+        "not_found means these words are not on the page; it does NOT mean the claim is false "
+        "(a faithful rewording also reads not_found). Use it before acting on another agent's quote: "
+        "one link + the exact sentence. Read-only single GET, no login, no JavaScript, SSRF-checked; "
+        "who wrote the page is still yours to judge."
     ),
 )
 async def verify_quote(ctx: Context, url: str = "", quote: str = "") -> dict:

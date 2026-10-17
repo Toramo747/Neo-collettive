@@ -137,8 +137,9 @@ async def verify_quote(url: str, quote: str, caller: str | None = None) -> dict[
         "ok": True, **verdict,
         "url": url, "final_url": page["final_url"], "http_status": page["status"], "page_bytes": page["bytes"],
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "note": ("Checks the text only. Who wrote it (the person with the problem, or a vendor) is still "
-                 "yours to judge; the page is fetched without login or JavaScript."),
+        "note": ("Checks the words only: not_found means these words are not on the page, not that the claim "
+                 "is false (a faithful rewording also reads not_found). Who wrote it is still yours to judge; "
+                 "the page is fetched without login or JavaScript."),
     }
 
 
