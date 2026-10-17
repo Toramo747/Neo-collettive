@@ -1,0 +1,63 @@
+name: Common ensemble experiment (Kaggle GPU, private)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kaggle-gpu
+  cancel-in-progress: false
+jobs:
+  ensemble:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet "kaggle>=1.8.0"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Run or collect the experiment
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -uo pipefail
+          K="$KAGGLE_USERNAME/neo-common-ensemble"
+          kstatus() { kaggle kernels status "$K" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*|queued|running' | head -1 | tr 'A-Z' 'a-z' || true; }
+          collect() {
+            rm -rf out; kaggle kernels output "$K" -p out >/dev/null 2>&1 || true
+            [ -f out/ensemble.json ] || return 1
+            h=$(sha256sum out/ensemble.json | cut -c1-16)
+            [ -f "private-labels/common/bench/collected-$h" ] && { echo "::notice title=ensemble::already collected"; return 0; }
+            python tools/common_ensemble.py collect private-labels out/ensemble.json && touch "private-labels/common/bench/collected-$h"
+          }
+          prev=$(kstatus)
+          echo "::notice title=ensemble::previous status=${prev:-none}"
+          case "$prev" in
+            queued|running) echo "::notice title=ensemble::still ${prev}; collect later"; exit 0 ;;
+            complete) collect && done=1 ;;
+          esac
+          if [ -z "${done:-}" ] || [ "${FORCE_NEW:-}" = "1" ]; then
+            python tools/common_ensemble.py build private-labels kernel "$KAGGLE_USERNAME" || exit 1
+            kaggle kernels push -p kernel >/dev/null 2>&1 || { echo "::error title=ensemble::push failed"; exit 1; }
+            start=$(date +%s); status=""
+            for i in $(seq 1 120); do
+              sleep 30; status=$(kstatus)
+              case "$status" in complete|error|cancel*) break ;; esac
+            done
+            echo "::notice title=ensemble::status=${status:-unknown} wall_minutes=$(( ($(date +%s)-start)/60 ))"
+            [ "$status" = "complete" ] && collect
+          fi
+          git -C private-labels config user.name "NEO Ensemble"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/bench
+          git -C private-labels commit --quiet -m "common: ensemble experiment (private)" || exit 0
+          for attempt in 1 2 3 4; do
+            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
+            sleep $((attempt*5))
+          done
+          exit 1

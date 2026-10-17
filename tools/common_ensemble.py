@@ -1,0 +1,160 @@
+"""Ensemble experiment: can several local models together check drafts better
+and cheaper than one big model alone?
+
+Method ("one thinks, all check, the big one decides only on doubt"):
+  each sentence of a draft is judged supported / unsupported against the public
+  facts (docs/common-voice.md) and the message it answers.
+    A  single   qwen2.5 14B judges every sentence (what the drafting mind does today)
+    B  ensemble llama3.1 8B + gemma2 9B judge every sentence in parallel; when they
+                agree that is the verdict, when they disagree the 14B decides
+    C  vote3    majority of the three models (reference)
+  Metrics against Andrea-grade labels (common/bench/claims-v1.json, private):
+  recall on invented sentences, false alarms on good ones, GPU seconds.
+
+  build   <private_dir> <kernel_dir> <kaggle_username>
+  collect <private_dir> <output_json>     -> common/bench/result-<stamp>.json + counts in the log
+Sentences and messages stay in the private archive and a private kernel; logs print metrics only.
+"""
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SLUG = "neo-common-ensemble"
+BIG = "qwen2.5:14b-instruct-q4_K_M"
+SMALL = ["llama3.1:8b", "gemma2:9b"]
+BENCH = "common/bench/claims-v1.json"
+
+DRIVER = r'''
+import json, os, subprocess, sys, time, threading, urllib.request
+T0 = time.time()
+subprocess.run("apt-get install -y -qq zstd >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq zstd)", shell=True, capture_output=True)
+subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True, capture_output=True)
+os.environ["LD_LIBRARY_PATH"] = "/usr/local/nvidia/lib:/usr/local/nvidia/lib64:" + os.environ.get("LD_LIBRARY_PATH", "")
+env = dict(os.environ, OLLAMA_MAX_LOADED_MODELS="3", OLLAMA_NUM_PARALLEL="2")
+subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+for _ in range(60):
+    try:
+        urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=2); break
+    except Exception:
+        time.sleep(1)
+for m in [BIG] + SMALL:
+    subprocess.run(["ollama", "pull", m], check=True, capture_output=True)
+SCHEMA = {"type": "object", "properties": {"verdict": {"type": "string", "enum": ["supported", "unsupported"]},
+          "why": {"type": "string"}}, "required": ["verdict", "why"]}
+
+def ask(model, row):
+    prompt = (
+        "You check one sentence of a reply that the agent neo (OSIXBAY) wants to post.\n"
+        "<facts>\n" + INPUT["voice"] + "\n</facts>\n"
+        "<message_it_answers>\n" + row["source_body"] + "\n</message_it_answers>\n"
+        "<sentence>\n" + row["sentence"] + "\n</sentence>\n"
+        "Answer 'unsupported' if the sentence states something about neo, OSIXBAY or the other agent that is NOT in "
+        "the facts or the message (an invented action, process, history, result or feeling), contradicts the facts, "
+        "or promises future action. Answer 'supported' if it is backed by the facts or the message, or is only a "
+        "greeting, thanks or harmless opinion. The sentence may be in any language."
+    )
+    body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": SCHEMA,
+                       "options": {"temperature": 0, "num_predict": 200}, "keep_alive": "30m"}).encode()
+    t = time.time()
+    try:
+        req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=300) as r:
+            out = json.loads(json.loads(r.read().decode()).get("response") or "{}")
+        v = out.get("verdict") if out.get("verdict") in ("supported", "unsupported") else "supported"
+    except Exception:
+        v = "error"
+    return v, round(time.time() - t, 2)
+
+# warm up every model once so load time is not charged to the first sentence
+for m in [BIG] + SMALL:
+    ask(m, INPUT["rows"][0])
+res = []
+for row in INPUT["rows"]:
+    out = {}
+    def run(m):
+        out[m] = ask(m, row)
+    ths = [threading.Thread(target=run, args=(m,)) for m in SMALL]
+    t = time.time()
+    [x.start() for x in ths]; [x.join() for x in ths]
+    small_wall = round(time.time() - t, 2)
+    big = ask(BIG, row)
+    res.append({"n": row["n"], "big": big[0], "big_s": big[1], "small_wall_s": small_wall,
+                **{m: out[m][0] for m in SMALL}})
+json.dump({"results": res, "minutes": round((time.time() - T0) / 60, 1)}, open("/kaggle/working/ensemble.json", "w"))
+'''
+
+
+def build(private_dir: str, kernel_dir: str, username: str) -> int:
+    rows = json.loads((Path(private_dir) / BENCH).read_text())
+    payload = {"rows": [{k: r[k] for k in ("n", "sentence", "source_body")} for r in rows],
+               "voice": (ROOT / "docs" / "common-voice.md").read_text()}
+    kd = Path(kernel_dir)
+    kd.mkdir(parents=True, exist_ok=True)
+    (kd / "ensemble.py").write_text(
+        f"import json as _json\nBIG = {BIG!r}\nSMALL = {SMALL!r}\n"
+        f"INPUT = _json.loads({json.dumps(payload, ensure_ascii=False)!r})\n" + DRIVER)
+    (kd / "kernel-metadata.json").write_text(json.dumps({
+        "id": f"{username}/{SLUG}", "title": SLUG, "code_file": "ensemble.py", "language": "python",
+        "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True,
+        "dataset_sources": [], "competition_sources": [], "kernel_sources": []}))
+    print(f"::notice title=ensemble::{len(rows)} sentences")
+    return 0
+
+
+def score(labels: dict[int, str], verdicts: dict[int, str]) -> dict:
+    bad = [n for n, l in labels.items() if l == "unsupported"]
+    good = [n for n, l in labels.items() if l == "supported"]
+    caught = sum(verdicts.get(n) == "unsupported" for n in bad)
+    false_alarms = sum(verdicts.get(n) == "unsupported" for n in good)
+    errors = sum(verdicts.get(n) == "error" for n in labels)
+    return {"caught": caught, "of_invented": len(bad), "recall": round(caught / len(bad), 2) if bad else None,
+            "false_alarms": false_alarms, "of_good": len(good),
+            "false_alarm_rate": round(false_alarms / len(good), 2) if good else None, "errors": errors}
+
+
+def evaluate(rows: list[dict], results: list[dict]) -> dict:
+    labels = {r["n"]: r["label"] for r in rows}
+    a, b, c = {}, {}, {}
+    sec = {"single": 0.0, "ensemble": 0.0, "vote3": 0.0}
+    escalated = 0
+    for r in results:
+        n, big = r["n"], r["big"]
+        s1, s2 = (r.get(m) for m in SMALL)
+        a[n] = big
+        sec["single"] += r["big_s"]
+        if s1 == s2 and s1 != "error":
+            b[n] = s1
+            sec["ensemble"] += r["small_wall_s"]
+        else:
+            b[n] = big
+            escalated += 1
+            sec["ensemble"] += r["small_wall_s"] + r["big_s"]
+        votes = [v for v in (big, s1, s2) if v in ("supported", "unsupported")]
+        c[n] = "unsupported" if votes.count("unsupported") >= 2 else "supported"
+        sec["vote3"] += max(r["small_wall_s"], r["big_s"])
+    return {"single_14b": dict(score(labels, a), seconds=round(sec["single"], 1)),
+            "ensemble": dict(score(labels, b), seconds=round(sec["ensemble"], 1), escalated_to_14b=escalated),
+            "vote3": dict(score(labels, c), seconds=round(sec["vote3"], 1)),
+            **{f"alone_{m}": score(labels, {r["n"]: r.get(m) for r in results}) for m in SMALL}}
+
+
+def collect(private_dir: str, output_json: str) -> int:
+    rows = json.loads((Path(private_dir) / BENCH).read_text())
+    data = json.loads(Path(output_json).read_text())
+    metrics = evaluate(rows, data.get("results") or [])
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out = Path(private_dir) / "common" / "bench" / f"result-{stamp}.json"
+    out.write_text(json.dumps({"bench": BENCH, "models": {"big": BIG, "small": SMALL}, "kernel_minutes": data.get("minutes"),
+                               "metrics": metrics, "results": data.get("results")}, indent=1))
+    print("::notice title=ensemble metrics::" + json.dumps(metrics))
+    return 0
+
+
+if __name__ == "__main__":
+    cmd, *args = sys.argv[1:]
+    raise SystemExit({"build": build, "collect": collect}[cmd](*args))

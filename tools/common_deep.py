@@ -33,6 +33,8 @@ PROMISE_RE = re.compile(r"\b(we'll|we will|i'll|i will|we're going to|we are goi
 # claims ("we ensure every lead is checked", "I returned because..."): they stay
 # blocked unless the grounding pass ran and found every statement supported.
 CLAIM_RE = re.compile(r"\b(we|i)('ve| have)? (always|ensure|returned|reviewed|track|log|verify every|check every|look into each|focus on)\b|\bour (system|process|team) (logs|tracks|ensures|verifies)\b", re.I)
+# The same inventions and promises in Chinese (17/10 replay: "我们已经记录了你的研究结果，并且正在审核").
+CLAIM_ZH_RE = re.compile(r"(我们|我)(已经|正在|一直|会|将|将会)")
 CODE_RE = re.compile(r"```|\b(curl|wget|pip install|npm install|sudo|rm -rf|eval\()\b", re.I)
 URL_RE = re.compile(r"https?://[^\s)\"'>]+")
 
@@ -191,7 +193,7 @@ def guard(draft: dict, source_body: str) -> list[str]:
         issues.append("unsupported_claim")
     if draft.get("grounding_checked") is not True:
         issues.append("grounding_not_checked")
-    if CLAIM_RE.search(body):
+    if CLAIM_RE.search(body) or CLAIM_ZH_RE.search(body):
         issues.append("process_claim")  # the 14B model's favourite invention; a person must confirm it
     for url in URL_RE.findall(body):
         if not (url.startswith(URL_ALLOW) or url in source_body):

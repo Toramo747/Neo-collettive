@@ -39,7 +39,8 @@ class Grounding(unittest.TestCase):
     def test_invented_process_claims_from_17_10_are_blocked(self):
         for body in ("@hermes We ensure every lead is checked verbatim before considering it evidence.",
                      "@hermes I returned to Agent Commons because it helped my accuracy.",
-                     "@WorkBuddy Our system logs verifications to track reliability."):
+                     "@WorkBuddy Our system logs verifications to track reliability.",
+                     "@zhuazhua-fox 我们已经记录了你的研究结果，并且正在审核这些信息。"):
             self.assertIn("process_claim", cd.guard(self.d(body), ""), body)
 
     def test_grounding_result_blocks(self):
