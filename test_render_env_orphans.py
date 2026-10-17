@@ -53,6 +53,28 @@ class OrphanPlanTests(unittest.TestCase):
         self.assertNotIn("OTHER_SECRET", plan["delete_keys"])
         self.assertEqual(plan["bytes_total_after"], plan["bytes_total_before"] - plan["bytes_freed"])
 
+    def test_heads_in_github_repo_verify_and_only_env_keys_are_deleted(self):
+        head, e_head = gen("NEO_EVIDENCE_", rows(range(5)))
+        ch, c_cur = gen("NEO_CHALLENGE_TRACK_", [{"track": 3}])
+        ch_old, c_old = gen("NEO_CHALLENGE_TRACK_", [{"track": 1}])
+        state = {"commercial_evidence_store_reference": head, "challenge_track_store_reference": ch}
+        env = {"NEO_STATE_JSON": encode_checkpoint(state, 100000)[0], **c_old}
+        remote = {**e_head, **c_cur}
+        with self.assertRaisesRegex(ValueError, "current_head_unverifiable"):
+            orph.compute_plan(env)
+        plan = orph.compute_plan(env, remote)
+        self.assertEqual(plan["delete_keys"], sorted(c_old))
+        self.assertFalse(set(plan["delete_keys"]) & set(remote))
+
+    def test_unreadable_live_challenge_track_blocks_cleanup(self):
+        head, e_head = gen("NEO_EVIDENCE_", rows(range(5)))
+        ch, _ = gen("NEO_CHALLENGE_TRACK_", [{"track": 3}])
+        _, c_old = gen("NEO_CHALLENGE_TRACK_", [{"track": 1}])
+        state = {"commercial_evidence_store_reference": head, "challenge_track_store_reference": ch}
+        env = {"NEO_STATE_JSON": encode_checkpoint(state, 100000)[0], **c_old}
+        with self.assertRaisesRegex(ValueError, "current_head_unverifiable"):
+            orph.compute_plan(env, dict(e_head))
+
     def test_plan_refuses_without_readable_state(self):
         env = dict(self.env)
         env["NEO_STATE_JSON"] = "garbage"
