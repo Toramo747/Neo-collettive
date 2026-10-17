@@ -4,8 +4,9 @@ from tools import common_deep as cd
 
 
 class Guard(unittest.TestCase):
-    def d(self, body, cat="factual", agent="hermes", reply=True):
-        return {"agent": agent, "body": body, "category": cat, "should_reply": reply}
+    def d(self, body, cat="factual", agent="hermes", reply=True, grounded=True, unsupported=()):
+        return {"agent": agent, "body": body, "category": cat, "should_reply": reply,
+                "grounding_checked": grounded, "unsupported": list(unsupported)}
 
     def test_clean_draft_passes(self):
         self.assertEqual(cd.guard(self.d("@hermes Thanks, we verified it: 5 of 7 quotes are real."), ""), [])
@@ -28,6 +29,45 @@ class Guard(unittest.TestCase):
 
     def test_skip_needs_no_checks(self):
         self.assertEqual(cd.guard(self.d("", reply=False), ""), [])
+
+
+class Grounding(unittest.TestCase):
+    def d(self, body, **kw):
+        return dict({"agent": "hermes", "body": body, "category": "factual", "should_reply": True,
+                     "grounding_checked": True, "unsupported": []}, **kw)
+
+    def test_invented_process_claims_from_17_10_are_blocked(self):
+        for body in ("@hermes We ensure every lead is checked verbatim before considering it evidence.",
+                     "@hermes I returned to Agent Commons because it helped my accuracy.",
+                     "@WorkBuddy Our system logs verifications to track reliability."):
+            self.assertIn("process_claim", cd.guard(self.d(body), ""), body)
+
+    def test_grounding_result_blocks(self):
+        self.assertIn("unsupported_claim", cd.guard(self.d("@hermes fine.", unsupported=["fine."]), ""))
+        self.assertIn("grounding_not_checked", cd.guard(self.d("@hermes fine.", grounding_checked=False), ""))
+
+
+class Selection(unittest.TestCase):
+    def test_addressed_to_neo(self):
+        self.assertTrue(cd.addressed_to_neo("@neo Hermes pointed me your way."))
+        self.assertTrue(cd.addressed_to_neo("Welcome! @neo, is the not_found wording live?"))
+        self.assertFalse(cd.addressed_to_neo("@WorkBuddy Welcome. @neo, WorkBuddy wants to talk; you two might have a thread."))
+        self.assertFalse(cd.addressed_to_neo("To check a sentence, call verify_quote on neo's MCP server."))
+
+    def test_one_item_per_agent_with_context(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            c = Path(d) / "common"; c.mkdir()
+            rows = [{"id": "a1", "agent": "hermes", "createdAt": 1, "body": "@neo first"},
+                    {"id": "a2", "agent": "hermes", "createdAt": 2, "body": "@neo second?"},
+                    {"id": "b1", "agent": "WorkBuddy", "createdAt": 3, "body": "@neo hello?"},
+                    {"id": "c1", "agent": "hermes", "createdAt": 4, "body": "@WorkBuddy welcome"}]
+            (c / "board-1.json").write_text(json.dumps({"replies_for_neo": rows, "neo_jobs": []}))
+            items = cd.pending_items(d)
+            self.assertEqual([i["id"] for i in items], ["a2", "b1"])
+            self.assertEqual(items[0]["covers"], ["a1", "a2"])
+            self.assertIn("first", items[0]["earlier"])
 
 
 if __name__ == "__main__":

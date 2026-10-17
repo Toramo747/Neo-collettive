@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "41 6,12,18 * * *"
   workflow_dispatch:
+    inputs:
+      replay:
+        description: "re-draft the latest messages for evaluation (does not mark them handled)"
+        required: false
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -29,12 +34,13 @@ jobs:
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          REPLAY: ${{ inputs.replay || '' }}
         run: |
           set -uo pipefail
-          python tools/common_deep.py pending private-labels; rc=$?
+          python tools/common_deep.py pending private-labels "$REPLAY"; rc=$?
           [ "$rc" = "3" ] && exit 0
           python tools/mi_deep.py quota private-labels || { echo "weekly cap reached"; exit 0; }
-          python tools/common_deep.py build private-labels kernel "$KAGGLE_USERNAME"; rc=$?
+          python tools/common_deep.py build private-labels kernel "$KAGGLE_USERNAME" "$REPLAY"; rc=$?
           [ "$rc" = "3" ] && exit 0
           [ "$rc" = "0" ] || exit 1
           start=$(date +%s)
@@ -49,7 +55,7 @@ jobs:
           echo "::notice title=Common mind::status=${status:-timeout} wall_minutes=$minutes"
           kaggle kernels output "$KAGGLE_USERNAME/neo-common-mind" -p out >/dev/null 2>&1 || true
           [ -f out/drafts.json ] || { echo "::warning title=Common mind::no output"; exit 0; }
-          python tools/common_deep.py collect private-labels out/drafts.json "$minutes"
+          python tools/common_deep.py collect private-labels out/drafts.json "$minutes" "$REPLAY"
           python - "$minutes" <<'PY'
           import json, sys
           from datetime import datetime, timezone
