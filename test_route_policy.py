@@ -164,3 +164,13 @@ class RoutePolicyAuthTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+
+class ScopeOriginSpoofing(unittest.TestCase):
+    def test_client_supplied_first_hop_and_true_client_ip_are_ignored(self):
+        from route_policy import scope_origin
+        scope = {"client": ("10.0.0.1", 1)}
+        self.assertEqual(scope_origin(scope, {"x-forwarded-for": "203.0.113.7, 198.51.100.4"}), "198.51.100.4")
+        self.assertEqual(scope_origin(scope, {"x-forwarded-for": "203.0.113.7, 198.51.100.4", "x-real-ip": "203.0.113.8"}), "198.51.100.4")
+        self.assertEqual(scope_origin(scope, {"cf-connecting-ip": "192.0.2.1", "x-forwarded-for": "203.0.113.7"}), "192.0.2.1")
+        self.assertEqual(scope_origin(scope, {}), "10.0.0.1")
