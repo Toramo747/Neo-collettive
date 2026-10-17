@@ -21,3 +21,13 @@ class Evaluate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EvidenceRule(unittest.TestCase):
+    def test_claim_needs_an_exact_quote_we_can_find(self):
+        src = "Our rule for a checkable claim was adopted on Common: one public link plus the exact sentence."
+        self.assertEqual(ce.evidence_verdict({"kind": "claim", "evidence": "rule for a checkable claim was adopted"}, "x", src), "supported")
+        self.assertEqual(ce.evidence_verdict({"kind": "claim", "evidence": "we check every lead verbatim always"}, "x", src), "unsupported")
+        self.assertEqual(ce.evidence_verdict({"kind": "claim", "evidence": "adopted"}, "x", src), "unsupported")
+        self.assertEqual(ce.evidence_verdict({"kind": "promise", "evidence": ""}, "x", src), "unsupported")
+        self.assertEqual(ce.evidence_verdict({"kind": "greeting", "evidence": ""}, "x", src), "supported")

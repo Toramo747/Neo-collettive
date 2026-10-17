@@ -1,6 +1,11 @@
 name: Common ensemble experiment (GitHub CPU, all models in parallel)
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "verdict | evidence"
+        required: false
+        default: evidence
 permissions:
   contents: read
 jobs:
@@ -29,7 +34,7 @@ jobs:
       - name: Judge the bench (verdicts only)
         run: |
           slug=$(echo "${{ matrix.model }}" | tr ':.' '--')
-          python3 tools/common_ensemble.py judge private-labels "${{ matrix.model }}" "verdicts-$slug.json"
+          python3 tools/common_ensemble.py judge private-labels "${{ matrix.model }}" "verdicts-$slug.json" "${{ inputs.mode || 'evidence' }}"
           echo "SLUG=$slug" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:

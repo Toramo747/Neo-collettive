@@ -97,8 +97,49 @@ PROMPT_TAIL = (
 )
 
 
-def judge(private_dir: str, model: str, out_json: str) -> int:
-    """Run one model over the bench against a local ollama (GitHub runner, CPU). Writes verdicts only."""
+EVIDENCE_SCHEMA = {"type": "object", "properties": {
+    "kind": {"type": "string", "enum": ["greeting", "opinion", "claim", "promise"]},
+    "evidence": {"type": "string"}}, "required": ["kind", "evidence"]}
+EVIDENCE_PROMPT = (
+    "Classify the sentence. kind = greeting (thanks, welcome, sign-off), opinion (a judgement with no factual "
+    "content about anyone), promise (anything neo says it will do later), or claim (any statement of fact about "
+    "neo, OSIXBAY, the other agent, or what someone did, does or has). "
+    "For a claim, copy into 'evidence' the EXACT words (at least 5 consecutive words, copied character for "
+    "character) from the facts or the message that prove it. If no such words exist, leave 'evidence' empty. "
+    "Never write evidence in your own words."
+)
+
+
+def _norm(text: str) -> str:
+    """Same normalisation as quote_verifier.norm, without its network imports (runs on bare runners)."""
+    import html
+    import re
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    text = html.unescape(text).replace("`", "").replace("\u2019", "'").replace("\u2018", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
+    return " ".join(text.lower().split())
+
+
+def evidence_verdict(out: dict, sentence: str, sources: str) -> str:
+    """Our own rule applied to the model: a claim stands only with an exact quote we can find."""
+    kind = str(out.get("kind") or "claim")
+    if kind == "promise":
+        return "unsupported"
+    if kind == "greeting":
+        return "supported"
+    ev = _norm(str(out.get("evidence") or ""))
+    found = len(ev.split()) >= 5 and ev in _norm(sources)
+    if kind == "opinion":
+        return "supported"
+    return "supported" if found else "unsupported"
+
+
+def judge(private_dir: str, model: str, out_json: str, mode: str = "verdict") -> int:
+    """Run one model over the bench against a local ollama (GitHub runner, CPU). Writes verdicts only.
+
+    mode=verdict   the model says supported/unsupported (17/10 run: ~5-9% of inventions caught)
+    mode=evidence  the model must quote exact supporting words; we check the quote ourselves
+    """
     import time
     import urllib.request
     rows = json.loads((Path(private_dir) / BENCH).read_text())
@@ -107,23 +148,28 @@ def judge(private_dir: str, model: str, out_json: str) -> int:
               "required": ["verdict"]}
     res = {}
     for r in rows:
-        prompt = ("You check one sentence of a reply that the agent neo (OSIXBAY) wants to post.\n<facts>\n" + voice
-                  + "\n</facts>\n<message_it_answers>\n" + r["source_body"] + "\n</message_it_answers>\n<sentence>\n"
-                  + r["sentence"] + "\n</sentence>\n" + PROMPT_TAIL)
-        body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": schema,
-                           "options": {"temperature": 0, "num_predict": 40}, "keep_alive": "60m"}).encode()
+        head = ("You check one sentence of a reply that the agent neo (OSIXBAY) wants to post.\n<facts>\n" + voice
+                + "\n</facts>\n<message_it_answers>\n" + r["source_body"] + "\n</message_it_answers>\n<sentence>\n"
+                + r["sentence"] + "\n</sentence>\n")
+        prompt = head + (EVIDENCE_PROMPT if mode == "evidence" else PROMPT_TAIL)
+        fmt = EVIDENCE_SCHEMA if mode == "evidence" else schema
+        body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": fmt,
+                           "options": {"temperature": 0, "num_predict": 160}, "keep_alive": "60m"}).encode()
         t = time.time()
         try:
             req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
                                          headers={"Content-Type": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=900) as resp:
                 out = json.loads(json.loads(resp.read().decode()).get("response") or "{}")
-            v = out.get("verdict") if out.get("verdict") in ("supported", "unsupported") else "supported"
+            if mode == "evidence":
+                v = evidence_verdict(out, r["sentence"], voice + "\n" + r["source_body"])
+            else:
+                v = out.get("verdict") if out.get("verdict") in ("supported", "unsupported") else "supported"
         except Exception:
             v = "error"
         res[str(r["n"])] = {"verdict": v, "s": round(time.time() - t, 2)}
-    Path(out_json).write_text(json.dumps({"model": model, "results": res}))
-    print(f"::notice title=ensemble judge::{model} sentences={len(res)} errors={sum(x['verdict']=='error' for x in res.values())}")
+    Path(out_json).write_text(json.dumps({"model": model, "mode": mode, "results": res}))
+    print(f"::notice title=ensemble judge::{model} mode={mode} sentences={len(res)} errors={sum(x['verdict']=='error' for x in res.values())}")
     return 0
 
 
