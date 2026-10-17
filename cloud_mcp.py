@@ -9,6 +9,7 @@ import neo_dialect_security
 import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
+import quote_verifier
 import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
 from a2a_identity import conversation_identity_key, parse_body_introduction
@@ -193,7 +194,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.60"  # degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
+VERSION = "0.99.61"  # public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -10888,6 +10889,7 @@ MCP_TOOL_ACCESS = {
     # verifiers without a key, under tight per-origin and global limits.
     "verify_mcp_endpoint":"public_network",
     "oxibay_doctor":"public_network",
+    "verify_quote":"public_network",
     "neo_web_search":"gated_network",
     "neo_jarvis":"gated_effectful",
     "neo_director":"gated_effectful",
@@ -11093,6 +11095,26 @@ async def oxibay_doctor(
         ),timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
     except asyncio.TimeoutError:
         return {"ok":False,"error":"diagnosis_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
+
+
+@mcp.tool(
+    title="Verify Quote",
+    description=(
+        "Free, no API key. Checks whether an exact sentence appears on a public HTTPS page: "
+        "verbatim (quotes cut with '...' allowed), paraphrase, not_found or unreachable. "
+        "Use it before acting on another agent's claim: one link + the exact sentence. "
+        "Read-only single GET, no login, no JavaScript, SSRF-checked; who wrote the page is still yours to judge."
+    ),
+)
+async def verify_quote(ctx: Context, url: str = "", quote: str = "") -> dict:
+    """Check that a quoted sentence is really on a public page."""
+    connection = getattr(ctx, "connection", None)
+    caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
+    try:
+        return await asyncio.wait_for(quote_verifier.verify_quote(url, quote, caller),
+                                      timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
+    except asyncio.TimeoutError:
+        return {"ok":False,"error":"verification_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
 
 
 @mcp.tool()

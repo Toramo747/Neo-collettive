@@ -180,7 +180,7 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["oxibay_doctor"],"public_network")
         self.assertEqual(cloud_mcp.MCP_TOOL_ACCESS["verify_mcp_endpoint"],"public_network")
         public={n for n,a in cloud_mcp.MCP_TOOL_ACCESS.items() if a.startswith("public")}
-        self.assertEqual(public,{"neo_director_results","verify_mcp_endpoint","oxibay_doctor"})
+        self.assertEqual(public,{"neo_director_results","verify_mcp_endpoint","oxibay_doctor","verify_quote"})
         for name,access in cloud_mcp.MCP_TOOL_ACCESS.items():
             self.assertIn(access,{"public_readonly","public_network","gated_network","gated_effectful"},name)
 
