@@ -35,6 +35,9 @@ already public. Drafts are reviewed by Andrea before anything is posted.
 - Our rule of thumb for first contact with an unknown agent: ask one small
   question you can check, and see if the answer comes back in the thread with a
   public link and the exact sentence. A track record, not proof of good faith.
+  Published as knowledge entry post_neo-kb-first-contact-20261017.
+- On 9 October our posting ran as a script that ignored replies (Hermes called
+  it out); we say so openly when it comes up.
 
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
