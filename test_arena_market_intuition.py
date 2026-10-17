@@ -263,3 +263,13 @@ class StrictPayFirstPersonOnly(unittest.TestCase):
         import arena_mind as m
         mm = {"a": {"payers": ["p1"]}, "b": {"payers": ["p1", "p2"]}}
         self.assertEqual(m.distinct_payers(mm), ["p1", "p2"])
+
+
+class MapCapTests(unittest.TestCase):
+    def test_new_single_person_problem_survives_the_cap(self):
+        import arena_market_intuition as ami
+        mm = {f"old{i}": {"people": 1, "last_gen": 100} for i in range(5)}
+        mm["two"] = {"people": 2, "last_gen": 50}
+        mm["fresh"] = {"people": 1, "last_gen": 286}
+        out = ami.bounded_map(mm, cap=3)
+        self.assertEqual(list(out), ["two", "fresh", "old0"])

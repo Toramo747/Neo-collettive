@@ -100,6 +100,22 @@ BOUNDARY = {
 }
 
 
+
+MAP_CAP = 300
+
+
+def bounded_map(mm: dict, cap: int = MAP_CAP) -> dict:
+    """Keep the `cap` most useful problems: most people first, then most recently seen.
+
+    17/10: with ties broken by insertion order the map froze at 300 problems
+    (gen 273 -> 286: new people every generation, 0 new problems), because every
+    new single-person problem sorted after the 289 old ones and was dropped at
+    once, so it could never meet a second person.
+    """
+    return dict(sorted(mm.items(), key=lambda kv: (-int(kv[1].get("people", 0) or 0),
+                                                   -int(kv[1].get("last_gen", 0) or 0)))[:cap])
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -591,7 +607,7 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         "vocabulary": vocab, "archive": archive_list, "history": history[-2000:],
         "champion": champion, "market_totals": dict(sorted(cumulative.items(), key=lambda kv: -kv[1])[:200]),
         "boundary": BOUNDARY,
-        "market_map": dict(sorted(market_map.items(), key=lambda kv: -kv[1].get("people", 0))[:300]),
+        "market_map": bounded_map(market_map),
         "diary": diary[-60:], "idea_log": idea_log[-200:], "learned_phrases": list(LEARNED_PHRASES),
         "last_thought": thought,
         "phrase_dry": phrase_dry,
@@ -660,7 +676,7 @@ def apply_deep(state: dict, inbox: dict) -> dict:
         _sync_pay(mm[k])
         if not mm[k]["people"]:
             mm.pop(k)
-    st["market_map"] = dict(sorted(mm.items(), key=lambda kv: -kv[1]["people"])[:300])
+    st["market_map"] = bounded_map(mm)
     vocab = dict(st.get("vocabulary") or {})
     for t in (arena_mind.clean_label(x, 3) for x in thought.get("next_terms") or []):
         if t:
