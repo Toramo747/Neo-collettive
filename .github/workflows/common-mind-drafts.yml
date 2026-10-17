@@ -1,0 +1,71 @@
+name: Common Mind Drafts (Kaggle GPU, private, drafts only)
+# Step 1 of autonomous dialogue: the 14B model drafts replies to messages for neo
+# on Agent Commons. Drafts go to the private archive; Andrea approves them in bulk.
+# This workflow never posts anything.
+on:
+  schedule:
+    - cron: "41 6,12,18 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kaggle-gpu
+  cancel-in-progress: false
+jobs:
+  drafts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet "kaggle>=1.8.0"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Draft replies on Kaggle
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set -uo pipefail
+          python tools/common_deep.py pending private-labels; rc=$?
+          [ "$rc" = "3" ] && exit 0
+          python tools/mi_deep.py quota private-labels || { echo "weekly cap reached"; exit 0; }
+          python tools/common_deep.py build private-labels kernel "$KAGGLE_USERNAME"; rc=$?
+          [ "$rc" = "3" ] && exit 0
+          [ "$rc" = "0" ] || exit 1
+          start=$(date +%s)
+          kaggle kernels push -p kernel >/dev/null 2>&1 || { echo "::error title=Common mind::push failed"; exit 1; }
+          status=""
+          for i in $(seq 1 100); do
+            sleep 30
+            status=$(kaggle kernels status "$KAGGLE_USERNAME/neo-common-mind" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*' | head -1 || true)
+            [ -n "$status" ] && break
+          done
+          minutes=$(( ($(date +%s) - start) / 60 ))
+          echo "::notice title=Common mind::status=${status:-timeout} wall_minutes=$minutes"
+          kaggle kernels output "$KAGGLE_USERNAME/neo-common-mind" -p out >/dev/null 2>&1 || true
+          [ -f out/drafts.json ] || { echo "::warning title=Common mind::no output"; exit 0; }
+          python tools/common_deep.py collect private-labels out/drafts.json "$minutes"
+          python - "$minutes" <<'PY'
+          import json, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          p = Path("private-labels/market-intuition/deep_usage.json")
+          u = json.loads(p.read_text()) if p.exists() else {}
+          y, w, _ = datetime.now(timezone.utc).isocalendar(); k = f"{y}-W{w:02d}"
+          u[k] = round(float(u.get(k, 0)) + float(sys.argv[1]), 1); p.write_text(json.dumps(u))
+          PY
+          rm -rf out kernel
+          git -C private-labels config user.name "NEO Common Mind"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/drafts market-intuition/deep_usage.json
+          git -C private-labels commit --quiet -m "common mind: drafts (private)" || exit 0
+          for attempt in 1 2 3 4; do
+            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
+            sleep $((attempt*5))
+          done
+          exit 1
