@@ -134,3 +134,25 @@ class ChallengeTrackTests(unittest.TestCase):
 
 if __name__=="__main__":
     unittest.main()
+
+
+class ChallengeStateBoundTests(unittest.TestCase):
+    def test_long_absent_candidates_are_forgotten_and_return_like_new(self):
+        import challenge_track as ct
+        state, _ = ct.apply_challenge_hysteresis({}, [{"challenge_key": "a", "gate_pass": False}, {"challenge_key": "b", "gate_pass": True}])
+        for _ in range(ct.CHALLENGE_ABSENT_FORGET):
+            state, _ = ct.apply_challenge_hysteresis(state, [{"challenge_key": "b", "gate_pass": True}])
+        self.assertNotIn("a", state["candidates"])
+        self.assertTrue(state["candidates"]["b"]["stable"])
+        _, rows = ct.apply_challenge_hysteresis(state, [{"challenge_key": "a", "gate_pass": True}])
+        self.assertEqual(rows[0]["gate_confirmation"]["pass_streak"], 1)
+        self.assertFalse(rows[0]["stable_gate_pass"])
+
+    def test_cap_never_drops_current_or_stable(self):
+        import challenge_track as ct
+        old = {"candidates": {f"x{i}": {"stable": False, "last_raw": False, "absent_streak": 1, "updated_at_utc": f"2026-01-01T00:{i % 60:02d}"} for i in range(ct.MAX_CHALLENGE_STATES + 50)}}
+        old["candidates"]["keep"] = {"stable": True, "last_raw": True, "pass_streak": 3, "updated_at_utc": "2000"}
+        state, _ = ct.apply_challenge_hysteresis(old, [{"challenge_key": "now", "gate_pass": False}])
+        self.assertEqual(len(state["candidates"]), ct.MAX_CHALLENGE_STATES)
+        self.assertIn("keep", state["candidates"])
+        self.assertIn("now", state["candidates"])

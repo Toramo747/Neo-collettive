@@ -195,7 +195,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.62"  # memory chunks in a dedicated GitHub repo (optional); public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
+VERSION = "0.99.63"  # bounded challenge gate state and council history; memory chunks in a dedicated GitHub repo (optional); public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -10665,7 +10665,7 @@ async def director_run(goal: str, budget: float = 0.0, hours_per_week: int = 5, 
         "top5":market_analysis.get("top5") or [],
         "transcripts":council_rows,
     })
-    AUTOPILOT_STATE["council_history"]=council_history[-20:]
+    AUTOPILOT_STATE["council_history"]=_bound_council_history(council_history[-20:])
     legacy_gate=bool(evidence_quality.get("quality_gate"))
     top_opportunity=(market_analysis.get("top5") or [{}])[0] if market_analysis.get("top5") else {}
     evidence_quality["legacy_human_problem_gate"]=legacy_gate
@@ -13460,6 +13460,29 @@ async def council_neo_dialect_example(request: Request):
         "dialect_version":neo_dialect.DIALECT_VERSION,
         "transcript":neo_dialect_council.redact(neo_dialect_council.example_transcript()),
     })
+
+
+COUNCIL_FULL_ENTRIES=3
+
+
+def _bound_council_history(history: list) -> list:
+    """Full debate text only for the newest entries; older cycles keep the
+    decision summary the checkpoint already stores (17/10: 20 x 55 KB in RAM)."""
+    from state_compaction import _summarize_opportunity,_summarize_transcript
+    out=[]
+    cut=len(history)-COUNCIL_FULL_ENTRIES
+    for i,raw in enumerate(history):
+        cycle=raw if isinstance(raw,dict) else {}
+        if i>=cut or cycle.get("summarized"):
+            out.append(cycle)
+            continue
+        out.append({
+            "generated_at_utc":cycle.get("generated_at_utc"),
+            "top5":[_summarize_opportunity(x) for x in (cycle.get("top5") or [])[:5]],
+            "transcripts":[_summarize_transcript(x) for x in (cycle.get("transcripts") or [])[:5]],
+            "summarized":True,
+        })
+    return out
 
 
 async def api_council(request: Request):
