@@ -1,0 +1,28 @@
+name: Security probe (anonymous, read-only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Anonymous requests must be refused (status codes only)
+        run: |
+          set +e
+          B=https://neo-collettive.onrender.com
+          out=""
+          for p in /api/autopilot/status /api/render/errors /api/render/diagnostics /system /api/console /console /api/council /api/admin/inbound /api/admin/agent-chats /api/admin/seti-interviews /api/seti/interviews /api/outcomes /results /director /api/director/results /api/self-improvement/proposal /api/collective /venture /api/venture/measurement /api/agents/diagnostics /api/memory/status /api/builder/status /api/autonomy/status /api/heartbeat /api/model-shadow/private-cases /api/model-shadow/hidden-eval /unknown-route-xyz /api/checkpoint-status /health; do
+            c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$B$p"); out="$out $p=$c"
+          done
+          for p in /api/checkpoint-status /api/market/run-cycles /api/runtime/snapshot-published /api/admin/evidence-reintegration; do
+            c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$B$p"); out="$out POST$p=$c"
+          done
+          c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$B/api/autopilot/status?token=x"); out="$out query-token=$c"
+          c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -H 'X-NEO-Heartbeat-Token: wrong' "$B/api/heartbeat"); out="$out legacy-hdr=$c"
+          c=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer wrong' "$B/api/autopilot/status"); out="$out bad-bearer=$c"
+          echo "::notice title=anonymous probe::$out"
+          # MCP: privileged tool without key must be refused
+          r=$(curl -s -m 30 "$B/mcp" -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"neo_render_logs","arguments":{}}}' | head -c 300 | tr -dc 'a-zA-Z0-9 _:,{}"-')
+          echo "::notice title=mcp gated tool::$r"
