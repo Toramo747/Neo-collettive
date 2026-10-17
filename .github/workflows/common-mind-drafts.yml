@@ -36,7 +36,7 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           REPLAY: ${{ inputs.replay || '' }}
         run: |
-          set -uo pipefail
+          set +e -uo pipefail  # GitHub runs bash -e: a "nothing pending" exit code 3 must not fail the job
           K="$KAGGLE_USERNAME/neo-common-mind"
           kstatus() { kaggle kernels status "$K" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*|queued|running' | head -1 | tr 'A-Z' 'a-z' || true; }
           collect_output() {
