@@ -20,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = "qwen2.5:14b-instruct-q4_K_M"
+CHECKERS = ["llama3.1:8b", "gemma2:9b"]  # small checkers from other families (claim_evidence.py)
 SLUG = "neo-common-mind"
 MAX_ITEMS = 12
 BODY_MAX = 900
@@ -64,8 +65,6 @@ SCHEMA = {"type": "object", "properties": {
     "body": {"type": "string"},
     "why": {"type": "string"}},
     "required": ["should_reply", "category", "body", "why"]}
-GROUND_SCHEMA = {"type": "object", "properties": {"unsupported": {"type": "array", "items": {"type": "string"}}},
-                 "required": ["unsupported"]}
 out = []
 for item in INPUT["items"]:
     prompt = (
@@ -89,18 +88,45 @@ for item in INPUT["items"]:
     r = arena_mind.ollama_generate(MODEL, prompt, SCHEMA, timeout=300) or {}
     row = {"id": item["id"], "agent": item["agent"], "covers": item.get("covers") or [item["id"]],
            "source_body": item["body"], **{k: r.get(k) for k in ("should_reply", "category", "body", "why")}}
-    if row.get("should_reply") and str(row.get("body") or "").strip():
-        check = (
-            "You check a draft reply for invented facts.\n<facts>\n" + INPUT["voice"] + "\n</facts>\n"
-            "<message>\n" + item["body"] + "\n</message>\n<draft>\n" + str(row["body"]) + "\n</draft>\n"
-            "List every sentence of the draft that states something about neo, OSIXBAY or the other agent that is NOT "
-            "supported by the facts or the message (invented processes, results, history, feelings or promises). "
-            "Quote each such sentence exactly. Return an empty list if every statement is supported."
-        )
-        g = arena_mind.ollama_generate(MODEL, check, GROUND_SCHEMA, timeout=300)
-        row["grounding_checked"] = isinstance(g, dict)
-        row["unsupported"] = [str(x)[:300] for x in ((g or {}).get("unsupported") or []) if str(x).strip()][:6]
     out.append(row)
+
+# Check: our own rule applied to the models (claim_evidence.py). Phases, so each
+# model is loaded once: the two small checkers judge every sentence, the drafting
+# model decides only where they disagree. Bench 17/10: 19/22 inventions caught vs
+# 15/22 for the 14B alone, in less time.
+import claim_evidence as ce
+def judge_sentence(model, item_body, sentence):
+    prompt = ("You check one sentence of a reply that the agent neo (OSIXBAY) wants to post.\n<facts>\n" + INPUT["voice"]
+              + "\n</facts>\n<message_it_answers>\n" + item_body + "\n</message_it_answers>\n<sentence>\n" + sentence
+              + "\n</sentence>\n" + ce.EVIDENCE_PROMPT)
+    res = arena_mind.ollama_generate(model, prompt, ce.EVIDENCE_SCHEMA, timeout=300)
+    if not isinstance(res, dict):
+        return "error"
+    return ce.evidence_verdict(res, sentence, INPUT["voice"] + "\n" + item_body)
+todo = [(row, s) for row in out if row.get("should_reply") and str(row.get("body") or "").strip()
+        for s in ce.split_sentences(row["body"])]
+votes = {}
+for m in CHECKERS:
+    try:
+        subprocess.run(["ollama", "pull", m], check=True, capture_output=True)
+    except Exception:
+        continue
+    for i, (row, s) in enumerate(todo):
+        votes.setdefault(i, {})[m] = judge_sentence(m, row["source_body"], s)
+for i, (row, s) in enumerate(todo):
+    v = [x for x in votes.get(i, {}).values() if x in ("supported", "unsupported")]
+    final = v[0] if len(v) == len(CHECKERS) and len(set(v)) == 1 else judge_sentence(MODEL, row["source_body"], s)
+    row.setdefault("checked_sentences", 0)
+    row["checked_sentences"] += 1
+    row.setdefault("unsupported", [])
+    if final == "unsupported":
+        row["unsupported"].append(s[:300])
+    if final == "error":
+        row["check_errors"] = row.get("check_errors", 0) + 1
+for row in out:
+    if row.get("should_reply") and str(row.get("body") or "").strip():
+        row["grounding_checked"] = not row.get("check_errors") and bool(row.get("checked_sentences"))
+        row["grounding_method"] = "evidence-ensemble-v1"
 json.dump({"model": MODEL, "run_tag": INPUT.get("run_tag"), "replay": INPUT.get("replay", False),
            "drafts": out, "kernel_minutes": round((time.time() - T0) / 60, 1)}, open(W + "/drafts.json", "w"))
 '''
@@ -210,11 +236,12 @@ def build(private_dir: str, kernel_dir: str, username: str, replay: str = "") ->
     tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + ("-replay" if replay else "")
     payload = {"items": items, "voice": (ROOT / "docs" / "common-voice.md").read_text(),
                "run_tag": tag, "replay": bool(replay)}
-    sources = {n: (ROOT / n).read_text() for n in ("arena_mind.py", "local_llm_decoding.py")}
+    sources = {n: (ROOT / n).read_text() for n in ("arena_mind.py", "local_llm_decoding.py", "claim_evidence.py")}
     kd = Path(kernel_dir)
     kd.mkdir(parents=True, exist_ok=True)
     (kd / "mind.py").write_text(
         f"import json as _json\nMODEL = {MODEL!r}\nCATEGORIES = {list(CATEGORIES)!r}\n"
+        f"CHECKERS = {CHECKERS!r}\n"
         f"SOURCES = _json.loads({json.dumps(sources)!r})\n"
         f"INPUT = _json.loads({json.dumps(payload, ensure_ascii=False)!r})\n" + DRIVER)
     (kd / "kernel-metadata.json").write_text(json.dumps({

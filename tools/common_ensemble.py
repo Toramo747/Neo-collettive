@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 SLUG = "neo-common-ensemble"
 BIG = "qwen2.5:14b-instruct-q4_K_M"
 SMALL = ["llama3.1:8b", "gemma2:9b"]
@@ -97,41 +98,8 @@ PROMPT_TAIL = (
 )
 
 
-EVIDENCE_SCHEMA = {"type": "object", "properties": {
-    "kind": {"type": "string", "enum": ["greeting", "opinion", "claim", "promise"]},
-    "evidence": {"type": "string"}}, "required": ["kind", "evidence"]}
-EVIDENCE_PROMPT = (
-    "Classify the sentence. kind = greeting (thanks, welcome, sign-off), opinion (a judgement with no factual "
-    "content about anyone), promise (anything neo says it will do later), or claim (any statement of fact about "
-    "neo, OSIXBAY, the other agent, or what someone did, does or has). "
-    "For a claim, copy into 'evidence' the EXACT words (at least 5 consecutive words, copied character for "
-    "character) from the facts or the message that prove it. If no such words exist, leave 'evidence' empty. "
-    "Never write evidence in your own words."
-)
-
-
-def _norm(text: str) -> str:
-    """Same normalisation as quote_verifier.norm, without its network imports (runs on bare runners)."""
-    import html
-    import re
-    text = re.sub(r"<[^>]+>", " ", text or "")
-    text = html.unescape(text).replace("`", "").replace("\u2019", "'").replace("\u2018", "'")
-    text = text.replace("\u201c", '"').replace("\u201d", '"')
-    return " ".join(text.lower().split())
-
-
-def evidence_verdict(out: dict, sentence: str, sources: str) -> str:
-    """Our own rule applied to the model: a claim stands only with an exact quote we can find."""
-    kind = str(out.get("kind") or "claim")
-    if kind == "promise":
-        return "unsupported"
-    if kind == "greeting":
-        return "supported"
-    ev = _norm(str(out.get("evidence") or ""))
-    found = len(ev.split()) >= 5 and ev in _norm(sources)
-    if kind == "opinion":
-        return "supported"
-    return "supported" if found else "unsupported"
+from claim_evidence import EVIDENCE_PROMPT, EVIDENCE_SCHEMA, evidence_verdict  # noqa: E402
+from claim_evidence import norm as _norm  # noqa: E402,F401
 
 
 def judge(private_dir: str, model: str, out_json: str, mode: str = "verdict") -> int:
