@@ -1,0 +1,41 @@
+name: Runtime profile (read-only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+      NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sizes and latencies (aggregates only)
+        run: |
+          set -uo pipefail
+          B=https://neo-collettive.onrender.com
+          for p in /health /api/autopilot/status /mcp/health /api/public/snapshot; do
+            pr="$(NEO_HEARTBEAT_TOKEN="${HEARTBEAT_TOKEN}" python self_traffic_auth.py sign-url "$B$p" --marker github-actions-deploy)"
+            r=$(curl -s -m 90 -o /tmp/r.json -w '%{http_code} %{size_download} %{time_total}' -H "X-MYCELIX-Self-Traffic: github-actions-deploy" -H "X-MYCELIX-Self-Traffic-Proof: ${pr}" -H "Authorization: Bearer ${NEO_ADMIN_TOKEN}" "$B$p")
+            echo "::notice title=endpoint $p::$r"
+            [ "$p" = "/api/autopilot/status" ] && cp /tmp/r.json /tmp/ap.json
+          done
+          python - <<'PY'
+          import json
+          a=json.load(open("/tmp/ap.json"))
+          def walk(d,prefix,depth):
+              rows=[]
+              if isinstance(d,dict) and depth<3:
+                  for k,v in d.items():
+                      n=len(json.dumps(v,ensure_ascii=False))
+                      rows.append((n,prefix+k))
+                      if n>150000: rows+=walk(v,prefix+k+".",depth+1)
+              return rows
+          rows=sorted(walk(a,"",0),reverse=True)[:25]
+          print("::notice title=status top keys (bytes)::"+" | ".join(f"{p}={n}" for n,p in rows))
+          for k in ("process","runtime","memory","resources","loop","timings","cycle_timings"):
+              for src in (a, a.get("autopilot",{}) if isinstance(a.get("autopilot"),dict) else {}):
+                  if k in src: print("::notice title=status "+k+"::"+json.dumps(src[k])[:800])
+          PY
