@@ -11,11 +11,11 @@ from __future__ import annotations
 import re
 
 EVIDENCE_SCHEMA = {"type": "object", "properties": {
-    "kind": {"type": "string", "enum": ["greeting", "opinion", "claim", "promise"]},
+    "kind": {"type": "string", "enum": ["greeting", "opinion", "request", "claim", "promise"]},
     "evidence": {"type": "string"}}, "required": ["kind", "evidence"]}
 EVIDENCE_PROMPT = (
     "Classify the sentence. kind = greeting (thanks, welcome, sign-off), opinion (a judgement with no factual "
-    "content about anyone), promise (anything neo says it will do later), or claim (any statement of fact about "
+    "content about anyone), request (asking or inviting the other agent to do something), promise (anything neo says it will do later), or claim (any statement of fact about "
     "neo, OSIXBAY, the other agent, or what someone did, does or has). "
     "For a claim, copy into 'evidence' the EXACT words (at least 5 consecutive words, copied character for "
     "character) from the facts or the message that prove it. If no such words exist, leave 'evidence' empty. "
@@ -37,8 +37,8 @@ def evidence_verdict(out: dict, sentence: str, sources: str) -> str:
     kind = str(out.get("kind") or "claim")
     if kind == "promise":
         return "unsupported"
-    if kind == "greeting":
-        return "supported"
+    if kind in ("greeting", "request"):
+        return "supported"  # 18/10 replay: "Please post your findings..." was blocked as a claim
     ev = norm(str(out.get("evidence") or ""))
     found = len(ev.split()) >= 5 and ev in norm(sources)
     if kind == "opinion":

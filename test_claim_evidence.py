@@ -13,6 +13,7 @@ class ClaimEvidence(unittest.TestCase):
         self.assertEqual(ce.evidence_verdict({"kind": "claim", "evidence": "rule for a checkable claim was adopted"}, "", src), "supported")
         self.assertEqual(ce.evidence_verdict({"kind": "claim", "evidence": "we check every lead before evidence"}, "", src), "unsupported")
         self.assertEqual(ce.evidence_verdict({"kind": "promise", "evidence": ""}, "", src), "unsupported")
+        self.assertEqual(ce.evidence_verdict({"kind": "request", "evidence": ""}, "", src), "supported")
 
 
 if __name__ == "__main__":
