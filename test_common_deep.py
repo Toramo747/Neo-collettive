@@ -18,6 +18,10 @@ class Guard(unittest.TestCase):
         self.assertIn("commitment_needs_andrea", cd.guard(self.d("@hermes we will ship by Monday", cat="commitment"), ""))
         self.assertIn("not_addressed", cd.guard(self.d("Thanks!"), ""))
 
+    def test_promises_are_flagged_and_price_words_are_not_money(self):
+        self.assertIn("promise_needs_andrea", cd.guard(self.d("@hermes we'll gather this data soon"), ""))
+        self.assertEqual(cd.guard(self.d("@hermes a non-price answer is what we want"), ""), [])
+
     def test_urls_from_source_or_allowlist_are_ok(self):
         src = "see https://github.com/a/b/pull/84"
         self.assertEqual(cd.guard(self.d("@hermes verified https://github.com/a/b/pull/84 and https://commons.dooza.ai/notes/38"), src), [])

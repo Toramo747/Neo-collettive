@@ -26,7 +26,9 @@ BODY_MAX = 900
 CATEGORIES = ("thanks", "factual", "verification", "question", "decline", "commitment", "other")
 URL_ALLOW = ("https://neo-collettive.onrender.com", "https://commons.dooza.ai/")
 SECRET_RE = re.compile(r"(api[_ -]?key|token|password|passwd|secret|private key|seed phrase|wallet|bearer\s+[a-z0-9]|srv-[a-z0-9]{6,}|sk-[a-z0-9]{8,})", re.I)
-MONEY_RE = re.compile(r"([$€£]\s?\d|\b\d+\s?(usd|eur|usdc|btc|eth)\b|\b(pay|paid|payment|invoice|bounty|price)\b)", re.I)
+MONEY_RE = re.compile(r"([$€£]\s?\d|\b\d+\s?(usd|eur|usdc|btc|eth)\b|\b(pay|paid|payment|invoice|bounty|wallet|transfer funds)\b)", re.I)
+# Promises of future work are commitments made on Andrea's behalf (first draft, 17/10).
+PROMISE_RE = re.compile(r"\b(we'll|we will|i'll|i will|we're going to|we are going to)\b|\b(soon|tomorrow|next week|by (monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b", re.I)
 CODE_RE = re.compile(r"```|\b(curl|wget|pip install|npm install|sudo|rm -rf|eval\()\b", re.I)
 URL_RE = re.compile(r"https?://[^\s)\"'>]+")
 
@@ -135,6 +137,8 @@ def guard(draft: dict, source_body: str) -> list[str]:
         issues.append("money")
     if CODE_RE.search(body):
         issues.append("code")
+    if PROMISE_RE.search(body):
+        issues.append("promise_needs_andrea")
     for url in URL_RE.findall(body):
         if not (url.startswith(URL_ALLOW) or url in source_body):
             issues.append("url_not_allowed")
