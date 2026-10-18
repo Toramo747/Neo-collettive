@@ -1,0 +1,203 @@
+{
+  "schema": "osixbay.verify_quote.conformance.v1",
+  "tool": "verify_quote",
+  "page": {
+    "url": "https://raw.githubusercontent.com/Toramo747/Neo-collettive/07cee89b3b5a21b35d25e34a21f885c3c77322be/docs/conformance/verify_quote_page_v1.txt",
+    "commit": "07cee89b3b5a21b35d25e34a21f885c3c77322be",
+    "path": "docs/conformance/verify_quote_page_v1.txt",
+    "sha256": "328d932c7856d0f0a9a36e95663323bee5eac5d921020e0a978ba9154aa21f5e",
+    "encoding": "utf-8"
+  },
+  "expected_semantics": "expected is the complete unmodified judge result; expected_api contains stable public-tool validation fields, calculated with mocked fetch of the same bytes.",
+  "max_live_calls": 6,
+  "cases": [
+    {
+      "id": "normal",
+      "quote": "The silver telescope records a clear signal before sunrise.",
+      "expected_outcome": "verbatim",
+      "expected": {
+        "outcome": "verbatim",
+        "segments": 1,
+        "segments_found": 1,
+        "context": "page, version 1. this fixed page contains synthetic public test sentences only. the silver telescope records a clear signal before sunrise. a careful observer checks the original source before repeating a claim. the pat"
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "verbatim"
+      },
+      "note": "Exact ordinary sentence.",
+      "live": true
+    },
+    {
+      "id": "ellipsis",
+      "quote": "The patient explorer carries a small notebo…servation before returning home with the evidence.",
+      "expected_outcome": "verbatim",
+      "expected": {
+        "outcome": "verbatim",
+        "segments": 2,
+        "segments_found": 2,
+        "context": "unrise. a careful observer checks the original source before repeating a claim. the patient explorer carries a small notebook across the silent valley and records every observation before returnin"
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "verbatim"
+      },
+      "note": "Cuts discard the boundary token on each side; surviving pieces are found.",
+      "live": true
+    },
+    {
+      "id": "paraphrase",
+      "quote": "The archive stores ten careful observations from the northern station every morning.",
+      "expected_outcome": "paraphrase",
+      "expected": {
+        "outcome": "paraphrase",
+        "segments": 1,
+        "segments_found": 0,
+        "four_word_overlap": 0.78
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "paraphrase"
+      },
+      "note": "Prefix matches but whole sentence does not; four-word overlap reaches 50 percent.",
+      "live": true
+    },
+    {
+      "id": "invented",
+      "quote": "A purple submarine delivers fresh strawberries to the distant moon.",
+      "expected_outcome": "not_found",
+      "expected": {
+        "outcome": "not_found",
+        "segments": 1,
+        "segments_found": 0,
+        "four_word_overlap": 0.0
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "not_found"
+      },
+      "note": "Invented text absent from the page.",
+      "live": true
+    },
+    {
+      "id": "script",
+      "quote": "The secret lunar committee demands payment before every public verification.",
+      "expected_outcome": "not_found",
+      "expected": {
+        "outcome": "not_found",
+        "segments": 1,
+        "segments_found": 0,
+        "four_word_overlap": 0.0
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "not_found"
+      },
+      "note": "Only inside script; discarded before matching.",
+      "live": true
+    },
+    {
+      "id": "typography",
+      "quote": "Mira's notebook says \"check the source\" before sharing a quotation.",
+      "expected_outcome": "verbatim",
+      "expected": {
+        "outcome": "verbatim",
+        "segments": 1,
+        "segments_found": 1,
+        "context": "t valley and records every observation before returning home with the evidence. mira's notebook says \"check the source\" before sharing a quotation. the lantern beside the window remains bright after midnight. a detailed public "
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "verbatim"
+      },
+      "note": "ASCII quotation marks and apostrophe match typographic marks.",
+      "live": true
+    },
+    {
+      "id": "short",
+      "quote": "two words",
+      "expected_outcome": "quote_too_short",
+      "expected": {
+        "outcome": "not_found",
+        "segments": 1,
+        "segments_found": 0,
+        "four_word_overlap": 0.0
+      },
+      "expected_api": {
+        "ok": false,
+        "error": "quote_too_short"
+      },
+      "note": "judge evaluates text; the public tool instead returns quote_too_short.",
+      "live": false
+    },
+    {
+      "id": "whitespace",
+      "quote": "The lantern beside the window remains bright after midnight.",
+      "expected_outcome": "verbatim",
+      "expected": {
+        "outcome": "verbatim",
+        "segments": 1,
+        "segments_found": 1,
+        "context": "e evidence. mira's notebook says \"check the source\" before sharing a quotation. the lantern beside the window remains bright after midnight. a detailed public record keeps the first observation and the final measurement "
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "verbatim"
+      },
+      "note": "Repeated spaces collapse.",
+      "live": false
+    },
+    {
+      "id": "linebreak",
+      "quote": "A detailed public record keeps the first observation and the final measurement on separate lines.",
+      "expected_outcome": "verbatim",
+      "expected": {
+        "outcome": "verbatim",
+        "segments": 1,
+        "segments_found": 1,
+        "context": "aring a quotation. the lantern beside the window remains bright after midnight. a detailed public record keeps the first observation and the final measurement on separate lines. the archive stores ten careful observations from the northern station. readers "
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "verbatim"
+      },
+      "note": "A real line break collapses to a space.",
+      "live": false
+    },
+    {
+      "id": "entity",
+      "quote": "rock & roll stays audible.",
+      "expected_outcome": "verbatim",
+      "expected": {
+        "outcome": "verbatim",
+        "segments": 1,
+        "segments_found": 1,
+        "context": "ate stays open until the evening bell rings. this line contains an html entity: rock & roll stays audible. the quoted label is \"a quiet public demonstration\". a scientist's question can "
+      },
+      "expected_api": {
+        "ok": true,
+        "outcome": "verbatim"
+      },
+      "note": "HTML entity is unescaped.",
+      "live": false
+    },
+    {
+      "id": "long",
+      "quote": "unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted unlisted ",
+      "expected_outcome": "quote_too_long",
+      "expected": {
+        "outcome": "not_found",
+        "segments": 1,
+        "segments_found": 0,
+        "four_word_overlap": 0.0
+      },
+      "expected_api": {
+        "ok": false,
+        "error": "quote_too_long",
+        "max_chars": 600
+      },
+      "note": "judge has no length limit; tool returns quote_too_long after stripping.",
+      "live": false
+    }
+  ]
+}
