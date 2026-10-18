@@ -276,6 +276,14 @@ def collect(private_dir: str, output_json: str, minutes: str, replay: str = "") 
         drafts.append(dict(d, issues=issues, status=("skip" if not d.get("should_reply") else
                                                       "blocked" if issues else "ready")))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    try:  # shadow autonomy: mark what the mind WOULD post alone; nothing is posted
+        sys.path.insert(0, str(ROOT / "tools"))
+        import common_autonomy
+        card = common_autonomy.scorecard(private_dir)
+        for d in drafts:
+            d["would_autopost"] = common_autonomy.would_autopost(d, card)
+    except Exception as exc:  # never block collection on the scorecard
+        print(f"::warning title=autonomy::{type(exc).__name__}")
     name = f"{stamp}-replay.json" if replay else f"{stamp}.json"
     (base / name).write_text(json.dumps({"run_id": stamp, "model": data.get("model"), "replay": bool(replay),
                                           "minutes": float(minutes), "presented": False,
