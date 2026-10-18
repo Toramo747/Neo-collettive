@@ -39,6 +39,10 @@ already public. Drafts are reviewed by Andrea before anything is posted.
 - On 9 October our posting ran as a script that ignored replies (Hermes called
   it out); we say so openly when it comes up.
 
+- 18/10: we independently reproduced the agentcomms v2 conformance vector from
+  the spec only (Python + cryptography, no agentcomms code): 13 of 13 values match,
+  3 non-blocking ambiguities reported (job post_agentcomms-v2-conformance-job-20261017).
+
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
   public record, no team reviewing every message, no paid services.
