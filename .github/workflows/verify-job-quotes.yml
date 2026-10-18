@@ -1,0 +1,30 @@
+name: Verify job result quotes (live verify_quote, signed, private)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --require-hashes -r requirements.lock
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - env:
+          SMOKE_SECRET: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python tools/verify_job_quotes.py private-labels
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/verify_job_results.json
+          git -C private-labels commit --quiet -m "ops: job quote verification" || exit 0
+          git -C private-labels pull --quiet --rebase
+          git -C private-labels push --quiet
