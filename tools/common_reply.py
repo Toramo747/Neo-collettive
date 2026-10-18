@@ -19,7 +19,7 @@ def get(path):
 def spec():
     s = get("/openapi.json")
     for path, ops in (s.get("paths") or {}).items():
-        if "entr" in path or "repl" in path or "message" in path:
+        if "entr" in path or "repl" in path or "message" in path or "job" in path:
             for m, op in ops.items():
                 body = (((op.get("requestBody") or {}).get("content") or {}).get("application/json") or {}).get("schema") or {}
                 ref = body.get("$ref", "")
