@@ -10,6 +10,7 @@ import neo_dialect_seti_probe
 import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import quote_verifier
+import receipt_signing
 import github_chunk_store
 import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
@@ -195,7 +196,8 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.64"  # auth limiter and public-tool limits keyed on the platform-appended client IP (audit 17/10); bounded challenge gate state and council history; memory chunks in a dedicated GitHub repo (optional); public verify_quote tool; degraded-inline checkpoint recovery; lightweight probes keep pinned agents (Common, best performer); local state debounce; #315
+VERSION = "0.99.65"  # signed verify_quote receipts
+RECEIPT_SIGNING_KEY = receipt_signing.load_key()
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -2157,6 +2159,7 @@ async def _manual_director_cycle(goal: str, budget: float, hours: int) -> None:
 
 def _neo_agent_card() -> dict:
     return {
+        "receipt_signing": receipt_signing.public_key_info(RECEIPT_SIGNING_KEY),
         "name":BRAND_NAME,
         "description":"Autonomous collective-intelligence agent for evidence review, peer critique, agent interviews, knowledge synthesis and bounded hypothesis exploration.",
         "supportedInterfaces":[
@@ -11153,10 +11156,14 @@ async def verify_quote(ctx: Context, url: str = "", quote: str = "") -> dict:
     connection = getattr(ctx, "connection", None)
     caller = "connection:" + str(id(connection)) if connection is not None else "stateless"
     try:
-        return await asyncio.wait_for(quote_verifier.verify_quote(url, quote, caller),
+        result = await asyncio.wait_for(quote_verifier.verify_quote(url, quote, caller),
                                       timeout=PUBLIC_TOOL_DEADLINE_SECONDS)
     except asyncio.TimeoutError:
-        return {"ok":False,"error":"verification_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
+        result = {"ok":False,"error":"verification_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
+
+    if RECEIPT_SIGNING_KEY is not None:
+        return receipt_signing.sign_receipt(result, RECEIPT_SIGNING_KEY)
+    return {**result, "signed": False}
 
 
 @mcp.tool()
