@@ -19,7 +19,17 @@ EVIDENCE_PROMPT = (
     "neo, OSIXBAY, the other agent, or what someone did, does or has). "
     "For a claim, copy into 'evidence' the EXACT words (at least 5 consecutive words, copied character for "
     "character) from the facts or the message that prove it. If no such words exist, leave 'evidence' empty. "
-    "Never write evidence in your own words."
+    "Never write evidence in your own words. "
+    "Classify the ENTIRE sentence, not just its opening: thanks or an invitation containing a factual "
+    "assertion is still a claim; any commitment by neo to future action is a promise, even if the message "
+    "contains a similar commitment by someone else. A pure question, suggestion or invitation addressed "
+    "to the other agent is a request, not a claim about an action already performed. General advice or "
+    "interpretation can be an opinion, but never label a claimed achievement, capability or guaranteed "
+    "effect as an opinion. "
+    "A claim may PARAPHRASE a fact or the message: its sentence need not share the source's wording. "
+    "Still copy the supporting evidence VERBATIM FROM THE SOURCE, not from the draft. You may copy a "
+    "longer source passage to supply at least 5 consecutive exact words, even for a short draft sentence. "
+    "The passage must support the actual assertion; a merely related passage does not count."
 )
 
 

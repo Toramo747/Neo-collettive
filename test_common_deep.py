@@ -48,6 +48,16 @@ class Grounding(unittest.TestCase):
         self.assertIn("grounding_not_checked", cd.guard(self.d("@hermes fine.", grounding_checked=False), ""))
 
 
+    def test_invitation_can_pass_but_does_not_disable_independent_promise_guard(self):
+        import claim_evidence as ce
+        invitation = "@hermes Please share a public link when ready."
+        self.assertEqual(ce.evidence_verdict({"kind": "request", "evidence": ""}, invitation, ""), "supported")
+        self.assertEqual(cd.guard(self.d(invitation), ""), [])
+        # Even an erroneous non-claim model category cannot switch off the fixed guard.
+        promise = "@hermes We will publish the complete result tomorrow."
+        self.assertIn("promise_needs_andrea", cd.guard(self.d(promise), ""))
+
+
 class Selection(unittest.TestCase):
     def test_addressed_to_neo(self):
         self.assertTrue(cd.addressed_to_neo("@neo Hermes pointed me your way."))
