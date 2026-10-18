@@ -36,6 +36,7 @@ SOURCES = {
     "wormhole": "https://doi.org/10.1119/1.15620",
     "wormhole_qi": "https://arxiv.org/abs/gr-qc/9510071",
     "van_den_broeck": "https://arxiv.org/abs/gr-qc/9905084",
+    "positive_energy_subluminal": "https://doi.org/10.1088/1361-6382/abdf6e",
 }
 
 
@@ -196,6 +197,163 @@ def vdb_reduction_study(beta: float = 0.5, amplitudes=(0.0, 3.0, 9.0)) -> dict:
                     "VdB's few-solar-mass figure needs A~1e17 and tuned walls, not reproduced numerically here"}
 
 
+# ------------------------------------------------ positive-energy subluminal
+# Bobrick & Martire (2021), CQG 38 105009, DOI 10.1088/1361-6382/abdf6e,
+# eqs. (5)-(7). This is a smooth, pressure-anisotropic illustrative member
+# of their static spherical class, NOT a claimed exact example from the paper.
+# G=c=1; comoving chart (t,r,theta,phi), signature -+++.
+# Density rho=m'(r)/(4*pi*r^2); p_r=0 is a declared model choice;
+# p_t=rho*m/(2*(r-2m)). Exterior is Schwarzschild, interior flat.
+_GL_X, _GL_W = np.polynomial.legendre.leggauss(64)
+
+
+def positive_energy_subluminal_metric(beta: float, inner: float = 0.7,
+                                       outer: float = 1.3, mass: float = 0.014):
+    """Subluminal material shell metric, not a propulsion mechanism.
+
+    beta labels the constant velocity of the comoving frame relative to a
+    remote observer; it does not change the static comoving stress tensor.
+    """
+    values = (beta, inner, outer, mass)
+    if any(not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v)
+           for v in values):
+        raise ValueError("non-finite spherical-shell parameters")
+    if not (0 <= beta < 1 and 0 < inner < outer and mass > 0 and 2*mass/inner < 0.1):
+        raise ValueError("requires beta<1, regular shell and low compactness")
+
+    def enclosed_mass(r):
+        if r <= inner:
+            return 0.0
+        if r >= outer:
+            return mass
+        u = (r - inner)/(outer - inner)
+        return mass*u**3*(10 + u*(-15 + 6*u))
+
+    def mass_gradient(r):
+        if r <= inner or r >= outer:
+            return 0.0
+        u = (r - inner)/(outer - inner)
+        return mass*30*u*u*(1-u)**2/(outer - inner)
+
+    @functools.lru_cache(maxsize=256)
+    def lapse(r):
+        if r >= outer:
+            return 1 - 2*mass/r
+        lower = max(r, inner)
+        nodes = 0.5*(outer-lower)*_GL_X + 0.5*(outer+lower)
+        integrand = [2*enclosed_mass(float(s)) /
+                     (s*(s-2*enclosed_mass(float(s)))) for s in nodes]
+        return (1 - 2*mass/outer)*math.exp(
+            -0.5*(outer-lower)*float(np.dot(_GL_W, integrand)))
+
+    def g(x):
+        r, theta = float(x[0]), float(x[1])
+        if r <= 0 or not (0 < theta < math.pi):
+            raise ValueError("regular spherical chart only")
+        m = enclosed_mass(r)
+        return np.diag([-lapse(r), 1/(1-2*m/r),
+                        r*r, r*r*math.sin(theta)**2])
+
+    def expected_stress(r):
+        m = enclosed_mass(r)
+        rho = mass_gradient(r)/(4*math.pi*r*r)
+        p_t = rho*m/(2*(r-2*m))
+        return np.array([rho, 0.0, p_t, p_t])
+
+    return g, expected_stress, enclosed_mass, mass_gradient, lapse
+
+
+@functools.lru_cache(maxsize=256)
+def positive_energy_subluminal_assess(beta: float, inner: float = 0.7,
+                                       outer: float = 1.3, mass: float = 0.014) -> dict:
+    """Two-step tensor convergence vs published spherical density (Eq. 6).
+
+    Finite point tests do NOT prove energy conditions at all points. For this
+    particular declared anisotropic model, the reference formulas obey
+    rho>=0, p_r=0, p_t>=0 and p_t/rho <= m/(2(r-2m)) < 1 when 2m/r < 0.1.
+    """
+    base = {"family": "positive_energy_subluminal",
+            "metric": "bobrick_martire_spherical_shell_illustrative",
+            "source": "https://doi.org/10.1088/1361-6382/abdf6e",
+            "physical_feasibility_established": False,
+            "matter_model_supplied": False,
+            "stability_evaluated": False,
+            "acceleration_or_propulsion_model_supplied": False,
+            "all_spacetime_points_numerically_checked": False}
+    try:
+        gfun, reference, mfun, gradient, lapse = positive_energy_subluminal_metric(
+            beta, inner, outer, mass)
+    except (ValueError, TypeError, OverflowError):
+        return {**base, "status": "INVALID_REFERENCE_PARAMETERS",
+                "eligible_for_reference_selection": False,
+                "numerics": {"converged": False}}
+
+    width = outer-inner
+    fine_h = min(inner, width)*1e-3
+    locations = (0.7*inner, inner+0.25*width,
+                 inner+0.5*width, inner+0.75*width,
+                 outer+max(width*0.25, 0.2))
+    errors = []
+    sampled = []
+    for r in locations:
+        target = reference(r)
+        observed = []
+        for step in (2*fine_h, fine_h):
+            g, t = stress(gfun, (r, 1.12, 0.2), step)
+            observed.append(np.array([t[i, i] /
+                                      ((-g[0, 0]) if i == 0 else g[i, i])
+                                      for i in range(4)]))
+        errors.append((float(np.max(np.abs(observed[0]-target))),
+                       float(np.max(np.abs(observed[1]-target)))))
+        rho, pr, pt, pphi = observed[1]
+        sampled.append({"r": float(r), "rho": float(rho), "p_radial": float(pr),
+                        "p_theta": float(pt), "p_phi": float(pphi)})
+    coarse = max(x[0] for x in errors)
+    fine = max(x[1] for x in errors)
+    # Control accuracy in units L0^-2, including the two vacuum regions.
+    tolerance = 1e-6
+    numeric_energy_nodes = 0.5*width*_GL_X + 0.5*(outer+inner)
+    proper_energy = 0.5*width*float(np.dot(_GL_W, [
+        gradient(float(r))/math.sqrt(1-2*mfun(float(r))/r)
+        for r in numeric_energy_nodes]))
+    valid = bool(fine < tolerance and fine < coarse and
+                 all(s["rho"] >= -tolerance and
+                     s["rho"] + s["p_radial"] >= -tolerance and
+                     s["rho"] + min(s["p_theta"], s["p_phi"]) >= -tolerance and
+                     s["rho"] >= max(abs(s["p_radial"]), abs(s["p_theta"]),
+                                     abs(s["p_phi"])) - tolerance
+                     for s in sampled) and proper_energy > 0 and
+                 0 < lapse(inner) < 1)
+    return {**base,
+            "status": "REFERENCE_METRIC_ONLY" if valid else "VALIDATION_FAILED",
+            "eligible_for_reference_selection": valid and beta < 1,
+            "parameters": {"beta": beta, "inner": inner, "outer": outer, "mass": mass},
+            "eulerian_energy_integral_over_L0": proper_energy,
+            "energy_interpretation": "proper-volume Eulerian integral, not propulsion energy or ADM mass",
+            "adm_mass_over_L0": mass,
+            "minimum_sampled_eulerian_density_times_L0_squared":
+                min(s["rho"] for s in sampled),
+            "interior_clock_rate_relative_to_infinity": math.sqrt(lapse(inner)),
+            "sampled_energy_conditions": {"wec": "NO_VIOLATION_AT_SAMPLES" if valid else "NOT_ESTABLISHED",
+                                          "nec": "NO_VIOLATION_AT_SAMPLES" if valid else "NOT_ESTABLISHED",
+                                          "dec": "NO_VIOLATION_AT_SAMPLES" if valid else "NOT_ESTABLISHED"},
+            "tensor_samples": sampled,
+            "numerics": {"converged": valid,
+                         "coarse_step": 2*fine_h, "fine_step": fine_h,
+                         "coarse_max_absolute_error": coarse,
+                         "fine_max_absolute_error": fine,
+                         "absolute_error_tolerance": tolerance,
+                         "reference": "Bobrick-Martire Eq. (6) with p_r=0 and Einstein/TOV tangential pressure"}}
+
+
+def positive_energy_subluminal_checks() -> dict:
+    result = positive_energy_subluminal_assess(0.5)
+    return {"passed": result["status"] == "REFERENCE_METRIC_ONLY",
+            "numerics": result["numerics"],
+            "positive_proper_energy": result.get("eulerian_energy_integral_over_L0"),
+            "sampled_energy_conditions": result.get("sampled_energy_conditions")}
+
+
 @functools.lru_cache(maxsize=1)
 def _evaluate_families_cached() -> str:
     import json
@@ -209,12 +367,12 @@ def evaluate_families() -> dict:
 
 
 def _evaluate_families() -> dict:
-    wc, vc = wormhole_checks(), vdb_checks()
+    wc, vc, pc = wormhole_checks(), vdb_checks(), positive_energy_subluminal_checks()
     return {
         "version": "metrics-v1",
         "sources": SOURCES,
-        "checks": {"wormhole": wc, "van_den_broeck": vc},
-        "passed": bool(wc["passed"] and vc["passed"]),
+        "checks": {"wormhole": wc, "van_den_broeck": vc, "positive_energy_subluminal": pc},
+        "passed": bool(wc["passed"] and vc["passed"] and pc["passed"]),
         "alcubierre_interior_clock": {"proper_time_rate_at_center": 1.0,
                                       "reason": "lapse = 1: the bubble centre follows a geodesic and its clock runs at coordinate rate (Alcubierre 1994)"},
         "wormhole_map": [wormhole_assess(b) for b in (6e-34, 1.0, 100.0)],
