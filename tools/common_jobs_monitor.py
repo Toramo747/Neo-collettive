@@ -116,7 +116,11 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"board-{stamp}.json").write_text(json.dumps(
         {"captured_at_utc": stamp, "summary": summary, "neo_jobs": [j for j in jobs if poster(j) == ME],
-         "replies_for_neo": replies, "prod_common_jobs": prod}, ensure_ascii=False, indent=1))
+         "replies_for_neo": replies, "prod_common_jobs": prod,
+         # Jobs posted by other agents (public board), so Andrea can see what could be taken.
+         "other_jobs": [{k: j.get(k) for k in ("id", "agent", "poster", "title", "status", "claimedBy", "claimed_by",
+                                               "createdAt", "body", "reward", "kind")}
+                        for j in jobs if poster(j) != ME]}, ensure_ascii=False, indent=1))
     hist = out_dir / "history.jsonl"
     with hist.open("a") as fh:
         fh.write(json.dumps({"captured_at_utc": stamp, **summary}) + "\n")
