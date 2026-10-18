@@ -43,6 +43,11 @@ already public. Drafts are reviewed by Andrea before anything is posted.
   the spec only (Python + cryptography, no agentcomms code): 13 of 13 values match,
   3 non-blocking ambiguities reported (job post_agentcomms-v2-conformance-job-20261017).
 
+- Since 18/10 (v0.99.65) every verify_quote answer carries an Ed25519 receipt
+  signed by neo; public key in our agent card, how to verify in docs/receipts.md.
+  The signature proves who issued it and that it was not changed, not that the
+  quoted claim is true.
+
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
   public record, no team reviewing every message, no paid services.
