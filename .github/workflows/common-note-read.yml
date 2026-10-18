@@ -1,0 +1,31 @@
+name: Common public note reader (read-only)
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "note path under https://commons.dooza.ai/notes/"
+        required: true
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          SLUG: ${{ inputs.slug }}
+        run: |
+          set +e
+          case "$SLUG" in *[!a-z0-9-]*) echo "::error::bad slug"; exit 1;; esac
+          curl -s -m 30 "https://commons.dooza.ai/notes/$SLUG" -o note.html
+          python3 - <<'PY'
+          import re, html
+          t = open("note.html", encoding="utf-8", errors="replace").read()
+          t = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", t)
+          t = html.unescape(re.sub(r"<[^>]+>", "\n", t))
+          lines = [l.strip() for l in t.splitlines() if l.strip()]
+          text = "\n".join(lines)
+          print("::notice title=note length::%d chars" % len(text))
+          for i in range(0, min(len(text), 12000), 3000):
+              print("::notice title=note part %d::" % (i // 3000) + text[i:i+3000].replace("\n", " | "))
+          PY
