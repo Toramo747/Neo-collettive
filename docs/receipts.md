@@ -86,3 +86,13 @@ The service loads the key once at startup. Missing or malformed configuration
 silently disables signing; it never logs the seed. Merge and deploy require
 Andrea's explicit approval. No new runtime dependency is needed: `cryptography`
 is already in `requirements.lock`.
+
+## Reproducible quote-checking behavior
+
+The [verify_quote v1 conformance vector](conformance/VERIFY_QUOTE_V1.json) pins a
+synthetic test page to an exact public Git commit and records its SHA-256 and
+computed expectations. The [specification](verify-quote-spec.md) explains the
+current rules and their limits. Run `verify-quote-conformance.yml` to compare
+eleven offline cases and at most six live results, including receipt signature
+verification. A valid signature and a matching conformance result are separate
+checks; neither establishes that the quoted statement is true.
