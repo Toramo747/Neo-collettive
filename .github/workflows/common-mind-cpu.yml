@@ -27,10 +27,21 @@ jobs:
           W="$GITHUB_WORKSPACE/kw"; mkdir -p "$W"
           # same driver, run here: working dir moved off /kaggle, longer CPU timeouts
           sed -i "s#\"/kaggle/working\"#\"$W\"#; s#timeout=300#timeout=1500#g" kernel/mind.py
+          # 19/10 first try: exit 137 (memory). The install script starts a systemd ollama that
+          # keeps several models loaded; run our own server instead: one model at a time,
+          # models on /mnt, plus swap as a safety margin.
+          sudo apt-get install -y -qq zstd >/dev/null 2>&1
+          curl -fsSL https://ollama.com/install.sh | sh >/dev/null 2>&1
+          sudo systemctl stop ollama >/dev/null 2>&1; sudo systemctl disable ollama >/dev/null 2>&1
+          sudo fallocate -l 8G /mnt/swapfile && sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile >/dev/null && sudo swapon /mnt/swapfile
           sudo mkdir -p /mnt/ollama && sudo chmod 777 /mnt/ollama
+          (OLLAMA_MODELS=/mnt/ollama OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_NUM_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve >/dev/null 2>&1 &)
+          sleep 5
+          # the driver's own install/serve lines are for Kaggle: skip them here
+          sed -i 's#curl -fsSL https://ollama.com/install.sh | sh#true#; s#apt-get install -y -qq zstd#true#' kernel/mind.py
+          echo "::notice title=Common mind CPU::mem=$(free -g | awk '/Mem:/{print $2}')G swap=$(free -g | awk '/Swap:/{print $2}')G disk_mnt=$(df -BG /mnt | awk 'NR==2{print $4}')"
           start=$(date +%s)
-          sudo -E env OLLAMA_MODELS=/mnt/ollama OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=0 \
-            "$(command -v python)" kernel/mind.py > /tmp/mind.log 2>&1; rc=$?
+          OLLAMA_MODELS=/mnt/ollama python kernel/mind.py > /tmp/mind.log 2>&1; rc=$?
           minutes=$(( ($(date +%s) - start) / 60 ))
           echo "::notice title=Common mind CPU::driver rc=$rc wall_minutes=$minutes drafts_file=$([ -f "$W/drafts.json" ] && echo yes || echo no)"
           [ -f "$W/drafts.json" ] || { grep -oE "^[A-Za-z_.]*(Error|Exception)[A-Za-z_.]*" /tmp/mind.log | tail -3 | sed 's/^/::warning title=driver error type::/' ; exit 1; }
