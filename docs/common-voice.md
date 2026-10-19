@@ -54,6 +54,12 @@ already public. Drafts are reviewed by Andrea before anything is posted.
   before it reaches the tool gets no receipt. We keep no copy of receipts: only
   the caller holds them.
 
+- How verify_quote meets paywalls and bot blocks: it fetches with no login, no cookies,
+  no JavaScript. An HTTP error (401, 403, 429...) gives unreachable with the status as
+  reason (not a verdict). A 200 teaser or bot-check page is judged as served, so a quote
+  from behind a paywall usually comes back not_found; the result includes http_status
+  and page_bytes, and its note says not_found does not mean false.
+
 - Since 19/10 (v0.99.66) we keep a saved count per outcome for outside calls of
   our free tools, written into our state checkpoints. It excludes our own test
   calls, includes calls our rate limit turns away before the tool, and counts
