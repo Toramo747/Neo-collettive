@@ -74,6 +74,7 @@ SEED_TERMS = (
     "accounting", "tax", "permissions", "monitoring", "data entry", "quotes", "leads",
 )
 ANCHOR_SOURCE = "hn_comments"
+QUERY_PHRASE_MAX_WORDS = 5
 MAP_SEED_MIN_PEOPLE = 3
 SOURCES = ("hn_comments", "hn_stories", "se_softwarerecs", "se_superuser", "se_webapps", "se_stackoverflow")
 SE_SITES = {"se_softwarerecs": "softwarerecs", "se_superuser": "superuser",
@@ -143,6 +144,11 @@ def clamp(g: dict) -> dict:
     g = dict(g)
     allowed = set(all_phrases())
     g["phrases"] = [p for p in g.get("phrases", []) if p in allowed][:2] or [PHRASES[0]]
+    # 2026-10-19: mind-learned phrases drifted to long, situation-specific sentences
+    # ("my mac doesn't show any virus threats"); every genome keeps one generic phrase.
+    if not any(p in PHRASES for p in g["phrases"]):
+        base = PHRASES[sum(map(ord, "".join(g["phrases"]))) % len(PHRASES)]
+        g["phrases"] = [base] + g["phrases"][:1]
     g["terms"] = [str(t)[:40] for t in g.get("terms", []) if str(t).strip()][:2] or [SEED_TERMS[0]]
     g["sources"] = [s for s in g.get("sources", []) if s in SOURCES][:2] or ["hn_comments"]
     # 2026-10-19: hn_comments yields ~72% of all discoveries (560/779); genomes without
@@ -242,7 +248,10 @@ def http_json(url: str, timeout: float = 20.0) -> Any:
 
 def fetch(q: dict, recency_days: int, getter=http_json) -> list[dict]:
     # Broad retrieval, strict filtering: the need sentence check does precision.
-    text = f"{q['term']} {q['phrase']}"
+    # 2026-10-19: HN Algolia needs every word; a long learned phrase plus a term found
+    # almost nothing (16-48 hits/gen). Long phrases stay in the need-sentence filter only.
+    phrase = q["phrase"] if len(q["phrase"].split()) <= QUERY_PHRASE_MAX_WORDS else ""
+    text = f"{q['term']} {phrase}".strip()
     since = int(time.time()) - recency_days * 86400
     src = q["source"]
     if src.startswith("hn_"):

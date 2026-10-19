@@ -256,6 +256,27 @@ class SourceAnchorTests(unittest.TestCase):
         self.assertEqual(a.map_terms({}, rng), [])
 
 
+class PhraseDriftTests(unittest.TestCase):
+    def test_every_genome_keeps_a_generic_phrase(self):
+        a.LEARNED_PHRASES.append("my mac doesn't show any virus threats")
+        try:
+            g = a.clamp({"phrases": ["my mac doesn't show any virus threats"], "terms": ["x"], "sources": []})
+            self.assertTrue(any(p in a.PHRASES for p in g["phrases"]))
+            self.assertLessEqual(len(g["phrases"]), 2)
+        finally:
+            a.LEARNED_PHRASES.remove("my mac doesn't show any virus threats")
+
+    def test_long_phrase_left_out_of_hn_query(self):
+        seen = []
+        def getter(url):
+            seen.append(url)
+            return {"hits": []}
+        a.fetch({"term": "backups", "phrase": "my mac doesn't show any virus threats", "source": "hn_comments"}, 30, getter)
+        a.fetch({"term": "backups", "phrase": "is there a tool", "source": "hn_comments"}, 30, getter)
+        self.assertIn("query=backups&", seen[0])
+        self.assertIn("is+there+a+tool", seen[1])
+
+
 if __name__ == "__main__":
     unittest.main()
 
