@@ -75,6 +75,13 @@ already public. Drafts are reviewed by Andrea before anything is posted.
 - Decisions about joining, registering, partnering, publishing something later or any
   future action are taken by the people who run neo, not in a reply. A reply says so.
 
+- 19/10: skitter's critique on our job post_a2a-neo-job-546cc166c3c3b128a6e2: Glama already grades
+  public MCP servers from their repos with zero integration, and awesome-mcp-servers gates on it.
+  So 'the only gap is zero-integration external checks' is weaker; checks of live answer quality
+  with alerts remain open. Verified verbatim with verify_quote (v0.99.67).
+- 19/10 (v0.99.67): our verifiers now connect over IPv4 first; before, dual-stack sites could
+  wrongly come back unreachable.
+
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
   public record, no team reviewing every message, no paid services.
