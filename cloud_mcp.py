@@ -196,7 +196,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.65"  # signed verify_quote receipts
+VERSION = "0.99.66"  # saved per-outcome counts for public tools (0.99.65: signed verify_quote receipts)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
@@ -11024,6 +11024,55 @@ def _record_public_tool_use(tool_name: str, source: str, category: str) -> None:
     row["last_utc"]=now
     usage[tool_name]=row
     AUTOPILOT_STATE["public_tool_usage"]=usage
+
+
+_OUTCOME_KEY_RE=re.compile(r"[^a-z0-9_]+")
+
+
+def _public_tool_outcome_key(result: Any) -> str:
+    """Outcome label of a public tool result: verdict, unreachable, refusal code or timeout (19/10)."""
+    if not isinstance(result,dict):
+        return "unknown"
+    raw=result.get("outcome") or result.get("error") or ("ok" if result.get("ok") is True else "unknown")
+    key=_OUTCOME_KEY_RE.sub("_",str(raw).lower()).strip("_")[:40]
+    return key or "unknown"
+
+
+def _outcome_from_jsonrpc_body(raw: bytes) -> str:
+    try:
+        text=raw.decode("utf-8","replace")
+        m=re.search(r"^data: (.*)$",text,re.M)
+        doc=json.loads(m.group(1) if m else text)
+    except Exception:
+        return "unparsed"
+    if not isinstance(doc,dict):
+        return "unparsed"
+    if doc.get("error"):
+        err=doc["error"] if isinstance(doc["error"],dict) else {}
+        return "rpc_"+_public_tool_outcome_key({"error":err.get("message") or "error"})
+    res=doc.get("result") or {}
+    sc=res.get("structuredContent") if isinstance(res,dict) else None
+    if not sc and isinstance(res,dict):
+        for c in res.get("content") or []:
+            try:
+                sc=json.loads(c.get("text") or "{}")
+                break
+            except Exception:
+                pass
+    return _public_tool_outcome_key(sc)
+
+
+def _record_public_tool_outcome(tool_name: str, key: str) -> None:
+    """Saved per-outcome count for counted (non self-traffic) public tool calls."""
+    usage=dict(AUTOPILOT_STATE.get("public_tool_usage") or {})
+    row=dict(usage.get(tool_name) or {"calls":0,"origins":[],"by_category":{}})
+    outcomes=dict(row.get("by_outcome") or {})
+    if key not in outcomes and len(outcomes)>=40:
+        key="other"
+    outcomes[key]=int(outcomes.get(key) or 0)+1
+    row["by_outcome"]=outcomes
+    usage[tool_name]=row
+    AUTOPILOT_STATE["public_tool_usage"]=usage
 _MCP_PUBLIC_READONLY_CALLS_BY_ORIGIN: dict[str, list[float]] = {}
 _MCP_PUBLIC_READONLY_GLOBAL_CALLS: list[float] = []
 
@@ -14498,6 +14547,7 @@ class _InboundTrafficASGI:
         AUTOPILOT_STATE["inbound_traffic_evicted"]=evicted
         AUTOPILOT_STATE["inbound_traffic_summary"]=summarize_inbound_traffic(events,evicted=evicted)
         _save_local_state()
+        outcome_tool=""
         if rpc=="tools/call":
             tool_name=str(params.get("name") or "").strip()
             known_tool=tool_name in MCP_TOOL_ACCESS
@@ -14521,7 +14571,10 @@ class _InboundTrafficASGI:
                 # Signed smoke tests arrive here as self_traffic: limited, not counted.
                 if category!="self_traffic":
                     _record_public_tool_use(tool_name,limit_key,category)
+                    outcome_tool=tool_name
                 if not _consume_mcp_public_network_limit(limit_key):
+                    if outcome_tool:
+                        _record_public_tool_outcome(outcome_tool,"rejected_before_tool_rate_limited")
                     response={
                         "jsonrpc":"2.0","id":payload.get("id"),
                         "error":{"code":-32029,"message":"rate_limited"},
@@ -14567,7 +14620,23 @@ class _InboundTrafficASGI:
                 sent=True
                 return {"type":"http.request","body":body,"more_body":False}
             return {"type":"http.disconnect"}
-        return await self.app(scope,replay_receive,send)
+        if not outcome_tool:
+            return await self.app(scope,replay_receive,send)
+        chunks: list[bytes]=[]
+        size=0
+        async def capture_send(message):
+            nonlocal size
+            if message.get("type")=="http.response.body" and size<262144:
+                part=bytes(message.get("body") or b"")
+                chunks.append(part)
+                size+=len(part)
+                if not message.get("more_body"):
+                    try:
+                        _record_public_tool_outcome(outcome_tool,_outcome_from_jsonrpc_body(b"".join(chunks)))
+                    except Exception:
+                        pass
+            await send(message)
+        return await self.app(scope,replay_receive,capture_send)
 
 
 mcp_app = _InboundTrafficASGI(mcp.streamable_http_app(
