@@ -1,3 +1,4 @@
+import unittest.mock
 import asyncio
 import os
 import unittest
@@ -95,6 +96,18 @@ class HardeningTests(unittest.TestCase):
         for i in range(600):
             v._record_usage(f"d{i}.example", False, [])
         self.assertLessEqual(len(v._METRICS["domains"]), 501)
+
+
+class IPv4FirstTests(unittest.IsolatedAsyncioTestCase):
+    async def test_dual_stack_host_pins_ipv4(self):
+        import socket
+        import mcp_endpoint_verifier as ev
+        rows = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2a09:8280:1::d:1234", 443, 0, 0)),
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("66.241.124.10", 443))]
+        with unittest.mock.patch.object(ev.socket, "getaddrinfo", return_value=rows):
+            ips = await ev.resolve_public_ips("hive-agents.fly.dev")
+        self.assertEqual(ips[0], "66.241.124.10")
+        self.assertEqual(len(ips), 2)
 
 
 if __name__ == "__main__":

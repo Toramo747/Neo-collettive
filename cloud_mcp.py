@@ -196,7 +196,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.66"  # saved per-outcome counts for public tools (0.99.65: signed verify_quote receipts)
+VERSION = "0.99.67"  # verifiers pin IPv4 first on dual-stack hosts (0.99.66: per-outcome counts)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
