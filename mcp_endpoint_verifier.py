@@ -160,7 +160,11 @@ async def resolve_public_ips(host: str) -> list[str]:
         rows = await asyncio.to_thread(socket.getaddrinfo, host_low, 443, type=socket.SOCK_STREAM)
     except Exception as exc:
         raise VerificationError("dns_error", type(exc).__name__) from exc
-    ips = sorted({str(row[4][0]) for row in rows if row and row[4]})
+    # IPv4 first (19/10): the connection is pinned to ips[0]; plain string order put
+    # AAAA records ("2a09:...") before "66.x", and the host has no IPv6 egress, so
+    # dual-stack sites (e.g. *.fly.dev) came back "unreachable: ConnectError".
+    ips = sorted({str(row[4][0]) for row in rows if row and row[4]},
+                 key=lambda v: (ipaddress.ip_address(v).version != 4, v))
     if not ips:
         raise VerificationError("dns_no_results", host_low)
     blocked = [ip for ip in ips if _blocked_ip(ip)]
