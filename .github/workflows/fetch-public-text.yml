@@ -1,0 +1,34 @@
+name: Fetch one public text page into the private archive (read as data, never executed)
+on:
+  workflow_dispatch:
+    inputs:
+      url: {description: "public https URL", required: true}
+      name: {description: "file name (letters, digits, dashes)", required: true}
+permissions:
+  contents: read
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - env:
+          URL: ${{ inputs.url }}
+          NAME: ${{ inputs.name }}
+        run: |
+          set -euo pipefail
+          case "$URL" in https://*) ;; *) echo "::error::https only"; exit 1;; esac
+          n=$(printf '%s' "$NAME" | tr -cd 'A-Za-z0-9-' | cut -c1-60)
+          mkdir -p private-labels/common/fetched
+          code=$(curl -sS -L --max-redirs 3 --max-time 30 --max-filesize 300000 -A "neo-osixbay-reader/1" \
+                 -o "private-labels/common/fetched/$n.txt" -w '%{http_code} %{content_type}' "$URL" || true)
+          echo "::notice title=fetch::http=$code bytes=$(wc -c < private-labels/common/fetched/$n.txt 2>/dev/null || echo 0)"
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/fetched
+          git -C private-labels commit --quiet -m "fetched public page (data only)" || exit 0
+          git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet
