@@ -1,7 +1,8 @@
 name: MYCELIX Collective Mind on Common (private)
 on:
   schedule:
-    - cron: "11 8 * * *"     # post the day's tasks
+    # 19/10: daily auto-posting removed (it re-posted the same 3 tasks and created every
+    # duplicate job; public posts need Andrea's OK). Posting stays possible by hand: stage=post.
     - cron: "41 */6 * * *"   # collect + verify replies
   workflow_dispatch:
     inputs:
@@ -31,7 +32,7 @@ jobs:
           set -euo pipefail
           stage="${{ inputs.stage }}"
           if [ -z "$stage" ]; then
-            if [ "${{ github.event.schedule }}" = "11 8 * * *" ]; then stage=post; else stage=collect; fi
+            stage=collect
           fi
           if [ "$stage" = "post" ]; then python tools/collective_common.py post private-labels; fi
           python tools/collective_common.py collect private-labels
