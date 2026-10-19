@@ -52,7 +52,8 @@ jobs:
           card = json.load(open("/tmp/receipt-agent-card.json"))
           public = card.get("receipt_signing") or {}
           receipt = sc.get("receipt") or {}
-          valid = (card.get("version") == "0.99.65"
+          expected_version = re.search(r'^VERSION = "([^"]+)"', open("cloud_mcp.py").read(), re.M).group(1)
+          valid = (card.get("version") == expected_version
                    and receipt.get("key_id") == public.get("key_id")
                    and receipt.get("tool") == "verify_quote"
                    and verify_receipt(sc, public.get("public_key_b64", "")))

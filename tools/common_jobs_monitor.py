@@ -127,7 +127,8 @@ def main() -> int:
     print("::notice title=Common job board::" + json.dumps(summary, separators=(",", ":")))
     # Free public MCP verifier test: aggregate demand only (hashed origins are never printed).
     free = {name: {"calls": int(r.get("calls") or 0), "distinct_origins": int(r.get("distinct_origins") or 0),
-                   "returning_origins": int(r.get("returning_origins") or 0), "by_category": r.get("by_category") or {}} for name, r in tools.items()}
+                   "returning_origins": int(r.get("returning_origins") or 0), "by_category": r.get("by_category") or {},
+                   "by_outcome": r.get("by_outcome") or {}} for name, r in tools.items()}
     with (out_dir / "free_tools_history.jsonl").open("a") as fh:
         fh.write(json.dumps({"captured_at_utc": stamp, **free}) + "\n")
     print("::notice title=Free MCP verifier usage::" + json.dumps(free, separators=(",", ":")))

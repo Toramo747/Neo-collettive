@@ -44,6 +44,17 @@ async def _call(wrapper, payload, headers=None):
     return status,json.loads(body.decode("utf-8")) if body else {}
 
 
+class _QuoteApp:
+    def __init__(self, result):
+        self.result=result
+    async def __call__(self, scope, receive, send):
+        await receive()
+        body=json.dumps({"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":json.dumps(self.result)}],
+                                                           "structuredContent":self.result}}).encode()
+        await send({"type":"http.response.start","status":200,"headers":[(b"content-type",b"application/json")]})
+        await send({"type":"http.response.body","body":body})
+
+
 class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.old_events=deepcopy(cloud_mcp.AUTOPILOT_STATE.get("inbound_traffic_events") or [])
@@ -117,6 +128,41 @@ class McpAuthorizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage["calls"],cloud_mcp.MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR+1)
         self.assertEqual(usage["distinct_origins"],1)
         self.assertNotIn("198.51.100.20",json.dumps(usage))   # origins are hashed
+
+    async def test_public_tool_outcomes_are_counted_without_self_traffic(self):
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
+        payload={"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"verify_quote","arguments":{}}}
+        for result in ({"ok":True,"outcome":"not_found"},{"ok":False,"error":"quote_too_short"},
+                       {"ok":False,"error":"verification_deadline_exceeded"},{"ok":True,"outcome":"unreachable"}):
+            status,_=await _call(cloud_mcp._InboundTrafficASGI(_QuoteApp(result)),payload)
+            self.assertEqual(status,200)
+        row=cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]["verify_quote"]
+        self.assertEqual(row["by_outcome"],{"not_found":1,"quote_too_short":1,
+                                            "verification_deadline_exceeded":1,"unreachable":1})
+        # a signed smoke call is neither counted as use nor as an outcome
+        proof=make_self_traffic_proof("synthetic-hmac","/mcp-smoke")
+        await _call(cloud_mcp._InboundTrafficASGI(_QuoteApp({"ok":True,"outcome":"verbatim"})),payload,
+                    headers={"x-mycelix-smoke-proof":proof})
+        row=cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]["verify_quote"]
+        self.assertNotIn("verbatim",row["by_outcome"])
+        self.assertEqual(row["calls"],4)
+
+    async def test_rate_limited_public_call_records_its_outcome(self):
+        cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
+        payload={"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"verify_quote","arguments":{}}}
+        wrapper=cloud_mcp._InboundTrafficASGI(_QuoteApp({"ok":True,"outcome":"verbatim"}))
+        for _ in range(cloud_mcp.MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR+1):
+            await _call(wrapper,payload)
+        outcomes=cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]["verify_quote"]["by_outcome"]
+        self.assertEqual(outcomes["verbatim"],cloud_mcp.MCP_PUBLIC_NETWORK_PER_ORIGIN_PER_HOUR)
+        self.assertEqual(outcomes["rejected_before_tool_rate_limited"],1)
+
+    def test_outcome_key_from_bodies(self):
+        f=cloud_mcp._outcome_from_jsonrpc_body
+        self.assertEqual(f(b'{"jsonrpc":"2.0","id":1,"result":{"structuredContent":{"ok":true,"outcome":"paraphrase"}}}'),"paraphrase")
+        self.assertEqual(f(b'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"structuredContent":{"ok":false,"error":"quote_too_long"}}}\n'),"quote_too_long")
+        self.assertEqual(f(b'{"jsonrpc":"2.0","id":1,"error":{"code":-32602,"message":"Invalid params"}}'),"rpc_invalid_params")
+        self.assertEqual(f(b"not json"),"unparsed")
 
     async def test_spoofed_origin_headers_cannot_dodge_the_limit_or_fake_demand(self):
         cloud_mcp.AUTOPILOT_STATE["public_tool_usage"]={}
