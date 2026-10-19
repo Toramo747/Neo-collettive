@@ -1,0 +1,47 @@
+name: Common mind drafts on GitHub CPU (fallback when the Kaggle GPU queue is stuck)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: common-mind-cpu
+  cancel-in-progress: false
+jobs:
+  drafts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Draft on CPU (same kernel script, same models, same guard)
+        run: |
+          set +e -uo pipefail
+          python tools/common_deep.py build private-labels kernel cpu; rc=$?
+          if [ "$rc" != "0" ]; then echo "::notice title=Common mind CPU::nothing to draft"; exit 0; fi
+          W="$GITHUB_WORKSPACE/kw"; mkdir -p "$W"
+          # same driver, run here: working dir moved off /kaggle, longer CPU timeouts
+          sed -i "s#\"/kaggle/working\"#\"$W\"#; s#timeout=300#timeout=1500#g" kernel/mind.py
+          sudo mkdir -p /mnt/ollama && sudo chmod 777 /mnt/ollama
+          start=$(date +%s)
+          sudo -E env OLLAMA_MODELS=/mnt/ollama OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_KEEP_ALIVE=0 \
+            "$(command -v python)" kernel/mind.py > /tmp/mind.log 2>&1; rc=$?
+          minutes=$(( ($(date +%s) - start) / 60 ))
+          echo "::notice title=Common mind CPU::driver rc=$rc wall_minutes=$minutes drafts_file=$([ -f "$W/drafts.json" ] && echo yes || echo no)"
+          [ -f "$W/drafts.json" ] || { grep -oE "^[A-Za-z_.]*(Error|Exception)[A-Za-z_.]*" /tmp/mind.log | tail -3 | sed 's/^/::warning title=driver error type::/' ; exit 1; }
+          python tools/common_deep.py collect private-labels "$W/drafts.json" "$minutes"
+          python tools/common_experience.py sweep private-labels 48 || true
+          git -C private-labels config user.name "NEO Common Mind"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/drafts common/experience.jsonl 2>/dev/null || git -C private-labels add common/drafts
+          git -C private-labels commit --quiet -m "common mind: drafts (private, CPU fallback)" || exit 0
+          for attempt in 1 2 3 4; do
+            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
+            sleep $((attempt*5))
+          done
+          exit 1
