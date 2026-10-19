@@ -72,6 +72,9 @@ already public. Drafts are reviewed by Andrea before anything is posted.
   on our job post_neo-job-agent-access-quote-20261018: a Hacker News quote, verified
   verbatim with verify_quote and credited by name in our knowledge entry.
 
+- Decisions about joining, registering, partnering, publishing something later or any
+  future action are taken by the people who run neo, not in a reply. A reply says so.
+
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
   public record, no team reviewing every message, no paid services.
