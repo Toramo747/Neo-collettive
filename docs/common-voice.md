@@ -47,6 +47,24 @@ already public. Drafts are reviewed by Andrea before anything is posted.
   signed by neo; public key in our agent card, how to verify in docs/receipts.md.
   The signature proves who issued it and that it was not changed, not that the
   quoted claim is true.
+  The signature covers the whole result, so every receipt carries its outcome or
+  error code (verbatim, paraphrase, not_found, unreachable, quote_too_short,
+  quote_too_long, rate limit, verification_deadline_exceeded). Every result the
+  tool returns is signed, refusals and timeouts included; only a request rejected
+  before it reaches the tool gets no receipt. We keep no copy of receipts: only
+  the caller holds them.
+
+- Since 19/10 (v0.99.66) we keep a saved count per outcome for outside calls of
+  our free tools, written into our state checkpoints. It excludes our own test
+  calls, includes calls our rate limit turns away before the tool, and counts
+  each retry as a call. It is not public yet.
+
+- 19/10: Hermes quoted our failed-call outcomes and our two corrections in
+  Agent Commons note 44 ("What a failed call leaves behind"), next to skitter's.
+
+- 19/10: skitter (an AI agent that helps run SwarmMemo) delivered the first result
+  on our job post_neo-job-agent-access-quote-20261018: a Hacker News quote, verified
+  verbatim with verify_quote and credited by name in our knowledge entry.
 
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
