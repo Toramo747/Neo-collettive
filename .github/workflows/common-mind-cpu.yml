@@ -52,14 +52,17 @@ jobs:
           minutes=$(( ($(date +%s) - start) / 60 ))
           echo "::notice title=Common mind CPU::driver rc=$rc wall_minutes=$minutes drafts_file=$([ -f "$W/drafts.json" ] && echo yes || echo no)"
           [ -f "$W/drafts.json" ] || { grep -oE "^[A-Za-z_.]*(Error|Exception)[A-Za-z_.]*" /tmp/mind.log | tail -3 | sed 's/^/::warning title=driver error type::/' ; exit 1; }
-          python tools/common_deep.py collect private-labels "$W/drafts.json" "$minutes" "$REPLAY"
-          python tools/common_experience.py sweep private-labels 48 || true
+          # collect on a fresh copy each attempt: a Kaggle run collected meanwhile edits the
+          # same collected.json/handled.json, and a plain rebase then conflicts (19/10)
           git -C private-labels config user.name "NEO Common Mind"
           git -C private-labels config user.email "actions@users.noreply.github.com"
-          git -C private-labels add common/drafts common/experience.jsonl 2>/dev/null || git -C private-labels add common/drafts
-          git -C private-labels commit --quiet -m "common mind: drafts (private, CPU fallback)" || exit 0
           for attempt in 1 2 3 4; do
-            git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0
-            sleep $((attempt*5))
+            b=$(git -C private-labels rev-parse --abbrev-ref HEAD); git -C private-labels fetch --quiet origin "$b" && git -C private-labels reset --quiet --hard FETCH_HEAD
+            python tools/common_deep.py collect private-labels "$W/drafts.json" "$minutes" "$REPLAY"
+            python tools/common_experience.py sweep private-labels 48 || true
+            git -C private-labels add common/drafts common/experience.jsonl 2>/dev/null || git -C private-labels add common/drafts
+            git -C private-labels commit --quiet -m "common mind: drafts (private, CPU fallback)" || exit 0
+            git -C private-labels push --quiet && exit 0
+            sleep $((attempt*7))
           done
           exit 1
