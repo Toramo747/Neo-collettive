@@ -238,6 +238,24 @@ class LabelHygieneTests(unittest.TestCase):
         self.assertEqual(stats["persons_before"], 3)
 
 
+class SourceAnchorTests(unittest.TestCase):
+    def test_every_genome_keeps_hn_comments(self):
+        g = a.clamp({"sources": ["se_webapps", "hn_stories"], "terms": ["x"], "phrases": []})
+        self.assertIn("hn_comments", g["sources"])
+        self.assertLessEqual(len(g["sources"]), 2)
+        rng = random.Random(1)
+        for i in range(50):
+            self.assertIn("hn_comments", a.random_genome(rng, {"backup": 1.0}, f"r{i}")["sources"])
+            self.assertIn("hn_comments", a.mutate(a.random_genome(rng, {"x": 1.0}, "p"), rng, {"y": 1.0}, f"m{i}")["sources"])
+
+    def test_map_terms_only_problems_with_three_people(self):
+        mm = {"handle agent access in prod": {"people": 4}, "lonely problem": {"people": 1},
+              "x" * 50: {"people": 9}}
+        rng = random.Random(0)
+        self.assertEqual(a.map_terms(mm, rng, 2), ["handle agent access in prod"])
+        self.assertEqual(a.map_terms({}, rng), [])
+
+
 if __name__ == "__main__":
     unittest.main()
 

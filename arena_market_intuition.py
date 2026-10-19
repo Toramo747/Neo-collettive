@@ -73,6 +73,8 @@ SEED_TERMS = (
     "expenses", "meetings", "documentation", "customer support", "recruiting",
     "accounting", "tax", "permissions", "monitoring", "data entry", "quotes", "leads",
 )
+ANCHOR_SOURCE = "hn_comments"
+MAP_SEED_MIN_PEOPLE = 3
 SOURCES = ("hn_comments", "hn_stories", "se_softwarerecs", "se_superuser", "se_webapps", "se_stackoverflow")
 SE_SITES = {"se_softwarerecs": "softwarerecs", "se_superuser": "superuser",
             "se_webapps": "webapps", "se_stackoverflow": "stackoverflow"}
@@ -143,9 +145,20 @@ def clamp(g: dict) -> dict:
     g["phrases"] = [p for p in g.get("phrases", []) if p in allowed][:2] or [PHRASES[0]]
     g["terms"] = [str(t)[:40] for t in g.get("terms", []) if str(t).strip()][:2] or [SEED_TERMS[0]]
     g["sources"] = [s for s in g.get("sources", []) if s in SOURCES][:2] or ["hn_comments"]
+    # 2026-10-19: hn_comments yields ~72% of all discoveries (560/779); genomes without
+    # it drifted to near-zero hits (39-67 per generation), so every genome keeps it.
+    if ANCHOR_SOURCE not in g["sources"]:
+        g["sources"] = [ANCHOR_SOURCE] + [x for x in g["sources"] if x != ANCHOR_SOURCE][:1]
     g["recency_days"] = int(min(365, max(14, int(g.get("recency_days", 120)))))
     g["mutation_rate"] = float(min(0.6, max(0.05, float(g.get("mutation_rate", 0.25)))))
     return g
+
+
+def map_terms(market_map: dict | None, rng: random.Random, k: int = 2) -> list[str]:
+    """Problem names already shared by 3+ people, used to reseed immigrants (2026-10-19)."""
+    names = [n for n, v in (market_map or {}).items()
+             if int((v or {}).get("people", 0) or 0) >= MAP_SEED_MIN_PEOPLE and len(n) <= 40]
+    return rng.sample(names, min(k, len(names))) if names else []
 
 
 def random_genome(rng: random.Random, vocab: dict[str, float], gid: str) -> dict:
@@ -527,7 +540,13 @@ def run_generation(state: dict, getter=http_json, seed: int | None = None,
         idea["origin"] = "mind"
         nxt.append(clamp(idea) | {"origin": "mind"})
     while len(nxt) < POPULATION:
-        nxt.append(random_genome(rng, vocab, f"g{gen}-r{len(nxt)}"))
+        imm = random_genome(rng, vocab, f"g{gen}-r{len(nxt)}")
+        # 2026-10-19: half the random immigrants search the problems that already have
+        # 3+ people, instead of mind-made term pairs that found almost nothing
+        seeded = map_terms(market_map, rng, 1) if rng.random() < 0.5 else []
+        if seeded:
+            imm = clamp(dict(imm, terms=[seeded[0], imm["terms"][-1]])) | {"origin": "map"}
+        nxt.append(imm)
     # stale phrases (2026-10-13): a phrase used for STALE_PHRASE_GENS generations in a
     # row without finding a single new person is dropped (if the mind invented it)
     # and swapped out of every genome for a phrase that is not stale.
