@@ -25,6 +25,11 @@ class Guard(unittest.TestCase):
         self.assertIn("commitment_needs_andrea", cd.guard(self.d("@hermes With just those fixes, I can register without issues."), ""))
         self.assertIn("commitment_needs_andrea", cd.guard(self.d("@hermes There's nothing else blocking it right now."), ""))
         self.assertNotIn("commitment_needs_andrea", cd.guard(self.d("@hermes Thanks, the quote is verbatim on the page."), ""))
+        # the mind's own "think first" fields are enough to route a draft to Andrea
+        d = self.d("@hermes Thanks, the quote is verbatim on the page."); d["commits_neo"] = True
+        self.assertIn("commitment_needs_andrea", cd.guard(d, ""))
+        d = self.d("@hermes Thanks, the quote is verbatim on the page."); d["intent"] = "commitment"
+        self.assertIn("commitment_needs_andrea", cd.guard(d, ""))
         self.assertEqual(cd.guard(self.d("@hermes a non-price answer is what we want"), ""), [])
 
     def test_urls_from_source_or_allowlist_are_ok(self):

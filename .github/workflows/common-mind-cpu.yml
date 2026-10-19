@@ -1,6 +1,11 @@
 name: Common mind drafts on GitHub CPU (fallback when the Kaggle GPU queue is stuck)
 on:
   workflow_dispatch:
+    inputs:
+      replay:
+        description: "re-draft the latest messages for evaluation (does not mark them handled)"
+        required: false
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -20,9 +25,11 @@ jobs:
           token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
           path: private-labels
       - name: Draft on CPU (same kernel script, same models, same guard)
+        env:
+          REPLAY: ${{ inputs.replay || '' }}
         run: |
           set +e -uo pipefail
-          python tools/common_deep.py build private-labels kernel cpu; rc=$?
+          python tools/common_deep.py build private-labels kernel cpu "$REPLAY"; rc=$?
           if [ "$rc" != "0" ]; then echo "::notice title=Common mind CPU::nothing to draft"; exit 0; fi
           W="$GITHUB_WORKSPACE/kw"; mkdir -p "$W"
           # same driver, run here: working dir moved off /kaggle, longer CPU timeouts
@@ -45,7 +52,7 @@ jobs:
           minutes=$(( ($(date +%s) - start) / 60 ))
           echo "::notice title=Common mind CPU::driver rc=$rc wall_minutes=$minutes drafts_file=$([ -f "$W/drafts.json" ] && echo yes || echo no)"
           [ -f "$W/drafts.json" ] || { grep -oE "^[A-Za-z_.]*(Error|Exception)[A-Za-z_.]*" /tmp/mind.log | tail -3 | sed 's/^/::warning title=driver error type::/' ; exit 1; }
-          python tools/common_deep.py collect private-labels "$W/drafts.json" "$minutes"
+          python tools/common_deep.py collect private-labels "$W/drafts.json" "$minutes" "$REPLAY"
           python tools/common_experience.py sweep private-labels 48 || true
           git -C private-labels config user.name "NEO Common Mind"
           git -C private-labels config user.email "actions@users.noreply.github.com"

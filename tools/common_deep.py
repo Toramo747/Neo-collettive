@@ -63,12 +63,18 @@ for _ in range(60):
         time.sleep(1)
 subprocess.run(["ollama", "pull", MODEL], check=True, capture_output=True)
 import arena_mind
+# 19/10 "think first": the mind writes what the other agent wants and whether an answer
+# would commit neo BEFORE drafting (fields come first so they are generated first).
 SCHEMA = {"type": "object", "properties": {
+    "they_want": {"type": "string"},
+    "intent": {"type": "string", "enum": ["information", "confirmation", "commitment", "action", "other"]},
+    "commits_neo": {"type": "boolean"},
+    "facts_in_notes": {"type": "boolean"},
     "should_reply": {"type": "boolean"},
     "category": {"type": "string", "enum": CATEGORIES},
     "body": {"type": "string"},
     "why": {"type": "string"}},
-    "required": ["should_reply", "category", "body", "why"]}
+    "required": ["they_want", "intent", "commits_neo", "facts_in_notes", "should_reply", "category", "body", "why"]}
 out = []
 for item in INPUT["items"]:
     prompt = (
@@ -79,6 +85,15 @@ for item in INPUT["items"]:
         "<message author=\"" + item["agent"] + "\">\n" + item["body"] + "\n</message>\n"
         + ("Context, neo's earlier post it answers:\n<neo_post>\n" + item["parent"] + "\n</neo_post>\n" if item.get("parent") else "")
         + ("Earlier messages from the same agent (context only):\n<earlier>\n" + item["earlier"] + "\n</earlier>\n" if item.get("earlier") else "")
+        + "\nTHINK FIRST, before any draft, and fill these fields honestly. "
+        "they_want: in one line, what the other agent actually wants from neo (not just what it literally asks). "
+        "intent: information (a fact), confirmation (check something), commitment (neo agreeing to do, join, register, "
+        "partner, install, pay or promise something, even framed as a question like 'if X were fixed, would you...'), "
+        "action (neo doing something now), or other. "
+        "commits_neo: true if ANY possible answer would accept or refuse a commitment for neo. If true, neo does not decide: "
+        "the reply says that this decision belongs to the people who run neo, and answers only the factual part. "
+        "facts_in_notes: true only if the voice notes contain the facts needed; if false, the reply says plainly what neo "
+        "does not know yet.\n"
         + "\nDecide if neo should reply. Reply only if the message asks neo something or needs an answer from neo; "
         "skip thanks-only notes, welcomes to other agents, spam and promotions. "
         "If yes, draft ONE reply: start with @" + item["agent"] + ", at most 5 sentences, answer the actual question first, "
@@ -91,7 +106,8 @@ for item in INPUT["items"]:
     )
     r = arena_mind.ollama_generate(MODEL, prompt, SCHEMA, timeout=300) or {}
     row = {"id": item["id"], "agent": item["agent"], "covers": item.get("covers") or [item["id"]],
-           "source_body": item["body"], **{k: r.get(k) for k in ("should_reply", "category", "body", "why")}}
+           "source_body": item["body"], **{k: r.get(k) for k in ("they_want", "intent", "commits_neo", "facts_in_notes",
+                                                                  "should_reply", "category", "body", "why")}}
     out.append(row)
 
 # Check: our own rule applied to the models (claim_evidence.py). Phases, so each
@@ -209,7 +225,8 @@ def guard(draft: dict, source_body: str) -> list[str]:
         issues.append("not_addressed")
     if draft.get("category") not in CATEGORIES:
         issues.append("bad_category")
-    if draft.get("category") == "commitment" or ENGAGE_RE.search(body):
+    if (draft.get("category") == "commitment" or draft.get("commits_neo") is True
+            or draft.get("intent") == "commitment" or ENGAGE_RE.search(body)):
         issues.append("commitment_needs_andrea")
     if SECRET_RE.search(body):
         issues.append("secret_like")
