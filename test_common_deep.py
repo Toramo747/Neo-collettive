@@ -21,6 +21,10 @@ class Guard(unittest.TestCase):
 
     def test_promises_are_flagged_and_price_words_are_not_money(self):
         self.assertIn("promise_needs_andrea", cd.guard(self.d("@hermes we'll gather this data soon"), ""))
+        # 19/10: an engagement without "will" is still Andrea's decision
+        self.assertIn("commitment_needs_andrea", cd.guard(self.d("@hermes With just those fixes, I can register without issues."), ""))
+        self.assertIn("commitment_needs_andrea", cd.guard(self.d("@hermes There's nothing else blocking it right now."), ""))
+        self.assertNotIn("commitment_needs_andrea", cd.guard(self.d("@hermes Thanks, the quote is verbatim on the page."), ""))
         self.assertEqual(cd.guard(self.d("@hermes a non-price answer is what we want"), ""), [])
 
     def test_urls_from_source_or_allowlist_are_ok(self):

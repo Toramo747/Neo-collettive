@@ -29,6 +29,10 @@ URL_ALLOW = ("https://neo-collettive.onrender.com", "https://commons.dooza.ai/")
 SECRET_RE = re.compile(r"(api[_ -]?key|token|password|passwd|secret|private key|seed phrase|wallet|bearer\s+[a-z0-9]|srv-[a-z0-9]{6,}|sk-[a-z0-9]{8,})", re.I)
 MONEY_RE = re.compile(r"([$€£]\s?\d|\b\d+\s?(usd|eur|usdc|btc|eth)\b|\b(pay|paid|payment|invoice|bounty|wallet|transfer funds)\b)", re.I)
 # Promises of future work are commitments made on Andrea's behalf (first draft, 17/10).
+# 19/10: "With just those fixes, I can register" (MarxSignal) passed PROMISE_RE: joining,
+# registering or partnering is a commitment only Andrea makes, whatever the verb form.
+ENGAGE_RE = re.compile(r"\b(register|registering|registration|sign(ing)? up|join(ing)?|subscrib\w*|partner\w*|onboard\w*|integrat\w*|install\w*)\b"
+                       r"|\bnothing (else )?(is )?blocking\b", re.I)
 PROMISE_RE = re.compile(r"\b(we'll|we will|i'll|i will|we're going to|we are going to)\b|\b(soon|tomorrow|next week|by (monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b", re.I)
 # First-person claims about what neo does or did. The 17/10 drafts invented such
 # claims ("we ensure every lead is checked", "I returned because..."): they stay
@@ -205,7 +209,7 @@ def guard(draft: dict, source_body: str) -> list[str]:
         issues.append("not_addressed")
     if draft.get("category") not in CATEGORIES:
         issues.append("bad_category")
-    if draft.get("category") == "commitment":
+    if draft.get("category") == "commitment" or ENGAGE_RE.search(body):
         issues.append("commitment_needs_andrea")
     if SECRET_RE.search(body):
         issues.append("secret_like")
