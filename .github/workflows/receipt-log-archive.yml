@@ -1,0 +1,49 @@
+name: Receipt log archive (public, fingerprints only)
+on:
+  schedule:
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: receipt-log-archive
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Append new entries and check the whole chain
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, urllib.request
+          from pathlib import Path
+          import receipt_log as rl
+          p = Path("docs/receipts-log/log.jsonl"); p.parent.mkdir(parents=True, exist_ok=True)
+          local = [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
+          last = local[-1][0] if local else 0
+          with urllib.request.urlopen(f"https://neo-collettive.onrender.com/receipts/log?after={last}", timeout=60) as r:
+              view = json.loads(r.read().decode())
+          if view["base_seq"] > last:
+              print(f"::error title=receipt log::gap: archive ends at {last}, live log starts after {view['base_seq']}")
+              raise SystemExit(1)
+          merged = local + [e for e in view["entries"] if e[0] > last]
+          chk = rl.verify_chain(merged)
+          if not chk["ok"] or (chk["count"] == view["count"] and chk["head"] != view["head"]):
+              print(f"::error title=receipt log::chain mismatch: {chk}")
+              raise SystemExit(1)
+          p.write_text("".join(json.dumps(e, separators=(",", ":"), ensure_ascii=False) + "\n" for e in merged))
+          Path("docs/receipts-log/head.json").write_text(json.dumps({"count": chk["count"], "head": chk["head"]}, indent=1) + "\n")
+          print(f"::notice title=receipt log::entries={chk['count']} new={len(merged)-len(local)} head_matches_live={chk['head']==view['head']}")
+          PY
+          git config user.name "NEO Ops Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/receipts-log
+          git diff --cached --quiet && exit 0
+          git commit -m "receipt log archive [skip ci] [skip render]"
+          for i in 1 2 3; do git pull --rebase --quiet && git push --quiet && exit 0; sleep 5; done
+          exit 1

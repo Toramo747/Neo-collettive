@@ -41,6 +41,7 @@ ROUTE_POLICY = {
     "/council/neo-dialect/example": PUBLIC,
     "/collective": PUBLIC,
     "/api/checkpoint-status": PUBLIC,
+    "/receipts/log": PUBLIC,
 
     "/inbox": PUBLIC_PROJECTION,
     "/agent-chats": PUBLIC_PROJECTION,
@@ -50,6 +51,7 @@ ROUTE_POLICY = {
     "/intelligence": PUBLIC_PROJECTION,
 
     "/api/autopilot/status": ADMIN,
+    "/api/receipts/log/correction": ADMIN,
     "/api/render/errors": ADMIN,
     "/api/render/diagnostics": ADMIN,
     "/system": ADMIN,

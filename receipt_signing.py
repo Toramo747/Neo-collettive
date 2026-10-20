@@ -46,7 +46,7 @@ def public_key_info(key):
     }
 
 
-def sign_receipt(result: dict, key) -> dict:
+def sign_receipt(result: dict, key, log: dict | None = None) -> dict:
     obj = dict(result)
     obj.pop("signature", None)
     obj["receipt"] = {
@@ -58,6 +58,8 @@ def sign_receipt(result: dict, key) -> dict:
         "alg": "Ed25519",
         "canonical": "json-sorted-compact-utf8",
     }
+    if log:  # position in the public receipt log (receipt_log.py), covered by the signature
+        obj["receipt"]["log"] = {"seq": int(log["seq"]), "prev": str(log["prev"])}
     obj["signature"] = base64.urlsafe_b64encode(key.sign(canonical_json(obj))).rstrip(b"=").decode("ascii")
     return obj
 

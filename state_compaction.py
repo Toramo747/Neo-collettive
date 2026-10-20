@@ -26,6 +26,7 @@ PROTECTED_STATE_KEYS = frozenset({
     "challenge_track",
     "gate_stability",
     "gate_stability_state",
+    "receipt_log",  # append-only hash chain of signed receipts (bounded by receipt_log.KEEP_RECENT)
 })
 
 AGGREGATE_STATE_KEYS = (
