@@ -96,3 +96,6 @@ current rules and their limits. Run `verify-quote-conformance.yml` to compare
 eleven offline cases and at most six live results, including receipt signature
 verification. A valid signature and a matching conformance result are separate
 checks; neither establishes that the quoted statement is true.
+
+
+Since v0.99.69 every receipt is also recorded in a public append-only log: see [receipt-log.md](receipt-log.md).

@@ -11,6 +11,7 @@ import neo_dialect_council
 import mcp_endpoint_verifier as endpoint_verifier
 import quote_verifier
 import receipt_signing
+import receipt_log
 import github_chunk_store
 import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
@@ -196,7 +197,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.68"  # verify_quote: cut pieces must be in order and close (0.99.67: IPv4 first)
+VERSION = "0.99.69"  # public append-only receipt log (0.99.68: stitched quotes)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
@@ -386,6 +387,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "agent_trust": {},
     "common_jobs": {},
     "public_tool_usage": {},
+    "receipt_log": {},
     "build_history": [],
     "last_build": None,
     "measurement_history": [],
@@ -573,6 +575,7 @@ def _state_payload() -> dict:
         "agent_trust": AUTOPILOT_STATE.get("agent_trust") or {},
         "common_jobs": AUTOPILOT_STATE.get("common_jobs") or {},
         "public_tool_usage": AUTOPILOT_STATE.get("public_tool_usage") or {},
+        "receipt_log": AUTOPILOT_STATE.get("receipt_log") or {},
         "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
@@ -665,6 +668,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["common_jobs"] = payload.get("common_jobs") or {}
     if isinstance(payload.get("public_tool_usage"), dict):
         AUTOPILOT_STATE["public_tool_usage"] = payload.get("public_tool_usage") or {}
+    if isinstance(payload.get("receipt_log"), dict):
+        AUTOPILOT_STATE["receipt_log"] = payload.get("receipt_log")
     if isinstance(payload.get("build_history"), list):
         AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
     if isinstance(payload.get("last_build"), dict):
@@ -2778,6 +2783,34 @@ def _inbound_reply_text(row: dict) -> str:
 async def a2a_agent_card(request: Request):
     _record_inbound_traffic(request)
     return JSONResponse(_neo_agent_card())
+
+
+async def receipts_log_view(request: Request):
+    """Public transparency log of signed receipts: fingerprints only, append-only hash chain."""
+    _record_inbound_traffic(request)
+    try:
+        after=int(request.query_params.get("after") or 0)
+    except ValueError:
+        after=0
+    return JSONResponse(receipt_log.public_view(AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty(), after=after))
+
+
+async def api_receipts_log_correction(request: Request):
+    """ADMIN: append a correction that points at a wrong entry. Past entries are never edited."""
+    try:
+        body=await request.json()
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_json"},status_code=400)
+    ref=str(body.get("ref") or "")[:80]
+    reason=str(body.get("reason") or "")[:400]
+    version=str(body.get("version") or VERSION)[:20]
+    if not ref or not reason:
+        return JSONResponse({"ok":False,"error":"ref_and_reason_required"},status_code=400)
+    extra={"ref":ref,"reason":reason,"version":version}
+    log=receipt_log.append(AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty(),"correction",receipt_log.item_hash(extra),extra)
+    AUTOPILOT_STATE["receipt_log"]=log
+    _save_local_state()
+    return JSONResponse({"ok":True,"seq":log["count"],"head":log["head"]})
 
 
 async def a2a_agent_json(request: Request):
@@ -11211,7 +11244,11 @@ async def verify_quote(ctx: Context, url: str = "", quote: str = "") -> dict:
         result = {"ok":False,"error":"verification_deadline_exceeded","deadline_seconds":PUBLIC_TOOL_DEADLINE_SECONDS}
 
     if RECEIPT_SIGNING_KEY is not None:
-        return receipt_signing.sign_receipt(result, RECEIPT_SIGNING_KEY)
+        log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
+        signed=receipt_signing.sign_receipt(result, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log))
+        # no await between position and append: the entry lands exactly where the receipt says
+        AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"receipt",receipt_log.item_hash(signed))
+        return signed
     return {**result, "signed": False}
 
 
@@ -14688,6 +14725,8 @@ app = Starlette(
     routes=[
         Route("/", home, methods=["GET"]),
         Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
+        Route("/receipts/log", receipts_log_view, methods=["GET"]),
+        Route("/api/receipts/log/correction", api_receipts_log_correction, methods=["POST"]),
         Route("/.well-known/agent.json", a2a_agent_json, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),
         Route("/a2a", a2a_endpoint, methods=["POST"]),
