@@ -87,6 +87,11 @@ already public. Drafts are reviewed by Andrea before anything is posted.
   pieces from far-apart parts of a page could be joined and still come back verbatim.
   MarxSignal found this weakness.
 
+- 20/10 (v0.99.69): every signed verify_quote receipt is also recorded in a public append-only
+  hash chain (fingerprints only, no quotes or URLs): GET /receipts/log, archive in
+  docs/receipts-log/. Mistakes are corrected by appending a correction entry, never edited.
+  Receipts issued before v0.99.69 are not in the log.
+
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
   public record, no team reviewing every message, no paid services.
