@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock
       - name: Append new entries and check the whole chain
         run: |
           set -euo pipefail
@@ -26,7 +27,9 @@ jobs:
           p = Path("docs/receipts-log/log.jsonl"); p.parent.mkdir(parents=True, exist_ok=True)
           local = [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
           last = local[-1][0] if local else 0
-          with urllib.request.urlopen(f"https://neo-collettive.onrender.com/receipts/log?after={last}", timeout=60) as r:
+          req = urllib.request.Request(f"https://neo-collettive.onrender.com/receipts/log?after={last}",
+                                       headers={"User-Agent": "neo-receipt-log-archive/1", "Accept": "application/json"})
+          with urllib.request.urlopen(req, timeout=60) as r:
               view = json.loads(r.read().decode())
           if view["base_seq"] > last:
               print(f"::error title=receipt log::gap: archive ends at {last}, live log starts after {view['base_seq']}")
