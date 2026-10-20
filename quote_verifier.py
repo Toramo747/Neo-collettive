@@ -29,6 +29,9 @@ MAX_QUOTE_CHARS = 600
 MAX_REDIRECTS = 3
 TIMEOUT_SECONDS = 15.0
 PARAPHRASE_SHARE = 0.5
+# 20/10 (found by MarxSignal): pieces joined with "…" must appear in the same order and
+# close together, or a quote stitched from far-apart parts of a page came back verbatim.
+MAX_CUT_GAP_CHARS = 400
 TEXT_TYPES = ("text/html", "text/plain", "application/json", "application/xhtml", "text/markdown")
 USER_AGENT = "OSIXBAY-QuoteVerifier/1.0 (+https://neo-collettive.onrender.com; read-only)"
 
@@ -68,8 +71,32 @@ def judge(quote: str, page_text: str) -> dict[str, Any]:
     found = [s for s in segs if s in hay]
     if segs and len(found) == len(segs):
         first = hay.find(found[0])
-        return {"outcome": "verbatim", "segments": len(segs), "segments_found": len(found),
-                "context": hay[max(0, first - 80): first + len(found[0]) + 80]}
+        if len(segs) == 1:
+            return {"outcome": "verbatim", "segments": 1, "segments_found": 1,
+                    "context": hay[max(0, first - 80): first + len(found[0]) + 80]}
+        # every piece after a cut must follow the previous one, within MAX_CUT_GAP_CHARS
+        best = None
+        start = hay.find(segs[0])
+        while start != -1:
+            end, gaps, ok = start + len(segs[0]), [], True
+            for seg in segs[1:]:
+                pos = hay.find(seg, end)
+                if pos == -1 or pos - end > MAX_CUT_GAP_CHARS:
+                    ok = False
+                    break
+                gaps.append(pos - end)
+                end = pos + len(seg)
+            if ok:
+                best = (start, end, max(gaps))
+                break
+            start = hay.find(segs[0], start + 1)
+        if best:
+            return {"outcome": "verbatim", "segments": len(segs), "segments_found": len(found),
+                    "context": hay[max(0, best[0] - 80): best[0] + len(segs[0]) + 80]}
+        return {"outcome": "stitched", "segments": len(segs), "segments_found": len(found),
+                "note": ("every piece is on the page, but not in this order within "
+                         f"{MAX_CUT_GAP_CHARS} characters of each other: the joined quote may say "
+                         "something the page does not")}
     words = norm(" ".join(segs)).split()
     shingles = [" ".join(words[i:i + 4]) for i in range(max(0, len(words) - 3))]
     share = (sum(1 for s in shingles if s in hay) / len(shingles)) if shingles else 0.0

@@ -37,10 +37,18 @@ That fallback is not subject to the three-word segment rule.
 ## `judge(quote, page_text)`
 
 Normalize the page and compute the segments. Find each segment with a substring
-search. If the nonempty segment list is entirely found, return `verbatim`,
-`segments`, `segments_found`, and `context`. Context starts up to 80 characters
-before the first segment's first occurrence and ends 80 characters after that
-segment. Segments need not appear in order or at distinct positions.
+search. If the nonempty segment list is entirely found:
+
+- one segment: return `verbatim`, `segments`, `segments_found`, and `context`
+  (up to 80 characters before and after the segment's first occurrence);
+- several segments (since v0.99.68): they must appear in the quoted order, each
+  one starting after the previous one ends and at most 400 normalized characters
+  later (`MAX_CUT_GAP_CHARS`). The first occurrence of the first segment that
+  starts such a chain is used. If a chain exists, return `verbatim` with context
+  around that first segment; if not, return `stitched` with `segments`,
+  `segments_found` and a note: every piece is on the page, but the joined quote
+  may say something the page does not. Before v0.99.68 segments did not need to
+  be in order or close together (reported by MarxSignal on 2026-10-20).
 
 Otherwise join the segments, normalize again, and enumerate every consecutive
 four-token sequence, including repetitions and sequences crossing segment

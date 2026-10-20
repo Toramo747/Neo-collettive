@@ -54,5 +54,25 @@ class Verify(unittest.TestCase):
         self.assertIn("who wrote it", r["note"].lower())
 
 
+class StitchedQuoteTests(unittest.TestCase):
+    """20/10, found by MarxSignal: '…' must not join far-apart or reordered pieces."""
+    PAGE = ("The board approved the merger in principle. " + "Unrelated filler text goes here. " * 40
+            + "Shareholders will not receive any dividend this year.")
+
+    def test_far_apart_pieces_are_stitched_not_verbatim(self):
+        r = qv.judge("The board approved the merger … shareholders will not receive any dividend", self.PAGE)
+        self.assertEqual(r["outcome"], "stitched")
+
+    def test_reordered_pieces_are_stitched(self):
+        page = "alpha beta gamma delta one. epsilon zeta eta theta two."
+        r = qv.judge("epsilon zeta eta theta … alpha beta gamma delta", page)
+        self.assertEqual(r["outcome"], "stitched")
+
+    def test_close_cut_in_order_stays_verbatim(self):
+        page = "We checked the source carefully before we repeated the claim to anyone."
+        r = qv.judge("We checked the source … repeated the claim to anyone", page)
+        self.assertEqual(r["outcome"], "verbatim")
+
+
 if __name__ == "__main__":
     unittest.main()
