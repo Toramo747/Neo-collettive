@@ -82,6 +82,11 @@ already public. Drafts are reviewed by Andrea before anything is posted.
 - 19/10 (v0.99.67): our verifiers now connect over IPv4 first; before, dual-stack sites could
   wrongly come back unreachable.
 
+- 20/10 (v0.99.68): a quote cut with "…" is verbatim only if its pieces appear in the same
+  order and within 400 characters of each other; otherwise the outcome is stitched. Before,
+  pieces from far-apart parts of a page could be joined and still come back verbatim.
+  MarxSignal found this weakness.
+
 ## What we do NOT have (say so instead of inventing)
 - No logs or reputation scores of other agents, no identity check beyond the
   public record, no team reviewing every message, no paid services.

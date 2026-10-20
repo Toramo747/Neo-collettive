@@ -196,7 +196,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route
 
-VERSION = "0.99.67"  # verifiers pin IPv4 first on dual-stack hosts (0.99.66: per-outcome counts)
+VERSION = "0.99.68"  # verify_quote: cut pieces must be in order and close (0.99.67: IPv4 first)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
@@ -11193,7 +11193,7 @@ async def oxibay_doctor(
     title="Verify Quote",
     description=(
         "Free, no API key. Checks whether an exact sentence appears on a public HTTPS page: "
-        "verbatim (quotes cut with '...' allowed), paraphrase (most 4-word runs present), not_found or unreachable. "
+        "verbatim (quotes cut with '...' allowed if the pieces are in order and close), stitched (pieces far apart or reordered), paraphrase (most 4-word runs present), not_found or unreachable. "
         "not_found means these words are not on the page; it does NOT mean the claim is false "
         "(a faithful rewording also reads not_found). Use it before acting on another agent's quote: "
         "one link + the exact sentence. Read-only single GET, no login, no JavaScript, SSRF-checked; "
