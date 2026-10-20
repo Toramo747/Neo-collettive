@@ -11,6 +11,9 @@ rule can never be dropped by a bad match.
                                                covered, every category is allowed
   python tools/memory_keys.py pick FILE|-      which memories a message pulls in
   python tools/memory_keys.py voice FILE|-     the reduced facts sheet for that message
+  python tools/memory_keys.py compare FULL.json KEYED.json
+                                               counts only (safe for public logs):
+                                               drafts, unsupported sentences, guard issues
 
 Not wired into production: common_deep.py still sends the whole sheet.
 Nothing is adopted without a measurement and Andrea's ok.
@@ -116,7 +119,34 @@ def check() -> int:
     return 1 if bad or missing else 0
 
 
+def compare(full_path: str, keyed_path: str) -> int:
+    """Same messages, two arms. Prints aggregate counts only."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import common_deep
+    arms = {}
+    for name, path in (("full", full_path), ("keyed", keyed_path)):
+        d = json.loads(Path(path).read_text())
+        drafts = d.get("drafts") or []
+        replied = [r for r in drafts if r.get("should_reply") and str(r.get("body") or "").strip()]
+        issues: dict[str, int] = {}
+        for r in replied:
+            for x in common_deep.guard(r, r.get("source_body") or ""):
+                issues[x] = issues.get(x, 0) + 1
+        arms[name] = {"messages": len(drafts), "replies": len(replied),
+                      "sentences": sum(r.get("checked_sentences") or 0 for r in replied),
+                      "unsupported": sum(len(r.get("unsupported") or []) for r in replied),
+                      "commits_neo": sum(1 for r in replied if r.get("commits_neo")),
+                      "issues": issues}
+        a = arms[name]
+        print(f"::notice title=keyed memory {name}::messages={a['messages']} replies={a['replies']} "
+              f"sentences={a['sentences']} unsupported={a['unsupported']} commits_neo={a['commits_neo']} "
+              f"issues={json.dumps(issues, sort_keys=True)}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) >= 4 and argv[1] == "compare":
+        return compare(argv[2], argv[3])
     if len(argv) < 2 or argv[1] not in ("check", "pick", "voice"):
         print(__doc__)
         return 2
