@@ -55,6 +55,8 @@ def _drafts_for(private_dir: str, message_id: str) -> list[tuple[str, dict]]:
     out = []
     for f in sorted(glob.glob(str(Path(private_dir) / "common" / "drafts" / "2*.json"))):
         data = json.loads(Path(f).read_text())
+        if data.get("replay") or "-replay" in Path(f).name:
+            continue  # 21/10: test re-drafts never count in the report card (Andrea's rule, 19/10)
         for d in data.get("drafts") or []:
             if message_id == d.get("id") or message_id in (d.get("covers") or []):
                 out.append((Path(f).name, d))
