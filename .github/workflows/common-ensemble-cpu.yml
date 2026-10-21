@@ -6,6 +6,10 @@ on:
         description: "verdict | evidence"
         required: false
         default: evidence
+      bench:
+        description: "bench file in the private archive (default common/bench/claims-v1.json)"
+        required: false
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -32,6 +36,8 @@ jobs:
           ollama pull "${{ matrix.model }}" >/dev/null 2>&1
           ollama list | tail -n +2 | awk '{print "::notice title=model::"$1" "$3$4}'
       - name: Judge the bench (verdicts only)
+        env:
+          NEO_BENCH: ${{ inputs.bench || '' }}
         run: |
           slug=$(echo "${{ matrix.model }}" | tr ':.' '--')
           python3 tools/common_ensemble.py judge private-labels "${{ matrix.model }}" "verdicts-$slug.json" "${{ inputs.mode || 'evidence' }}"
@@ -54,7 +60,9 @@ jobs:
           path: private-labels
       - uses: actions/download-artifact@v4
         with: {path: v, merge-multiple: true}
-      - run: |
+      - env:
+          NEO_BENCH: ${{ inputs.bench || '' }}
+        run: |
           set -euo pipefail
           python3 tools/common_ensemble.py merge ensemble.json v/*.json
           python3 tools/common_ensemble.py collect private-labels ensemble.json

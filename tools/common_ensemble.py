@@ -18,6 +18,7 @@ Sentences and messages stay in the private archive and a private kernel; logs pr
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 SLUG = "neo-common-ensemble"
 BIG = "qwen2.5:14b-instruct-q4_K_M"
 SMALL = ["llama3.1:8b", "gemma2:9b"]
-BENCH = "common/bench/claims-v1.json"
+BENCH = os.environ.get("NEO_BENCH") or "common/bench/claims-v1.json"  # 21/10: v2 = posted replies (false alarms)
 
 DRIVER = r'''
 import json, os, subprocess, sys, time, threading, urllib.request
