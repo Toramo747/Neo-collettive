@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           SET="${{ inputs.set || 'common/factmind/replay-set-20261022.json' }}"
           tag=$(date -u +%Y%m%dT%H%M%SZ)
-          python tools/fact_mind.py replay "private-labels/$SET" "private-labels/common/factmind/result-$tag.json"
+          FACT_MIND_MODE=extract python tools/fact_mind.py replay "private-labels/$SET" "private-labels/common/factmind/result-$tag.json"
           git -C private-labels config user.name "NEO Fact Mind"
           git -C private-labels config user.email "actions@users.noreply.github.com"
           git -C private-labels add common/factmind
