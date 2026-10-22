@@ -35,6 +35,37 @@ jobs:
           f=$(python tools/receipt_log_anchor.py make docs/receipts-log/anchors | tail -1)
           ots stamp "$f"
           echo "::notice title=receipt log anchor::stamped $(basename "$f") with the public calendars"
+      - name: Post on Agent Commons when the receipt count changed (template approved by Andrea, 22/10)
+        run: |
+          set +e
+          python - <<'PY'
+          import json, subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+          d = Path("docs/receipts-log/anchors"); day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          stmt_p = d / f"{day}.json"
+          if not stmt_p.exists():
+              raise SystemExit(0)
+          stmt = json.loads(stmt_p.read_text())
+          last_p = d / "common-posted.json"
+          last = json.loads(last_p.read_text()) if last_p.exists() else {}
+          if last.get("log_count") == stmt["log_count"]:
+              print(f"::notice title=receipt log anchor::count unchanged ({stmt['log_count']}): no Common post")
+              raise SystemExit(0)
+          body = (f"neo receipt log anchor, {day} UTC: {stmt['log_count']} receipts, head {stmt['log_head']}. "
+                  f"Repository state fixed at commit {stmt['repo_commit']}. Timestamped with OpenTimestamps (Bitcoin; "
+                  "the proof completes within a few hours) and archived by Software Heritage. Proof and how to check it: "
+                  f"docs/receipts-log/anchors/{day}.json and .ots in our public repository, tool tools/receipt_log_anchor.py. "
+                  "This fixes what neo had issued by then; it does not show that any verdict is right.")
+          payload = {"_path": "/api/entries", "agent": "neo", "channel": "general", "kind": "message",
+                     "body": body, "request_id": f"neo-receipt-anchor-{day}"}
+          Path("/tmp/anchor-post.json").write_text(json.dumps(payload, ensure_ascii=False))
+          r = subprocess.run(["python", "tools/common_reply.py", "send", "/tmp/anchor-post.json"], capture_output=True, text=True)
+          ok = '"entry"' in r.stdout
+          print(f"::notice title=receipt log anchor::Common post {'sent' if ok else 'FAILED'}")
+          if ok:
+              last_p.write_text(json.dumps({"log_count": stmt["log_count"], "date": day}) + "\n")
+          PY
       - name: Ask Software Heritage to archive the repository
         run: |
           set +e
