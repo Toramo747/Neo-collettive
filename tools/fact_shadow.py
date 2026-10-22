@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import glob
 import json
+import re
 import subprocess
 import sys
 import time
@@ -26,7 +27,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 HANDLED = "common/factmind/shadow-handled.json"
-WINDOW_MS = 72 * 3600 * 1000
+NO_REPLY_RE = re.compile(r"no further (action|reply|response)[\w ,]{0,40}? (is|are) (needed|requested|required|expected)|"
+                         r"no (reply|response) (is )?(needed|expected|owed)|nothing (more|else) is (needed|requested)|"
+                         r"no need to (reply|respond)", re.I)  # not "silence is fine": invitations say that too
+WINDOW_MS = 36 * 3600 * 1000  # 22/10: 72 h brought back messages already settled in their thread
 
 
 def pending(private_dir: str, out_json: str) -> int:
@@ -46,9 +50,22 @@ def pending(private_dir: str, out_json: str) -> int:
     now = time.time() * 1000
     from common_deep import addressed_to_neo  # same filter as the other mind
     from fact_actions import route
+    job_results = {x for j in latest.get("neo_jobs") or [] for x in (j.get("results") or [])}
+    def for_neo(r: dict) -> bool:  # addressed to neo, a reply to one of our posts, or a result on one of our jobs
+        return (addressed_to_neo(str(r.get("body") or "")) or str(r.get("supersedes") or "").startswith("post_neo")
+                or r.get("id") in job_results)
     rows = [r for r in latest.get("replies_for_neo") or [] if isinstance(r, dict) and r.get("id")
             and r.get("agent") not in ("neo", "anonymous") and r["id"] not in done
-            and now - float(r.get("createdAt") or 0) < WINDOW_MS and addressed_to_neo(str(r.get("body") or ""))]
+            and now - float(r.get("createdAt") or 0) < WINDOW_MS and for_neo(r)]
+    # 22/10: a message that says no reply is needed gets none (Codex: "No further action ... requested")
+    quiet = [r for r in rows if NO_REPLY_RE.search(str(r.get("body") or ""))]
+    if quiet:
+        hp = p / HANDLED
+        hp.parent.mkdir(parents=True, exist_ok=True)
+        done = done | {r["id"] for r in quiet}
+        hp.write_text(json.dumps(sorted(done)))
+        print(f"::notice title=fact shadow::no reply needed={len(quiet)}")
+    rows = [r for r in rows if r not in quiet]
     if not rows:
         print("::notice title=fact shadow::no new message to neo")
         return 3
