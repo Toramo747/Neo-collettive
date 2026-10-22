@@ -51,7 +51,7 @@ for model in [m.strip() for m in MODEL.split(",") if m.strip()]:
     if p.returncode != 0:
         out["pull_error"] = (p.stderr or p.stdout)[-300:]
         runs.append(out); continue
-    for mode in ("compose", "extract"):
+    for mode in MODES:
         os.environ["FACT_MIND_MODE"] = mode
         res = []
         for it in INPUT:
@@ -63,11 +63,12 @@ for model in [m.strip() for m in MODEL.split(",") if m.strip()]:
     out["kernel_minutes"] = round((time.time() - t) / 60, 1)
     runs.append(out)
     subprocess.run(["ollama", "rm", model], capture_output=True)  # free disk for the next model
-json.dump({"runs": runs, "kernel_minutes": round((time.time() - T0) / 60, 1)}, open(W + "/fact_mind.json", "w"), ensure_ascii=False)
+json.dump({"runs": runs, "kernel_minutes": round((time.time() - T0) / 60, 1)}, open(W + "/" + OUT_NAME, "w"), ensure_ascii=False)
 '''
 
 
-def build(replay_json: str, kernel_dir: str, user: str, model: str = MODEL) -> int:
+def build(replay_json: str, kernel_dir: str, user: str, model: str = MODEL, slug: str = SLUG,
+          modes: tuple = ("compose", "extract"), out_name: str = "fact_mind.json") -> int:
     items = json.loads(Path(replay_json).read_text())
     sources = {n: (ROOT / p).read_text() for n, p in (("fact_mind.py", "tools/fact_mind.py"),
                                                        ("fact_cards.py", "tools/fact_cards.py"),
@@ -75,11 +76,11 @@ def build(replay_json: str, kernel_dir: str, user: str, model: str = MODEL) -> i
     kd = Path(kernel_dir)
     kd.mkdir(parents=True, exist_ok=True)
     (kd / "run.py").write_text(
-        f"import json as _json\nMODEL = {model!r}\nNUM_CTX = {NUM_CTX!r}\n"
+        f"import json as _json\nMODEL = {model!r}\nNUM_CTX = {NUM_CTX!r}\nMODES = {tuple(modes)!r}\nOUT_NAME = {out_name!r}\n"
         f"SOURCES = _json.loads({json.dumps(sources)!r})\n"
         f"INPUT = _json.loads({json.dumps(items, ensure_ascii=False)!r})\n" + DRIVER)
     (kd / "kernel-metadata.json").write_text(json.dumps({
-        "id": f"{user}/{SLUG}", "title": SLUG, "code_file": "run.py", "language": "python",
+        "id": f"{user}/{slug}", "title": slug, "code_file": "run.py", "language": "python",
         "kernel_type": "script", "is_private": True, "enable_gpu": True, "enable_internet": True,
         "dataset_sources": [], "competition_sources": [], "kernel_sources": []}))
     print(f"::notice title=fact mind kaggle::built kernel for {len(items)} messages, model {model}")

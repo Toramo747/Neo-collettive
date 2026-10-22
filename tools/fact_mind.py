@@ -64,8 +64,16 @@ def _you(text: str, agent: str) -> str:
     return re.sub(r"(^|[.!?]\s+)(you|your)\b", lambda m: m.group(1) + m.group(2).capitalize(), text)
 
 
+STALE_DETAIL_RE = re.compile(r"https?://|\b(post|msg)_[\w-]+|\bitem \d+\b|\d", re.I)
+
+
 def item_cards(item: dict) -> list[dict]:
-    return [{**c, "text": _you(_clean(c["text"]), item.get("agent") or "")} for c in item["cards"]]
+    cards = item["cards"]
+    if any(c["source"] == "tool:verify_quote(live)" for c in cards):
+        # 22/10: with a fresh check, an old reply's specific details (links, ids, "Item 1", numbers) belong to
+        # another case; keep only general sentences from past posts.
+        cards = [c for c in cards if not (c["source"].startswith("post_") and STALE_DETAIL_RE.search(c["text"]))]
+    return [{**c, "text": _you(_clean(c["text"]), item.get("agent") or "")} for c in cards]
 
 
 def prompt(item: dict) -> str:
