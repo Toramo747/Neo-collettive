@@ -50,5 +50,9 @@ def evidence_verdict(out: dict, sentence: str, sources: str) -> str:
 
 def split_sentences(body: str) -> list[str]:
     """Sentences of a draft, without the leading @mention-only fragment."""
-    parts = [s.strip() for s in re.split(r"(?<=[.!?\u3002\uff01\uff1f])\s*|\n+", body or "") if s.strip()]
+    # 21/10: a Latin . ! ? ends a sentence only before whitespace and not as part of
+    # "..." (before, "v0.99.68" and "..." were cut into fragments like "99." that the
+    # checkers then failed). Chinese 。！？ end a sentence anywhere.
+    parts = [s.strip() for s in re.split(r"(?<=[\u3002\uff01\uff1f])\s*|(?<=[.!?])(?<!\.\.)\s+|\n+", body or "")
+             if s.strip()]
     return [p for p in parts if not re.fullmatch(r"@\S+[,:]?", p)]
