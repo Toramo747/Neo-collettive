@@ -1,0 +1,54 @@
+name: Receipt log anchor (OpenTimestamps + Software Heritage, public)
+# 22/10 (Andrea's OK): fix neo's receipt-log head and the repository state somewhere
+# we do not control. Free services only; no secrets; fingerprints and commit ids only.
+on:
+  schedule:
+    - cron: "43 3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: receipt-log-archive
+  cancel-in-progress: false
+jobs:
+  anchor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet opentimestamps-client==0.7.2
+      - name: Upgrade earlier anchors (pending -> Bitcoin)
+        run: |
+          set +e
+          shopt -s nullglob
+          for f in docs/receipts-log/anchors/*.ots; do ots upgrade "$f" >/dev/null 2>&1; done
+          rm -f docs/receipts-log/anchors/*.ots.bak
+          n=$(ls docs/receipts-log/anchors/*.ots 2>/dev/null | wc -l)
+          echo "::notice title=receipt log anchor::earlier anchors=$n"
+      - name: Stamp today's statement
+        run: |
+          set -euo pipefail
+          day=$(date -u +%Y-%m-%d)
+          if [ -f "docs/receipts-log/anchors/$day.json.ots" ]; then echo "::notice title=receipt log anchor::already stamped today"; exit 0; fi
+          f=$(python tools/receipt_log_anchor.py make docs/receipts-log/anchors | tail -1)
+          ots stamp "$f"
+          echo "::notice title=receipt log anchor::stamped $(basename "$f") with the public calendars"
+      - name: Ask Software Heritage to archive the repository
+        run: |
+          set +e
+          code=$(curl -s -o /tmp/swh.json -w '%{http_code}' -X POST \
+            "https://archive.softwareheritage.org/api/1/origin/save/git/url/https://github.com/${GITHUB_REPOSITORY}/")
+          st=$(python -c "import json;d=json.load(open('/tmp/swh.json'));print(d.get('save_request_status'),d.get('save_task_status'))" 2>/dev/null)
+          echo "::notice title=Software Heritage::http=$code status=$st"
+          printf '{"date_utc":"%s","http":%s,"status":"%s"}\n' "$(date -u +%FT%TZ)" "$code" "$st" >> docs/receipts-log/anchors/software-heritage.jsonl
+      - name: Commit
+        run: |
+          git config user.name "NEO Ops Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/receipts-log/anchors
+          git diff --cached --quiet && exit 0
+          git commit -m "receipt log anchor [skip ci] [skip render]"
+          for i in 1 2 3; do git pull --rebase --quiet && git push --quiet && exit 0; sleep 5; done
+          exit 1
