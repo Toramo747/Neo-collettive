@@ -17,7 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SLUG = "neo-fact-mind"
-MODEL = "qwen2.5:32b-instruct-q4_K_M"
+MODEL = "llama3.3:70b-instruct-q2_K"  # 22/10: 70B compressed (~26 GB) to fit two T4 (2 x 15 GB)
+NUM_CTX = "4096"  # prompts are under 2,000 tokens; a smaller window leaves GPU memory for the model
 
 DRIVER = r'''
 import json, os, subprocess, sys, time
@@ -40,6 +41,7 @@ for _ in range(60):
         time.sleep(1)
 subprocess.run(["ollama", "pull", MODEL], check=True, capture_output=True)
 t_pull = time.time() - T0
+os.environ["FACT_MIND_NUM_CTX"] = NUM_CTX
 import fact_mind as fm
 from difflib import SequenceMatcher
 out = {"model": MODEL, "gpu": gpu, "pull_minutes": round(t_pull / 60, 1)}
@@ -65,7 +67,7 @@ def build(replay_json: str, kernel_dir: str, user: str, model: str = MODEL) -> i
     kd = Path(kernel_dir)
     kd.mkdir(parents=True, exist_ok=True)
     (kd / "run.py").write_text(
-        f"import json as _json\nMODEL = {model!r}\n"
+        f"import json as _json\nMODEL = {model!r}\nNUM_CTX = {NUM_CTX!r}\n"
         f"SOURCES = _json.loads({json.dumps(sources)!r})\n"
         f"INPUT = _json.loads({json.dumps(items, ensure_ascii=False)!r})\n" + DRIVER)
     (kd / "kernel-metadata.json").write_text(json.dumps({
