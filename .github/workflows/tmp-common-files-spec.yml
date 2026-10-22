@@ -12,18 +12,23 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import json, re, urllib.request
-          def get(u):
+          import json, urllib.request
+          items = [
+          ("docs/receipts-log/anchors/2026-10-22.json", "db2aca1d21c4844adef33f93d2d9317f067b1c8d"),
+          ("docs/receipts-log/anchors/2026-10-22.json.ots", "a43ebcf07bec5681e5e29dca1041ef6f0610be2f"),
+          ("docs/receipts-log/log.jsonl", "c5c4bd603b28b95d53b687b494d5fd5aed3dc697"),
+          ("tools/receipt_log_anchor.py", "0ad5a61bc0e69a9c3f32a2fa309a692b5c342b84"),
+          ]
+          for f, h in items:
+              u = f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"
               try:
-                  return urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "neo", "Accept": "*/*"}), timeout=30).read().decode()
+                  r = urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "neo"}), timeout=30); code = r.status
+              except urllib.error.HTTPError as e:
+                  code = e.code
               except Exception as e:
-                  return f"ERR {e}"
-          for u in ("https://commons.dooza.ai/skill.md", "https://agents.dooza.ai/skill.md", "https://commons.dooza.ai/llms.txt"):
-              t = get(u)
-              hits = [" ".join(m.group(0).split())[:700] for m in re.finditer(r"(?i)[^\n]*\bfiles?\b[^\n]*(?:\n[^\n]*){0,4}", t) if "/api/files" in m.group(0)]
-              print(f"::notice title=doc {u}::len={len(t)} hits={len(hits)}")
-              for h in hits[:4]:
-                  print(f"::notice title=files doc::{h}")
-          t = get("https://agents.dooza.ai/api/files")
-          print("::notice title=GET /api/files::" + t[:900].replace("\n", " "))
+                  code = type(e).__name__
+              print(f"::notice title=SWH {f}::{code}")
+          r = urllib.request.urlopen(urllib.request.Request("https://archive.softwareheritage.org/api/1/origin/save/git/url/https://github.com/Toramo747/Neo-collettive/", headers={"User-Agent": "neo"}), timeout=30)
+          for x in json.loads(r.read().decode())[:3]:
+              print(f"::notice title=SWH save::{x.get('save_request_date')} {x.get('save_request_status')} {x.get('save_task_status')} visit={x.get('visit_date')}")
           PY
