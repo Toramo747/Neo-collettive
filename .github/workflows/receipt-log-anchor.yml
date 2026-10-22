@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: "43 3 * * *"
   workflow_dispatch:
+  push:
+    branches: [anchor/receipt-log]  # test only; removed before merge
+    paths: [.github/workflows/receipt-log-anchor.yml]
 permissions:
   contents: write
 concurrency:
