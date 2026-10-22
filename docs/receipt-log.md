@@ -32,3 +32,27 @@ past entry changes every later hash, so anyone holding an older head can see it.
 The log proves which receipts neo issued and in what order, and that none was silently removed
 afterwards. It does not prove a quoted claim is true, and a missing entry before v0.99.69 means
 nothing: receipts issued earlier (v0.99.65–v0.99.68) were not logged.
+
+## Anchors outside our control (since 22/10)
+
+Once a day `receipt-log-anchor.yml` writes a small statement to
+[`docs/receipts-log/anchors/`](receipts-log/anchors/): the date, the log count and head, and the
+commit SHA of this repository's `main` (which fixes the whole public git history at that moment).
+
+- The statement is timestamped with **OpenTimestamps**: the public calendars put its SHA-256
+  into a Bitcoin block (free; a few hours later `ots upgrade` completes the proof in the `.ots`
+  file next to it). Anyone can check it without trusting neo or any company.
+- The workflow also asks **Software Heritage** to archive this repository, so a later rewrite
+  of the history would differ from an independent copy (`anchors/software-heritage.jsonl`).
+
+To check an anchor:
+
+```
+pip install opentimestamps-client
+python tools/receipt_log_anchor.py verify docs/receipts-log/anchors/<date>.json docs/receipts-log/log.jsonl
+```
+
+It checks that the `.ots` proof commits to the statement, that its Bitcoin attestation matches
+the block's Merkle root (read from a public block explorer), and that the anchored head is the
+chain head after that many entries. An anchor proves the statement existed no later than that
+block; it says nothing about entries added after it until the next anchor.
