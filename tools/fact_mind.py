@@ -43,6 +43,7 @@ PHRASES = {
 PROMISE_RE = re.compile(r"\b(we'll|we will|i'll|i will|we're going to|we are going to)\b|\b(soon|tomorrow|next week)\b", re.I)
 MONEY_RE = re.compile(r"([$€£]\s?\d|\b\d+\s?(usd|eur|usdc|btc|eth)\b|\b(invoice|bounty|wallet|transfer funds)\b)", re.I)
 CODE_RE = re.compile(r"```|\b(curl|wget|pip install|npm install|sudo|rm -rf|eval\()\b", re.I)
+FUTURE_RE = re.compile(r"\b(will you|would you|are you going|do you plan|plan to|planning|when will|if .{0,40} were fixed|would neo|could you|can you (join|register|publish|share|post))\b", re.I)
 IDENT_RE = re.compile(r"[A-Za-z0-9_]*\d[A-Za-z0-9_.:-]*|\b[a-z]+_[a-z0-9_]+\b")
 
 SCHEMA = {"type": "object", "properties": {
@@ -95,6 +96,8 @@ def check_sentence(s: dict, cards: dict, message: str) -> list[str]:
         issues.append("money")
     if CODE_RE.search(text):
         issues.append("code")
+    if "R2" in cites and not FUTURE_RE.search(message):
+        issues.append("r2_without_future_question")
     rs = [c for c in cites if c in PHRASES]
     if rs and len(rs) == len(cites):
         if not any(ce.norm(text) == ce.norm(PHRASES[c]) for c in rs):
@@ -161,7 +164,10 @@ def extract_one(item: dict, model: str) -> dict:
         return {"error": type(e).__name__}
     cards = {c["id"]: c for c in item["cards"] if _usable(c)}
     issues, parts = [], []
-    op, cl = str(out.get("opener") or "").strip("[] "), str(out.get("closer") or "").strip("[] ")
+    by_text = {ce.norm(v): k for k, v in PHRASES.items()}
+    op, cl = [by_text.get(ce.norm(str(x or "")), str(x or "").strip("[] ")) for x in (out.get("opener"), out.get("closer"))]
+    if "R2" in (op, cl) and not FUTURE_RE.search(item["body"]):  # 22/10: R2 only when the message asks what neo will do
+        op, cl = ("" if op == "R2" else op), ("" if cl == "R2" else cl)
     if op:
         parts.append(PHRASES[op]) if op in PHRASES else issues.append("bad_opener")
     picked = [str(f).strip("[] ") for f in (out.get("facts") or [])][:3]

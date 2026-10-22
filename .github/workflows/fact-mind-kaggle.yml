@@ -1,0 +1,63 @@
+name: Fact-card mind on Kaggle GPU (trial, bigger model, private results)
+on:
+  workflow_dispatch:
+  push:
+    branches: [mind/fact-cards]  # trial branch only
+    paths: [.github/workflows/fact-mind-kaggle.yml, tools/fact_mind_kaggle.py]
+permissions:
+  contents: read
+concurrency:
+  group: kaggle-gpu
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet "kaggle>=1.8.0"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Run on Kaggle (never over a queued run; quota tracked)
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        run: |
+          set +e -uo pipefail
+          K="$KAGGLE_USERNAME/neo-fact-mind"
+          kstatus() { kaggle kernels status "$K" 2>&1 | grep -oiE 'complete|error|cancel[a-z]*|queued|running' | head -1 | tr 'A-Z' 'a-z' || true; }
+          prev=$(kstatus); echo "::notice title=fact mind kaggle::previous kernel status=${prev:-none}"
+          case "$prev" in queued|running) echo "::notice title=fact mind kaggle::previous run still ${prev}; not pushing over it"; exit 0 ;; esac
+          python tools/mi_deep.py quota private-labels || { echo "::warning title=fact mind kaggle::GPU quota guard says no"; exit 0; }
+          python tools/fact_mind_kaggle.py build private-labels/common/factmind/replay-set-20261022.json kernel "$KAGGLE_USERNAME"
+          start=$(date +%s)
+          kaggle kernels push -p kernel --accelerator NvidiaTeslaT4 >/dev/null 2>&1 || { echo "::error title=fact mind kaggle::push failed"; exit 1; }
+          status=""
+          for i in $(seq 1 240); do sleep 30; status=$(kstatus); case "$status" in complete|error|cancel*) break ;; esac; done
+          minutes=$(( ($(date +%s) - start) / 60 ))
+          echo "::notice title=fact mind kaggle::status=${status:-unknown} wall_minutes=$minutes"
+          if [ "$status" = "complete" ]; then
+            rm -rf out; kaggle kernels output "$K" -p out >/dev/null 2>&1
+            [ -f out/fact_mind.json ] && python tools/fact_mind_kaggle.py collect out/fact_mind.json private-labels
+          fi
+          python - "$minutes" <<'PY2'
+          import json, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          p = Path("private-labels/market-intuition/deep_usage.json")
+          u = json.loads(p.read_text()) if p.exists() else {}
+          y, w, _ = datetime.now(timezone.utc).isocalendar(); k = f"{y}-W{w:02d}"
+          u[k] = round(float(u.get(k, 0)) + float(sys.argv[1]), 1); p.write_text(json.dumps(u))
+          PY2
+          rm -rf out kernel
+          git -C private-labels config user.name "NEO Fact Mind"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/factmind market-intuition/deep_usage.json
+          git -C private-labels commit --quiet -m "common: fact-card mind on Kaggle (private)" || exit 0
+          for a in 1 2 3 4; do git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0; sleep $((a*5)); done
+          exit 1
