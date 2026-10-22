@@ -1,0 +1,50 @@
+name: Fact-card mind replay (trial, GitHub CPU, private results)
+on:
+  workflow_dispatch:
+    inputs:
+      set:
+        description: "replay set in the private archive"
+        required: false
+        default: common/factmind/replay-set-20261022.json
+  push:
+    branches: [mind/fact-cards]  # trial branch only
+    paths: [.github/workflows/fact-mind-replay.yml, tools/fact_mind.py]
+permissions:
+  contents: read
+concurrency:
+  group: common-mind-cpu
+  cancel-in-progress: false
+jobs:
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Ollama on CPU (one model)
+        run: |
+          sudo apt-get install -y -qq zstd >/dev/null 2>&1
+          curl -fsSL https://ollama.com/install.sh | sh >/dev/null 2>&1
+          sudo systemctl stop ollama >/dev/null 2>&1; sudo systemctl disable ollama >/dev/null 2>&1
+          sudo fallocate -l 8G /mnt/swapfile && sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile >/dev/null && sudo swapon /mnt/swapfile
+          sudo mkdir -p /mnt/ollama && sudo chmod 777 /mnt/ollama
+          (OLLAMA_MODELS=/mnt/ollama OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_NUM_PARALLEL=1 ollama serve >/dev/null 2>&1 &)
+          sleep 5; OLLAMA_MODELS=/mnt/ollama ollama pull qwen2.5:14b-instruct-q4_K_M >/dev/null 2>&1
+      - name: Replay (drafts and code check; counts only in the log)
+        run: |
+          set -euo pipefail
+          SET="${{ inputs.set || 'common/factmind/replay-set-20261022.json' }}"
+          tag=$(date -u +%Y%m%dT%H%M%SZ)
+          python tools/fact_mind.py replay "private-labels/$SET" "private-labels/common/factmind/result-$tag.json"
+          git -C private-labels config user.name "NEO Fact Mind"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/factmind
+          git -C private-labels commit --quiet -m "common: fact-card mind replay result (private)"
+          for i in 1 2 3 4; do git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0; sleep $((i*5)); done
+          exit 1
