@@ -112,10 +112,11 @@ def judge(private_dir: str, model: str, out_json: str, mode: str = "verdict") ->
     import time
     import urllib.request
     rows = json.loads((Path(private_dir) / BENCH).read_text())
-    voice = (ROOT / "docs" / "common-voice.md").read_text()
+    voice = (ROOT / (os.environ.get("NEO_VOICE") or "docs/common-voice.md")).read_text()
     schema = {"type": "object", "properties": {"verdict": {"type": "string", "enum": ["supported", "unsupported"]}},
               "required": ["verdict"]}
     res = {}
+    pe = 0
     for r in rows:
         head = ("You check one sentence of a reply that the agent neo (OSIXBAY) wants to post.\n<facts>\n" + voice
                 + "\n</facts>\n<message_it_answers>\n" + r["source_body"] + "\n</message_it_answers>\n<sentence>\n"
@@ -123,13 +124,17 @@ def judge(private_dir: str, model: str, out_json: str, mode: str = "verdict") ->
         prompt = head + (EVIDENCE_PROMPT if mode == "evidence" else PROMPT_TAIL)
         fmt = EVIDENCE_SCHEMA if mode == "evidence" else schema
         body = json.dumps({"model": model, "prompt": prompt, "stream": False, "format": fmt,
-                           "options": {"temperature": 0, "num_predict": 160}, "keep_alive": "60m"}).encode()
+                           "options": dict({"temperature": 0, "num_predict": 160},
+                                       **({"num_ctx": int(os.environ["NEO_NUM_CTX"])} if os.environ.get("NEO_NUM_CTX") else {})),
+                           "keep_alive": "60m"}).encode()
         t = time.time()
         try:
             req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
                                          headers={"Content-Type": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=900) as resp:
-                out = json.loads(json.loads(resp.read().decode()).get("response") or "{}")
+                raw = json.loads(resp.read().decode())
+                pe = max(pe, int(raw.get("prompt_eval_count") or 0))  # 22/10: tokens the model actually read
+                out = json.loads(raw.get("response") or "{}")
             if mode == "evidence":
                 v = evidence_verdict(out, r["sentence"], voice + "\n" + r["source_body"])
             else:
@@ -138,7 +143,8 @@ def judge(private_dir: str, model: str, out_json: str, mode: str = "verdict") ->
             v = "error"
         res[str(r["n"])] = {"verdict": v, "s": round(time.time() - t, 2)}
     Path(out_json).write_text(json.dumps({"model": model, "mode": mode, "results": res}))
-    print(f"::notice title=ensemble judge::{model} mode={mode} sentences={len(res)} errors={sum(x['verdict']=='error' for x in res.values())}")
+    print(f"::notice title=ensemble judge::{model} mode={mode} sentences={len(res)} errors={sum(x['verdict']=='error' for x in res.values())} "
+          f"max_prompt_tokens={pe} num_ctx={os.environ.get('NEO_NUM_CTX') or 'default'} voice_chars={len(voice)}")
     return 0
 
 
@@ -163,7 +169,7 @@ def merge(out_json: str, *files: str) -> int:
 def build(private_dir: str, kernel_dir: str, username: str) -> int:
     rows = json.loads((Path(private_dir) / BENCH).read_text())
     payload = {"rows": [{k: r[k] for k in ("n", "sentence", "source_body")} for r in rows],
-               "voice": (ROOT / "docs" / "common-voice.md").read_text()}
+               "voice": (ROOT / (os.environ.get("NEO_VOICE") or "docs/common-voice.md")).read_text()}
     kd = Path(kernel_dir)
     kd.mkdir(parents=True, exist_ok=True)
     (kd / "ensemble.py").write_text(

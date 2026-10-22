@@ -10,6 +10,14 @@ on:
         description: "bench file in the private archive (default common/bench/claims-v1.json)"
         required: false
         default: ""
+      voice:
+        description: "facts sheet in this repo (default docs/common-voice.md)"
+        required: false
+        default: ""
+      num_ctx:
+        description: "model context window in tokens (default: ollama's own)"
+        required: false
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -38,6 +46,8 @@ jobs:
       - name: Judge the bench (verdicts only)
         env:
           NEO_BENCH: ${{ inputs.bench || '' }}
+          NEO_VOICE: ${{ inputs.voice || '' }}
+          NEO_NUM_CTX: ${{ inputs.num_ctx || '' }}
         run: |
           slug=$(echo "${{ matrix.model }}" | tr ':.' '--')
           python3 tools/common_ensemble.py judge private-labels "${{ matrix.model }}" "verdicts-$slug.json" "${{ inputs.mode || 'evidence' }}"
