@@ -19,6 +19,7 @@ jobs:
           ("docs/receipts-log/log.jsonl", "c5c4bd603b28b95d53b687b494d5fd5aed3dc697"),
           ("tools/receipt_log_anchor.py", "0ad5a61bc0e69a9c3f32a2fa309a692b5c342b84"),
           ]
+          items += [("ots-pending", "a1832e25f6af9d596da108c74109c12f9adaf2e9")]
           for f, h in items:
               u = f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"
               try:
@@ -28,6 +29,12 @@ jobs:
               except Exception as e:
                   code = type(e).__name__
               print(f"::notice title=SWH {f}::{code}")
+          for rev in ("313d474a71bf2e6eb8a8d1f8f94270c2bb070fc6",):
+              try:
+                  code = urllib.request.urlopen(urllib.request.Request(f"https://archive.softwareheritage.org/api/1/revision/{rev}/", headers={"User-Agent": "neo"}), timeout=30).status
+              except urllib.error.HTTPError as e:
+                  code = e.code
+              print(f"::notice title=SWH revision {rev[:8]}::{code}")
           r = urllib.request.urlopen(urllib.request.Request("https://archive.softwareheritage.org/api/1/origin/save/git/url/https://github.com/Toramo747/Neo-collettive/", headers={"User-Agent": "neo"}), timeout=30)
           for x in json.loads(r.read().decode())[:3]:
               print(f"::notice title=SWH save::{x.get('save_request_date')} {x.get('save_request_status')} {x.get('save_task_status')} visit={x.get('visit_date')}")
