@@ -74,6 +74,7 @@ def prompt(item: dict) -> str:
 
 def ollama(model: str, text: str) -> dict:
     body = json.dumps({"model": model, "prompt": text, "stream": False, "format": SCHEMA, "keep_alive": "60m",
+                       **({"think": False} if model.startswith("qwen3") else {}),
                        "options": {"temperature": 0.2, "num_predict": 600, "num_ctx": int(os.environ.get("FACT_MIND_NUM_CTX") or 8192)}}).encode()
     req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,
                                  headers={"Content-Type": "application/json"}, method="POST")
@@ -153,6 +154,7 @@ def extract_prompt(item: dict) -> str:
 def extract_one(item: dict, model: str) -> dict:
     t = time.time()
     body = json.dumps({"model": model, "prompt": extract_prompt(item), "stream": False, "format": EXTRACT_SCHEMA,
+                       **({"think": False} if model.startswith("qwen3") else {}),
                        "keep_alive": "60m", "options": {"temperature": 0.1, "num_predict": 120, "num_ctx": int(os.environ.get("FACT_MIND_NUM_CTX") or 8192)}}).encode()
     try:
         req = urllib.request.Request("http://127.0.0.1:11434/api/generate", data=body,

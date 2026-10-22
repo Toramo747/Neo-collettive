@@ -17,8 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SLUG = "neo-fact-mind"
-MODEL = "llama3.3:70b-instruct-q2_K"  # 22/10: 70B compressed (~26 GB) to fit two T4 (2 x 15 GB)
-NUM_CTX = "4096"  # prompts are under 2,000 tokens; a smaller window leaves GPU memory for the model
+MODEL = "gemma4:31b,qwen3.8:27b"  # 22/10 pm: newer 2026 models at normal quality (Andrea: better models, not bigger)
+NUM_CTX = "8192"  # prompts are under 2,000 tokens; a smaller window leaves GPU memory for the model
 
 DRIVER = r'''
 import json, os, subprocess, sys, time
@@ -39,23 +39,30 @@ for _ in range(60):
         urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=2); break
     except Exception:
         time.sleep(1)
-subprocess.run(["ollama", "pull", MODEL], check=True, capture_output=True)
-t_pull = time.time() - T0
 os.environ["FACT_MIND_NUM_CTX"] = NUM_CTX
 import fact_mind as fm
 from difflib import SequenceMatcher
-out = {"model": MODEL, "gpu": gpu, "pull_minutes": round(t_pull / 60, 1)}
-for mode in ("compose", "extract"):
-    os.environ["FACT_MIND_MODE"] = mode
-    res = []
-    for it in INPUT:
-        d = fm.draft_one(it, MODEL)
-        d.update({"message_id": it["message_id"], "agent": it["agent"], "reply_file": it["reply_file"], "target": it["target"],
-                  "similarity": round(SequenceMatcher(None, d.get("body") or "", it["target"] or "").ratio(), 2)})
-        res.append(d)
-    out[mode] = res
-out["kernel_minutes"] = round((time.time() - T0) / 60, 1)
-json.dump(out, open(W + "/fact_mind.json", "w"), ensure_ascii=False)
+runs = []
+for model in [m.strip() for m in MODEL.split(",") if m.strip()]:
+    t = time.time()
+    p = subprocess.run(["ollama", "pull", model], capture_output=True, text=True)
+    out = {"model": model, "gpu": gpu, "pull_minutes": round((time.time() - t) / 60, 1)}
+    if p.returncode != 0:
+        out["pull_error"] = (p.stderr or p.stdout)[-300:]
+        runs.append(out); continue
+    for mode in ("compose", "extract"):
+        os.environ["FACT_MIND_MODE"] = mode
+        res = []
+        for it in INPUT:
+            d = fm.draft_one(it, model)
+            d.update({"message_id": it["message_id"], "agent": it["agent"], "reply_file": it["reply_file"], "target": it["target"],
+                      "similarity": round(SequenceMatcher(None, d.get("body") or "", it["target"] or "").ratio(), 2)})
+            res.append(d)
+        out[mode] = res
+    out["kernel_minutes"] = round((time.time() - t) / 60, 1)
+    runs.append(out)
+    subprocess.run(["ollama", "rm", model], capture_output=True)  # free disk for the next model
+json.dump({"runs": runs, "kernel_minutes": round((time.time() - T0) / 60, 1)}, open(W + "/fact_mind.json", "w"), ensure_ascii=False)
 '''
 
 
@@ -80,14 +87,19 @@ def build(replay_json: str, kernel_dir: str, user: str, model: str = MODEL) -> i
 
 def collect(out_json: str, private_dir: str) -> int:
     d = json.loads(Path(out_json).read_text())
+    runs = d.get("runs") or [d]
     tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     dest = Path(private_dir) / "common" / "factmind" / f"kaggle-{tag}.json"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(d, ensure_ascii=False, indent=1))
-    for mode in ("compose", "extract"):
-        r = [x for x in d.get(mode) or [] if not x.get("error")]
-        print(f"::notice title=fact mind {mode}::model={d.get('model')} messages={len(d.get(mode) or [])} errors={len(d.get(mode) or []) - len(r)} "
-              f"ready={sum(bool(x.get('ready')) for x in r)} kernel_minutes={d.get('kernel_minutes')} gpu_count={len((d.get('gpu') or '').splitlines())}")
+    for run in runs:
+        if run.get("pull_error"):
+            print(f"::warning title=fact mind kaggle::model {run.get('model')} could not be pulled")
+            continue
+        for mode in ("compose", "extract"):
+            r = [x for x in run.get(mode) or [] if not x.get("error")]
+            print(f"::notice title=fact mind {mode}::model={run.get('model')} messages={len(run.get(mode) or [])} errors={len(run.get(mode) or []) - len(r)} "
+                  f"ready={sum(bool(x.get('ready')) for x in r)} minutes={run.get('kernel_minutes')} gpu_count={len((run.get('gpu') or '').splitlines())}")
     return 0
 
 
