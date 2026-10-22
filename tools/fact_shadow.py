@@ -30,6 +30,11 @@ def pending(private_dir: str, out_json: str) -> int:
     from fact_cards import all_cards, select
     p = Path(private_dir)
     done = set(json.loads((p / HANDLED).read_text())) if (p / HANDLED).exists() else set()
+    for f in glob.glob(str(ROOT / "docs" / "common-reply-*.json")):  # already answered by us
+        try:
+            done.add(json.loads(Path(f).read_text()).get("reply_to"))
+        except Exception:
+            pass
     boards = sorted(glob.glob(str(p / "common" / "board-*.json")))
     if not boards:
         return 3

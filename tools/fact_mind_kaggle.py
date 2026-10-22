@@ -68,7 +68,7 @@ json.dump({"runs": runs, "kernel_minutes": round((time.time() - T0) / 60, 1)}, o
 
 
 def build(replay_json: str, kernel_dir: str, user: str, model: str = MODEL, slug: str = SLUG,
-          modes: tuple = ("compose", "extract"), out_name: str = "fact_mind.json") -> int:
+          modes: tuple = ("compose",), out_name: str = "fact_mind.json") -> int:
     items = json.loads(Path(replay_json).read_text())
     sources = {n: (ROOT / p).read_text() for n, p in (("fact_mind.py", "tools/fact_mind.py"),
                                                        ("fact_cards.py", "tools/fact_cards.py"),

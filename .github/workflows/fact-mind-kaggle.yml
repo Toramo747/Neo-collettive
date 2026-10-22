@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: python -m pip install --quiet --require-hashes -r requirements.lock && python -m pip install --quiet "kaggle>=1.8.0"
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock && python -m pip install --quiet "kaggle>=1.8.0" opentimestamps-client==0.7.2
       - uses: actions/checkout@v4
         with:
           repository: ${{ vars.MODEL_LABEL_REPO }}
@@ -36,7 +36,9 @@ jobs:
           python tools/mi_deep.py quota private-labels || { echo "::warning title=fact mind kaggle::GPU quota guard says no"; exit 0; }
           # 22/10: actions. Add the messages that bring a link + exact sentence, and run verify_quote on them here
           python tools/fact_actions.py verification-set private-labels /tmp/vset.json
-          python tools/fact_actions.py merge private-labels/common/factmind/replay-set-20261022.json /tmp/vset.json /tmp/set.json
+          python tools/fact_actions.py merge private-labels/common/factmind/replay-set-20261022.json /tmp/vset.json /tmp/set0.json
+          python tools/fact_actions.py recent-set private-labels /tmp/rset.json
+          python tools/fact_actions.py merge /tmp/set0.json /tmp/rset.json /tmp/set.json
           python tools/fact_actions.py enrich /tmp/set.json /tmp/set-enriched.json
           python tools/fact_mind_kaggle.py build /tmp/set-enriched.json kernel "$KAGGLE_USERNAME"
           start=$(date +%s)
