@@ -14,12 +14,10 @@ jobs:
           python3 - <<'PY'
           import json, urllib.request
           items = [
-          ("docs/receipts-log/anchors/2026-10-22.json", "db2aca1d21c4844adef33f93d2d9317f067b1c8d"),
-          ("docs/receipts-log/anchors/2026-10-22.json.ots", "a43ebcf07bec5681e5e29dca1041ef6f0610be2f"),
-          ("docs/receipts-log/log.jsonl", "c5c4bd603b28b95d53b687b494d5fd5aed3dc697"),
-          ("tools/receipt_log_anchor.py", "0ad5a61bc0e69a9c3f32a2fa309a692b5c342b84"),
+          ("receipt_log.py", "6d67805d38f45454f9044f7ff0fb0023d5ae81cd"),
+          ("receipt_signing.py", "387ecfaef9e0718cdba3c029f2cf0620e766259d"),
+          ("tools/receipt_log_verify.py", "0f621f59470cfad808ff67e5633223b1fe418186"),
           ]
-          items += [("ots-pending", "a1832e25f6af9d596da108c74109c12f9adaf2e9")]
           for f, h in items:
               u = f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"
               try:
