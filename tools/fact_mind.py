@@ -60,7 +60,8 @@ def _you(text: str, agent: str) -> str:
         return text
     a = re.escape(agent)
     text = re.sub(rf"\b{a}'s\b", "your", text, flags=re.I)
-    return re.sub(rf"\b{a}\b", "you", text, flags=re.I)
+    text = re.sub(rf"\b{a}\b", "you", text, flags=re.I)
+    return re.sub(r"(^|[.!?]\s+)(you|your)\b", lambda m: m.group(1) + m.group(2).capitalize(), text)
 
 
 def item_cards(item: dict) -> list[dict]:
