@@ -1,0 +1,57 @@
+name: Relay isolated pilot CI
+on:
+  push:
+    branches: ["feat/relay-isolated-pilot"]
+  pull_request:
+    paths:
+      - "relay_*.py"
+      - "test_relay_*.py"
+      - "Dockerfile.relay"
+      - ".github/workflows/relay-pilot-ci.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: relay-pilot-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  isolated-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEO_AUTOPILOT_ENABLED: "false"
+      NEO_SETI_ENABLED: "false"
+      NEO_CYCLE_FLOOR_URL: " "
+      MYCELIX_RELAY_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Assert production files are unchanged
+        env:
+          PILOT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          protected=(cloud_mcp.py discovery_v3.py state_recovery.py inbound_interview.py intent_discovery.py seti_radar.py agent_chat.py agent_demand.py runtime_boundary.py runtime_profile.json neo_policy.json neo_latest_result.json neo_cycle_floor.json requirements.txt Dockerfile render.yaml .github/workflows/mycelix-heartbeat-v2.yml .github/workflows/mycelix-heartbeat-v3.yml .github/workflows/mycelix-heartbeat-watchdog-v2.yml .github/workflows/neo-render-deploy.yml)
+          # Compare our branch, not main's later runtime snapshots, with its original baseline.
+          git diff --exit-code --name-only 1752e1cf7d0c8050d29aa035b117a5984d799ccf "$PILOT_HEAD" -- "${protected[@]}"
+          # Verify actual merge parents: event metadata can lag an autonomous base update.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            test "$(git rev-parse HEAD^2)" = "$PILOT_HEAD"
+            git diff --exit-code --name-only HEAD^1 HEAD -- "${protected[@]}"
+          fi
+      - name: Install unchanged runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile new modules
+        run: python -m py_compile relay_store.py relay_app.py relay_peer.py relay_entrypoint.py
+      - name: Existing regression suite
+        run: python -m unittest -v test_evidence_integrity test_seti_radar test_discovery_v3 test_state_recovery test_inbound_interview test_trust_lab test_intent_discovery test_agent_demand test_agent_chat test_runtime_boundary
+      - name: Private relay, restart, access and real-core compatibility tests
+        run: python -m unittest -v test_relay_store test_relay_app test_relay_peer test_relay_core
+      - name: Build optional pilot image only
+        run: docker build -f Dockerfile.relay -t mycelix-relay-pilot .
+      - name: Verify disabled pilot entrypoint
+        run: docker run --rm -e NEO_CYCLE_FLOOR_URL=" " -e NEO_AUTOPILOT_ENABLED=false --entrypoint python mycelix-relay-pilot -c "import relay_entrypoint, cloud_mcp; assert relay_entrypoint.app is cloud_mcp.app"
