@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [mind/fact-cards]  # trial branch only
-    paths: [.github/workflows/fact-mind-kaggle.yml, tools/fact_mind_kaggle.py, tools/fact_mind.py]
+    paths: [.github/workflows/fact-mind-kaggle.yml, tools/fact_mind_kaggle.py, tools/fact_mind.py, tools/fact_actions.py]
 permissions:
   contents: read
 concurrency:
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: python -m pip install --quiet "kaggle>=1.8.0"
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock && python -m pip install --quiet "kaggle>=1.8.0"
       - uses: actions/checkout@v4
         with:
           repository: ${{ vars.MODEL_LABEL_REPO }}
@@ -34,7 +34,11 @@ jobs:
           prev=$(kstatus); echo "::notice title=fact mind kaggle::previous kernel status=${prev:-none}"
           case "$prev" in queued|running) echo "::notice title=fact mind kaggle::previous run still ${prev}; not pushing over it"; exit 0 ;; esac
           python tools/mi_deep.py quota private-labels || { echo "::warning title=fact mind kaggle::GPU quota guard says no"; exit 0; }
-          python tools/fact_mind_kaggle.py build private-labels/common/factmind/replay-set-20261022.json kernel "$KAGGLE_USERNAME"
+          # 22/10: actions. Add the messages that bring a link + exact sentence, and run verify_quote on them here
+          python tools/fact_actions.py verification-set private-labels /tmp/vset.json
+          python tools/fact_actions.py merge private-labels/common/factmind/replay-set-20261022.json /tmp/vset.json /tmp/set.json
+          python tools/fact_actions.py enrich /tmp/set.json /tmp/set-enriched.json
+          python tools/fact_mind_kaggle.py build /tmp/set-enriched.json kernel "$KAGGLE_USERNAME"
           start=$(date +%s)
           kaggle kernels push -p kernel --accelerator NvidiaTeslaT4 >/dev/null 2>&1 || { echo "::error title=fact mind kaggle::push failed"; exit 1; }
           status=""
