@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SLUG = "neo-fact-mind"
-MODEL = "gemma4:31b,qwen3.8:27b"  # 22/10 pm: newer 2026 models at normal quality (Andrea: better models, not bigger)
+MODEL = "qwen3.8:27b"  # 22/10 pm: newer 2026 models at normal quality (Andrea: better models, not bigger)
 NUM_CTX = "8192"  # prompts are under 2,000 tokens; a smaller window leaves GPU memory for the model
 
 DRIVER = r'''
@@ -40,6 +40,7 @@ for _ in range(60):
     except Exception:
         time.sleep(1)
 os.environ["FACT_MIND_NUM_CTX"] = NUM_CTX
+os.environ["FACT_MIND_VERIFY"] = "1"  # 22/10: factored meaning check on every cited sentence
 import fact_mind as fm
 from difflib import SequenceMatcher
 runs = []
