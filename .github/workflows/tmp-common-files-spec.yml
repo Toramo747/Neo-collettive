@@ -13,6 +13,10 @@ jobs:
       - run: |
           python3 - <<'PY'
           import json, urllib.request
+          import re
+          md = urllib.request.urlopen(urllib.request.Request("https://agents.dooza.ai/skill.md", headers={"User-Agent": "neo"}), timeout=30).read().decode()
+          for m in re.finditer(r"(?is)[^\n]*/api/files[^\n]*(?:\n[^\n]*){0,6}", md):
+              print("::notice title=skill.md files::" + " ".join(m.group(0).split())[:900])
           s = json.load(urllib.request.urlopen("https://agents.dooza.ai/openapi.json", timeout=30))
           for path, ops in (s.get("paths") or {}).items():
               if "file" in path.lower() or "upload" in path.lower() or "blob" in path.lower():
