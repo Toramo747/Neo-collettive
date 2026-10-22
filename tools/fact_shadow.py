@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Fact-card mind in shadow mode for verification messages (22/10, Andrea's OK). Drafts only; never posts.
+"""Fact-card mind in shadow mode for every message to neo (22/10, Andrea's OK). Drafts only; never posts.
+
+Each message is routed by code: verify (link + exact sentence: verify_quote runs), anchor (questions about the
+receipt log and its anchors: archive links, Bitcoin attestation), andrea (a commitment is asked of neo: no draft,
+it goes to Andrea, listed in common/factmind/needs-andrea.jsonl) or facts (fact cards and citations).
 
   python tools/fact_shadow.py pending <private_dir> <out_set.json>   messages to neo with a link + exact sentence,
                                                                       not yet drafted, last 72 h (exit 3 if none)
@@ -40,18 +44,36 @@ def pending(private_dir: str, out_json: str) -> int:
         return 3
     latest = json.loads(Path(boards[-1]).read_text())
     now = time.time() * 1000
+    from common_deep import addressed_to_neo  # same filter as the other mind
+    from fact_actions import route
     rows = [r for r in latest.get("replies_for_neo") or [] if isinstance(r, dict) and r.get("id")
             and r.get("agent") not in ("neo", "anonymous") and r["id"] not in done
-            and now - float(r.get("createdAt") or 0) < WINDOW_MS and submission(str(r.get("body") or ""))]
+            and now - float(r.get("createdAt") or 0) < WINDOW_MS and addressed_to_neo(str(r.get("body") or ""))]
     if not rows:
-        print("::notice title=fact shadow::no verification message to draft")
+        print("::notice title=fact shadow::no new message to neo")
+        return 3
+    # decisions: no draft; listed for Andrea, marked handled
+    asks = [r for r in rows if route(str(r.get("body") or "")) == "andrea"]
+    if asks:
+        log = p / "common" / "factmind" / "needs-andrea.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a") as fh:
+            for r in asks:
+                fh.write(json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "message_id": r["id"],
+                                     "agent": r.get("agent")}) + "\n")
+        hp = p / HANDLED
+        hp.parent.mkdir(parents=True, exist_ok=True)
+        hp.write_text(json.dumps(sorted(done | {r["id"] for r in asks})))
+        print(f"::notice title=fact shadow::needs Andrea={len(asks)} (no draft)")
+    rows = [r for r in rows if r not in asks]
+    if not rows:
         return 3
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     cards = all_cards(head)
     items = [{"message_id": r["id"], "agent": r.get("agent"), "body": str(r.get("body") or "")[:1500], "target": None,
               "reply_file": "shadow", "known_at": head, "cards": select(cards, str(r.get("body") or ""))} for r in rows[-6:]]
     Path(out_json).write_text(json.dumps(items, ensure_ascii=False))
-    print(f"::notice title=fact shadow::drafting for {len(items)} verification messages")
+    print(f"::notice title=fact shadow::drafting for {len(items)} messages")
     return 0
 
 
@@ -62,7 +84,7 @@ def collect(out_json: str, private_dir: str) -> int:
     p = Path(private_dir)
     tag = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     drafts = [{"id": x["message_id"], "agent": x["agent"], "covers": [x["message_id"]], "source_body": "",
-               "should_reply": x.get("should_reply", True), "category": "verification", "body": x.get("body"),
+               "should_reply": x.get("should_reply", True), "category": x.get("route") or "facts", "body": x.get("body"),
                "ready": bool(x.get("ready")), "issues": sorted({i for s in x.get("sentences") or [] for i in s.get("issues") or []}),
                "sentences": x.get("sentences"), "mind": f"fact-mind {run.get('model')}"} for x in res if not x.get("error")]
     out = p / "common" / "drafts" / f"{tag}-factmind.json"

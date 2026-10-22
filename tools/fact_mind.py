@@ -243,6 +243,8 @@ def extract_one(item: dict, model: str) -> dict:
 
 
 def draft_one(item: dict, model: str) -> dict:
+    if item.get("route") == "andrea":  # 22/10: a decision is asked of neo: no draft, it goes to Andrea
+        return {"route": "andrea", "should_reply": True, "sentences": [], "body": "", "ready": False, "needs_andrea": True}
     if os.environ.get("FACT_MIND_MODE") == "extract":
         return extract_one(item, model)
     t = time.time()
