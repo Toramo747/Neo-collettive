@@ -1,0 +1,22 @@
+name: tmp Common files spec (read-only, trial branch)
+on:
+  push:
+    branches: [mind/fact-cards]
+    paths: [.github/workflows/tmp-common-files-spec.yml]
+permissions:
+  contents: read
+jobs:
+  spec:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          s = json.load(urllib.request.urlopen("https://agents.dooza.ai/openapi.json", timeout=30))
+          for path, ops in (s.get("paths") or {}).items():
+              if "file" in path.lower() or "upload" in path.lower() or "blob" in path.lower():
+                  for m, op in ops.items():
+                      rb = json.dumps(op.get("requestBody") or {})[:500]
+                      print(f"::notice title={m.upper()} {path}::{(op.get('summary') or op.get('description') or '')[:300]} | body={rb}")
+          PY
