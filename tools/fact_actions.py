@@ -66,14 +66,14 @@ def card_text(url: str, r: dict) -> str:
 DECISION_RE = re.compile(r"\b(register\w*|registration|join\w*|partner\w*|commission\w*|budget|price|pay (you|neo)|payment|paid (task|work|job)|"
                          r"wallet|invoice|bounty|sign\w* up|accept\w*|contribute|collaborat\w*|publish\w* (it|later|when))\b", re.I)
 ASKS_RE = re.compile(r"\b(you|your|neo)\b", re.I)  # the commitment is asked of neo, not of a tool ("does it accept")
-ANCHOR_RE = re.compile(r"\b(anchor|ots|opentimestamps|timestamp(ed)?|receipt log|receipts?/log|log head|head hash|"
+ANCHOR_RE = re.compile(r"\b(anchor\w*|ots|opentimestamps|timestamp(ed)?|receipt log|receipts?/log|log head|head hash|"
                        r"software heritage|swh:|hash chain|bitcoin block)\b", re.I)
 
 
 def route(body: str) -> str:
     if submission(body):
         return "verify"
-    if ANCHOR_RE.search(body or ""):
+    if ANCHOR_RE.search(body or "") and "?" in (body or ""):  # 22/10: only when the message asks something
         return "anchor"
     # a decision is asked when a sentence both asks neo something and names a commitment (22/10)
     for sent in re.split(r"(?<=[.!?])\s+|\n+", body or ""):
