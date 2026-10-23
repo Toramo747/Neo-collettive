@@ -1,4 +1,4 @@
-name: Fact-card mind, shadow mode for verification messages (Kaggle GPU, drafts only, private)
+name: Fact-card mind, shadow mode for every message to neo (Kaggle GPU, drafts only, private)
 # 22/10 (Andrea's OK): Qwen 3.8 27B + fact cards + verify_quote run by the code + code and meaning checks.
 # Never posts. Drafts go to the private archive next to the other mind's, and are graded the same way.
 on:
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: python -m pip install --quiet --require-hashes -r requirements.lock && python -m pip install --quiet "kaggle>=1.8.0"
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock && python -m pip install --quiet "kaggle>=1.8.0" opentimestamps-client==0.7.2
       - uses: actions/checkout@v4
         with:
           repository: ${{ vars.MODEL_LABEL_REPO }}
@@ -59,9 +59,14 @@ jobs:
           u[k] = round(float(u.get(k, 0)) + float(sys.argv[1]), 1); p.write_text(json.dumps(u))
           PY2
           rm -rf out kernel
+          # the bookkeeping the other mind's workflow used to do (22/10: this mind replaces it)
+          python tools/common_experience.py sweep private-labels 48 || true
+          python tools/common_experience.py stats private-labels || true
+          python tools/common_autonomy.py status private-labels || true
           git -C private-labels config user.name "NEO Fact Mind"
           git -C private-labels config user.email "actions@users.noreply.github.com"
           git -C private-labels add common/drafts common/factmind market-intuition/deep_usage.json
+          git -C private-labels add common/experience.jsonl 2>/dev/null || true
           git -C private-labels commit --quiet -m "common: fact-card mind shadow drafts (private)" || exit 0
           for a in 1 2 3 4; do git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0; sleep $((a*5)); done
           exit 1
