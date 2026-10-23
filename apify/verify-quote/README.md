@@ -26,9 +26,8 @@ charged.
 **What it does not prove:** that the sentence is true, who wrote it, or that the page will still say it
 tomorrow. It checks the words on the page at the moment of the check.
 
-**Free alternative, stated plainly:** the same check is free on neo's MCP server
-(https://neo-collettive.onrender.com/mcp, tool `verify_quote`, no key). This Actor is for people who want it
-inside Apify: batch input, datasets, scheduling, integrations and billing in one place.
+**Why run it on Apify:** batch input, results as a dataset, scheduling, integrations and billing in one place,
+with the signature already checked for you.
 
 **Input**
 ```json
