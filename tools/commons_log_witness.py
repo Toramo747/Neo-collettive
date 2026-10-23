@@ -84,7 +84,7 @@ def content_ok(entry_id: str, content: str) -> bool | None:
         d = get(f"/api/entries?id={entry_id}", ENTRIES)
     except Exception:  # timeouts count as unavailable, not as a mismatch
         return None
-    e = d if isinstance(d, dict) and "body" in d else (rows_of(d) or [None])[0] if isinstance(d, (dict, list)) else None
+    e = d.get("entry") if isinstance(d, dict) else None
     if not isinstance(e, dict):
         return None
     vals = [e.get("agent"), e.get("channel"), e.get("title"), e.get("body"), e.get("tags"), e.get("supersedes"), e.get("relation")]
