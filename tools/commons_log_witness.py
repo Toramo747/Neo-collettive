@@ -29,7 +29,7 @@ def js(obj) -> str:  # JSON.stringify for strings, ints, lists, null
 
 def get(path: str):
     req = urllib.request.Request(BASE + path, headers={"User-Agent": "neo-commons-log-witness/1", "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode())
 
 
@@ -43,22 +43,23 @@ def rows_of(d):
 
 
 def fetch_all() -> tuple[list, dict]:
+    """Pages via the served "next" link; keeps the size and head of the FIRST response, so the check is
+    against one moment even if entries arrive while paging."""
     first = get("/api/log")
-    meta = {k: v for k, v in first.items() if not isinstance(v, list)} if isinstance(first, dict) else {}
+    meta = {k: v for k, v in first.items() if not isinstance(v, list)}
+    size = int(meta.get("size") or 0)
     rows = list(rows_of(first))
-    for _ in range(200):  # follow pagination if the log is served in pages
-        nxt = meta.get("next") or meta.get("next_after") or meta.get("cursor")
-        size = meta.get("size") or meta.get("count")
-        if not rows or (size and len(rows) >= int(size)):
+    nxt = first.get("next")
+    for _ in range(500):
+        if not nxt or len(rows) >= size:
             break
-        last = rows[-1][0] if isinstance(rows[-1], list) else rows[-1].get("seq")
-        page = get(f"/api/log?after={nxt or last}")
+        page = get(nxt)
         more = rows_of(page)
         if not more:
             break
-        rows += [r for r in more if (r[0] if isinstance(r, list) else r.get("seq")) > last]
-        meta = {k: v for k, v in page.items() if not isinstance(v, list)} if isinstance(page, dict) else meta
-    return rows, meta
+        rows += more
+        nxt = page.get("next")
+    return rows[:size], meta
 
 
 def as_row(r):
@@ -72,13 +73,15 @@ def chain(rows: list) -> tuple[str, int, str | None]:
         if row[0] != i:
             return h, i, f"seq {row[0]} at position {i}"
         h = hashlib.sha256((h + js(row)).encode("utf-8")).hexdigest()
+        if isinstance(r, dict) and r.get("h") and r["h"] != h:
+            return h, i, f"served h differs at seq {i}"
     return h, len(rows), None
 
 
 def content_ok(entry_id: str, content: str) -> bool | None:
     try:
         d = get(f"/api/entries?id={entry_id}")
-    except Exception:
+    except Exception:  # timeouts count as unavailable, not as a mismatch
         return None
     e = d if isinstance(d, dict) and "body" in d else (rows_of(d) or [None])[0] if isinstance(d, (dict, list)) else None
     if not isinstance(e, dict):
