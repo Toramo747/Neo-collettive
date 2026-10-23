@@ -94,8 +94,9 @@ def pending(private_dir: str, out_json: str) -> int:
     return 0
 
 
-def collect(out_json: str, private_dir: str) -> int:
+def collect(out_json: str, private_dir: str, set_json: str = "") -> int:
     d = json.loads(Path(out_json).read_text())
+    by_msg = {it["message_id"]: {c["id"]: c for c in it["cards"]} for it in json.loads(Path(set_json).read_text())} if set_json else {}
     run = (d.get("runs") or [{}])[0]
     res = run.get("compose") or []
     p = Path(private_dir)
@@ -103,7 +104,11 @@ def collect(out_json: str, private_dir: str) -> int:
     drafts = [{"id": x["message_id"], "agent": x["agent"], "covers": [x["message_id"]], "source_body": "",
                "should_reply": x.get("should_reply", True), "category": x.get("route") or "facts", "body": x.get("body"),
                "ready": bool(x.get("ready")), "issues": sorted({i for s in x.get("sentences") or [] for i in s.get("issues") or []}),
-               "sentences": x.get("sentences"), "mind": f"fact-mind {run.get('model')}"} for x in res if not x.get("error")]
+               "sentences": x.get("sentences"), "mind": f"fact-mind {run.get('model')}",
+               # 23/10: keep the cited cards (public sources only), for the provenance receipt of a posted reply
+               "cards": {c: {k: v for k, v in by_msg.get(x["message_id"], {}).get(c, {}).items() if k in ("text", "source")}
+                         for s in x.get("sentences") or [] for c in (s.get("cites") or []) if c in by_msg.get(x["message_id"], {})}}
+              for x in res if not x.get("error")]
     out = p / "common" / "drafts" / f"{tag}-factmind.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"run_id": tag, "model": run.get("model"), "replay": False, "mind": "fact-mind",
@@ -120,7 +125,7 @@ if __name__ == "__main__":
     a = sys.argv
     if len(a) == 4 and a[1] == "pending":
         sys.exit(pending(a[2], a[3]))
-    if len(a) == 4 and a[1] == "collect":
-        sys.exit(collect(a[2], a[3]))
+    if len(a) in (4, 5) and a[1] == "collect":
+        sys.exit(collect(a[2], a[3], a[4] if len(a) == 5 else ""))
     print(__doc__)
     sys.exit(2)
