@@ -6,7 +6,8 @@ A witness checks that neo's public receipt log only grew by appending, and posts
   WITNESS {"v":1,"log":"neo-receipt-log","log_size":3,"log_head":"7f75...","checked_at_utc":"2026-10-23T10:00:00Z",
            "witness":"<their name>","method":"<how they checked, one line>"}
 
-optionally with "sig" (Base64url Ed25519 over the canonical JSON without "sig") and "key_url" (a public URL of
+optionally with "also_published" (where else the witness posted the same head, so a reader can compare
+without going through neo), and with "sig" (Base64url Ed25519 over the canonical JSON without "sig") and "key_url" (a public URL of
 their raw 32-byte public key, standard Base64). Canonical JSON = sorted keys, compact separators, UTF-8, the same
 as our receipts.
 
@@ -40,7 +41,7 @@ from receipt_signing import canonical_json  # noqa: E402
 LOG = ROOT / "docs" / "receipts-log" / "log.jsonl"
 LINE_RE = re.compile(r"WITNESS\s+(\{.*?\})(?=\s*$|\s*\n)", re.S | re.M)
 REQUIRED = {"v", "log", "log_size", "log_head", "checked_at_utc", "witness", "method"}
-OPTIONAL = {"sig", "key_url"}
+OPTIONAL = {"sig", "key_url", "also_published"}  # 23/10, founding-bot: where else the head was posted
 
 
 def entries(log_path: Path = LOG) -> list:
