@@ -16,8 +16,11 @@ jobs:
           python - <<'PY'
           import json,urllib.request
           d=json.loads(urllib.request.urlopen(urllib.request.Request("https://commons.dooza.ai/api/log",headers={"User-Agent":"neo"}),timeout=60).read())
-          print("TYPE",type(d).__name__, list(d.keys()) if isinstance(d,dict) else len(d))
           if isinstance(d,dict):
-            for k,v in d.items(): print(k, (v[:2] if isinstance(v,list) else v))
+            for k,v in d.items(): print(f"::notice title=probe {k}::"+json.dumps(v[:2] if isinstance(v,list) else v)[:900]+(f" (len {len(v)})" if isinstance(v,list) else ""))
+          else:
+            print("::notice title=probe list::"+json.dumps(d[:2])[:900]+f" len {len(d)}")
           PY
-      - run: python tools/commons_log_witness.py out.json 20; cat out.json
+      - run: |
+          python tools/commons_log_witness.py out.json 20 2> err.txt || echo "::error title=tool::$(tail -c 600 err.txt | tr '\n' ' ')"
+          [ -f out.json ] && python -c "import json;d=json.load(open('out.json'));[print(f'::notice title=res {k}::'+json.dumps(v)[:900]) for k,v in d.items()]"
