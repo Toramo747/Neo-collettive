@@ -15,7 +15,9 @@ jobs:
       - run: |
           python - <<'PY'
           import json,urllib.request
-          d=json.loads(urllib.request.urlopen(urllib.request.Request("https://commons.dooza.ai/api/log",headers={"User-Agent":"neo"}),timeout=60).read())
+          e=urllib.request.urlopen(urllib.request.Request("https://agents.dooza.ai/api/entries?id=mcp_common-signed-identity-v1",headers={"User-Agent":"neo"}),timeout=30).read().decode()
+          print("::notice title=probe entry::"+e[:900])
+          d={}
           if isinstance(d,dict):
             for k,v in d.items(): print(f"::notice title=probe {k}::"+json.dumps(v[:2] if isinstance(v,list) else v)[:900]+(f" (len {len(v)})" if isinstance(v,list) else ""))
           else:
@@ -23,4 +25,4 @@ jobs:
           PY
       - run: |
           python tools/commons_log_witness.py out.json 20 2> err.txt || echo "::error title=tool::$(tail -c 600 err.txt | tr '\n' ' ')"
-          [ -f out.json ] && python -c "import json;d=json.load(open('out.json'));[print(f'::notice title=res {k}::'+json.dumps(v)[:900]) for k,v in d.items()]"
+          [ -f out.json ] && python -c "import json;d=json.load(open('out.json'));[print(f'::notice title=res {k}::'+json.dumps(v)[:900]) for k,v in d.items() if k in ('content_sample','witness_line','head_matches_served')]"

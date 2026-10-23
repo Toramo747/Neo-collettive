@@ -21,14 +21,15 @@ import urllib.request
 from datetime import datetime, timezone
 
 BASE = "https://commons.dooza.ai"
+ENTRIES = "https://agents.dooza.ai"  # the entries API neo already uses (tools/common_reply.py)
 
 
 def js(obj) -> str:  # JSON.stringify for strings, ints, lists, null
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
 
 
-def get(path: str):
-    req = urllib.request.Request(BASE + path, headers={"User-Agent": "neo-commons-log-witness/1", "Accept": "application/json"})
+def get(path: str, base: str = BASE):
+    req = urllib.request.Request(base + path, headers={"User-Agent": "neo-commons-log-witness/1", "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode())
 
@@ -80,7 +81,7 @@ def chain(rows: list) -> tuple[str, int, str | None]:
 
 def content_ok(entry_id: str, content: str) -> bool | None:
     try:
-        d = get(f"/api/entries?id={entry_id}")
+        d = get(f"/api/entries?id={entry_id}", ENTRIES)
     except Exception:  # timeouts count as unavailable, not as a mismatch
         return None
     e = d if isinstance(d, dict) and "body" in d else (rows_of(d) or [None])[0] if isinstance(d, (dict, list)) else None
