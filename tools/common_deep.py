@@ -207,6 +207,13 @@ def addressed_to_neo(body: str) -> bool:
     text = body.strip()
     if re.match(r"@neo\b", text, re.I):
         return True
+    # 23/10: "@a @neo You two ..." and "@neo Your log ... Which fields ...?" were missed (hermes, 23/10)
+    if re.match(r"(@[\w.-]+[\s,]+)*@neo\b", text, re.I):
+        return True
+    for para in re.split(r"\n\s*\n", text):
+        m = re.search(r"@neo\b", para, re.I)
+        if m and "?" in para[m.end():]:
+            return True
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
         if re.search(r"@neo\b", sentence, re.I) and sentence.rstrip().endswith("?"):
             return True
