@@ -185,6 +185,57 @@ def select(cards: list[dict], message: str, k: int = 14) -> list[dict]:
     return [{"id": f"F{j + 1}", **cards[i]} for j, i in enumerate(pick)]
 
 
+# 23/10 (Andrea's OK): conversation memory per agent. What we already told an agent is not offered to the
+# model again: no card that only repeats a link or an id already sent to them, and no sentence of one of our
+# jobs unless the message is a result on that job (job text is an instruction to takers, not a reply).
+LINK_RE = re.compile(r"https?://[^\s)\]>\"']+|swh:1:[a-z]{3}:[0-9a-f]{40}|\b[0-9a-f]{64}\b|\b(?:post|msg)_[\w-]+", re.I)
+
+
+def tokens(text: str) -> set[str]:
+    return {t.rstrip(".,;:").lower() for t in LINK_RE.findall(text or "")}
+
+
+def told(commit: str, agent: str) -> list[dict]:
+    """Our posted replies to this agent (body starts with @agent), as known at that commit."""
+    if not agent:
+        return []
+    out = []
+    for name in git("ls-tree", "--name-only", commit, "docs/").split():
+        base = name.split("/")[-1]
+        if not re.match(r"common-reply-.*\.json$", base):
+            continue
+        try:
+            d = json.loads(show(commit, name))
+        except Exception:
+            continue
+        body = str(d.get("body") or "")
+        if body.lower().startswith("@" + agent.lower() + " ") or body.lower().startswith("@" + agent.lower() + ","):
+            m = re.search(r"(20\d{6})", base)
+            out.append({"post": "post_" + str(d.get("request_id") or base), "date": m.group(1) if m else "",
+                        "text": body})
+    return out
+
+
+def drop_told(cards: list[dict], told_rows: list[dict], on_job: str | None = None) -> list[dict]:
+    said = [ce.norm(r["text"]) for r in told_rows]
+    seen = set().union(*[tokens(r["text"]) for r in told_rows]) if told_rows else set()
+    keep = []
+    for c in cards:
+        src = c.get("source") or ""
+        if src.startswith("post_neo-job") and src != on_job:
+            continue
+        if not src.startswith("tool:") and told_rows:
+            t = tokens(c["text"])
+            if any(ce.norm(c["text"]) in x for x in said) or (t and t <= seen):
+                continue
+        keep.append(c)
+    return keep
+
+
+def told_tokens(told_rows: list[dict]) -> list[str]:
+    return sorted(set().union(*[tokens(r["text"]) for r in told_rows])) if told_rows else []
+
+
 def replay_set(out_path: str, private_dir: str) -> int:
     msgs = {}
     for f in sorted(glob.glob(str(Path(private_dir) / "common" / "board-*.json"))):
@@ -207,9 +258,10 @@ def replay_set(out_path: str, private_dir: str) -> int:
         before = c + "^"
         src = msgs[rid]
         body = str(src.get("body") or "")[:1500]
-        cards = select(all_cards(before), body)
+        tr = told(before, str(src.get("agent") or ""))
+        cards = select(drop_told(all_cards(before), tr), body)
         items.append({"message_id": rid, "agent": src.get("agent"), "body": body, "target": d.get("body"),
-                      "reply_file": Path(f).name, "known_at": before, "cards": cards})
+                      "reply_file": Path(f).name, "known_at": before, "cards": cards, "told": told_tokens(tr)})
     Path(out_path).write_text(json.dumps(items, ensure_ascii=False, indent=1))
     print(f"::notice title=fact cards::replay items={len(items)} cards_per_item={sum(len(i['cards']) for i in items) // max(1, len(items))}")
     return 0

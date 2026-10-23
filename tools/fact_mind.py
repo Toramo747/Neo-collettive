@@ -111,7 +111,10 @@ def ollama(model: str, text: str) -> dict:
     return out
 
 
-def check_sentence(s: dict, cards: dict, message: str) -> list[str]:
+TOLD_LINK_RE = re.compile(r"https?://[^\s)\]>\"']+|swh:1:[a-z]{3}:[0-9a-f]{40}", re.I)
+
+
+def check_sentence(s: dict, cards: dict, message: str, told: list | None = None) -> list[str]:
     text = str(s.get("text") or "").strip()
     cites = [str(c).strip("[] ") for c in (s.get("cites") or [])]
     issues = []
@@ -125,6 +128,9 @@ def check_sentence(s: dict, cards: dict, message: str) -> list[str]:
         issues.append("code")
     if "R2" in cites and not FUTURE_RE.search(message):
         issues.append("r2_without_future_question")
+    if told:  # 23/10: a link we already sent to this agent, sent again (Andrea: the skitter draft of 23/10)
+        if {t.rstrip(".,;:").lower() for t in TOLD_LINK_RE.findall(text)} & set(told):
+            issues.append("already_told")
     rs = [c for c in cites if c in PHRASES]
     if rs and len(rs) == len(cites):
         if not any(ce.norm(text) == ce.norm(PHRASES[c]) for c in rs):
@@ -258,7 +264,7 @@ def draft_one(item: dict, model: str) -> dict:
     if has_fact:  # 22/10: "We do not know that yet" in front of a real answer is filler
         sents = [x for x in sents if not ({str(c).strip("[] ") for c in (x.get("cites") or [])} <= {"R3", "R6"}
                                           and ce.norm(str(x.get("text") or "")) in {ce.norm(PHRASES["R3"]), ce.norm(PHRASES["R6"])})]
-    checked = [{"text": s.get("text"), "cites": s.get("cites"), "issues": check_sentence(s, cards, item["body"])} for s in sents]
+    checked = [{"text": s.get("text"), "cites": s.get("cites"), "issues": check_sentence(s, cards, item["body"], item.get("told"))} for s in sents]
     if os.environ.get("FACT_MIND_VERIFY") == "1":
         for c in checked:
             fs = [cards[x] for x in (str(y).strip("[] ") for y in (c.get("cites") or [])) if x in cards]

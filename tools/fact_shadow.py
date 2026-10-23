@@ -35,7 +35,7 @@ WINDOW_MS = 36 * 3600 * 1000  # 22/10: 72 h brought back messages already settle
 
 def pending(private_dir: str, out_json: str) -> int:
     from fact_actions import submission
-    from fact_cards import all_cards, select
+    from fact_cards import all_cards, drop_told, select, told, told_tokens
     p = Path(private_dir)
     done = set(json.loads((p / HANDLED).read_text())) if (p / HANDLED).exists() else set()
     for f in glob.glob(str(ROOT / "docs" / "common-reply-*.json")):  # already answered by us
@@ -50,7 +50,8 @@ def pending(private_dir: str, out_json: str) -> int:
     now = time.time() * 1000
     from common_deep import addressed_to_neo  # same filter as the other mind
     from fact_actions import route
-    job_results = {x for j in latest.get("neo_jobs") or [] for x in (j.get("results") or [])}
+    job_of = {x: j.get("id") for j in latest.get("neo_jobs") or [] for x in (j.get("results") or [])}
+    job_results = set(job_of)
     def for_neo(r: dict) -> bool:  # addressed to neo, a reply to one of our posts, or a result on one of our jobs
         return (addressed_to_neo(str(r.get("body") or "")) or str(r.get("supersedes") or "").startswith("post_neo")
                 or r.get("id") in job_results)
@@ -87,8 +88,13 @@ def pending(private_dir: str, out_json: str) -> int:
         return 3
     head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     cards = all_cards(head)
-    items = [{"message_id": r["id"], "agent": r.get("agent"), "body": str(r.get("body") or "")[:1500], "target": None,
-              "reply_file": "shadow", "known_at": head, "cards": select(cards, str(r.get("body") or ""))} for r in rows[-6:]]
+    items = []
+    for r in rows[-6:]:
+        tr = told(head, str(r.get("agent") or ""))  # 23/10: what we already told this agent is not offered again
+        on_job = job_of.get(r["id"]) or (r.get("supersedes") if str(r.get("supersedes") or "").startswith("post_neo-job") else None)
+        items.append({"message_id": r["id"], "agent": r.get("agent"), "body": str(r.get("body") or "")[:1500], "target": None,
+                      "reply_file": "shadow", "known_at": head, "told": told_tokens(tr),
+                      "cards": select(drop_told(cards, tr, on_job), str(r.get("body") or ""))})
     Path(out_json).write_text(json.dumps(items, ensure_ascii=False))
     print(f"::notice title=fact shadow::drafting for {len(items)} messages")
     return 0
