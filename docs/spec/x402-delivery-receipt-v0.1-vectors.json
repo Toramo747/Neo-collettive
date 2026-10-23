@@ -1,0 +1,244 @@
+{
+ "test_key_public_b64": "k17Nv+rU8+/0vpadOXmVySvs4Ufx9YFchl72Ynl/DDY=",
+ "note": "hop signed with the same test key, for brevity",
+ "vectors": [
+  {
+   "name": "good-delivered",
+   "receipt": {
+    "v": "0.1",
+    "type": "x402-delivery-receipt",
+    "seller": {
+     "name": "example-seller",
+     "key_id": "ed25519:example",
+     "key_url": "https://seller.example/.well-known/agent-card.json"
+    },
+    "buyer_request_id": "buyer-req-0001",
+    "route": {
+     "method": "GET",
+     "url": "https://seller.example/api/funding?symbol=BTCUSDT"
+    },
+    "request_sha256": "920f38c33a54a5e260a43e8eb51723171307ae17856216f664ea72148e8626ef",
+    "payment_required": {
+     "body_sha256": "f5210dd524b72143dba43d42037179283ec6c081b90e8a3713f29489a7ac9bd6",
+     "header_sha256": "781cad1414cb7f3da9c7bae96d5ce5d8af34a8953be804524ed35465cfca7be1",
+     "body_x402_version": 2,
+     "header_x402_version": 2
+    },
+    "payment": {
+     "network": "eip155:8453",
+     "asset": "0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913",
+     "amount": "2000",
+     "pay_to_requested": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "payer_seen": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "facilitator": "example-facilitator",
+     "facilitator_wallet": "0xdddddddddddddddddddddddddddddddddddddddd",
+     "tx": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "outcome": "delivered",
+    "refusal_code": null,
+    "charged": true,
+    "settlement": {
+     "kind": "onchain"
+    },
+    "times": {
+     "response_sent_utc": "2026-10-23T10:12:17.622Z",
+     "settlement_seen_utc": "2026-10-23T10:12:21.000Z",
+     "settlement_block_time_utc": "2026-10-23T10:12:21Z"
+    },
+    "response_sha256": "4c337ae59f81e2b7a3303746932f19689ce3b532348d56856bcdc7faffbb10ec",
+    "log": {
+     "name": "example-seller-receipts",
+     "seq": 42,
+     "prev": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "signature": "2AviSM83FTm0jWOeGYn3-YKTZM_rprRUKtEqpTEJbaJIrpyDtUlp4u3VbSgv1ASrVrovpHJtuJQ64-yr0n1YAg",
+    "hops": []
+   },
+   "expect": {
+    "ok": true,
+    "changed_by": null
+   }
+  },
+  {
+   "name": "hop-changed-bytes",
+   "receipt": {
+    "v": "0.1",
+    "type": "x402-delivery-receipt",
+    "seller": {
+     "name": "example-seller",
+     "key_id": "ed25519:example",
+     "key_url": "https://seller.example/.well-known/agent-card.json"
+    },
+    "buyer_request_id": "buyer-req-0001",
+    "route": {
+     "method": "GET",
+     "url": "https://seller.example/api/funding?symbol=BTCUSDT"
+    },
+    "request_sha256": "920f38c33a54a5e260a43e8eb51723171307ae17856216f664ea72148e8626ef",
+    "payment_required": {
+     "body_sha256": "f5210dd524b72143dba43d42037179283ec6c081b90e8a3713f29489a7ac9bd6",
+     "header_sha256": "781cad1414cb7f3da9c7bae96d5ce5d8af34a8953be804524ed35465cfca7be1",
+     "body_x402_version": 2,
+     "header_x402_version": 2
+    },
+    "payment": {
+     "network": "eip155:8453",
+     "asset": "0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913",
+     "amount": "2000",
+     "pay_to_requested": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "payer_seen": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "facilitator": "example-facilitator",
+     "facilitator_wallet": "0xdddddddddddddddddddddddddddddddddddddddd",
+     "tx": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "outcome": "delivered",
+    "refusal_code": null,
+    "charged": true,
+    "settlement": {
+     "kind": "onchain"
+    },
+    "times": {
+     "response_sent_utc": "2026-10-23T10:12:17.622Z",
+     "settlement_seen_utc": "2026-10-23T10:12:21.000Z",
+     "settlement_block_time_utc": "2026-10-23T10:12:21Z"
+    },
+    "response_sha256": "4c337ae59f81e2b7a3303746932f19689ce3b532348d56856bcdc7faffbb10ec",
+    "log": {
+     "name": "example-seller-receipts",
+     "seq": 42,
+     "prev": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "signature": "2AviSM83FTm0jWOeGYn3-YKTZM_rprRUKtEqpTEJbaJIrpyDtUlp4u3VbSgv1ASrVrovpHJtuJQ64-yr0n1YAg",
+    "hops": [
+     {
+      "name": "example-relay",
+      "receipt_sha256": "7ff8e576f85bd48856d9dc2e5ffb7b7ed2a4c03c181ec451a923600903f6b736",
+      "received_sha256": "4c337ae59f81e2b7a3303746932f19689ce3b532348d56856bcdc7faffbb10ec",
+      "forwarded_sha256": "e169f73d184fd68c3e47b486abf03e01686c9f336056d620964493f198bf7116",
+      "at_utc": "2026-10-23T10:12:22Z",
+      "signature": "j5GDTI0h2MFpobQB2yj_CfVe4gM6pKsK-qVUlNSMPkbTKPZidlZUF2iG7ZUoE7ACS0d_XwDHJ5yShebtJLmCCw"
+     }
+    ]
+   },
+   "hop_pubs": {
+    "example-relay": "k17Nv+rU8+/0vpadOXmVySvs4Ufx9YFchl72Ynl/DDY="
+   },
+   "buyer_body_sha256": "e169f73d184fd68c3e47b486abf03e01686c9f336056d620964493f198bf7116",
+   "expect": {
+    "ok": true,
+    "changed_by": "example-relay"
+   }
+  },
+  {
+   "name": "refused-not-charged",
+   "receipt": {
+    "v": "0.1",
+    "type": "x402-delivery-receipt",
+    "seller": {
+     "name": "example-seller",
+     "key_id": "ed25519:example",
+     "key_url": "https://seller.example/.well-known/agent-card.json"
+    },
+    "buyer_request_id": "buyer-req-0001",
+    "route": {
+     "method": "GET",
+     "url": "https://seller.example/api/funding?symbol=BTCUSDT"
+    },
+    "request_sha256": "920f38c33a54a5e260a43e8eb51723171307ae17856216f664ea72148e8626ef",
+    "payment_required": {
+     "body_sha256": "f5210dd524b72143dba43d42037179283ec6c081b90e8a3713f29489a7ac9bd6",
+     "header_sha256": "781cad1414cb7f3da9c7bae96d5ce5d8af34a8953be804524ed35465cfca7be1",
+     "body_x402_version": 2,
+     "header_x402_version": 2
+    },
+    "payment": {
+     "network": "eip155:8453",
+     "asset": "0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913",
+     "amount": "2000",
+     "pay_to_requested": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "payer_seen": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "facilitator": "example-facilitator",
+     "facilitator_wallet": "0xdddddddddddddddddddddddddddddddddddddddd",
+     "tx": null
+    },
+    "outcome": "refused",
+    "refusal_code": "seller_unavailable",
+    "charged": false,
+    "settlement": {
+     "kind": "none"
+    },
+    "times": {
+     "response_sent_utc": "2026-10-23T10:12:17.622Z"
+    },
+    "response_sha256": "db4517f081991c029775c5e43b5b5be85452a1386f7766313c3d70005ba1c5fa",
+    "log": {
+     "name": "example-seller-receipts",
+     "seq": 42,
+     "prev": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "signature": "DesxDU4ISeMWEiLLnyO-lXsMpNDdfFRdaXFIrNt_CMiqhTl_pjPjfR5KoVgS-4lm2mh0CrmSZF-V0yJpZ7rQDA",
+    "hops": []
+   },
+   "expect": {
+    "ok": true,
+    "changed_by": null
+   }
+  },
+  {
+   "name": "tampered-amount",
+   "receipt": {
+    "v": "0.1",
+    "type": "x402-delivery-receipt",
+    "seller": {
+     "name": "example-seller",
+     "key_id": "ed25519:example",
+     "key_url": "https://seller.example/.well-known/agent-card.json"
+    },
+    "buyer_request_id": "buyer-req-0001",
+    "route": {
+     "method": "GET",
+     "url": "https://seller.example/api/funding?symbol=BTCUSDT"
+    },
+    "request_sha256": "920f38c33a54a5e260a43e8eb51723171307ae17856216f664ea72148e8626ef",
+    "payment_required": {
+     "body_sha256": "f5210dd524b72143dba43d42037179283ec6c081b90e8a3713f29489a7ac9bd6",
+     "header_sha256": "781cad1414cb7f3da9c7bae96d5ce5d8af34a8953be804524ed35465cfca7be1",
+     "body_x402_version": 2,
+     "header_x402_version": 2
+    },
+    "payment": {
+     "network": "eip155:8453",
+     "asset": "0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913",
+     "amount": "1",
+     "pay_to_requested": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "payer_seen": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "facilitator": "example-facilitator",
+     "facilitator_wallet": "0xdddddddddddddddddddddddddddddddddddddddd",
+     "tx": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "outcome": "delivered",
+    "refusal_code": null,
+    "charged": true,
+    "settlement": {
+     "kind": "onchain"
+    },
+    "times": {
+     "response_sent_utc": "2026-10-23T10:12:17.622Z",
+     "settlement_seen_utc": "2026-10-23T10:12:21.000Z",
+     "settlement_block_time_utc": "2026-10-23T10:12:21Z"
+    },
+    "response_sha256": "4c337ae59f81e2b7a3303746932f19689ce3b532348d56856bcdc7faffbb10ec",
+    "log": {
+     "name": "example-seller-receipts",
+     "seq": 42,
+     "prev": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "signature": "2AviSM83FTm0jWOeGYn3-YKTZM_rprRUKtEqpTEJbaJIrpyDtUlp4u3VbSgv1ASrVrovpHJtuJQ64-yr0n1YAg",
+    "hops": []
+   },
+   "expect": {
+    "ok": false
+   }
+  }
+ ]
+}

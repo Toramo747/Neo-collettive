@@ -39,10 +39,33 @@ class DeliveryReceiptTest(unittest.TestCase):
 
     def test_refusal_needs_a_code_and_no_tx(self):
         r = copy.deepcopy(self.r)
-        r["outcome"], r["refusal_code"] = "refused", "it failed"
+        r["outcome"], r["refusal_code"], r["charged"] = "refused", "it failed", "no"
         fails = " ".join(dr.verify(r, self.k["seller_pub"])["fails"])
         self.assertIn("refusal needs a code", fails)
         self.assertIn("cannot carry a settlement tx", fails)
+        self.assertIn("charged must be true or false", fails)
+
+    def test_settlement_kind_and_internal_cost(self):
+        r = copy.deepcopy(self.r)
+        r["settlement"] = {"kind": "internal"}
+        fails = " ".join(self.v(r)["fails"])
+        self.assertIn("name who carried the cost", fails)
+        self.assertIn("only allowed with an onchain", fails)
+
+    def test_transfer_log_against_signed_payee(self):
+        p = self.r["payment"]
+        ok = {"to": p["pay_to_requested"], "from": p["facilitator_wallet"], "amount": p["amount"]}
+        self.assertEqual(dr.check_transfer(self.r, ok), [])
+        self.assertEqual(len(dr.check_transfer(self.r, dict(ok, to="0x" + "e" * 40, **{"from": "0x" + "f" * 40}))), 2)
+
+    def test_published_vectors(self):
+        import json
+        V = json.loads((Path(__file__).resolve().parent / "docs" / "spec" / "x402-delivery-receipt-v0.1-vectors.json").read_text())
+        for v in V["vectors"]:
+            res = dr.verify(v["receipt"], V["test_key_public_b64"], v.get("buyer_body_sha256"), v.get("hop_pubs"))
+            self.assertEqual(res["ok"], v["expect"]["ok"], v["name"])
+            if "changed_by" in v["expect"]:
+                self.assertEqual(res["changed_by"], v["expect"]["changed_by"], v["name"])
 
     def test_body_header_disagreement_is_noted(self):
         r = copy.deepcopy(self.r)
