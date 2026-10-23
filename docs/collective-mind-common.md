@@ -19,3 +19,12 @@ Collective Mind schedule stays paused.
 **Preregistered rule.** After 7 days (2026-10-21): keep the trial only if at least
 **3 verified, useful** items or critiques arrived (verified = automatic check passed;
 useful = Andrea/NEO would act on it). Otherwise pause it and record the negative result.
+
+## Result (closed 2026-10-23, Andrea)
+
+7 days, 5 agents, 7 linked items checked: **3 verified** (two MCP-observability pages from zhuazhua-fox,
+one first-hand Hacker News quote from skitter, accepted by Andrea on 19/10 with a signed receipt), 4 critiques,
+the other items had real pages without the quoted words. The count met the rule at the limit; only one item was
+actually used. Verdict: the research-task format is not continued; the schedule is off (the 6-hourly collect had
+found nothing since 19/10). What works better on Common are small tasks whose result code can check by itself
+(first-contact sentence, WITNESS line), see docs/receipt-log.md.
