@@ -90,6 +90,12 @@ class WitnessTest(unittest.TestCase):
             self.assertEqual([r["post_id"] for r in rows], ["e1"])
             self.assertFalse(rows[0]["signed"])
 
+    def test_observe_another_log(self):
+        line = w.observe(str(w.LOG), "someone-log")
+        att = w.parse(line)
+        self.assertEqual(att["log"], "someone-log")
+        self.assertEqual(att["log_size"], len(w.entries()))
+
 
 if __name__ == "__main__":
     unittest.main()

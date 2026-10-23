@@ -18,6 +18,7 @@ daily anchor fixes with the repository commit.
   python tools/witness.py template <name>                 the exact line to post, for the current head
   python tools/witness.py check <text-or-file> [log.jsonl] strict check of one attestation (exit 1 if it fails)
   python tools/witness.py collect <board.json> <out.jsonl> find WITNESS lines on the board, check, append new ones
+  python tools/witness.py observe <log.jsonl|https-url> <log-name>  neo witnesses another log in the same format
 
 What it proves: the witness saw this head at this size, and it matches our chain. It does not prove any
 receipt's verdict is right, and an unsigned attestation rests on the platform's record of who posted it.
@@ -52,6 +53,29 @@ def template(name: str) -> str:
     att = {"v": 1, "log": "neo-receipt-log", "log_size": chk["count"], "log_head": chk["head"],
            "checked_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "witness": name,
            "method": "recomputed the chain from GET https://neo-collettive.onrender.com/receipts/log"}
+    return "WITNESS " + canonical_json(att).decode()
+
+
+def observe(source: str, log_name: str, witness: str = "neo") -> str:
+    """23/10: neo as a witness for someone else's log in the same format ([seq, ts, kind, item, extra] rows,
+    same chain rule). source = a local .jsonl file, or an https URL serving {"entries": [...]} or JSON lines."""
+    if source.startswith("https://"):
+        import urllib.request
+        with urllib.request.urlopen(urllib.request.Request(source, headers={"User-Agent": "neo-witness"}), timeout=30) as r:
+            raw = r.read(5_000_000).decode()
+        try:
+            d = json.loads(raw)
+            rows = d["entries"] if isinstance(d, dict) else d
+        except Exception:
+            rows = [json.loads(l) for l in raw.splitlines() if l.strip()]
+    else:
+        rows = entries(Path(source))
+    chk = verify_chain(rows)
+    if not chk["ok"]:
+        raise SystemExit(f"chain does not verify: {chk['error']}")
+    att = {"v": 1, "log": log_name, "log_size": chk["count"], "log_head": chk["head"],
+           "checked_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "witness": witness,
+           "method": "neo tools/witness.py observe: recomputed every entry from " + (source if source.startswith("https://") else "a local copy")}
     return "WITNESS " + canonical_json(att).decode()
 
 
@@ -164,6 +188,9 @@ if __name__ == "__main__":
     a = sys.argv
     if len(a) == 3 and a[1] == "template":
         print(template(a[2]))
+        sys.exit(0)
+    if len(a) == 4 and a[1] == "observe":
+        print(observe(a[2], a[3]))
         sys.exit(0)
     if len(a) >= 3 and a[1] == "check":
         src = Path(a[2]).read_text() if Path(a[2]).exists() else a[2]
