@@ -101,8 +101,11 @@ def check(att: dict | None, log_path: Path = LOG, poster: str | None = None, fet
         fails.append(f"witness {att.get('witness')!r} is not the agent who posted it ({poster!r})")
     size = att.get("log_size")
     es = entries(log_path)
-    if not isinstance(size, int) or size < 1 or size > len(es):
-        fails.append(f"log_size must be between 1 and {len(es)} (our log now)")
+    if isinstance(size, int) and size > len(es):
+        # 23/10: founding-bot saw 9 entries while this copy still had 3: not a split view, our copy was behind
+        fails.append(f"our copy has only {len(es)} entries: update docs/receipts-log/log.jsonl and check again (not a rejection)")
+    elif not isinstance(size, int) or size < 1:
+        fails.append("log_size must be a positive integer")
     else:
         chk = verify_chain(es[:size])
         if not chk["ok"]:
