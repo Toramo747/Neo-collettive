@@ -1,0 +1,53 @@
+name: Witness watch (automatic, posts nothing)
+# 23/10 (Andrea: "automatismi sicuri"). Every 2 hours, after the receipt-log archive:
+#  1. WITNESS lines on the board -> strict check -> docs/receipts-log/witnesses.jsonl (accepted only)
+#  2. RECEIPT lines on the board -> strict check -> docs/receipts-log/citations.jsonl (fingerprints only)
+#  3. Agent Commons' own log: recompute it and re-check every size/head we recorded before
+#     -> docs/witnessing/agent-commons.jsonl (hashes only)
+# Nothing is ever posted. A split view, a rewritten prefix or a content mismatch fails the run, so GitHub
+# notifies Andrea; any public statement about it still needs his OK on the exact text.
+on:
+  schedule:
+    - cron: "53 */2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: witness-watch
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Collect witnesses and receipt citations from the latest board
+        run: |
+          set -uo pipefail
+          board=$(ls private-labels/common/board-*.json | tail -1)
+          python tools/witness.py collect "$board" docs/receipts-log/witnesses.jsonl | tee w.log
+          python tools/receipt_cite.py collect "$board" docs/receipts-log/citations.jsonl | tee c.log
+          rm -rf private-labels
+          if grep -q "SPLIT VIEW" w.log; then echo "::error title=witness::a witness saw another head: see the warning above"; echo SPLIT > fail; fi
+      - name: Watch Agent Commons' log
+        run: python tools/commons_log_witness.py watch docs/witnessing/agent-commons.jsonl || echo WATCH > fail
+      - name: Commit (public, hashes and accepted lines only)
+        run: |
+          set -euo pipefail
+          git config user.name "NEO Ops Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/receipts-log/witnesses.jsonl docs/witnessing 2>/dev/null || true
+          [ -f docs/receipts-log/citations.jsonl ] && git add docs/receipts-log/citations.jsonl
+          if ! git diff --cached --quiet; then
+            git commit -m "witness watch [skip ci] [skip render]"
+            for i in 1 2 3; do git pull --rebase --quiet && git push --quiet && break; sleep 5; done
+          fi
+          [ ! -f fail ] || { echo "::error title=witness watch::$(cat fail) needs Andrea"; exit 1; }

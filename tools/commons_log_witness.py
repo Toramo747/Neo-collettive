@@ -18,6 +18,7 @@ import json
 import random
 import sys
 import urllib.request
+from pathlib import Path
 from datetime import datetime, timezone
 
 BASE = "https://commons.dooza.ai"
@@ -114,5 +115,39 @@ def main(out: str, sample_n: int = 20) -> int:
     return 0 if not err else 1
 
 
+def watch(history_jsonl: str, sample_n: int = 10) -> int:
+    """23/10 (automatic, posts nothing): recompute the whole log, then check that every size/head we recorded
+    before is still the head of the same prefix today. A different head = the history was rewritten after we saw
+    it: the run fails (GitHub notifies Andrea) and nothing is posted. Appends today's size/head (hashes only)."""
+    hist = Path(history_jsonl)
+    past = [json.loads(l) for l in hist.read_text().splitlines() if l.strip()] if hist.exists() else []
+    rows, meta = fetch_all()
+    head, size, err = chain(rows)
+    if err or (meta.get("head") and meta["head"] != head):
+        print(f"::error title=commons log::chain does not recompute to the served head ({err or 'head differs'})")
+        return 1
+    bad = []
+    for r in past:
+        n = int(r["size"])
+        if n > size:
+            bad.append(f"recorded size {n} > served size {size}")
+        elif chain(rows[:n])[0] != r["head"]:
+            bad.append(f"prefix of {n} rows now has another head (recorded {r['head'][:16]} at {r['checked_at_utc']})")
+    sample = random.Random(size).sample(rows, min(sample_n, len(rows))) if rows else []
+    checks = [content_ok(as_row(x)[3], as_row(x)[4]) for x in sample]
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    hist.parent.mkdir(parents=True, exist_ok=True)
+    with hist.open("a") as fh:
+        fh.write(json.dumps({"checked_at_utc": now, "size": size, "head": head, "prefixes_rechecked": len(past),
+                             "prefix_mismatches": len(bad), "content_sample": [checks.count(True), len(checks)]}, sort_keys=True) + "\n")
+    for b in bad:
+        print(f"::error title=commons log rewritten?::{b}")
+    print(f"::notice title=commons log watch::size={size} head={head[:16]} past={len(past)} mismatches={len(bad)} "
+          f"content={checks.count(True)}/{len(checks)} mismatch_content={checks.count(False)}")
+    return 1 if bad or checks.count(False) else 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) >= 3 and sys.argv[1] == "watch":
+        sys.exit(watch(sys.argv[2]))
     sys.exit(main(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else 20))
