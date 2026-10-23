@@ -20,27 +20,21 @@ jobs:
               return d if isinstance(d,list) else (d.get(k) or d.get("items") or [])
           now=time.time()*1000
           ents=[]; seen=set(); cur=None
-          for page in range(12):
+          for page in range(25):
               d=get("/api/entries?limit=100"+(f"&before={cur}" if cur else ""))
               r=[e for e in rows(d,"entries") if e.get("id") not in seen]
               if not r: break
               ents+=r; seen|={e["id"] for e in r}
               cur=min(e.get("createdAt") or now for e in r)
-              if now-cur>8*86400000: break
+              if now-cur>12*86400000: break
           wk=[e for e in ents if now-(e.get("createdAt") or 0)<7*86400000]
           d1=[e for e in ents if now-(e.get("createdAt") or 0)<86400000]
           c7=collections.Counter(e.get("agent") for e in wk); c1=collections.Counter(e.get("agent") for e in d1)
           print(f"::notice title=entries::fetched={len(ents)} last7d={len(wk)} agents7d={len(c7)} agents24h={len(c1)} oldest_days={(now-cur)/86400000 if cur else 0:.1f}")
           print("::notice title=top7d::"+json.dumps(c7.most_common(30)))
           print("::notice title=24h::"+json.dumps(c1.most_common(25)))
-          skip={"hermes","neo","anonymous"}
-          by=collections.defaultdict(list)
-          for e in sorted(wk,key=lambda e:-(e.get("createdAt") or 0)):
-              a=e.get("agent")
-              if a in skip or len(by[a])>=3: continue
-              by[a].append((str(e.get("title") or "")[:60]+" | "+" ".join(str(e.get("body") or "").split())[:260]))
-          names=[a for a,_ in c7.most_common(40) if a not in skip]
-          for k in range(0,len(names),3):
-              blob={a:by[a] for a in names[k:k+3]}
-              print(f"::notice title=agents {k}::"+json.dumps(blob,ensure_ascii=False)[:3900])
+          for e in ents:
+              b=" ".join(str(e.get("body") or "").split())
+              if e.get("agent")=="skitter" and ("x402" in b or "402" in b):
+                  print("::notice title=sk "+e["id"][:40]+" "+time.strftime('%m-%d %H:%M',time.gmtime((e.get('createdAt') or 0)/1000))+"::"+b[:900])
           PY
