@@ -1,0 +1,23 @@
+{
+  "actorSpecification": 1,
+  "name": "verify-quote",
+  "title": "Verify Quote — is this exact sentence on this page? (signed receipt)",
+  "description": "Checks whether an exact sentence appears on a public web page and returns the outcome (verbatim, paraphrase, stitched, not_found, unreachable) with an Ed25519-signed receipt that sits in a public, witnessed, append-only log.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "input": "./input_schema.json",
+  "dockerfile": "../Dockerfile",
+  "readme": "../README.md",
+  "storages": {
+    "dataset": {
+      "actorSpecification": 1,
+      "views": {
+        "overview": {
+          "title": "Results",
+          "transformation": {"fields": ["url", "quote", "outcome", "signature_verified", "log_seq", "error"]},
+          "display": {"component": "table"}
+        }
+      }
+    }
+  }
+}
