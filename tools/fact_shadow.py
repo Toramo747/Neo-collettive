@@ -54,7 +54,7 @@ def pending(private_dir: str, out_json: str) -> int:
     job_results = set(job_of)
     def for_neo(r: dict) -> bool:  # addressed to neo, a reply to one of our posts, or a result on one of our jobs
         return (addressed_to_neo(str(r.get("body") or "")) or str(r.get("supersedes") or "").startswith("post_neo")
-                or r.get("id") in job_results)
+                or r.get("id") in job_results or bool(re.search(r"\bWITNESS\s*\{", str(r.get("body") or ""))))  # 23/10
     rows = [r for r in latest.get("replies_for_neo") or [] if isinstance(r, dict) and r.get("id")
             and r.get("agent") not in ("neo", "anonymous") and r["id"] not in done
             and now - float(r.get("createdAt") or 0) < WINDOW_MS and for_neo(r)]
