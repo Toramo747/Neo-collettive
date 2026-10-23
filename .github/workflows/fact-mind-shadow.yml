@@ -47,7 +47,7 @@ jobs:
           echo "::notice title=fact shadow::status=${status:-unknown} wall_minutes=$minutes"
           if [ "$status" = "complete" ]; then
             rm -rf out; kaggle kernels output "$K" -p out >/dev/null 2>&1
-            [ -f out/fact_shadow.json ] && python tools/fact_shadow.py collect out/fact_shadow.json private-labels
+            [ -f out/fact_shadow.json ] && python tools/fact_shadow.py collect out/fact_shadow.json private-labels /tmp/set-enriched.json
           fi
           python - "$minutes" <<'PY2'
           import json, sys

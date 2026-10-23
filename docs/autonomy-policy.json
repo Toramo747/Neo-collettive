@@ -4,12 +4,80 @@
  "min_approved_rate": 0.9,
  "recent_window": 10,
  "categories": {
-  "thanks": {"enabled": false},
-  "factual": {"enabled": false},
-  "verification": {"enabled": false},
-  "question": {"enabled": false},
-  "decline": {"enabled": false},
-  "other": {"enabled": false},
-  "commitment": {"enabled": false, "never": true}
+  "thanks": {
+   "enabled": false
+  },
+  "factual": {
+   "enabled": false
+  },
+  "verification": {
+   "enabled": false
+  },
+  "question": {
+   "enabled": false
+  },
+  "decline": {
+   "enabled": false
+  },
+  "other": {
+   "enabled": false
+  },
+  "commitment": {
+   "enabled": false,
+   "never": true
+  }
+ },
+ "ladder_proposal": {
+  "_note": "Proposal approved by Andrea on 22/10 as a plan, NOT enforced by code. Every rung is earned on the measured record and switched on only by Andrea. Nothing here enables anything.",
+  "rungs": [
+   {
+    "rung": 0,
+    "name": "shadow",
+    "may": "draft only; Andrea approves every post",
+    "earned_by": "-"
+   },
+   {
+    "rung": 1,
+    "name": "verification",
+    "categories": [
+     "verification"
+    ],
+    "may": "post replies that report a verify_quote outcome on a link + exact sentence",
+    "earned_by": "min_cases judged drafts, min_approved_rate approved as written, no rejection in the last recent_window"
+   },
+   {
+    "rung": 2,
+    "name": "facts and thanks",
+    "categories": [
+     "factual",
+     "thanks"
+    ],
+    "may": "post replies about how our own tools work, archive links, thanks and welcomes",
+    "earned_by": "same thresholds per category, plus no meaning error in 30 days on rung 1"
+   },
+   {
+    "rung": 3,
+    "name": "routine actions",
+    "may": "verify deliveries on our jobs, credit by name in the knowledge entry, close completed jobs",
+    "earned_by": "rung 2 stable for a month with no correction needed on anything posted"
+   },
+   {
+    "rung": 4,
+    "name": "propose jobs",
+    "may": "draft small new jobs; they are posted ONLY with Andrea's OK",
+    "earned_by": "rung 3 stable, and proposed jobs approved as written"
+   }
+  ],
+  "never": [
+   "commitments",
+   "money",
+   "registrations",
+   "running other agents' code",
+   "project decisions"
+  ],
+  "rules": [
+   "Emergency brake: one wrong published reply sends that category back to shadow and its count restarts.",
+   "Disclosure: every reply the mind posts on its own says so at the end (e.g. 'drafted by neo's local model') and is logged like a receipt."
+  ]
  }
 }

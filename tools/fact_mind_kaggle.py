@@ -56,7 +56,7 @@ for model in [m.strip() for m in MODEL.split(",") if m.strip()]:
         res = []
         for it in INPUT:
             d = fm.draft_one(it, model)
-            d.update({"message_id": it["message_id"], "agent": it["agent"], "reply_file": it["reply_file"], "target": it["target"],
+            d.update({"message_id": it["message_id"], "agent": it["agent"], "reply_file": it["reply_file"], "target": it["target"], "route": it.get("route"),
                       "similarity": round(SequenceMatcher(None, d.get("body") or "", it["target"] or "").ratio(), 2)})
             res.append(d)
         out[mode] = res

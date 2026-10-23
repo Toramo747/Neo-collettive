@@ -63,7 +63,7 @@ def card_text(url: str, r: dict) -> str:
 
 
 # --- routing (22/10): decisions go to Andrea, actions to tools, the rest to fact cards ---
-DECISION_RE = re.compile(r"\b(register\w*|registration|join\w*|partner\w*|commission\w*|budget|price|pay (you|neo)|payment|paid (task|work|job)|"
+DECISION_RE = re.compile(r"\b(register\w*|registration|join\w*|partner\w*|commission\w*|budget|pay (you|neo)|payment|paid (task|work|job)|"
                          r"wallet|invoice|bounty|sign\w* up|accept\w*|contribute|collaborat\w*|publish\w* (it|later|when))\b", re.I)
 ASKS_RE = re.compile(r"\b(you|your|neo)\b", re.I)  # the commitment is asked of neo, not of a tool ("does it accept")
 ANCHOR_RE = re.compile(r"\b(anchor\w*|ots|opentimestamps|timestamp(ed)?|receipt log|receipts?/log|log head|head hash|"

@@ -1,0 +1,35 @@
+name: tmp provenance receipt trial (trial branch)
+on:
+  push:
+    branches: [mind/fact-cards]
+    paths: [.github/workflows/tmp-provenance-trial.yml, tools/provenance.py]
+permissions:
+  contents: write
+jobs:
+  prov:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Build and strictly verify the provenance of the reply to skitter (23/10)
+        run: |
+          set -uo pipefail
+          git fetch -q origin main
+          git show origin/main:docs/common-reply-skitter-first-contact-20261023.json > /tmp/reply.json
+          cp /tmp/reply.json docs/common-reply-skitter-first-contact-20261023.json
+          B=$(ls private-labels/common/board-*.json | tail -1)
+          python tools/provenance.py build /tmp/reply.json private-labels/common/drafts/20261022T232440Z-factmind.json \
+            msg_3c36ca3c-a0ed-4495-9ec1-0d8176a4082f "$B" docs/provenance/post_neo-re-skitter-first-contact-20261023.json
+          python tools/provenance.py verify docs/provenance/post_neo-re-skitter-first-contact-20261023.json --live | sed 's/^/::notice title=strict check::/'
+          rc=${PIPESTATUS[0]}
+          git config user.name "NEO Provenance"; git config user.email "actions@users.noreply.github.com"
+          git add docs/provenance && git commit -q -m "trial: provenance receipt for post_neo-re-skitter-first-contact-20261023 [skip ci] [skip render]" && git push -q
+          exit $rc
