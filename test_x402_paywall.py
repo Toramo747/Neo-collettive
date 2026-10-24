@@ -90,6 +90,7 @@ class PaywallTest(unittest.TestCase):
             op = d["paths"][f"/x402/{k}"]["post"]
             self.assertEqual(op["x-payment-info"]["price"]["amount"], f"{s['price_usd']:.2f}")
             self.assertIn("402", op["responses"])
+            self.assertIn("x402", op["x-payment-info"]["protocols"][0])  # structured form: [{"x402": {...}}]
             self.assertNotIn("security", op)  # security: [] would list a paid route as free on x402scan
             self.assertEqual(op["requestBody"]["content"]["application/json"]["schema"]["type"], "object")
         self.assertEqual(xs.well_known("https://example.org")["resources"][0], "https://example.org/x402/" + next(iter(xs.SERVICES)))

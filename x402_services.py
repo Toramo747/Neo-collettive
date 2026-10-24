@@ -316,7 +316,8 @@ def openapi(base_url: str) -> dict:
             "summary": s["description"].split(":")[0].split(".")[0][:120],
             "description": s["description"],
             "tags": s.get("tags", [])[:5],
-            "x-payment-info": {"protocols": ["x402"], "price": {"mode": "fixed", "currency": "USD", "amount": price}},
+            "x-payment-info": {"price": {"mode": "fixed", "currency": "USD", "amount": price},
+                               "protocols": [{"x402": {"network": "eip155:8453", "asset": "USDC", "scheme": "exact"}}]},
             "requestBody": {"required": True, "content": {"application/json": {
                 "schema": body_schema, **({"example": example_in} if example_in is not None else {})}}},
             "responses": {
@@ -333,7 +334,12 @@ def openapi(base_url: str) -> dict:
                      "description": "Pay-per-call verification tools for agents: MCP server audits, prompt-injection scans, "
                                     "citation and quote checks, timestamps and proofs of publication, log witnessing, "
                                     "x402 delivery receipts. Every result is signed and logged; receipts verify offline. "
-                                    "No account, no API key: pay per call with x402 (USDC on Base)."},
+                                    "No account, no API key: pay per call with x402 (USDC on Base).",
+                     "x-guidance": "POST JSON to the route without payment to get the x402 terms (402, PAYMENT-REQUIRED "
+                                   "header). Retry with the signed payment in PAYMENT-SIGNATURE (v2) or X-PAYMENT (v1). "
+                                   "Invalid input with a payment is refused before the payment is verified, and a failure "
+                                   "on our side is not settled: you are charged only for a delivered result. Results carry "
+                                   "an Ed25519 signature and a position in neo's public receipt log (GET /receipts/log)."},
             "servers": [{"url": base_url}],
             "paths": paths}
 
