@@ -22,7 +22,10 @@ import re
 
 import prompt_injection_scan as pis
 
-POISON = [r"<\s*important\s*>", r"\bbefore (using|calling) (this|any) tool\b", r"\b(do not|don't|never) (tell|mention|inform|show)\b[^.]{0,40}\buser\b",
+# 24/10 calibration (63 registry servers): honest guidance ("confirm with the user before calling this tool",
+# "never tell the user a name is available") is not poisoning; concealment of the instruction itself is.
+POISON = [r"<\s*important\s*>", r"\bbefore (using|calling) (this|any) tool,? (you must |first )?(read|open|fetch|pass|send|include|call|cat)\b",
+          r"\b(do not|don't|never) (tell|mention|inform|reveal|show)( the user| anyone)?( about)? (this|these|that you|the (above|following|instruction))",
           r"~/\.(ssh|aws|cursor|config|gnupg)\b", r"\bid_rsa\b", r"\bmcp\.json\b", r"\b(pass|include|send|put)\b[^.]{0,60}\b(contents? of|full conversation|chat history|all previous messages)\b",
           r"\bsidenote\b", r"\bthe user (must|should) not (see|know)\b", r"\bsecretly\b", r"\bwithout (asking|telling|confirmation)\b"]
 SHADOW = [r"\bwhen (using|calling) (the )?\w+ tool\b", r"\binstead of (the|using) \w+\b", r"\b(all|any) other tools?\b",
@@ -54,10 +57,13 @@ def audit(verified: dict, previous_fingerprint: str | None = None) -> dict:
         desc, schema = str(t.get("description") or ""), str(t.get("input_schema") or "")
         text = desc + "\n" + schema
         inj = pis.scan(text)
-        if inj["level"] in ("medium", "high"):
+        # in tool docs, credential and "call this tool again" wording is normal API documentation: only the
+        # injection shapes that have no business in a tool description count here
+        strong = [f for f in inj["findings"] if f["type"] in ("override", "role_marker", "hidden", "hidden_instruction", "encoded")]
+        if strong:
             findings.append({"severity": "high", "type": "poisoning", "tool": name,
-                             "evidence": "; ".join(f["type"] + ": " + f["evidence"] for f in inj["findings"][:3])[:400]})
-            score += 35 if inj["level"] == "high" else 20
+                             "evidence": "; ".join(f["type"] + ": " + f["evidence"] for f in strong[:3])[:400]})
+            score += 35
         for p in POISON:
             m = re.search(p, text, re.I)
             if m:
@@ -73,16 +79,18 @@ def audit(verified: dict, previous_fingerprint: str | None = None) -> dict:
         if len(desc) > 3000:
             findings.append({"severity": "low", "type": "long_description", "tool": name, "evidence": f"{len(desc)} chars: room to hide instructions"})
             score += 3
-        # secrets: only when the tool asks for one as a parameter ("no API key" in a description is not a capability)
-        found = [c for c, p in CAPS.items() if c != "secrets" and re.search(p, name + " " + text, re.I)]
+        # capabilities from the tool name and its parameter schema, not from prose (calibration, 24/10)
+        found = [c for c, p in CAPS.items() if c != "secrets" and re.search(p, name.replace("_", " ") + " " + schema, re.I)]
         if re.search(r'"[a-z_]*(api_?key|password|passwd|secret|token|private_?key|seed)[a-z_]*"\s*:', schema, re.I):
             found.append("secrets")
         for c in found:
             caps.setdefault(c, []).append(name)
         ann = t.get("annotations") or {}
-        if ann.get("readOnlyHint") is True and {"destructive", "code_execution", "payments"} & set(found):
+        acts = {c for c in ("destructive", "code_execution", "payments")
+                if re.search(CAPS[c], name.replace("_", " "), re.I)}  # judged on what the tool is called
+        if ann.get("readOnlyHint") is True and acts:
             findings.append({"severity": "medium", "type": "annotation_mismatch", "tool": name,
-                             "evidence": f"declares readOnlyHint but describes {sorted({'destructive','code_execution','payments'} & set(found))}"})
+                             "evidence": f"declares readOnlyHint but its name says {sorted(acts)}"})
             score += 10
     for c, names in caps.items():
         score += CAP_WEIGHT[c]
