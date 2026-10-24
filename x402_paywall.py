@@ -33,6 +33,15 @@ FACILITATOR_ROUTE = "/platform/v2/x402"
 MAX_TIMEOUT_SECONDS = 120
 
 
+# --- counters (public aggregates only: no payer, no amount per call) -------------------------------------------
+METRICS: dict[str, int] = {"asked_to_pay": 0, "bad_input": 0, "wrong_terms": 0, "payment_invalid": 0,
+                           "our_failure_not_charged": 0, "settle_failed": 0, "paid_and_served": 0, "facilitator_http_error": 0}
+
+
+def _count(k: str) -> None:
+    METRICS[k] = METRICS.get(k, 0) + 1
+
+
 # --- configuration -------------------------------------------------------------------------------------------
 def config(env: dict | None = None) -> dict | None:
     e = os.environ if env is None else env
@@ -146,6 +155,7 @@ async def facilitator(cfg: dict, action: str, version: int, payload: dict, req: 
     else:
         status, data = await post(f"https://{FACILITATOR_HOST}{path}", headers, body)
     if status != 200:
+        _count("facilitator_http_error")
         return {"_http": status, "isValid": False, "success": False, "errorReason": f"facilitator_http_{status}"}
     return data
 
@@ -159,26 +169,33 @@ async def handle(service: dict, url: str, headers: dict, body: dict, run: Callab
     req = requirements(service["price_usd"], cfg["pay_to"])
     bad = service["validate"](body) if service.get("validate") else None
     if bad:  # bad input is refused before any payment is looked at: nothing is verified, nothing moves
+        _count("bad_input")
         return 400, {}, {"ok": False, "error": bad, "charged": False}
     payload, version = decode_payment(headers)
     if payload is None:
+        _count("asked_to_pay")
         h, b = payment_required(service, url, cfg["pay_to"])
         return 402, h, b
     why = accepted_matches(payload, req, version)
     if why:
+        _count("wrong_terms")
         h, b = payment_required(service, url, cfg["pay_to"], error=why)
         return 402, h, b
     v = await facilitator(cfg, "verify", version, payload, req, post)
     if not v.get("isValid"):
+        _count("payment_invalid")
         h, b = payment_required(service, url, cfg["pay_to"], error=str(v.get("invalidReason") or v.get("errorReason") or "payment_invalid"))
         return 402, h, b
     result = await run(body, str(v.get("payer") or "unknown"))  # computed, not released until settlement succeeds
     if result.get("ok") is False and str(result.get("error") or "").startswith(tuple(service.get("no_charge_errors", ()))):
+        _count("our_failure_not_charged")
         return 503, {}, {**result, "charged": False}  # our side failed (deadline, rate limit): do not settle
     s = await facilitator(cfg, "settle", version, payload, req, post)
     if not s.get("success"):
+        _count("settle_failed")
         h, b = payment_required(service, url, cfg["pay_to"], error=str(s.get("errorReason") or "settlement_failed"))
         return 402, h, {**b, "charged": False}
+    _count("paid_and_served")
     settle = {"success": True, "transaction": s.get("transaction"), "network": s.get("network") or NETWORK, "payer": s.get("payer")}
     return 200, {"PAYMENT-RESPONSE": base64.b64encode(json.dumps(settle, separators=(",", ":")).encode()).decode()}, \
         {**result, "payment": settle}

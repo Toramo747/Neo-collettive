@@ -34,7 +34,7 @@ CAPS = {
     "code_execution": r"\b(exec(ute)?|shell|bash|command line|run[_ ]?(code|command|script)|eval|subprocess|terminal)\b",
     "filesystem": r"\b(read|write|delete|list)[_ ]?(file|dir(ectory)?|folder)s?\b|\bfile ?path\b|\bfilesystem\b",
     "network_egress": r"\b(http request|fetch (a |any )?url|webhook|send[_ ]?(email|message|sms)|post to|upload)\b",
-    "payments": r"\b(transfer|send (funds|money|usdc|eth)|sign[_ ]?transaction|private key|wallet|approve (token|spending))\b",
+    "payments": r"\b(transfer[_ ]?(funds|money|usdc|eth|tokens?|crypto)|send[_ ]?(funds|money|usdc|eth)|pay(ment)?s?|sign[_ ]?transaction|private[_ ]?key|wallet|approve[_ ]?(token|spending))\b",
     "destructive": r"\b(delete|drop|truncate|destroy|wipe|remove)[_ ]?(all|table|database|records?|files?|users?)?\b",
     "secrets": r"\b(api[_ ]?key|password|token|secret|credential)s?\b",
 }

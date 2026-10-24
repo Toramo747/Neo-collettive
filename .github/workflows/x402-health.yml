@@ -1,0 +1,34 @@
+name: x402 health (read only)
+# 24/10: alarm for the paid routes. Reads the public counters at /x402; fails (GitHub notifies Andrea) when settlements
+# or the facilitator start failing. Before the deploy the route is 404 and this is only a notice. Posts nothing.
+on:
+  schedule:
+    - cron: "41 */2 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: x402-health
+  cancel-in-progress: false
+jobs:
+  health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - run: |
+          set -uo pipefail
+          python tools/x402_health.py private-labels; rc=$?
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/x402 2>/dev/null || true
+          git -C private-labels commit --quiet -m "ops: x402 health (private)" || true
+          for i in 1 2 3; do git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && break; sleep 5; done
+          exit $rc

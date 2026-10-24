@@ -205,5 +205,21 @@ class HighValueServicesTest(unittest.TestCase):
         self.assertIsNone(xs.v_proof({"url": "https://a.example"}))
 
 
+class HealthTest(unittest.TestCase):
+    def test_alarm_rules(self):
+        import x402_health as h
+        a = {"counters_since_start": {"settle_failed": 0, "our_failure_not_charged": 1, "facilitator_http_error": 0}}
+        self.assertEqual(h.check(a, a), [])
+        self.assertTrue(h.check({"counters_since_start": {"settle_failed": 1, "our_failure_not_charged": 1}}, a))
+        self.assertFalse(h.check({"counters_since_start": {"our_failure_not_charged": 3}}, a))   # +2 only
+        self.assertTrue(h.check({"counters_since_start": {"our_failure_not_charged": 4}}, a))
+        self.assertFalse(h.check({"counters_since_start": {"our_failure_not_charged": 0}}, a))   # restarted, 0 new
+
+    def test_counters_move(self):
+        before = dict(xp.METRICS)
+        run(xp.handle(SVC, URL, {}, BODY, None, CFG, post=Fac()))
+        self.assertEqual(xp.METRICS["asked_to_pay"], before["asked_to_pay"] + 1)
+
+
 if __name__ == "__main__":
     unittest.main()
