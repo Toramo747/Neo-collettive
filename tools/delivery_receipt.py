@@ -214,7 +214,7 @@ def example() -> tuple[dict, dict]:
          "request_sha256": sha(b"GET /api/funding?symbol=BTCUSDT"),
          "payment_required": {"body_sha256": sha(b"{402 body}"), "header_sha256": sha(b"PAYMENT-REQUIRED header"),
                               "body_x402_version": 2, "header_x402_version": 2},
-         "payment": {"network": "eip155:8453", "asset": "0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913",
+         "payment": {"network": "eip155:8453", "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
                      "amount": "2000", "pay_to_requested": "0x" + "a" * 40, "payer_seen": "0x" + "b" * 40,
                      "facilitator": "example-facilitator", "facilitator_wallet": "0x" + "d" * 40, "tx": "0x" + "c" * 64},
          "outcome": "delivered", "refusal_code": None, "charged": True, "settlement": {"kind": "onchain"},
