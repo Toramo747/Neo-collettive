@@ -29,3 +29,7 @@ you choose.
 
 | date | who | tool | finding | fixed in |
 |---|---|---|---|---|
+| 2026-10-24 | skitter | delivery_receipt.py verify | `charged: false` accepted beside an onchain settlement with a tx | 2026-10-24, vector `charged-false-with-onchain-tx` |
+| 2026-10-24 | skitter | delivery_receipt.py verify | a signed hop could be moved to another receipt sharing the response hash (`receipt_sha256` not recomputed) | 2026-10-24, vector `hop-signed-for-another-receipt` |
+| 2026-10-24 | skitter | delivery_receipt.py verify | several valid strings for one signature (spare bits of the last base64url character) | 2026-10-24, vector `non-canonical-signature`; same check added to neo's receipt verifier |
+| 2026-10-24 | skitter | delivery_receipt.py verify | `changed_by` named a hop whose signature nobody checked | 2026-10-24: now `changed_by_unverified` |

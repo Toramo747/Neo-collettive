@@ -43,8 +43,12 @@ def _sign(key, obj) -> str:
 def _ok(pub_b64: str, obj, sig: str) -> bool:
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     try:
-        Ed25519PublicKey.from_public_bytes(base64.b64decode(pub_b64, validate=True)).verify(
-            base64.urlsafe_b64decode(sig + "=" * (-len(sig) % 4)), canonical_json(obj))
+        raw = base64.urlsafe_b64decode(sig + "=" * (-len(sig) % 4))
+        # 24/10 (skitter, BREAK 3): one accepted encoding per signature; the spare bits of the last character
+        # would otherwise give several valid strings for one signature (and several receipt hashes)
+        if len(raw) != 64 or base64.urlsafe_b64encode(raw).rstrip(b"=").decode() != sig:
+            return False
+        Ed25519PublicKey.from_public_bytes(base64.b64decode(pub_b64, validate=True)).verify(raw, canonical_json(obj))
         return True
     except Exception:
         return False
@@ -132,6 +136,10 @@ def verify(r: dict, seller_pub: str, buyer_body_sha256: str | None = None, hop_p
         fails.append("an internal settlement must name who carried the cost")
     if st.get("kind") == "none" and charged is True:
         fails.append("charged with no settlement at all")
+    if st.get("kind") == "onchain" and pay.get("tx") and charged is False:
+        fails.append("charged false contradicts an onchain settlement with a tx")  # 24/10, skitter BREAK 1
+    if out == "served_not_settled" and charged is True:
+        fails.append("served_not_settled cannot be charged")
     if out == "delivered" and st.get("kind") == "none":
         fails.append("delivered needs a settlement (onchain or internal)")
     if out == "refused" and charged is True:
@@ -149,23 +157,42 @@ def verify(r: dict, seller_pub: str, buyer_body_sha256: str | None = None, hop_p
     except Exception:
         fails.append("times need response_sent_utc (and settlement_seen_utc when delivered), ISO 8601 UTC")
     # hops: the chain of hashes from the seller's response to what the buyer holds
-    prev, changed = r["response_sha256"], None
+    prev, changed, unverified_change = r["response_sha256"], None, None
+    this_receipt = sha(canonical_json(seller_body(r) | {"signature": r.get("signature")}))
     for i, h in enumerate(r.get("hops") or []):
         body = {k: v for k, v in h.items() if k != "signature"}
         pub = (hop_pubs or {}).get(h.get("name"))
-        if pub and not _ok(pub, body, str(h.get("signature") or "")):
+        signed_ok = bool(pub) and _ok(pub, body, str(h.get("signature") or ""))
+        if pub and not signed_ok:
             fails.append(f"hop {i} ({h.get('name')}): signature does not verify")
         elif not pub:
             notes.append(f"hop {i} ({h.get('name')}): no published key given, signature not checked")
+        if h.get("receipt_sha256") != this_receipt:  # 24/10, skitter BREAK 2: a signed hop cannot move between receipts
+            fails.append(f"hop {i} ({h.get('name')}) was signed for a different receipt")
         if h.get("received_sha256") != prev:
             fails.append(f"hop {i} ({h.get('name')}) received bytes that differ from what the previous hop sent")
-        if h.get("forwarded_sha256") != h.get("received_sha256") and changed is None:
-            changed = h.get("name")
-            notes.append(f"hop {i} ({h.get('name')}) changed the bytes and says so")
+        if h.get("forwarded_sha256") != h.get("received_sha256") and changed is None and unverified_change is None:
+            if signed_ok:
+                changed = h.get("name")
+                notes.append(f"hop {i} ({h.get('name')}) changed the bytes and says so")
+            else:  # 24/10, skitter: never blame a name whose signature nobody checked
+                unverified_change = h.get("name")
+                notes.append(f"hop {i} claims to be {h.get('name')!r} and changed the bytes, but its signature was not checked")
         prev = h.get("forwarded_sha256")
     if buyer_body_sha256 is not None and buyer_body_sha256 != prev:
         fails.append("the buyer's bytes differ from what the last signed hop sent: the change is unattributed")
-    return {"ok": not fails, "fails": fails, "notes": notes, "changed_by": changed}
+    asset = str(pay.get("asset") or "")
+    if re.fullmatch(r"0x[0-9a-fA-F]{40}", asset) and asset[2:] not in (asset[2:].lower(), asset[2:].upper()):
+        try:
+            import importlib.util as _u
+            _s = _u.spec_from_file_location("x402_lint", Path(__file__).with_name("x402_lint.py"))
+            _m = _u.module_from_spec(_s)
+            _s.loader.exec_module(_m)
+            if _m.checksum(asset) != asset:  # 24/10, skitter: a note, compared case-insensitively, not a fail
+                notes.append(f"payment.asset fails EIP-55 (checksum spelling {_m.checksum(asset)}); addresses compare case-insensitively")
+        except Exception:
+            pass
+    return {"ok": not fails, "fails": fails, "notes": notes, "changed_by": changed, "changed_by_unverified": unverified_change}
 
 
 def vectors() -> dict:
@@ -193,7 +220,19 @@ def vectors() -> dict:
                  "expect": {"ok": True, "changed_by": "example-relay"}},
                 {"name": "refused-not-charged", "receipt": refusal, "expect": {"ok": True, "changed_by": None}},
                 {"name": "tampered-amount", "receipt": copy.deepcopy(plain) | {"payment": dict(plain["payment"], amount="1")},
-                 "expect": {"ok": False}}]}
+                 "expect": {"ok": False}},
+                # 24/10: skitter's three BREAKs and his asset-spelling suggestion, kept as regression vectors
+                {"name": "charged-false-with-onchain-tx", "receipt": sign_seller(dict(base, charged=False), sk), "expect": {"ok": False}},
+                {"name": "hop-signed-for-another-receipt", "receipt": dict(copy.deepcopy(plain), hops=add_hop(
+                    sign_seller(dict(base, buyer_request_id="some-other-request"), sk), "example-relay", sk,
+                    b'{"symbol":"BTCUSDT","funding":"0.0001","token":"abc"}', b'{"symbol":"BTCUSDT","funding":"0.0001","token":"abc"}',
+                    "2026-10-23T10:12:22Z")["hops"]), "hop_pubs": {"example-relay": spub}, "expect": {"ok": False}},
+                {"name": "non-canonical-signature", "receipt": dict(plain, signature=plain["signature"][:-1] + "BCDEFGHIJKLMNOPA"[
+                    "ABCDEFGHIJKLMNOP".index(plain["signature"][-1])] if plain["signature"][-1] in "ABCDEFGHIJKLMNOP" else plain["signature"][:-1] + "A"),
+                 "expect": {"ok": False}},
+                {"name": "asset-non-checksum-spelling-is-a-note", "receipt": sign_seller(dict(base, payment=dict(
+                    base["payment"], asset="0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913")), sk),
+                 "expect": {"ok": True, "note_contains": "fails EIP-55"}}]}
 
 
 def example() -> tuple[dict, dict]:
