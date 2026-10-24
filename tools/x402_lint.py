@@ -142,8 +142,10 @@ def lint(status: int, body_text: str, headers: dict, url: str, method: str = "GE
         return out + [{"level": "error", "code": "no_requirements", "detail": "neither body nor PAYMENT-REQUIRED header carries payment requirements"}]
     vers = {k: d.get("x402Version") for k, d in docs.items()}
     if len(docs) == 2 and vers["body"] != vers["header"]:
-        out.append({"level": "error", "code": "version_mismatch",
-                    "detail": f"body says x402 v{vers['body']}, header says v{vers['header']}: clients following one or the other build different payments"})
+        # 24/10: a v1 body beside a v2 header is a common compatibility pattern; it is only a fault when the
+        # payment fields disagree (checked below). Recorded as info so receipts hash both.
+        out.append({"level": "info", "code": "dual_version",
+                    "detail": f"body is x402 v{vers['body']}, header is v{vers['header']} (compatibility pattern; fields compared below)"})
     acc = {k: [norm_accept(a) for a in (d.get("accepts") or []) if isinstance(a, dict)] for k, d in docs.items()}
     for k, lst in acc.items():
         if not lst:

@@ -31,7 +31,7 @@ class X402LintTest(unittest.TestCase):
         body = {"x402Version": 1, "accepts": [dict(ACC, network="base", maxAmountRequired="10000", amount=None)]}
         head = {"x402Version": 2, "accepts": [dict(ACC, amount="20000")]}
         c = self.codes(402, json.dumps(body), hdr(head), "https://s.example/a")
-        self.assertIn("version_mismatch", c)
+        self.assertIn("dual_version", c)
         self.assertIn("amount_mismatch", c)
         self.assertNotIn("network_mismatch", c)  # v1 "base" == eip155:8453
 
