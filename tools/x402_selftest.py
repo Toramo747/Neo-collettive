@@ -81,11 +81,12 @@ async def pay(keyfile, report):
     from x402.mechanisms.evm.exact.register import register_exact_evm_client
     acct = Account.from_key(Path(keyfile).read_text().strip())
     deadline = time.time() + 40 * 60
-    while usdc_balance(acct.address) < 50000:
+    while usdc_balance(acct.address) < 10000:
         if time.time() > deadline:
             print("::warning title=selftest::no funds after 40 min, nothing paid")
             return 0
         await asyncio.sleep(20)
+    await asyncio.sleep(30)  # let the whole transfer land before spending
     print(f"::notice title=selftest::funded with {usdc_balance(acct.address) / 1e6} USDC")
     client = register_exact_evm_client(x402Client(), acct)
     card = json.loads(urllib.request.urlopen(BASE + "/.well-known/agent-card.json", timeout=60).read())
@@ -94,12 +95,24 @@ async def pay(keyfile, report):
     from receipt_signing import verify_receipt
     rows = []
     async with httpx.AsyncClient(timeout=90) as plain, httpx.AsyncClient(timeout=90, transport=x402_httpx_transport(client)) as paid:
-        for name, body in CALLS:
+        # 24/10: Coinbase sends at least 1 USDC, so after the five test calls the rest is drained to Andrea's address
+        # through our own paid routes: one proof-of-publication (0.50), then timestamps (0.01) until under a cent
+        bal = usdc_balance(acct.address)
+        plan = list(CALLS)
+        rest = bal - 10000 * len(CALLS)
+        if rest >= 500000:
+            plan.append(("proof-of-publication", {"url": "https://en.wikipedia.org/wiki/Hash_chain"}))
+            rest -= 500000
+        for i in range(min(rest // 10000, 150)):
+            plan.append(("timestamp", {"sha256": f"{i:064x}", "note": "neo x402 self-test drain 24/10"}))
+        print(f"::notice title=selftest::plan {len(plan)} paid calls for {bal / 1e6} USDC")
+        want = {"proof-of-publication": "500000"}
+        for name, body in plan:
             url = f"{BASE}/x402/{name}"
             r0 = await plain.post(url, json=body)
             req = json.loads(base64.b64decode(r0.headers.get("payment-required", "")) or b"{}") if r0.status_code == 402 else {}
             acc = (req.get("accepts") or [{}])[0]
-            if r0.status_code != 402 or acc.get("amount") != "10000" or acc.get("payTo", "").lower() != PAY_TO:
+            if r0.status_code != 402 or acc.get("amount") != want.get(name, "10000") or acc.get("payTo", "").lower() != PAY_TO:
                 rows.append({"service": name, "skipped": f"unpaid status {r0.status_code}, terms {acc.get('amount')} to ok={acc.get('payTo','').lower()==PAY_TO}"})
                 continue
             r = await paid.post(url, json=body)
@@ -108,11 +121,14 @@ async def pay(keyfile, report):
             rows.append({"service": name, "status": r.status_code, "signature_ok": bool(j.get("signature")) and verify_receipt(j, pub),
                          "log_seq": ((j.get("receipt") or {}).get("log") or {}).get("seq"), "tx": (j.get("payment") or {}).get("transaction"),
                          "payment_response": bool(pr), "error": j.get("error")})
-            print(f"::notice title=selftest {name}::" + json.dumps(rows[-1])[:600])
+            if len(rows) <= 6 or rows[-1].get("status") != 200:
+                print(f"::notice title=selftest {name} #{len(rows)}::" + json.dumps(rows[-1])[:600])
     Path(report).parent.mkdir(parents=True, exist_ok=True)
     Path(report).write_text(json.dumps({"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "rows": rows,
                                         "left_usdc_units": usdc_balance(acct.address)}, indent=1))
-    print(f"::notice title=selftest::paid={sum(1 for x in rows if x.get('status') == 200)} of {len(rows)}; left {usdc_balance(acct.address)} units")
+    ok = sum(1 for x in rows if x.get("status") == 200)
+    sig = sum(1 for x in rows if x.get("signature_ok"))
+    print(f"::notice title=selftest::paid_and_served={ok} of {len(rows)} signatures_ok={sig} left {usdc_balance(acct.address)} units")
     return 0
 
 
