@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import mcp_endpoint_verifier as ev
+import prompt_injection_scan
 import quote_verifier
 import receipt_log
 
@@ -72,6 +73,41 @@ def v_delivery(b):
     if not isinstance(b.get("receipt"), dict):
         return "receipt must be an object"
     return None if isinstance(b.get("seller_public_key_b64"), str) else "seller_public_key_b64 required"
+
+
+def v_scan(b):
+    t, u = b.get("text"), b.get("url")
+    if (t is None) == (u is None):
+        return "give exactly one of text or url"
+    if t is not None:
+        return None if isinstance(t, str) and 0 < len(t) <= prompt_injection_scan.MAX_CHARS else "text must be 1..200000 chars"
+    return None if _https(u) else "url must be https"
+
+
+CITE_MAX = 8
+CITE_RE = re.compile(r"[\"“]([^\"”]{15,600})[\"”][^\n]{0,200}?(https://[^\s)\]>\"']+)")
+
+
+def extract_citations(answer: str) -> list[dict]:
+    """Quoted sentence followed (within 200 chars, same line) by an https link: the common way agents cite."""
+    out = []
+    for m in CITE_RE.finditer(str(answer or "")):
+        out.append({"quote": m.group(1).strip(), "url": m.group(2).rstrip(".,;")})
+    return out[:CITE_MAX]
+
+
+def v_cite(b):
+    cits = b.get("citations")
+    if cits is None:
+        cits = extract_citations(b.get("answer") or "")
+        if not cits:
+            return "no citations: pass citations [{url, quote}] or an answer with \"quoted sentence\" followed by its https link"
+    if not isinstance(cits, list) or not 1 <= len(cits) <= CITE_MAX:
+        return f"citations must be a list of 1..{CITE_MAX}"
+    for c in cits:
+        if not isinstance(c, dict) or v_quote(c):
+            return "each citation needs an https url and a quote of 3+ words"
+    return None
 
 
 # --- runners --------------------------------------------------------------------------------------------------
@@ -140,7 +176,41 @@ async def r_delivery(b, caller):
     return {"ok": True, "verdict": res}
 
 
+async def r_scan(b, caller):
+    if b.get("text") is not None:
+        return {**prompt_injection_scan.scan(b["text"]), "source": "text"}
+    try:
+        page = await asyncio.wait_for(quote_verifier._fetch(b["url"]), timeout=DEADLINE)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "verification_deadline_exceeded"}
+    except ev.VerificationError as e:
+        return {"ok": True, "source": "url", "url": b["url"], "unreachable": str(e.args[0] if e.args else e), "risk_score": None, "level": "unknown", "findings": []}
+    return {**prompt_injection_scan.scan(page["text"]), "source": "url", "url": b["url"], "final_url": page["final_url"]}
+
+
+async def r_cite(b, caller):
+    cits = b.get("citations") or extract_citations(b.get("answer") or "")
+    rows = []
+    for c in cits[:CITE_MAX]:  # sequential: one bucket per payer, same limits as the free tool
+        r = await r_quote({"url": c["url"], "quote": c["quote"]}, caller + "#cite")
+        rows.append({"url": c["url"], "quote": c["quote"][:200], "outcome": r.get("outcome"), "error": r.get("error")})
+    counts = {}
+    for r in rows:
+        k = r["outcome"] or "error"
+        counts[k] = counts.get(k, 0) + 1
+    ok = counts.get("verbatim", 0)
+    return {"ok": True, "checked": len(rows), "verbatim": ok, "counts": counts, "citations": rows,
+            "summary": f"{ok} of {len(rows)} quotes found word for word on their pages",
+            "note": "not_found means the words are not on that page, not that the claim is false; who wrote it is still yours to judge."}
+
+
 SERVICES: dict[str, dict[str, Any]] = {
+    "injection-scan": {"price_usd": 0.01, "tool": "injection_scan", "validate": v_scan, "run": r_scan,
+                       "tags": ["security", "prompt-injection", "agents", "safety"],
+                       "description": "Scan text or a public page for prompt injection before your agent reads it: overrides, fake roles, exfiltration, tool abuse, payment asks, invisible Unicode/HTML-hidden instructions, base64. Rule-based evidence, signed and logged."},
+    "citation-check": {"price_usd": 0.05, "tool": "citation_check", "validate": v_cite, "run": r_cite,
+                       "tags": ["citations", "fact-check", "hallucination", "research"],
+                       "description": "Check every citation in an answer (up to 8 quote+link pairs, or extracted from the text): which quotes are really on their pages. One signed, logged report."},
     "verify-quote": {"price_usd": 0.01, "tool": "verify_quote", "validate": v_quote, "run": r_quote,
                      "tags": ["verification", "quotes", "citations", "fact-check"],
                      "description": "Is this exact sentence on this public page? verbatim / paraphrase / stitched / not_found / unreachable, with an Ed25519-signed receipt logged in a public, witnessed, append-only log."},
