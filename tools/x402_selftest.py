@@ -23,9 +23,10 @@ def rpc(method, params):
     for u in RPCS:
         try:
             d = json.loads(urllib.request.urlopen(urllib.request.Request(u, data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
-                                                                        headers={"Content-Type": "application/json"}), timeout=20).read())
+                                                                        headers={"Content-Type": "application/json", "User-Agent": "neo-x402-selftest"}), timeout=20).read())
             return d["result"]
-        except Exception:
+        except Exception as e:
+            print(f"::warning title=rpc::{u}: {type(e).__name__} {str(e)[:120]}")
             time.sleep(2)
     raise RuntimeError("rpc")
 
@@ -43,6 +44,33 @@ def create(keyfile, out):
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text(a.address + "\n")
     print("::notice title=selftest::wallet created; address saved to the private archive")
+
+
+async def run_all(out_addr, report):
+    """24/10 fix: the address is published only after everything needed to spend it has been checked."""
+    import subprocess
+    from eth_account import Account
+    from x402 import x402Client
+    from x402.http.clients import x402_httpx_transport  # noqa: F401  (import check)
+    from x402.mechanisms.evm.exact.register import register_exact_evm_client
+    acct = Account.create()
+    usdc_balance(acct.address)                       # the RPC answers
+    register_exact_evm_client(x402Client(), acct)    # the client builds
+    urllib.request.urlopen(urllib.request.Request(BASE + "/x402", headers={"User-Agent": "neo-x402-selftest"}), timeout=60).read()
+    keyfile = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "k")
+    Path(keyfile).write_text(acct.key.hex())
+    os.chmod(keyfile, 0o600)
+    Path(out_addr).parent.mkdir(parents=True, exist_ok=True)
+    Path(out_addr).write_text(acct.address + "\n")
+    repo = str(Path(out_addr).parents[2])
+    for cmd in (["git", "-C", repo, "add", "common/x402/selftest-address.txt"], ["git", "-C", repo, "commit", "-qm", "ops: x402 self-test address (private)"]):
+        subprocess.run(cmd, check=True)
+    for _ in range(3):
+        if subprocess.run(["git", "-C", repo, "pull", "-q", "--rebase"]).returncode == 0 and subprocess.run(["git", "-C", repo, "push", "-q"]).returncode == 0:
+            break
+        time.sleep(5)
+    print("::notice title=selftest::checks passed; address published to the private archive; waiting for funds")
+    return await pay(keyfile, report)
 
 
 async def pay(keyfile, report):
@@ -89,7 +117,4 @@ async def pay(keyfile, report):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "create":
-        create(sys.argv[2], sys.argv[3])
-    else:
-        sys.exit(asyncio.run(pay(sys.argv[2], sys.argv[3])))
+    sys.exit(asyncio.run(run_all(sys.argv[1], sys.argv[2])))

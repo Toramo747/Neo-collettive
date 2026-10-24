@@ -18,14 +18,12 @@ jobs:
           repository: ${{ vars.MODEL_LABEL_REPO }}
           token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
           path: private-labels
-      - name: Create the throwaway wallet (key stays in the runner temp dir)
+      - name: Self-test (address published only after checks; then wait for 0.05 USDC and pay five calls)
         run: |
-          python tools/x402_selftest.py create "$RUNNER_TEMP/k" private-labels/common/x402/selftest-address.txt
           git -C private-labels config user.name "NEO Ops Bot"; git -C private-labels config user.email "actions@users.noreply.github.com"
-          git -C private-labels add common/x402/selftest-address.txt && git -C private-labels commit -qm "ops: x402 self-test address (private)"
-          for i in 1 2 3; do git -C private-labels pull -q --rebase && git -C private-labels push -q && break; sleep 5; done
-      - name: Wait for 0.05 USDC, then five paid calls
-        run: python tools/x402_selftest.py pay "$RUNNER_TEMP/k" private-labels/common/x402/selftest-report.json
+          git -C private-labels rm -q --cached common/x402/selftest-address.txt 2>/dev/null || true
+          rm -f private-labels/common/x402/selftest-address.txt
+          python tools/x402_selftest.py private-labels/common/x402/selftest-address.txt private-labels/common/x402/selftest-report.json
       - if: always()
         run: |
           rm -f "$RUNNER_TEMP/k"
