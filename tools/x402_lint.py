@@ -123,6 +123,8 @@ def declared_methods(doc: dict) -> set[str]:
 def lint(status: int, body_text: str, headers: dict, url: str, method: str = "GET") -> list[dict]:
     out = []
     h = {k.lower(): v for k, v in headers.items()}
+    if status in (400, 405, 415, 422):
+        return [{"level": "info", "code": "needs_valid_request", "detail": f"HTTP {status} before any payment requirements: the route checks the request first; probe again with a valid method/body"}]
     if status != 402:
         return [{"level": "error", "code": "not_402", "detail": f"unpaid request returned HTTP {status}, not 402"}]
     try:

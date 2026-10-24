@@ -46,6 +46,7 @@ class X402LintTest(unittest.TestCase):
 
     def test_not_402_and_empty(self):
         self.assertEqual(self.codes(200, "{}", {}, "https://s.example/a"), {"not_402"})
+        self.assertEqual(self.codes(400, "{}", {}, "https://s.example/a"), {"needs_valid_request"})
         self.assertIn("no_requirements", self.codes(402, "", {}, "https://s.example/a"))
 
 
