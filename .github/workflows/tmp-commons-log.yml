@@ -1,4 +1,4 @@
-name: tmp gondola detail (unpaid reads, posts nothing)
+name: tmp mcp audit calibration (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,28 +7,21 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock
       - run: |
           python - <<'PY'
-          import sys,json,re,urllib.request
-          sys.path.insert(0,"tools"); import x402_lint as x
-          url="https://api.gondola-ai.com/v1/chat/completions"
-          for m in ("GET","POST"):
-              st,body,hd=x.fetch(url,m)
-              h={k.lower():v for k,v in hd.items()}
-              head=x.parse_header(h.get("payment-required"))
-              print(f"::notice title={m} status::{st} lint="+json.dumps([f['code'] for f in x.lint(st,body,hd,url,m)]))
-              print(f"::notice title={m} body::"+body[:900].replace("\n"," "))
-              print(f"::notice title={m} header::"+json.dumps(head)[:900])
-          for page in ("https://gondola-ai.com","https://www.gondola-ai.com","https://api.gondola-ai.com"):
+          import asyncio, json
+          import mcp_endpoint_verifier as ev, mcp_audit
+          for u in ["https://neo-collettive.onrender.com/mcp","https://mcp.deepwiki.com/mcp","https://docs.mcp.cloudflare.com/mcp","https://gitmcp.io/docs","https://mcp.semgrep.ai/mcp"]:
               try:
-                  t=urllib.request.urlopen(urllib.request.Request(page,headers={"User-Agent":"Mozilla/5.0"}),timeout=20).read(300000).decode("utf-8","replace")
-                  links=sorted(set(re.findall(r'(mailto:[^"\'\s<>]+|https?://(?:x\.com|twitter\.com|github\.com|discord\.gg|t\.me)/[^"\'\s<>]+)',t)))
-                  print(f"::notice title=links {page}::"+json.dumps(links)[:900])
+                  v=asyncio.run(ev.verify_endpoint(url=u,caller="calib",client_version="calib",full_tools=True,enforce_rate_limit=False))
+                  r=mcp_audit.audit(v)
+                  print(f"::notice title={u}::grade={r['grade']} score={r['risk_score']} tools={r['tool_count']} caps={r['capabilities']} top="+json.dumps([(f['type'],f.get('tool'),f.get('evidence','')[:80]) for f in r['findings'] if f['severity']!='info'][:4])[:700])
               except Exception as e:
-                  print(f"::notice title=links {page}::{type(e).__name__}")
+                  print(f"::notice title={u}::{type(e).__name__} {e}"[:300])
           PY
