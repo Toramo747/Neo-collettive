@@ -317,7 +317,9 @@ SEARCH_MAX_CALLS_PER_CYCLE = max(0,min(100,int(os.getenv("NEO_SEARCH_MAX_CALLS_P
 SEARCH_MAX_CALLS_PER_DAY = max(0,min(5000,int(os.getenv("NEO_SEARCH_MAX_CALLS_PER_DAY","150"))))
 SEARCH_MIN_INTERVAL_MS = max(0,min(5000,int(os.getenv("NEO_SEARCH_MIN_INTERVAL_MS","1100"))))
 PRICE_VALIDATION_ENABLED = os.getenv("NEO_PRICE_VALIDATION_ENABLED","0")=="1"
-HN_RETRIEVAL_MODE = (os.getenv("NEO_HN_RETRIEVAL_MODE","comment10") or "comment10").strip().lower()
+# 2026-10-16 trial verdict: comment10 added 3 gate-eligible HN rows in 3 days, all noise
+# (a job ad, a builder showcase, an opinion) plus hiring-thread self-promotion; back to stories.
+HN_RETRIEVAL_MODE = (os.getenv("NEO_HN_RETRIEVAL_MODE","story") or "story").strip().lower()
 AGENT_PROBE_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_AGENT_PROBE_TIMEOUT_SECONDS","75"))))
 WEB_RESEARCH_TIMEOUT_SECONDS = max(20.0,min(180.0,float(os.getenv("NEO_WEB_RESEARCH_TIMEOUT_SECONDS","75"))))
 EVIDENCE_SCOUT_TIMEOUT_SECONDS = max(20.0,min(120.0,float(os.getenv("NEO_EVIDENCE_SCOUT_TIMEOUT_SECONDS","45"))))
