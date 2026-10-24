@@ -296,3 +296,48 @@ def catalog(base_url: str) -> dict:
     return {"payment": "x402 (USDC on Base), pay per call", "services": [
         {"name": k, "url": f"{base_url}/x402/{k}", "method": "POST", "price_usd": s["price_usd"], "description": s["description"]}
         for k, s in SERVICES.items()]}
+
+
+def openapi(base_url: str) -> dict:
+    """24/10: OpenAPI 3.1 discovery document for the paid routes (x402scan spec: x-payment-info + a 402 response
+    on each paid operation; Circle's Agent Marketplace asks for an OpenAPI spec). Built from SERVICES and the
+    Bazaar blocks, so prices and schemas cannot drift from what the routes enforce."""
+    paths = {}
+    for k, s in SERVICES.items():
+        info = (s.get("bazaar") or {}).get("info") or {}
+        body_schema = ((((s.get("bazaar") or {}).get("schema") or {}).get("properties") or {}).get("input") or {}) \
+            .get("properties", {}).get("body") or {"type": "object"}
+        body_schema = {"type": "object", **body_schema}
+        example_in = (info.get("input") or {}).get("body")
+        example_out = (info.get("output") or {}).get("example")
+        price = f"{s['price_usd']:.2f}"
+        paths[f"/x402/{k}"] = {"post": {
+            "operationId": k.replace("-", "_"),
+            "summary": s["description"].split(":")[0].split(".")[0][:120],
+            "description": s["description"],
+            "tags": s.get("tags", [])[:5],
+            "x-payment-info": {"protocols": ["x402"], "price": {"mode": "fixed", "currency": "USD", "amount": price}},
+            "requestBody": {"required": True, "content": {"application/json": {
+                "schema": body_schema, **({"example": example_in} if example_in is not None else {})}}},
+            "responses": {
+                "200": {"description": "Result, signed by neo (Ed25519) and appended to neo's public receipt log. "
+                                       "PAYMENT-RESPONSE header carries the settlement.",
+                        "content": {"application/json": {"schema": {"type": "object"},
+                                                         **({"example": example_out} if example_out is not None else {})}}},
+                "400": {"description": "Invalid input with a payment attached: refused before the payment is verified, nothing is charged."},
+                "402": {"description": f"Payment required: {price} USDC on Base (x402 v2, exact scheme). "
+                                       "Requirements in the PAYMENT-REQUIRED header (v2) and in the body (v1)."},
+                "503": {"description": "Our side failed after verification: not settled, nothing is charged."}}}}
+    return {"openapi": "3.1.0",
+            "info": {"title": "neo verification microservices (x402)", "version": "2026-10-24",
+                     "description": "Pay-per-call verification tools for agents: MCP server audits, prompt-injection scans, "
+                                    "citation and quote checks, timestamps and proofs of publication, log witnessing, "
+                                    "x402 delivery receipts. Every result is signed and logged; receipts verify offline. "
+                                    "No account, no API key: pay per call with x402 (USDC on Base)."},
+            "servers": [{"url": base_url}],
+            "paths": paths}
+
+
+def well_known(base_url: str) -> dict:
+    """/.well-known/x402 fan-out (x402scan compatibility)."""
+    return {"version": 1, "resources": [f"{base_url}/x402/{k}" for k in SERVICES]}

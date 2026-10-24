@@ -67,8 +67,32 @@ class PaywallTest(unittest.TestCase):
 
     def test_bad_input_never_touches_payment(self):
         fac = Fac()
-        st, h, b = self.handle({}, body={"sha256": "nope"}, fac=fac)
-        self.assertEqual((st, b["charged"], fac.calls), (400, False, []))
+        req = xp.requirements(SVC["price_usd"], PAY_TO)
+        for body in ({"sha256": "nope"}, None):  # bad fields, invalid JSON: refused before verify, nothing moves
+            st, h, b = self.handle(pay_header(req), body=body, fac=fac)
+            self.assertEqual((st, b["charged"]), (400, False))
+        self.assertEqual(fac.calls, [])
+
+    def test_unpaid_probe_gets_402_even_with_bad_or_empty_body(self):
+        # x402scan spec: probes must reach the 402 before request validation
+        for body in ({}, {"sha256": "nope"}, None):
+            self.assertEqual(self.handle({}, body=body)[0], 402)
+
+    def test_counters_by_service(self):
+        xp.BY_SERVICE.clear()
+        self.handle({})
+        self.assertEqual(xp.BY_SERVICE[SVC["service_name"]]["asked_to_pay"], 1)
+
+    def test_openapi_matches_routes_and_prices(self):
+        d = xs.openapi("https://example.org")
+        self.assertEqual(set(d["paths"]), {f"/x402/{k}" for k in xs.SERVICES})
+        for k, s in xs.SERVICES.items():
+            op = d["paths"][f"/x402/{k}"]["post"]
+            self.assertEqual(op["x-payment-info"]["price"]["amount"], f"{s['price_usd']:.2f}")
+            self.assertIn("402", op["responses"])
+            self.assertNotIn("security", op)  # security: [] would list a paid route as free on x402scan
+            self.assertEqual(op["requestBody"]["content"]["application/json"]["schema"]["type"], "object")
+        self.assertEqual(xs.well_known("https://example.org")["resources"][0], "https://example.org/x402/" + next(iter(xs.SERVICES)))
 
     def test_payment_for_other_terms_is_refused_without_facilitator(self):
         fac = Fac()
