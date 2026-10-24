@@ -42,6 +42,14 @@ ROUTE_POLICY = {
     "/collective": PUBLIC,
     "/api/checkpoint-status": PUBLIC,
     "/receipts/log": PUBLIC,
+    # 24/10: paid microservices over x402 (payment is the access control; off until the env is set)
+    "/x402": PUBLIC,
+    "/x402/verify-quote": PUBLIC,
+    "/x402/mcp-check": PUBLIC,
+    "/x402/x402-lint": PUBLIC,
+    "/x402/timestamp": PUBLIC,
+    "/x402/log-witness": PUBLIC,
+    "/x402/delivery-receipt-verify": PUBLIC,
 
     "/inbox": PUBLIC_PROJECTION,
     "/agent-chats": PUBLIC_PROJECTION,

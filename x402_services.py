@@ -1,0 +1,172 @@
+# SPDX-License-Identifier: BUSL-1.1
+"""The paid microservice catalog (draft, 24/10). One entry per service: price, description, input check, runner.
+
+Every result is signed with neo's receipt key and its fingerprint appended to the public receipt log, like the free
+verify_quote. Runners never call another paid service and never spend: the only money is what buyers pay us.
+Add a service = add one entry here + its Bazaar discovery block in x402_bazaar.json.
+"""
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import json
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import mcp_endpoint_verifier as ev
+import quote_verifier
+import receipt_log
+
+ROOT = Path(__file__).resolve().parent
+BAZAAR = json.loads((ROOT / "x402_bazaar.json").read_text())
+DEADLINE = 45.0
+NO_CHARGE = ("verification_deadline_exceeded", "rate_limited", "internal_")
+
+
+def _tool(name: str):
+    spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _https(v) -> bool:
+    return isinstance(v, str) and v.startswith("https://") and len(v) <= 2048
+
+
+# --- validators (bad input is refused before any payment is looked at) ----------------------------------------
+def v_quote(b):
+    if not _https(b.get("url")):
+        return "url must be https"
+    q = str(b.get("quote") or "").strip()
+    return None if 3 <= len(q.split()) and len(q) <= quote_verifier.MAX_QUOTE_CHARS else "quote must be 3+ words, at most 600 chars"
+
+
+def v_mcp(b):
+    return None if _https(b.get("url")) or str(b.get("registry_name") or "").strip() else "url (https) or registry_name required"
+
+
+def v_lint(b):
+    if not _https(b.get("url")):
+        return "url must be https"
+    return None if str(b.get("method") or "GET").upper() in ("GET", "POST") else "method must be GET or POST"
+
+
+def v_stamp(b):
+    if not re.fullmatch(r"[0-9a-f]{64}", str(b.get("sha256") or "")):
+        return "sha256 must be 64 lowercase hex"
+    return None if len(str(b.get("note") or "")) <= 200 else "note at most 200 chars"
+
+
+def v_witness(b):
+    e = b.get("entries")
+    if not isinstance(e, list) or not e or len(e) > 5000:
+        return "entries must be a list of 1..5000 rows"
+    sh = b.get("start_head")
+    return None if sh is None or re.fullmatch(r"[0-9a-f]{64}", str(sh)) else "start_head must be 64 lowercase hex"
+
+
+def v_delivery(b):
+    if not isinstance(b.get("receipt"), dict):
+        return "receipt must be an object"
+    return None if isinstance(b.get("seller_public_key_b64"), str) else "seller_public_key_b64 required"
+
+
+# --- runners --------------------------------------------------------------------------------------------------
+async def r_quote(b, caller):
+    try:
+        return await asyncio.wait_for(quote_verifier.verify_quote(b["url"], b["quote"], caller), timeout=DEADLINE)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "verification_deadline_exceeded"}
+
+
+async def r_mcp(b, caller, version="x402"):
+    try:
+        return await asyncio.wait_for(ev.verify_endpoint(url=b.get("url") or None, registry_name=b.get("registry_name") or None,
+                                                         caller=caller, client_version=version), timeout=DEADLINE)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "verification_deadline_exceeded"}
+
+
+async def _fetch_402(url: str, method: str) -> tuple[int, str, dict]:
+    """One unpaid request, same SSRF checks and IP pinning as verify_quote; redirects are not followed."""
+    import httpx
+    target = await ev.validate_public_https(url)
+    headers = {"User-Agent": "neo-x402-lint/0.1 (unpaid read)", "Accept": "application/json", "Content-Type": "application/json"}
+    pinned, pinned_headers, ext = ev.pin_to_resolved_ip(url, target, headers)
+    async with httpx.AsyncClient(timeout=20, follow_redirects=False, trust_env=False) as c:
+        async with c.stream(method, pinned, headers=pinned_headers, extensions=ext, content=b"{}" if method == "POST" else None) as r:
+            total, chunks = 0, []
+            async for ch in r.aiter_bytes():
+                total += len(ch)
+                if total > 200_000:
+                    break
+                chunks.append(ch)
+            return r.status_code, b"".join(chunks).decode("utf-8", "replace"), dict(r.headers)
+
+
+async def r_lint(b, caller):
+    lint = _tool("x402_lint")
+    method = str(b.get("method") or "GET").upper()
+    try:
+        st, body, hd = await asyncio.wait_for(_fetch_402(b["url"], method), timeout=DEADLINE)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "verification_deadline_exceeded"}
+    except ev.VerificationError as e:
+        return {"ok": True, "url": b["url"], "method": method, "findings": [{"level": "error", "code": "unreachable", "detail": str(e.args[0] if e.args else e)}], "errors": 1}
+    f = lint.lint(st, body, hd, b["url"], method)
+    return {"ok": True, "url": b["url"], "method": method, "http_status": st, "findings": f,
+            "errors": sum(x["level"] == "error" for x in f)}
+
+
+async def r_stamp(b, caller):
+    return {"ok": True, "sha256": b["sha256"], "note": str(b.get("note") or "")[:200],
+            "received_at_utc": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            "anchoring": "the receipt's log entry is anchored daily (OpenTimestamps on Bitcoin, Software Heritage)"}
+
+
+async def r_witness(b, caller):
+    chk = receipt_log.verify_chain(b["entries"], start_head=b.get("start_head") or receipt_log.GENESIS,
+                                   start_seq=int(b["entries"][0][0]) - 1 if isinstance(b["entries"][0], list) and isinstance(b["entries"][0][0], int) else 0)
+    return {"ok": bool(chk["ok"]), "log": str(b.get("log") or "")[:80], "size": chk["count"], "head": chk["head"],
+            "error": chk["error"], "rule": "h_n = sha256(bytes.fromhex(h_{n-1}) + canonical_json(entry)), h_0 = 64 zeros"}
+
+
+async def r_delivery(b, caller):
+    dr = _tool("delivery_receipt")
+    res = dr.verify(b["receipt"], b["seller_public_key_b64"], b.get("buyer_body_sha256"), b.get("hop_public_keys") or {})
+    return {"ok": True, "verdict": res}
+
+
+SERVICES: dict[str, dict[str, Any]] = {
+    "verify-quote": {"price_usd": 0.01, "tool": "verify_quote", "validate": v_quote, "run": r_quote,
+                     "tags": ["verification", "quotes", "citations", "fact-check"],
+                     "description": "Is this exact sentence on this public page? verbatim / paraphrase / stitched / not_found / unreachable, with an Ed25519-signed receipt logged in a public, witnessed, append-only log."},
+    "mcp-check": {"price_usd": 0.01, "tool": "verify_mcp_endpoint", "validate": v_mcp, "run": r_mcp,
+                  "tags": ["mcp", "monitoring", "verification"],
+                  "description": "Read-only check of a public MCP endpoint: DNS/SSRF safety, TLS, initialize, tools/list sanity, latency. Never calls remote tools. Signed, logged result."},
+    "x402-lint": {"price_usd": 0.01, "tool": "x402_lint", "validate": v_lint, "run": r_lint,
+                  "tags": ["x402", "payments", "lint", "sellers"],
+                  "description": "Lint a seller's unpaid 402: body vs PAYMENT-REQUIRED header fields, EIP-55 checksums, method conflicts. One unpaid read, never pays. Signed, logged result."},
+    "timestamp": {"price_usd": 0.01, "tool": "timestamp", "validate": v_stamp, "run": r_stamp,
+                  "tags": ["timestamp", "proof", "notary", "hash"],
+                  "description": "Prove you had this sha256 at this time: signed receipt with its position in neo's public log, anchored daily on Bitcoin (OpenTimestamps) and Software Heritage."},
+    "log-witness": {"price_usd": 0.01, "tool": "log_witness", "validate": v_witness, "run": r_witness,
+                    "tags": ["transparency-log", "witness", "hash-chain"],
+                    "description": "Recompute a hash-chained log ([seq, ts, kind, item, extra] rows, up to 5000) and get its size and head, signed and logged: a third-party witness line."},
+    "delivery-receipt-verify": {"price_usd": 0.01, "tool": "delivery_receipt_verify", "validate": v_delivery, "run": r_delivery,
+                                "tags": ["x402", "receipts", "disputes", "verification"],
+                                "description": "Verify an x402 delivery receipt (v0.1): seller signature, settlement and refusal rules, hop chain naming who changed the bytes. Signed, logged verdict."},
+}
+for _k, _s in SERVICES.items():
+    _s["bazaar"] = BAZAAR.get(_k)
+    _s["service_name"] = "neo " + _k
+    _s["no_charge_errors"] = NO_CHARGE
+
+
+def catalog(base_url: str) -> dict:
+    return {"payment": "x402 (USDC on Base), pay per call", "services": [
+        {"name": k, "url": f"{base_url}/x402/{k}", "method": "POST", "price_usd": s["price_usd"], "description": s["description"]}
+        for k, s in SERVICES.items()]}

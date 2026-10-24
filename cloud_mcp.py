@@ -12,6 +12,8 @@ import mcp_endpoint_verifier as endpoint_verifier
 import quote_verifier
 import receipt_signing
 import receipt_log
+import x402_paywall
+import x402_services
 import github_chunk_store
 import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
@@ -2793,6 +2795,39 @@ async def receipts_log_view(request: Request):
     except ValueError:
         after=0
     return JSONResponse(receipt_log.public_view(AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty(), after=after))
+
+
+def _x402_route(name: str):
+    """24/10: one paid microservice over x402 (see x402_paywall.py / x402_services.py). Off until Andrea sets the env."""
+    async def view(request: Request):
+        _record_inbound_traffic(request)
+        svc=x402_services.SERVICES[name]
+        try:
+            body=await request.json() if request.method=="POST" else {}
+        except Exception:
+            body=None
+        if not isinstance(body,dict):
+            return JSONResponse({"ok":False,"error":"invalid_json","charged":False},status_code=400)
+        url=str(request.url).split("?")[0]
+        if url.startswith("http://") and request.url.hostname not in ("testserver","localhost","127.0.0.1"):
+            url="https://"+url[len("http://"):]  # Render terminates TLS: the public resource is https
+        async def run(b, payer):
+            return await svc["run"](b, "x402:"+payer)  # per-payer rate limits, same buckets as the free tools
+        status,headers,payload=await x402_paywall.handle(svc,url,dict(request.headers),body,run,x402_paywall.config())
+        if status==200 and RECEIPT_SIGNING_KEY is not None:
+            log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
+            payload=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])
+            # no await between position and append: the entry lands exactly where the receipt says
+            AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"receipt",receipt_log.item_hash(payload))
+        return JSONResponse(payload,status_code=status,headers=headers)
+    return view
+
+
+async def x402_catalog(request: Request):
+    """Public list of the paid microservices (prices, routes). Payment itself happens on each route."""
+    _record_inbound_traffic(request)
+    base=str(request.base_url).rstrip("/")
+    return JSONResponse({**x402_services.catalog(base),"enabled":x402_paywall.config() is not None})
 
 
 async def api_receipts_log_correction(request: Request):
@@ -14726,6 +14761,8 @@ app = Starlette(
         Route("/", home, methods=["GET"]),
         Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
         Route("/receipts/log", receipts_log_view, methods=["GET"]),
+        Route("/x402", x402_catalog, methods=["GET"]),
+        *[Route(f"/x402/{_name}", _x402_route(_name), methods=["GET","POST"]) for _name in x402_services.SERVICES],
         Route("/api/receipts/log/correction", api_receipts_log_correction, methods=["POST"]),
         Route("/.well-known/agent.json", a2a_agent_json, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),

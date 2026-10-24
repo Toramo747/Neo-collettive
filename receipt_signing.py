@@ -46,12 +46,12 @@ def public_key_info(key):
     }
 
 
-def sign_receipt(result: dict, key, log: dict | None = None) -> dict:
+def sign_receipt(result: dict, key, log: dict | None = None, tool: str = "verify_quote") -> dict:
     obj = dict(result)
     obj.pop("signature", None)
     obj["receipt"] = {
         "v": 1,
-        "tool": "verify_quote",
+        "tool": tool,
         "issuer": "neo (OSIXBAY)",
         "key_id": key_id(key.public_key()),
         "issued_at_utc": datetime.now(timezone.utc).isoformat(),
