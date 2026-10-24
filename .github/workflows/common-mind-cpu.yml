@@ -6,6 +6,10 @@ on:
         description: "re-draft the latest messages for evaluation (does not mark them handled)"
         required: false
         default: ""
+      keyed:
+        description: "keyed memory trial: draft from the matching memories only (1 = on; checkers still use the whole sheet)"
+        required: false
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -27,6 +31,7 @@ jobs:
       - name: Draft on CPU (same kernel script, same models, same guard)
         env:
           REPLAY: ${{ inputs.replay || '' }}
+          KEYED_MEMORY: ${{ inputs.keyed || '' }}
         run: |
           set +e -uo pipefail
           python tools/common_deep.py build private-labels kernel cpu "$REPLAY"; rc=$?
