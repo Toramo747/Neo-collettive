@@ -1,4 +1,4 @@
-name: tmp swh check (read only, posts nothing)
+name: tmp x402 lint over discovery (unpaid reads, posts nothing)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,11 +7,17 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
       - run: |
-          for pair in receipt_cite:41c5ad57f3c6314c72a5451add10df11b01eda83 witness:dd85844b1c9ecd55e20ab8aad7bd424cbbd9ad83 delivery_receipt:fe460d2a2b6efe62b5d5fab691defc878603c997 spec:e522b830b1231fdb9003e15b23c1c2be0cc41570 vectors:2185d505622f3d1e4c0effbbbde43f66b1ababd3 commons_log_witness:624f827193dcbcaac597a4ac0ca0b0b117144e7c break:fdcb1f686019d7ea7d5cb15371f83ebde0bbc32a quote_verifier:96d6e619f3cca94af61e856614101808260384ce; do
-            n=${pair%%:*}; id=${pair#*:}
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://archive.softwareheritage.org/api/1/content/sha1_git:$id/")
-            echo "::notice title=swh $n::$code $id"
-          done
+          python tools/x402_lint.py --discovery out.json 40 || echo "::error title=lint::failed"
+          python - <<'PY'
+          import json
+          d=json.load(open("out.json"))
+          bad=[r for r in d["rows"] if r["errors"]]
+          for r in bad[:8]:
+              print("::notice title=bad "+r["url"][:90]+"::"+json.dumps([f["code"] for f in r["findings"]]))
+          PY
