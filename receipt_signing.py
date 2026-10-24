@@ -72,6 +72,9 @@ def verify_receipt(obj: dict, public_key_b64: str) -> bool:
         if not isinstance(encoded, str) or re.fullmatch(r"[A-Za-z0-9_-]{86}", encoded) is None:
             return False
         signature = base64.b64decode(encoded + "==", altchars=b"-_", validate=True)
+        # 24/10 (skitter): one accepted encoding per signature, no spare-bit variants of the last character
+        if base64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii") != encoded:
+            return False
         public_key = Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key_b64, validate=True))
         public_key.verify(signature, canonical_json(payload))
         return True
