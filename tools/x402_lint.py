@@ -106,12 +106,16 @@ def norm_accept(acc: dict) -> dict:
 
 
 def declared_methods(doc: dict) -> set[str]:
+    """HTTP methods the seller declares for the route. Skips JSON-schema "properties" (24/10: our own x402-lint
+    service has a body parameter named "method", which is input data, not the route's method)."""
     found = set()
     def walk(o, path=""):
         if isinstance(o, dict):
             for k, v in o.items():
-                if k.lower() == "method" and isinstance(v, str):
+                if k.lower() == "method" and isinstance(v, str) and v.upper() in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"):
                     found.add(v.upper())
+                if k in ("properties", "body", "queryParams", "input_schema", "inputSchema", "example"):
+                    continue  # input data and schemas, not the route's own method
                 walk(v, path + "/" + k)
         elif isinstance(o, list):
             for v in o:
