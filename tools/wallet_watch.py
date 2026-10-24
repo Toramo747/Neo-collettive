@@ -17,7 +17,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-RPC = "https://mainnet.base.org"
+RPCS = ("https://base-rpc.publicnode.com", "https://mainnet.base.org", "https://base.drpc.org")  # public, keyless
 USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"  # USDC on Base (6 decimals)
 TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 CHUNK = 2000            # blocks per eth_getLogs call (public RPC limits the range)
@@ -27,13 +27,23 @@ FIRST_LOOKBACK = 2000   # about an hour of Base blocks on the very first run
 def rpc(method: str, params: list, call=None):
     if call:
         return call(method, params)
+    import time
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    req = urllib.request.Request(RPC, data=body, headers={"Content-Type": "application/json", "User-Agent": "neo-wallet-watch"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        d = json.loads(r.read().decode())
-    if "error" in d:
-        raise RuntimeError(str(d["error"])[:200])
-    return d["result"]
+    last = None
+    for attempt in range(6):  # rotate public endpoints, back off on 429 and errors
+        url = RPCS[attempt % len(RPCS)]
+        try:
+            req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "User-Agent": "neo-wallet-watch"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                d = json.loads(r.read().decode())
+            if "error" in d:
+                raise RuntimeError(str(d["error"])[:200])
+            time.sleep(0.5)
+            return d["result"]
+        except Exception as e:
+            last = e
+            time.sleep(2 * (attempt + 1))
+    raise last
 
 
 def watch(private_dir: str, call=None, max_chunks: int = 60) -> int:
