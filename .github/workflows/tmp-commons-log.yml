@@ -1,4 +1,4 @@
-name: tmp x402 lint over discovery (unpaid reads, posts nothing)
+name: tmp gondola detail (unpaid reads, posts nothing)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,17 +7,28 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - run: |
-          python tools/x402_lint.py --discovery out.json 40 || echo "::error title=lint::failed"
           python - <<'PY'
-          import json
-          d=json.load(open("out.json"))
-          bad=[r for r in d["rows"] if r["errors"]]
-          for r in bad[:12]:
-              print("::notice title=bad "+r["url"][:90]+"::"+json.dumps([f["code"]+": "+f["detail"][:120] for f in r["findings"] if f["level"]!="info"])[:900])
+          import sys,json,re,urllib.request
+          sys.path.insert(0,"tools"); import x402_lint as x
+          url="https://api.gondola-ai.com/v1/chat/completions"
+          for m in ("GET","POST"):
+              st,body,hd=x.fetch(url,m)
+              h={k.lower():v for k,v in hd.items()}
+              head=x.parse_header(h.get("payment-required"))
+              print(f"::notice title={m} status::{st} lint="+json.dumps([f['code'] for f in x.lint(st,body,hd,url,m)]))
+              print(f"::notice title={m} body::"+body[:900].replace("\n"," "))
+              print(f"::notice title={m} header::"+json.dumps(head)[:900])
+          for page in ("https://gondola-ai.com","https://www.gondola-ai.com","https://api.gondola-ai.com"):
+              try:
+                  t=urllib.request.urlopen(urllib.request.Request(page,headers={"User-Agent":"Mozilla/5.0"}),timeout=20).read(300000).decode("utf-8","replace")
+                  links=sorted(set(re.findall(r'(mailto:[^"\'\s<>]+|https?://(?:x\.com|twitter\.com|github\.com|discord\.gg|t\.me)/[^"\'\s<>]+)',t)))
+                  print(f"::notice title=links {page}::"+json.dumps(links)[:900])
+              except Exception as e:
+                  print(f"::notice title=links {page}::{type(e).__name__}")
           PY
