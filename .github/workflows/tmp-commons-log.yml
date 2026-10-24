@@ -18,6 +18,6 @@ jobs:
           import json
           d=json.load(open("out.json"))
           bad=[r for r in d["rows"] if r["errors"]]
-          for r in bad[:8]:
-              print("::notice title=bad "+r["url"][:90]+"::"+json.dumps([f["code"] for f in r["findings"]]))
+          for r in bad[:12]:
+              print("::notice title=bad "+r["url"][:90]+"::"+json.dumps([f["code"]+": "+f["detail"][:120] for f in r["findings"] if f["level"]!="info"])[:900])
           PY

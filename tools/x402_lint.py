@@ -136,7 +136,10 @@ def lint(status: int, body_text: str, headers: dict, url: str, method: str = "GE
         header = None
     if not body and not header:
         return out + [{"level": "error", "code": "no_requirements", "detail": "neither body nor PAYMENT-REQUIRED header carries payment requirements"}]
-    docs = {k: d for k, d in (("body", body), ("header", header)) if isinstance(d, dict)}
+    # a body without x402Version/accepts is a plain error message, not payment requirements
+    docs = {k: d for k, d in (("body", body), ("header", header)) if isinstance(d, dict) and ("accepts" in d or "x402Version" in d)}
+    if not docs:
+        return out + [{"level": "error", "code": "no_requirements", "detail": "neither body nor PAYMENT-REQUIRED header carries payment requirements"}]
     vers = {k: d.get("x402Version") for k, d in docs.items()}
     if len(docs) == 2 and vers["body"] != vers["header"]:
         out.append({"level": "error", "code": "version_mismatch",
@@ -152,6 +155,8 @@ def lint(status: int, body_text: str, headers: dict, url: str, method: str = "GE
                 out.append({"level": "error", "code": f"{f}_mismatch", "detail": f"body and header disagree on {f}"})
     for k, lst in acc.items():
         for i, a in enumerate(lst[:4]):
+            if not a["network"].startswith("eip155:"):
+                continue  # EVM checks only; Solana and other chains use other address formats
             out += [dict(x, detail=f"{k} accepts[{i}]: " + x["detail"]) for x in addr_findings("asset", a["asset"]) + addr_findings("payTo", a["payTo"])]
             usdc = USDC.get(a["network"])
             if usdc and a["asset"] and a["asset"].lower() != usdc.lower():
