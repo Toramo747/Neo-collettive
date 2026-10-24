@@ -2827,7 +2827,9 @@ async def x402_catalog(request: Request):
     """Public list of the paid microservices (prices, routes). Payment itself happens on each route."""
     _record_inbound_traffic(request)
     base=str(request.base_url).rstrip("/")
-    return JSONResponse({**x402_services.catalog(base),"enabled":x402_paywall.config() is not None,
+    cfg=x402_paywall.config()
+    return JSONResponse({**x402_services.catalog(base),"enabled":cfg is not None,
+                         "facilitator":await x402_paywall.facilitator_check(cfg),
                          "counters_since_start":dict(x402_paywall.METRICS)})
 
 

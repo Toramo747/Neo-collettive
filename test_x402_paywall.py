@@ -117,6 +117,19 @@ class PaywallTest(unittest.TestCase):
         st, h, b = self.handle(pay_header(xp.requirements(0.01, PAY_TO)), fac=fac, runner=slow)
         self.assertEqual((st, b["charged"], [c[0] for c in fac.calls]), (503, False, ["verify"]))
 
+    def test_facilitator_check(self):
+        xp._SUPPORTED_CACHE.clear()
+        async def get(url, headers):
+            self.assertTrue(url.endswith("/platform/v2/x402/supported"))
+            self.assertTrue(headers["Authorization"].startswith("Bearer "))
+            return 200, {"kinds": [{"x402Version": 2, "scheme": "exact", "network": "eip155:8453"}]}
+        self.assertEqual(run(xp.facilitator_check(CFG, get))["ok"], True)
+        xp._SUPPORTED_CACHE.clear()
+        self.assertEqual(run(xp.facilitator_check(None))["reason"], "not_configured")
+        xp._SUPPORTED_CACHE.clear()
+        self.assertEqual(run(xp.facilitator_check(dict(CFG, secret="bad")))["reason"], "key_unreadable")
+        xp._SUPPORTED_CACHE.clear()
+
     def test_es256_key(self):
         k = ec.generate_private_key(ec.SECP256R1())
         pem = k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()

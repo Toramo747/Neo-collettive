@@ -160,6 +160,40 @@ async def facilitator(cfg: dict, action: str, version: int, payload: dict, req: 
     return data
 
 
+_SUPPORTED_CACHE: dict = {}
+
+
+async def facilitator_check(cfg: dict | None, get=None) -> dict:
+    """Authenticated GET /supported: proves the key works and Base/exact is offered, without moving money.
+    Cached 10 minutes. Returns only booleans and public network names, never key material."""
+    if cfg is None:
+        return {"ok": False, "reason": "not_configured"}
+    now = time.time()
+    if _SUPPORTED_CACHE.get("at", 0) > now - 600:
+        return _SUPPORTED_CACHE["res"]
+    path = f"{FACILITATOR_ROUTE}/supported"
+    try:
+        headers = {"Authorization": "Bearer " + cdp_jwt(cfg["key_id"], cfg["secret"], "GET", path)}
+    except Exception:
+        res = {"ok": False, "reason": "key_unreadable"}
+    else:
+        try:
+            if get is None:
+                import httpx
+                async with httpx.AsyncClient(timeout=20, trust_env=False) as c:
+                    r = await c.get(f"https://{FACILITATOR_HOST}{path}", headers=headers)
+                    status, data = r.status_code, (r.json() if r.content else {})
+            else:
+                status, data = await get(f"https://{FACILITATOR_HOST}{path}", headers)
+            kinds = data.get("kinds") or []
+            base_exact = any(k.get("network") == NETWORK and k.get("scheme") == "exact" for k in kinds if isinstance(k, dict))
+            res = {"ok": status == 200 and base_exact, "http_status": status, "base_exact_supported": base_exact}
+        except Exception as e:
+            res = {"ok": False, "reason": type(e).__name__}
+    _SUPPORTED_CACHE.update(at=now, res=res)
+    return res
+
+
 # --- the whole flow, framework-free (the Starlette route only adapts request/response) -----------------------
 async def handle(service: dict, url: str, headers: dict, body: dict, run: Callable[[dict, str], Awaitable[dict]],
                  cfg: dict | None, post=None) -> tuple[int, dict, dict]:
