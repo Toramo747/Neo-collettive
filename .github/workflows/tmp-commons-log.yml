@@ -1,4 +1,4 @@
-name: tmp x402 live check (unpaid, posts nothing)
+name: tmp x402 self-test (first paid calls, Andrea's OK)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,30 +7,27 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: |
-          python - <<'PY'
-          import json, sys, urllib.request
-          sys.path.insert(0,"tools"); import x402_lint as x
-          B="https://neo-collettive.onrender.com"
-          d=json.loads(urllib.request.urlopen(urllib.request.Request(B+"/x402",headers={"User-Agent":"neo-check"}),timeout=60).read())
-          print("::notice title=catalog::enabled="+str(d.get("enabled"))+" facilitator="+json.dumps(d.get("facilitator"))+" services="+str(len(d.get("services") or []))+" counters="+json.dumps(d.get("counters_since_start")))
-          bodies={"verify-quote":{"url":"https://en.wikipedia.org/wiki/Hash_chain","quote":"A hash chain is the successive application of a cryptographic hash function to a piece of data."},
-                  "timestamp":{"sha256":"a"*64},"injection-scan":{"text":"hello"},"mcp-audit":{"url":"https://mcp.deepwiki.com/mcp"}}
-          for s in d["services"]:
-              body=json.dumps(bodies.get(s["name"],{"url":"https://example.org"})).encode()
-              req=urllib.request.Request(s["url"].replace("http://","https://"),data=body,method="POST",headers={"Content-Type":"application/json","User-Agent":"neo-check"})
-              try:
-                  r=urllib.request.urlopen(req,timeout=60); st,txt,hd=r.status,r.read().decode(),dict(r.headers)
-              except urllib.error.HTTPError as e:
-                  st,txt,hd=e.code,e.read().decode(),dict(e.headers)
-              f=[i for i in x.lint(st,txt,hd,s["url"],"POST") if i["level"]!="info"]
-              h={k.lower():v for k,v in hd.items()}
-              res=x.parse_header(h.get("payment-required")) or {}
-              acc=(res.get("accepts") or [{}])[0] if isinstance(res,dict) else {}
-              print(f"::notice title={s['name']}::status={st} amount={acc.get('amount')} payTo_ok={acc.get('payTo','').lower()=='0x77346045c9c30ca2516359812221ed6afcfc55a7'} resource={((res.get('resource') or {}).get('url') if isinstance(res,dict) else None)} bazaar={'bazaar' in (res.get('extensions') or {}) if isinstance(res,dict) else None} lint={json.dumps(f)[:200]} body={txt[:120]}")
-          PY
+      - run: python -m pip install --quiet "x402[httpx,evm]" eth-account cryptography
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Create the throwaway wallet (key stays in the runner temp dir)
+        run: |
+          python tools/x402_selftest.py create "$RUNNER_TEMP/k" private-labels/common/x402/selftest-address.txt
+          git -C private-labels config user.name "NEO Ops Bot"; git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/x402/selftest-address.txt && git -C private-labels commit -qm "ops: x402 self-test address (private)"
+          for i in 1 2 3; do git -C private-labels pull -q --rebase && git -C private-labels push -q && break; sleep 5; done
+      - name: Wait for 0.05 USDC, then five paid calls
+        run: python tools/x402_selftest.py pay "$RUNNER_TEMP/k" private-labels/common/x402/selftest-report.json
+      - if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/k"
+          git -C private-labels add common/x402 2>/dev/null; git -C private-labels commit -qm "ops: x402 self-test report (private)" || true
+          for i in 1 2 3; do git -C private-labels pull -q --rebase && git -C private-labels push -q && break; sleep 5; done
