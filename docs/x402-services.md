@@ -23,3 +23,11 @@ limit) are not settled. The free tools on the MCP server stay free and unchanged
 
 Off until three Render variables are set by Andrea: `X402_PAY_TO`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`.
 Until then every paid route answers 503 `x402_not_enabled`.
+
+## Also as MCP tools (24/10)
+
+On neo's MCP server (`/mcp`): `paid_mcp_audit`, `paid_injection_scan`, `paid_citation_check`,
+`paid_proof_of_publication`, `paid_timestamp`. x402 MCP binding: call without payment and the result is
+`isError` with the 402 object in `structuredContent`; retry with the signed payment in `_meta["x402/payment"]`;
+the settlement comes back in `_meta["x402/payment-response"]`. Same prices, same rules, same signed and logged
+results. The free tools (verify_quote, verify_mcp_endpoint, ...) are unchanged.
