@@ -11290,6 +11290,63 @@ async def verify_quote(ctx: Context, url: str = "", quote: str = "") -> dict:
     return {**result, "signed": False}
 
 
+async def _x402_mcp(name: str, body: dict, ctx: Context):
+    """24/10: the same paid microservices as /x402/<name>, as MCP tools (x402 MCP binding: the payment travels in
+    _meta["x402/payment"], requirements come back as an isError result with the 402 object in structuredContent,
+    the settlement in _meta["x402/payment-response"])."""
+    from mcp.types import CallToolResult
+    svc=x402_services.SERVICES[name]
+    meta=(getattr(ctx.request_context,"meta",None) or {}) if ctx is not None else {}
+    payment=meta.get("x402/payment") if isinstance(meta,dict) else None
+    headers={}
+    if payment is not None:
+        raw=payment if isinstance(payment,str) else json.dumps(payment)
+        headers["PAYMENT-SIGNATURE"]=base64.b64encode(raw.encode()).decode()
+    async def run(b, payer):
+        return await svc["run"](b, "x402:"+payer)
+    status,h,payload=await x402_paywall.handle(svc,f"mcp://tool/paid_{name.replace('-','_')}",headers,body,run,x402_paywall.config())
+    if status==402 and h.get("PAYMENT-REQUIRED"):
+        pr=json.loads(base64.b64decode(h["PAYMENT-REQUIRED"]))
+        return CallToolResult.model_validate({"content":[{"type":"text","text":json.dumps(pr)}],"structuredContent":pr,"isError":True})
+    if status!=200:
+        return CallToolResult.model_validate({"content":[{"type":"text","text":json.dumps(payload)}],"structuredContent":payload,"isError":True})
+    settle=payload.get("payment") or {}
+    if RECEIPT_SIGNING_KEY is not None:
+        log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
+        payload=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])
+        AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"receipt",receipt_log.item_hash(payload))
+    return CallToolResult.model_validate({"content":[{"type":"text","text":json.dumps(payload,ensure_ascii=False)}],
+                                          "structuredContent":payload,"isError":False,"_meta":{"x402/payment-response":settle}})
+
+
+_PAID_NOTE=" Paid per call via x402 (USDC on Base). Call without payment to get the requirements (isError result, 402 object in structuredContent); retry with the signed payment in _meta['x402/payment']. Result is signed by neo and logged."
+
+
+@mcp.tool(title="Paid: MCP server security audit (2.00 USDC)", description=x402_services.SERVICES["mcp-audit"]["description"]+_PAID_NOTE)
+async def paid_mcp_audit(ctx: Context, url: str, previous_fingerprint: str = ""):
+    return await _x402_mcp("mcp-audit",{"url":url,**({"previous_fingerprint":previous_fingerprint} if previous_fingerprint else {})},ctx)
+
+
+@mcp.tool(title="Paid: prompt-injection scan (0.01 USDC)", description=x402_services.SERVICES["injection-scan"]["description"]+_PAID_NOTE)
+async def paid_injection_scan(ctx: Context, text: str = "", url: str = ""):
+    return await _x402_mcp("injection-scan",({"text":text} if text else {})|({"url":url} if url else {}),ctx)
+
+
+@mcp.tool(title="Paid: check every citation in an answer (0.05 USDC)", description=x402_services.SERVICES["citation-check"]["description"]+_PAID_NOTE)
+async def paid_citation_check(ctx: Context, answer: str = "", citations: list[dict] | None = None):
+    return await _x402_mcp("citation-check",({"answer":answer} if answer else {})|({"citations":citations} if citations else {}),ctx)
+
+
+@mcp.tool(title="Paid: proof of publication (0.50 USDC)", description=x402_services.SERVICES["proof-of-publication"]["description"]+_PAID_NOTE)
+async def paid_proof_of_publication(ctx: Context, url: str):
+    return await _x402_mcp("proof-of-publication",{"url":url},ctx)
+
+
+@mcp.tool(title="Paid: timestamp a sha256 (0.01 USDC)", description=x402_services.SERVICES["timestamp"]["description"]+_PAID_NOTE)
+async def paid_timestamp(ctx: Context, sha256: str, note: str = ""):
+    return await _x402_mcp("timestamp",{"sha256":sha256,**({"note":note} if note else {})},ctx)
+
+
 @mcp.tool()
 async def neo_web_search(query: str, limit: int = 6) -> dict:
     """Search the public web using a free RSS search surface. No paid API key."""
