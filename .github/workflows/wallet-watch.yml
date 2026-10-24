@@ -1,0 +1,34 @@
+name: Wallet watch (read only, private)
+# 24/10 (Andrea): incoming USDC on Base to OSIXBAY's receiving address. Reads public chain logs only; there is no
+# key anywhere, so it cannot move funds. Address and transfers stay in the private archive; the log prints counts.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wallet-watch
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - run: |
+          set -euo pipefail
+          python tools/wallet_watch.py private-labels
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common/wallet
+          git -C private-labels commit --quiet -m "ops: wallet watch (private)" || exit 0
+          for i in 1 2 3; do git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0; sleep 5; done
+          exit 1
