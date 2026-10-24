@@ -1,4 +1,4 @@
-name: tmp mcp audit calibration 50 (read only)
+name: tmp x402 live check (unpaid, posts nothing)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,48 +7,30 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - run: python -m pip install --quiet --require-hashes -r requirements.lock
       - run: |
           python - <<'PY'
-          import asyncio, json, urllib.request, collections
-          import mcp_endpoint_verifier as ev, mcp_audit
-          urls=[]; cursor=None
-          for _ in range(15):
-              q="https://registry.modelcontextprotocol.io/v0/servers?limit=100"+(f"&cursor={cursor}" if cursor else "")
-              d=json.loads(urllib.request.urlopen(urllib.request.Request(q,headers={"User-Agent":"neo-calib"}),timeout=30).read())
-              for s in d.get("servers") or []:
-                  srv=s.get("server",s)
-                  for r in srv.get("remotes") or []:
-                      u=r.get("url") or ""
-                      if u.startswith("https://") and "{" not in u and u not in urls: urls.append(u)
-              cursor=(d.get("metadata") or {}).get("nextCursor") or (d.get("metadata") or {}).get("next_cursor")
-              if not cursor or len(urls)>=120: break
-          print(f"::notice title=candidates::{len(urls)}")
-          async def one(u):
+          import json, sys, urllib.request
+          sys.path.insert(0,"tools"); import x402_lint as x
+          B="https://neo-collettive.onrender.com"
+          d=json.loads(urllib.request.urlopen(urllib.request.Request(B+"/x402",headers={"User-Agent":"neo-check"}),timeout=60).read())
+          print("::notice title=catalog::enabled="+str(d.get("enabled"))+" facilitator="+json.dumps(d.get("facilitator"))+" services="+str(len(d.get("services") or []))+" counters="+json.dumps(d.get("counters_since_start")))
+          bodies={"verify-quote":{"url":"https://en.wikipedia.org/wiki/Hash_chain","quote":"A hash chain is the successive application of a cryptographic hash function to a piece of data."},
+                  "timestamp":{"sha256":"a"*64},"injection-scan":{"text":"hello"},"mcp-audit":{"url":"https://mcp.deepwiki.com/mcp"}}
+          for s in d["services"]:
+              body=json.dumps(bodies.get(s["name"],{"url":"https://example.org"})).encode()
+              req=urllib.request.Request(s["url"].replace("http://","https://"),data=body,method="POST",headers={"Content-Type":"application/json","User-Agent":"neo-check"})
               try:
-                  v=await asyncio.wait_for(ev.verify_endpoint(url=u,caller="calib",client_version="calib",full_tools=True,enforce_rate_limit=False),timeout=40)
-                  return u,mcp_audit.audit(v)
-              except Exception as e:
-                  return u,{"grade":"error","risk_score":None,"tool_count":0,"findings":[],"err":type(e).__name__}
-          async def main():
-              sem=asyncio.Semaphore(6); out=[]
-              async def w(u):
-                  async with sem: out.append(await one(u))
-              await asyncio.gather(*[w(u) for u in urls[:120]])
-              return out
-          res=asyncio.run(main())
-          withtools=[(u,r) for u,r in res if r.get("tool_count")]
-          grades=collections.Counter(r["grade"] for u,r in withtools)
-          print(f"::notice title=grades::audited_with_tools={len(withtools)} of {len(res)} grades={dict(grades)}")
-          ftypes=collections.Counter(f["type"] for u,r in withtools for f in r["findings"] if f["severity"]!="info")
-          caps=collections.Counter(c for u,r in withtools for c in (r.get("capabilities") or {}))
-          print(f"::notice title=findings::{dict(ftypes)} caps={dict(caps)}")
-          bad=[(u,r) for u,r in withtools if r["grade"] in ("C","D","F")]
-          for u,r in sorted(bad,key=lambda x:-x[1]["risk_score"])[:8]:
-              print(f"::notice title={r['grade']} {r['risk_score']} {u[:70]}::"+json.dumps([(f['type'],f.get('tool'),f.get('evidence','')[:150]) for f in r['findings'] if f['severity'] in ('high','medium')][:3])[:900])
+                  r=urllib.request.urlopen(req,timeout=60); st,txt,hd=r.status,r.read().decode(),dict(r.headers)
+              except urllib.error.HTTPError as e:
+                  st,txt,hd=e.code,e.read().decode(),dict(e.headers)
+              f=[i for i in x.lint(st,txt,hd,s["url"],"POST") if i["level"]!="info"]
+              h={k.lower():v for k,v in hd.items()}
+              res=x.parse_header(h.get("payment-required")) or {}
+              acc=(res.get("accepts") or [{}])[0] if isinstance(res,dict) else {}
+              print(f"::notice title={s['name']}::status={st} amount={acc.get('amount')} payTo_ok={acc.get('payTo','').lower()=='0x77346045c9c30ca2516359812221ed6afcfc55a7'} resource={((res.get('resource') or {}).get('url') if isinstance(res,dict) else None)} bazaar={'bazaar' in (res.get('extensions') or {}) if isinstance(res,dict) else None} lint={json.dumps(f)[:200]} body={txt[:120]}")
           PY
