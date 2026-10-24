@@ -103,3 +103,18 @@ class ReceiptIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIs(obj["signed"], False)
             self.assertNotIn("signature", obj)
             self.assertNotIn("receipt", obj)
+
+
+class CanonicalSignatureTest(unittest.TestCase):
+    def test_spare_bit_variants_are_refused(self):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        import base64 as b64
+        from cryptography.hazmat.primitives import serialization
+        k = Ed25519PrivateKey.generate()
+        pub = b64.b64encode(k.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
+        signed = rs.sign_receipt({"ok": True, "outcome": "verbatim"}, k)
+        self.assertTrue(rs.verify_receipt(signed, pub))
+        last = signed["signature"][-1]
+        alph = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        sib = alph[(alph.index(last) // 16) * 16 + ((alph.index(last) % 16) + 1) % 16]
+        self.assertFalse(rs.verify_receipt(dict(signed, signature=signed["signature"][:-1] + sib), pub))

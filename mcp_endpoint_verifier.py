@@ -532,7 +532,9 @@ async def verify_endpoint(
     user_agent: str | None = None,
     request_pacer: RequestPacer | None = None,
     enforce_rate_limit: bool = True,
+    full_tools: bool = False,
 ) -> dict[str, Any]:
+    """full_tools (24/10, paid audit only): also return each tool's full description and input schema."""
     if usage_scope not in {"external", "internal_registry_health"}:
         raise ValueError("invalid_usage_scope")
     bucket = caller_bucket(caller)
@@ -733,6 +735,12 @@ async def verify_endpoint(
                     "declared_tools": declared_tools,
                     "latency_ms": listed.get("latency_ms"),
                 }
+                if full_tools:
+                    checks["tools_list"]["full_tools"] = [
+                        {"name": str(t.get("name") or "")[:200], "description": str(t.get("description") or "")[:20000],
+                         "input_schema": json.dumps(t.get("inputSchema"), ensure_ascii=False)[:20000],
+                         "annotations": t.get("annotations") if isinstance(t.get("annotations"), dict) else None}
+                        for t in tools[:64] if isinstance(t, dict)]
                 if not tools_ok:
                     errors.append("tools_list_or_schema_invalid")
             except VerificationError as exc:
