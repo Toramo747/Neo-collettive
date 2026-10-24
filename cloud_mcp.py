@@ -2805,9 +2805,7 @@ def _x402_route(name: str):
         try:
             body=await request.json() if request.method=="POST" else {}
         except Exception:
-            body=None
-        if not isinstance(body,dict):
-            return JSONResponse({"ok":False,"error":"invalid_json","charged":False},status_code=400)
+            body=None  # an unpaid probe still gets the 402; with a payment, x402_paywall refuses it (400, not charged)
         url=str(request.url).split("?")[0]
         if url.startswith("http://") and request.url.hostname not in ("testserver","localhost","127.0.0.1"):
             url="https://"+url[len("http://"):]  # Render terminates TLS: the public resource is https
@@ -2823,6 +2821,24 @@ def _x402_route(name: str):
     return view
 
 
+async def x402_openapi(request: Request):
+    """24/10: OpenAPI discovery for the paid routes (x402scan, Circle Agent Marketplace)."""
+    _record_inbound_traffic(request)
+    return JSONResponse(x402_services.openapi(_x402_base(request)))
+
+
+async def x402_well_known(request: Request):
+    _record_inbound_traffic(request)
+    return JSONResponse(x402_services.well_known(_x402_base(request)))
+
+
+def _x402_base(request: Request) -> str:
+    base=str(request.base_url).rstrip("/")
+    if base.startswith("http://") and request.url.hostname not in ("testserver","localhost","127.0.0.1"):
+        base="https://"+base[len("http://"):]
+    return base
+
+
 async def x402_catalog(request: Request):
     """Public list of the paid microservices (prices, routes). Payment itself happens on each route."""
     _record_inbound_traffic(request)
@@ -2830,7 +2846,8 @@ async def x402_catalog(request: Request):
     cfg=x402_paywall.config()
     return JSONResponse({**x402_services.catalog(base),"enabled":cfg is not None,
                          "facilitator":await x402_paywall.facilitator_check(cfg),
-                         "counters_since_start":dict(x402_paywall.METRICS)})
+                         "counters_since_start":dict(x402_paywall.METRICS),
+                         "counters_by_service":{k:dict(v) for k,v in x402_paywall.BY_SERVICE.items()}})
 
 
 async def api_receipts_log_correction(request: Request):
@@ -14822,6 +14839,8 @@ app = Starlette(
         Route("/.well-known/agent-card.json", a2a_agent_card, methods=["GET"]),
         Route("/receipts/log", receipts_log_view, methods=["GET"]),
         Route("/x402", x402_catalog, methods=["GET"]),
+        Route("/openapi.json", x402_openapi, methods=["GET"]),
+        Route("/.well-known/x402", x402_well_known, methods=["GET"]),
         *[Route(f"/x402/{_name}", _x402_route(_name), methods=["GET","POST"]) for _name in x402_services.SERVICES],
         Route("/api/receipts/log/correction", api_receipts_log_correction, methods=["POST"]),
         Route("/.well-known/agent.json", a2a_agent_json, methods=["GET"]),

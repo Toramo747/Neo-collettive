@@ -38,8 +38,15 @@ METRICS: dict[str, int] = {"asked_to_pay": 0, "bad_input": 0, "wrong_terms": 0, 
                            "our_failure_not_charged": 0, "settle_failed": 0, "paid_and_served": 0, "facilitator_http_error": 0}
 
 
-def _count(k: str) -> None:
+BY_SERVICE: dict[str, dict[str, int]] = {}  # 24/10: the same counters per service, to see what is asked for
+
+
+def _count(k: str, service: dict | None = None) -> None:
     METRICS[k] = METRICS.get(k, 0) + 1
+    name = str((service or {}).get("service_name") or "")
+    if name:
+        d = BY_SERVICE.setdefault(name, {})
+        d[k] = d.get(k, 0) + 1
 
 
 # --- configuration -------------------------------------------------------------------------------------------
@@ -195,41 +202,44 @@ async def facilitator_check(cfg: dict | None, get=None) -> dict:
 
 
 # --- the whole flow, framework-free (the Starlette route only adapts request/response) -----------------------
-async def handle(service: dict, url: str, headers: dict, body: dict, run: Callable[[dict, str], Awaitable[dict]],
+async def handle(service: dict, url: str, headers: dict, body: dict | None, run: Callable[[dict, str], Awaitable[dict]],
                  cfg: dict | None, post=None) -> tuple[int, dict, dict]:
     """Returns (status, response headers, JSON body)."""
     if cfg is None:
         return 503, {}, {"ok": False, "error": "x402_not_enabled"}
     req = requirements(service["price_usd"], cfg["pay_to"])
-    bad = service["validate"](body) if service.get("validate") else None
-    if bad:  # bad input is refused before any payment is looked at: nothing is verified, nothing moves
-        _count("bad_input")
-        return 400, {}, {"ok": False, "error": bad, "charged": False}
     payload, version = decode_payment(headers)
-    if payload is None:
-        _count("asked_to_pay")
+    if payload is None:  # 24/10 (x402scan spec): an unpaid probe gets the 402 even with an empty or invalid body
+        _count("asked_to_pay", service)
         h, b = payment_required(service, url, cfg["pay_to"])
         return 402, h, b
+    if not isinstance(body, dict):
+        _count("bad_input", service)
+        return 400, {}, {"ok": False, "error": "invalid_json", "charged": False}
+    bad = service["validate"](body) if service.get("validate") else None
+    if bad:  # bad input is refused before the payment is verified or settled: nothing moves
+        _count("bad_input", service)
+        return 400, {}, {"ok": False, "error": bad, "charged": False}
     why = accepted_matches(payload, req, version)
     if why:
-        _count("wrong_terms")
+        _count("wrong_terms", service)
         h, b = payment_required(service, url, cfg["pay_to"], error=why)
         return 402, h, b
     v = await facilitator(cfg, "verify", version, payload, req, post)
     if not v.get("isValid"):
-        _count("payment_invalid")
+        _count("payment_invalid", service)
         h, b = payment_required(service, url, cfg["pay_to"], error=str(v.get("invalidReason") or v.get("errorReason") or "payment_invalid"))
         return 402, h, b
     result = await run(body, str(v.get("payer") or "unknown"))  # computed, not released until settlement succeeds
     if result.get("ok") is False and str(result.get("error") or "").startswith(tuple(service.get("no_charge_errors", ()))):
-        _count("our_failure_not_charged")
+        _count("our_failure_not_charged", service)
         return 503, {}, {**result, "charged": False}  # our side failed (deadline, rate limit): do not settle
     s = await facilitator(cfg, "settle", version, payload, req, post)
     if not s.get("success"):
-        _count("settle_failed")
+        _count("settle_failed", service)
         h, b = payment_required(service, url, cfg["pay_to"], error=str(s.get("errorReason") or "settlement_failed"))
         return 402, h, {**b, "charged": False}
-    _count("paid_and_served")
+    _count("paid_and_served", service)
     settle = {"success": True, "transaction": s.get("transaction"), "network": s.get("network") or NETWORK, "payer": s.get("payer")}
     return 200, {"PAYMENT-RESPONSE": base64.b64encode(json.dumps(settle, separators=(",", ":")).encode()).decode()}, \
         {**result, "payment": settle}

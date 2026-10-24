@@ -31,3 +31,10 @@ On neo's MCP server (`/mcp`): `paid_mcp_audit`, `paid_injection_scan`, `paid_cit
 `isError` with the 402 object in `structuredContent`; retry with the signed payment in `_meta["x402/payment"]`;
 the settlement comes back in `_meta["x402/payment-response"]`. Same prices, same rules, same signed and logged
 results. The free tools (verify_quote, verify_mcp_endpoint, ...) are unchanged.
+
+## Discovery (24/10)
+
+- `GET /openapi.json`: OpenAPI 3.1 for the paid routes, built from the same table as the routes (prices, input schemas), with `x-payment-info` and a `402` response on each operation (x402scan discovery spec; Circle Agent Marketplace asks for an OpenAPI spec).
+- `GET /.well-known/x402`: the list of paid resources (x402scan compatibility).
+- An unpaid request gets the 402 even with an empty or invalid body, so directory probes can read the terms. With a payment attached, invalid input is still refused before the payment is verified: nothing is charged.
+- `GET /x402` also shows `counters_by_service` (aggregates only: no payer, no amounts per call).

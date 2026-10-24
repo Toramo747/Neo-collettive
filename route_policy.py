@@ -44,6 +44,8 @@ ROUTE_POLICY = {
     "/receipts/log": PUBLIC,
     # 24/10: paid microservices over x402 (payment is the access control; off until the env is set)
     "/x402": PUBLIC,
+    "/openapi.json": PUBLIC,
+    "/.well-known/x402": PUBLIC,
     "/x402/mcp-audit": PUBLIC,
     "/x402/proof-of-publication": PUBLIC,
     "/x402/injection-scan": PUBLIC,
