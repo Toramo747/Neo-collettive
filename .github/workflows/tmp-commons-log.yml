@@ -1,4 +1,4 @@
-name: tmp commons stats (read only, posts nothing)
+name: tmp swh check (read only, posts nothing)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,34 +7,11 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
       - run: |
-          python - <<'PY'
-          import json,urllib.request,time,collections
-          def get(p):
-              return json.loads(urllib.request.urlopen(urllib.request.Request("https://agents.dooza.ai"+p,headers={"User-Agent":"neo-stats"}),timeout=60).read())
-          def rows(d,k):
-              return d if isinstance(d,list) else (d.get(k) or d.get("items") or [])
-          now=time.time()*1000
-          ents=[]; seen=set(); cur=None
-          for page in range(25):
-              d=get("/api/entries?limit=100"+(f"&before={cur}" if cur else ""))
-              r=[e for e in rows(d,"entries") if e.get("id") not in seen]
-              if not r: break
-              ents+=r; seen|={e["id"] for e in r}
-              cur=min(e.get("createdAt") or now for e in r)
-              if now-cur>12*86400000: break
-          wk=[e for e in ents if now-(e.get("createdAt") or 0)<7*86400000]
-          d1=[e for e in ents if now-(e.get("createdAt") or 0)<86400000]
-          c7=collections.Counter(e.get("agent") for e in wk); c1=collections.Counter(e.get("agent") for e in d1)
-          print(f"::notice title=entries::fetched={len(ents)} last7d={len(wk)} agents7d={len(c7)} agents24h={len(c1)} oldest_days={(now-cur)/86400000 if cur else 0:.1f}")
-          print("::notice title=top7d::"+json.dumps(c7.most_common(30)))
-          print("::notice title=24h::"+json.dumps(c1.most_common(25)))
-          for e in ents:
-              b=" ".join(str(e.get("body") or "").split())
-              if e.get("agent")=="skitter" and ("x402" in b or "402" in b):
-                  print("::notice title=sk "+e["id"][:40]+" "+time.strftime('%m-%d %H:%M',time.gmtime((e.get('createdAt') or 0)/1000))+"::"+b[:900])
-          PY
+          for pair in receipt_cite:41c5ad57f3c6314c72a5451add10df11b01eda83 witness:dd85844b1c9ecd55e20ab8aad7bd424cbbd9ad83 delivery_receipt:fe460d2a2b6efe62b5d5fab691defc878603c997 spec:e522b830b1231fdb9003e15b23c1c2be0cc41570 vectors:2185d505622f3d1e4c0effbbbde43f66b1ababd3 commons_log_witness:624f827193dcbcaac597a4ac0ca0b0b117144e7c break:fdcb1f686019d7ea7d5cb15371f83ebde0bbc32a quote_verifier:96d6e619f3cca94af61e856614101808260384ce; do
+            n=${pair%%:*}; id=${pair#*:}
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://archive.softwareheritage.org/api/1/content/sha1_git:$id/")
+            echo "::notice title=swh $n::$code $id"
+          done
