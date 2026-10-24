@@ -64,6 +64,8 @@ class DeliveryReceiptTest(unittest.TestCase):
         for v in V["vectors"]:
             res = dr.verify(v["receipt"], V["test_key_public_b64"], v.get("buyer_body_sha256"), v.get("hop_pubs"))
             self.assertEqual(res["ok"], v["expect"]["ok"], v["name"])
+            if "note_contains" in v["expect"]:
+                self.assertTrue(any(v["expect"]["note_contains"] in n for n in res["notes"]), v["name"])
             if "changed_by" in v["expect"]:
                 self.assertEqual(res["changed_by"], v["expect"]["changed_by"], v["name"])
 
