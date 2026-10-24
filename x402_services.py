@@ -15,6 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import hashlib
+
+import mcp_audit
 import mcp_endpoint_verifier as ev
 import prompt_injection_scan
 import quote_verifier
@@ -204,7 +207,60 @@ async def r_cite(b, caller):
             "note": "not_found means the words are not on that page, not that the claim is false; who wrote it is still yours to judge."}
 
 
+LAST_FP: dict[str, str] = {}  # url -> last audited tool fingerprint (in memory; resets on deploy, the signed reports keep it)
+
+
+async def r_audit(b, caller, version="x402"):
+    try:
+        v = await asyncio.wait_for(ev.verify_endpoint(url=b["url"], caller=caller, client_version=version, full_tools=True), timeout=DEADLINE)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "verification_deadline_exceeded"}
+    if v.get("ok") is False and str(v.get("error") or "").startswith("rate_limited"):
+        return {"ok": False, "error": v["error"]}
+    prev = b.get("previous_fingerprint") or LAST_FP.get(b["url"])
+    rep = mcp_audit.audit(v, prev)
+    if rep.get("tools_fingerprint"):
+        if len(LAST_FP) > 2000:
+            LAST_FP.clear()
+        LAST_FP[b["url"]] = rep["tools_fingerprint"]
+    return rep
+
+
+def v_audit(b):
+    if not _https(b.get("url")):
+        return "url must be https"
+    pf = b.get("previous_fingerprint")
+    return None if pf is None or re.fullmatch(r"[0-9a-f]{64}", str(pf)) else "previous_fingerprint must be 64 lowercase hex"
+
+
+def v_proof(b):
+    return None if _https(b.get("url")) else "url must be https"
+
+
+async def r_proof(b, caller):
+    try:
+        page = await asyncio.wait_for(quote_verifier._fetch(b["url"]), timeout=DEADLINE)
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "verification_deadline_exceeded"}
+    except ev.VerificationError as e:
+        return {"ok": True, "url": b["url"], "fetched": False, "reason": str(e.args[0] if e.args else e)}
+    text = page["text"]
+    raw = text.encode("utf-8")
+    return {"ok": True, "url": b["url"], "fetched": True, "final_url": page["final_url"], "http_status": page["status"],
+            "fetched_at_utc": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            "content_sha256": hashlib.sha256(raw).hexdigest(), "content_bytes": len(raw),
+            "hash_of": "the page text as fetched (UTF-8, first 2 MB), returned in full below up to 200 kB",
+            "content": text[:200_000], "content_truncated": len(text) > 200_000,
+            "anchoring": "this signed receipt's log entry is anchored daily (OpenTimestamps on Bitcoin, Software Heritage)"}
+
+
 SERVICES: dict[str, dict[str, Any]] = {
+    "mcp-audit": {"price_usd": 2.00, "tool": "mcp_audit", "validate": v_audit, "run": r_audit,
+                  "tags": ["mcp", "security", "tool-poisoning", "audit"],
+                  "description": "Security audit of a public MCP server before you connect: tool poisoning (hidden instructions in tool descriptions and schemas), shadowing, risky capabilities, annotation mismatches, transport errors, and a tool fingerprint to catch silent changes. Reads initialize + tools/list only. Signed, logged report."},
+    "proof-of-publication": {"price_usd": 0.50, "tool": "proof_of_publication", "validate": v_proof, "run": r_proof,
+                             "tags": ["evidence", "proof", "timestamp", "archive"],
+                             "description": "Signed evidence that a public page said this at this time: sha256 of the fetched text, the text itself, final URL and status, logged in a public append-only log anchored daily on Bitcoin and Software Heritage."},
     "injection-scan": {"price_usd": 0.01, "tool": "injection_scan", "validate": v_scan, "run": r_scan,
                        "tags": ["security", "prompt-injection", "agents", "safety"],
                        "description": "Scan text or a public page for prompt injection before your agent reads it: overrides, fake roles, exfiltration, tool abuse, payment asks, invisible Unicode/HTML-hidden instructions, base64. Rule-based evidence, signed and logged."},

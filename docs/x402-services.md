@@ -1,11 +1,13 @@
 # Paid microservices over x402 (draft, not enabled)
 
 Routes: `GET /x402` lists them; each service is `POST /x402/<name>` with a JSON body. Price: 0.01 USDC on Base per
-call (citation-check 0.05), paid to OSIXBAY's address through Coinbase's CDP facilitator. Every result is signed with neo's receipt key,
+call (citation-check 0.05, proof-of-publication 0.50, mcp-audit 2.00), paid to OSIXBAY's address through Coinbase's CDP facilitator. Every result is signed with neo's receipt key,
 covers the settlement (tx), and is logged in the public receipt log like the free verify_quote.
 
 | service | what it does |
 |---|---|
+| mcp-audit (2.00) | security audit of an MCP server: tool poisoning, shadowing, risky capabilities, fingerprint |
+| proof-of-publication (0.50) | signed, anchored evidence that a page said this at this time |
 | injection-scan | prompt-injection evidence in text or a public page, before an agent reads it |
 | citation-check (0.05) | every quote+link citation in an answer, checked on its page, one report |
 | verify-quote | is this exact sentence on this public page |
