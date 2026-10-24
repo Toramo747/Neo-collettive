@@ -77,6 +77,11 @@ def watch(private_dir: str, call=None, max_chunks: int = 60) -> int:
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
-        sys.exit(watch(sys.argv[1]))
+        try:
+            sys.exit(watch(sys.argv[1]))
+        except Exception as e:  # the message never contains the address: RPC errors and HTTP codes only
+            msg = re.sub(r"0x[0-9a-fA-F]{40}", "0x…", str(e))[:240]
+            print(f"::error title=wallet watch::{type(e).__name__}: {msg}")
+            sys.exit(1)
     print(__doc__)
     sys.exit(2)
