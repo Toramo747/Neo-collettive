@@ -1,4 +1,4 @@
-name: tmp mcp audit calibration (read only)
+name: tmp mcp audit calibration 50 (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,7 +7,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,13 +15,40 @@ jobs:
       - run: python -m pip install --quiet --require-hashes -r requirements.lock
       - run: |
           python - <<'PY'
-          import asyncio, json
+          import asyncio, json, urllib.request, collections
           import mcp_endpoint_verifier as ev, mcp_audit
-          for u in ["https://neo-collettive.onrender.com/mcp","https://mcp.deepwiki.com/mcp","https://docs.mcp.cloudflare.com/mcp","https://gitmcp.io/docs","https://mcp.semgrep.ai/mcp"]:
+          urls=[]; cursor=None
+          for _ in range(15):
+              q="https://registry.modelcontextprotocol.io/v0/servers?limit=100"+(f"&cursor={cursor}" if cursor else "")
+              d=json.loads(urllib.request.urlopen(urllib.request.Request(q,headers={"User-Agent":"neo-calib"}),timeout=30).read())
+              for s in d.get("servers") or []:
+                  srv=s.get("server",s)
+                  for r in srv.get("remotes") or []:
+                      u=r.get("url") or ""
+                      if u.startswith("https://") and "{" not in u and u not in urls: urls.append(u)
+              cursor=(d.get("metadata") or {}).get("nextCursor") or (d.get("metadata") or {}).get("next_cursor")
+              if not cursor or len(urls)>=120: break
+          print(f"::notice title=candidates::{len(urls)}")
+          async def one(u):
               try:
-                  v=asyncio.run(ev.verify_endpoint(url=u,caller="calib",client_version="calib",full_tools=True,enforce_rate_limit=False))
-                  r=mcp_audit.audit(v)
-                  print(f"::notice title={u}::grade={r['grade']} score={r['risk_score']} tools={r['tool_count']} caps={r['capabilities']} top="+json.dumps([(f['type'],f.get('tool'),f.get('evidence','')[:80]) for f in r['findings'] if f['severity']!='info'][:4])[:700])
+                  v=await asyncio.wait_for(ev.verify_endpoint(url=u,caller="calib",client_version="calib",full_tools=True,enforce_rate_limit=False),timeout=40)
+                  return u,mcp_audit.audit(v)
               except Exception as e:
-                  print(f"::notice title={u}::{type(e).__name__} {e}"[:300])
+                  return u,{"grade":"error","risk_score":None,"tool_count":0,"findings":[],"err":type(e).__name__}
+          async def main():
+              sem=asyncio.Semaphore(6); out=[]
+              async def w(u):
+                  async with sem: out.append(await one(u))
+              await asyncio.gather(*[w(u) for u in urls[:120]])
+              return out
+          res=asyncio.run(main())
+          withtools=[(u,r) for u,r in res if r.get("tool_count")]
+          grades=collections.Counter(r["grade"] for u,r in withtools)
+          print(f"::notice title=grades::audited_with_tools={len(withtools)} of {len(res)} grades={dict(grades)}")
+          ftypes=collections.Counter(f["type"] for u,r in withtools for f in r["findings"] if f["severity"]!="info")
+          caps=collections.Counter(c for u,r in withtools for c in (r.get("capabilities") or {}))
+          print(f"::notice title=findings::{dict(ftypes)} caps={dict(caps)}")
+          bad=[(u,r) for u,r in withtools if r["grade"] in ("C","D","F")]
+          for u,r in sorted(bad,key=lambda x:-x[1]["risk_score"])[:8]:
+              print(f"::notice title={r['grade']} {r['risk_score']} {u[:70]}::"+json.dumps([(f['type'],f.get('tool'),f.get('evidence','')[:150]) for f in r['findings'] if f['severity'] in ('high','medium')][:3])[:900])
           PY

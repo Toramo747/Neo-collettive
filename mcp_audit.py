@@ -73,7 +73,10 @@ def audit(verified: dict, previous_fingerprint: str | None = None) -> dict:
         if len(desc) > 3000:
             findings.append({"severity": "low", "type": "long_description", "tool": name, "evidence": f"{len(desc)} chars: room to hide instructions"})
             score += 3
-        found = [c for c, p in CAPS.items() if re.search(p, name + " " + text, re.I)]
+        # secrets: only when the tool asks for one as a parameter ("no API key" in a description is not a capability)
+        found = [c for c, p in CAPS.items() if c != "secrets" and re.search(p, name + " " + text, re.I)]
+        if re.search(r'"[a-z_]*(api_?key|password|passwd|secret|token|private_?key|seed)[a-z_]*"\s*:', schema, re.I):
+            found.append("secrets")
         for c in found:
             caps.setdefault(c, []).append(name)
         ann = t.get("annotations") or {}
