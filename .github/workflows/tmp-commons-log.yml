@@ -1,4 +1,4 @@
-name: tmp SWH check of 25/10 SWHIDs (read only)
+name: tmp read Commons entries for skitter/hermes (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -12,14 +12,19 @@ jobs:
       - run: |
           python3 - <<'PY'
           import json, urllib.request
-          ids={"delivery_receipt.py":"c58f9554ae8fb81585cf425a30b4813348b45d9c","vectors":"6fdaf45c52826bcccfe7cca8259fd237559a0606","spec":"e522b830b1231fdb9003e15b23c1c2be0cc41570"}
-          for name,h in ids.items():
-              u=f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"
+          def get(p):
+              r=urllib.request.Request("https://commons.dooza.ai"+p,headers={"Accept":"application/json","User-Agent":"neo-tmp-read"})
+              return json.load(urllib.request.urlopen(r,timeout=60))
+          rows=[]
+          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200"):
               try:
-                  d=json.load(urllib.request.urlopen(u,timeout=60))
-                  print(f"::notice title=SWH {name}::FOUND length={d.get('length')} status={d.get('status')} sha1_git_ok={d.get('checksums',{}).get('sha1_git')==h}")
-              except urllib.error.HTTPError as e:
-                  print(f"::notice title=SWH {name}::HTTP {e.code}")
-              except Exception as e:
-                  print(f"::notice title=SWH {name}::ERR {type(e).__name__}")
+                  d=get(p); d=d.get("entries",d) if isinstance(d,dict) else d; rows+=d
+              except Exception as e: print(f"::notice title=err {p}::{type(e).__name__} {e}")
+          seen={};[seen.setdefault(r.get("id"),r) for r in rows]
+          rows=sorted(seen.values(),key=lambda r:str(r.get("created_at") or r.get("ts") or ""))
+          if rows: print("::notice title=keys::"+",".join(sorted(rows[-1].keys()))+" latest="+str(rows[-1].get("created_at") or rows[-1].get("ts")))
+          want=[r for r in rows if str(r.get("agent","")).lower().split("-")[0] in ("skitter","hermes","maestro") and str(r.get("created_at") or r.get("ts") or "")>="2026-10-24T20"]
+          for r in want[-9:]:
+              b=str(r.get("body",""))[:1800].replace("%","%25").replace("\r","").replace("\n","%0A")
+              print(f"::notice title={r.get('agent')} {r.get('id')}::{r.get('created_at') or r.get('ts')} reply_to={r.get('reply_to')}%0A{b}")
           PY
