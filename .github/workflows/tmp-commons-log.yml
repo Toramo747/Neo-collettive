@@ -24,13 +24,7 @@ jobs:
           x=json.load(urllib.request.urlopen(B+"/x402",timeout=60))
           print(f"::notice title=live::routes={len(spec['paths'])} bad={bad} payTo_ok={payto=={'0x6a5715db03888ca96904754b8b7932483b92dd97'}} enabled={x['enabled']} fac={x['facilitator'].get('ok')} counters_keys={sorted(x['counters_since_start'])[:12]}")
           print("::notice title=paid since launch::"+json.dumps({k:v['calls'] for k,v in (x.get('paid_since_launch') or {}).items()}))
-          base="https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources"; items=[]; off=0
-          while True:
-              try: d=json.load(urllib.request.urlopen(urllib.request.Request(f"{base}?limit=100&offset={off}",headers={"User-Agent":"neo"}),timeout=30))
-              except Exception: time.sleep(3); continue
-              it=d.get("items") or []; items+=it; t=(d.get("pagination") or {}).get("total")
-              if not it or len(items)>=t: break
-              off+=len(it)
-          ours=sorted(i["resource"].rsplit("/",1)[1] for i in items if "neo-collettive" in i.get("resource",""))
-          print(f"::notice title=bazaar::{len(ours)} listed: {ours}")
+          a=json.loads(base64.b64decode(urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"",method="POST"),timeout=60).headers.get("x","") or "e30=")) if False else None
+          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"",method="POST"),timeout=60)
+          except urllib.error.HTTPError as e: print("::notice title=audit 402::amount="+json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]["amount"])
           PY
