@@ -1,0 +1,28 @@
+name: Teacher vs control shadow review (read-only, preregistered)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet --require-hashes -r requirements.lock
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - run: |
+          set -euo pipefail
+          python tools/teacher_vs_control_shadow.py private-labels
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add maestro/teacher_vs_control.jsonl
+          git -C private-labels commit --quiet -m "maestro: teacher vs control shadow run" || exit 0
+          for i in 1 2 3; do git -C private-labels pull --quiet --rebase && git -C private-labels push --quiet && exit 0; sleep 5; done
+          exit 1
