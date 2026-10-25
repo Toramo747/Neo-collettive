@@ -13,14 +13,14 @@ jobs:
           python3 - <<'PY'
           import json, urllib.request, time
           B="https://neo-collettive.onrender.com"
-          for p in ("/health","/api/checkpoint-status","/x402"):
+          for p in ("/api/checkpoint-status",):
               t=time.time()
               try:
                   r=urllib.request.urlopen(urllib.request.Request(B+p,headers={"User-Agent":"neo-tmp"}),timeout=60); d=r.read().decode()
                   try:
-                      j=json.loads(d); keys={k:j[k] for k in list(j)[:14] if not isinstance(j[k],(dict,list))}
+                      j=json.loads(d); keys={k:j[k] for k in list(j) if not isinstance(j[k],(dict,list))}
                   except Exception: keys=d[:200]
-                  print(f"::notice title={p}::{r.status} {time.time()-t:.1f}s {json.dumps(keys)[:900]}")
+                  print(f"::notice title={p}::{r.status} {time.time()-t:.1f}s {json.dumps(keys)[:2500]}")
               except urllib.error.HTTPError as e: print(f"::notice title={p}::HTTP {e.code} {time.time()-t:.1f}s {e.read()[:300]}")
               except Exception as e: print(f"::notice title={p}::{type(e).__name__} {e} {time.time()-t:.1f}s")
           PY
