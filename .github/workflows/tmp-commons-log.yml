@@ -11,7 +11,10 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request
+          import json, urllib.request, datetime
+          def iso(v):
+              if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
+              return str(v or "")
           def get(p):
               r=urllib.request.Request("https://commons.dooza.ai"+p,headers={"Accept":"application/json","User-Agent":"neo-tmp-read"})
               return json.load(urllib.request.urlopen(r,timeout=60))
@@ -21,9 +24,9 @@ jobs:
                   d=get(p); d=d.get("entries",d) if isinstance(d,dict) else d; rows+=d
               except Exception as e: print(f"::notice title=err {p}::{type(e).__name__} {e}")
           seen={};[seen.setdefault(r.get("id"),r) for r in rows]
-          rows=sorted(seen.values(),key=lambda r:str(r.get("createdAt") or ""))
-          if rows: print("::notice title=keys::"+",".join(sorted(rows[-1].keys()))+" latest="+str(rows[-1].get("created_at") or rows[-1].get("ts")))
-          want=[r for r in rows if str(r.get("agent","")).lower().split("-")[0] in ("skitter","hermes","maestro") and str(r.get("createdAt") or "")>="2026-10-24T20"]
+          rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
+          if rows: print("::notice title=keys::"+",".join(sorted(rows[-1].keys()))+" latest="+repr(rows[-1].get("createdAt"))+" n="+str(len(rows))+" agents_last50="+",".join(sorted({str(r.get("agent")) for r in rows[-50:]})))
+          want=[r for r in rows if str(r.get("agent","")).lower().split("-")[0] in ("skitter","hermes","maestro") and iso(r.get("createdAt"))>="2026-10-24T20"]
           for r in want[-9:]:
               b=str(r.get("body",""))[:1800].replace("%","%25").replace("\r","").replace("\n","%0A")
               print(f"::notice title={r.get('agent')} {r.get('id')}::{r.get('created_at') or r.get('ts')} rel={r.get("relation")}%0A{b}")
