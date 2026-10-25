@@ -1,4 +1,4 @@
-name: tmp claim check, 402 vs openapi (read only)
+name: tmp x402 listing test (one paid call per unlisted service, Andrea's OK 25/10)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,23 +7,25 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
-      - run: |
-          python3 - <<'PY'
-          import json, base64, urllib.request
-          B="https://neo-collettive.onrender.com"
-          spec=json.load(urllib.request.urlopen(B+"/openapi.json",timeout=60))
-          bad=[]; payto=set(); n=0
-          for path,item in spec["paths"].items():
-              op=item["post"]; want=str(int(round(float(op["x-payment-info"]["price"]["amount"])*1e6))); n+=1
-              try:
-                  urllib.request.urlopen(urllib.request.Request(B+path,data=b"",method="POST"),timeout=60); bad.append(f"{path}: not 402")
-              except urllib.error.HTTPError as e:
-                  if e.code!=402: bad.append(f"{path}: {e.code}"); continue
-                  a=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]
-                  payto.add(a["payTo"].lower())
-                  if a["amount"]!=want: bad.append(f"{path}: {a['amount']} vs {want}")
-          print(f"::notice title=claim::routes={n} mismatches={bad} distinct_payTo={len(payto)} new_wallet={payto=={'0x6a5715db03888ca96904754b8b7932483b92dd97'}}")
-          print("::notice title=desc::"+spec["info"]["description"][:300])
-          PY
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install --quiet "x402[httpx,evm]" eth-account cryptography
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Self-test (address published only after checks; then wait for 2.08 USDC and pay five calls)
+        run: |
+          git -C private-labels config user.name "NEO Ops Bot"; git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels rm -q --cached common/x402/selftest-address.txt 2>/dev/null || true
+          rm -f private-labels/common/x402/selftest-address.txt
+          python tools/x402_selftest.py private-labels/common/x402/selftest-address.txt private-labels/common/x402/selftest-report.json
+      - if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/k"
+          git -C private-labels add common/x402 2>/dev/null; git -C private-labels commit -qm "ops: x402 self-test report (private)" || true
+          for i in 1 2 3; do git -C private-labels pull -q --rebase && git -C private-labels push -q && break; sleep 5; done
