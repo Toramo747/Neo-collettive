@@ -1,4 +1,4 @@
-name: tmp SWH x402_lint + live mcp-audit price (read only)
+name: tmp SWH save + wait for new delivery_receipt.py
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,20 +7,21 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - run: |
           python3 - <<'PY'
-          import json, base64, urllib.request
-          h="e1b410ef00fc67c5a41f2b2fd52841dd2faad01b"
+          import json, urllib.request, time
+          A="https://archive.softwareheritage.org/api/1/"
           try:
-              d=json.load(urllib.request.urlopen(f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/",timeout=60))
-              print(f"::notice title=SWH x402_lint::FOUND length={d.get('length')} status={d.get('status')}")
-          except urllib.error.HTTPError as e: print(f"::notice title=SWH x402_lint::HTTP {e.code}")
-          B="https://neo-collettive.onrender.com"
-          spec=json.load(urllib.request.urlopen(B+"/openapi.json",timeout=90))
-          oa=spec["paths"]["/x402/mcp-audit"]["post"]["x-payment-info"]["price"]["amount"]
-          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"{}",method="POST",headers={"Content-Type":"application/json"}),timeout=90); amt="no 402"
-          except urllib.error.HTTPError as e: amt=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]["amount"] if e.code==402 else f"HTTP {e.code}"
-          print(f"::notice title=mcp-audit live::openapi={oa} 402_amount={amt}")
+              r=json.load(urllib.request.urlopen(urllib.request.Request(A+"origin/save/git/url/https://github.com/Toramo747/Neo-collettive/",method="POST",headers={"User-Agent":"neo"}),timeout=60))
+              print(f"::notice title=save::{r.get('save_request_status')} {r.get('save_task_status')}")
+          except Exception as e: print(f"::notice title=save::ERR {e}")
+          h="b91ca2d24c2de5f812b909c78868f7df95909b8b"; t0=time.time()
+          while time.time()-t0<2100:
+              try:
+                  d=json.load(urllib.request.urlopen(urllib.request.Request(A+f"content/sha1_git:{h}/",headers={"User-Agent":"neo"}),timeout=60))
+                  print(f"::notice title=SWH new delivery_receipt.py::FOUND after {int(time.time()-t0)}s length={d.get('length')} status={d.get('status')}"); break
+              except urllib.error.HTTPError as e: time.sleep(60)
+          else: print("::notice title=SWH new delivery_receipt.py::NOT YET after 35 min")
           PY
