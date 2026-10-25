@@ -390,6 +390,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "common_jobs": {},
     "public_tool_usage": {},
     "receipt_log": {},
+    "x402_paid": {},
     "build_history": [],
     "last_build": None,
     "measurement_history": [],
@@ -578,6 +579,7 @@ def _state_payload() -> dict:
         "common_jobs": AUTOPILOT_STATE.get("common_jobs") or {},
         "public_tool_usage": AUTOPILOT_STATE.get("public_tool_usage") or {},
         "receipt_log": AUTOPILOT_STATE.get("receipt_log") or {},
+        "x402_paid": AUTOPILOT_STATE.get("x402_paid") or {},
         "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
@@ -672,6 +674,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["public_tool_usage"] = payload.get("public_tool_usage") or {}
     if isinstance(payload.get("receipt_log"), dict):
         AUTOPILOT_STATE["receipt_log"] = payload.get("receipt_log")
+    if isinstance(payload.get("x402_paid"), dict):
+        AUTOPILOT_STATE["x402_paid"] = payload.get("x402_paid")
     if isinstance(payload.get("build_history"), list):
         AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
     if isinstance(payload.get("last_build"), dict):
@@ -2797,6 +2801,17 @@ async def receipts_log_view(request: Request):
     return JSONResponse(receipt_log.public_view(AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty(), after=after))
 
 
+def _x402_record_paid(name: str, via: str) -> None:
+    """25/10: paid calls per service, kept in the checkpoint so a restart does not lose them. Aggregates only:
+    no payer, no transaction, no input."""
+    paid=AUTOPILOT_STATE.setdefault("x402_paid",{})
+    row=paid.setdefault(name,{"calls":0,"usd":0.0,"http":0,"mcp":0,"last_utc":None})
+    row["calls"]=int(row.get("calls",0))+1
+    row["usd"]=round(float(row.get("usd",0.0))+float(x402_services.SERVICES[name]["price_usd"]),6)
+    row[via]=int(row.get(via,0))+1
+    row["last_utc"]=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+
+
 def _x402_route(name: str):
     """24/10: one paid microservice over x402 (see x402_paywall.py / x402_services.py). Off until Andrea sets the env."""
     async def view(request: Request):
@@ -2812,6 +2827,8 @@ def _x402_route(name: str):
         async def run(b, payer):
             return await svc["run"](b, "x402:"+payer)  # per-payer rate limits, same buckets as the free tools
         status,headers,payload=await x402_paywall.handle(svc,url,dict(request.headers),body,run,x402_paywall.config())
+        if status==200:
+            _x402_record_paid(name,"http")
         if status==200 and RECEIPT_SIGNING_KEY is not None:
             log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
             payload=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])
@@ -2847,7 +2864,8 @@ async def x402_catalog(request: Request):
     return JSONResponse({**x402_services.catalog(base),"enabled":cfg is not None,
                          "facilitator":await x402_paywall.facilitator_check(cfg),
                          "counters_since_start":dict(x402_paywall.METRICS),
-                         "counters_by_service":{k:dict(v) for k,v in x402_paywall.BY_SERVICE.items()}})
+                         "counters_by_service":{k:dict(v) for k,v in x402_paywall.BY_SERVICE.items()},
+                         "paid_since_launch":{k:dict(v) for k,v in (AUTOPILOT_STATE.get("x402_paid") or {}).items()}})
 
 
 async def api_receipts_log_correction(request: Request):
@@ -11328,6 +11346,7 @@ async def _x402_mcp(name: str, body: dict, ctx: Context):
     if status!=200:
         return CallToolResult.model_validate({"content":[{"type":"text","text":json.dumps(payload)}],"structuredContent":payload,"isError":True})
     settle=payload.get("payment") or {}
+    _x402_record_paid(name,"mcp")
     if RECEIPT_SIGNING_KEY is not None:
         log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
         payload=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])

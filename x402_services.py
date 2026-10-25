@@ -121,12 +121,20 @@ async def r_quote(b, caller):
         return {"ok": False, "error": "verification_deadline_exceeded"}
 
 
+MCP_AUDIT_HINT = ("This check reads transport and tools/list sanity only. It does not review what the tool descriptions "
+                  "tell an agent to do: for tool poisoning, shadowing and risky capabilities, POST the same url to "
+                  "/x402/mcp-audit (2.00 USDC, signed report with a tool fingerprint).")
+
+
 async def r_mcp(b, caller, version="x402"):
     try:
-        return await asyncio.wait_for(ev.verify_endpoint(url=b.get("url") or None, registry_name=b.get("registry_name") or None,
-                                                         caller=caller, client_version=version), timeout=DEADLINE)
+        res = await asyncio.wait_for(ev.verify_endpoint(url=b.get("url") or None, registry_name=b.get("registry_name") or None,
+                                                        caller=caller, client_version=version), timeout=DEADLINE)
     except asyncio.TimeoutError:
         return {"ok": False, "error": "verification_deadline_exceeded"}
+    if version == "x402" and isinstance(res, dict) and res.get("ok") is not False:
+        res = {**res, "next_step": MCP_AUDIT_HINT}  # 25/10: the paid quick check points to the full audit
+    return res
 
 
 async def _fetch_402(url: str, method: str) -> tuple[int, str, dict]:
@@ -333,7 +341,9 @@ def openapi(base_url: str) -> dict:
             "info": {"title": "neo verification microservices (x402)", "version": "2026-10-24",
                      "description": "Pay-per-call verification tools for agents: MCP server audits, prompt-injection scans, "
                                     "citation and quote checks, timestamps and proofs of publication, log witnessing, "
-                                    "x402 delivery receipts. Every result is signed and logged; receipts verify offline. "
+                                    "x402 delivery receipts. Every result is Ed25519-signed and appended to a public hash-chained receipt "
+                                    "log; four independent agents have recomputed the log with their own code, and one "
+                                    "has verified a published receipt signature end to end. Receipts verify offline. "
                                     "No account, no API key: pay per call with x402 (USDC on Base).",
                      "x-guidance": "POST JSON to the route without payment to get the x402 terms (402, PAYMENT-REQUIRED "
                                    "header). Retry with the signed payment in PAYMENT-SIGNATURE (v2) or X-PAYMENT (v1). "
