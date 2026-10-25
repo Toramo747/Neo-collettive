@@ -36,7 +36,12 @@ def main(private_dir: str, fetch=None) -> int:
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(json.dumps(now))
     c = now.get("counters_since_start") or {}
-    print(f"::notice title=x402 health::enabled={now.get('enabled')} paid_and_served={c.get('paid_and_served', 0)} asked_to_pay={c.get('asked_to_pay', 0)}")
+    paid = now.get("paid_since_launch") or {}
+    total = sum(int(v.get("calls", 0)) for v in paid.values())
+    usd = round(sum(float(v.get("usd", 0)) for v in paid.values()), 2)
+    by = ",".join(f"{k}={v.get('calls', 0)}" for k, v in sorted(paid.items())) or "-"
+    print(f"::notice title=x402 health::enabled={now.get('enabled')} paid_and_served={c.get('paid_and_served', 0)} asked_to_pay={c.get('asked_to_pay', 0)} "
+          f"paid_since_launch={total} usd={usd} by_service={by}")
     bad = check(now, before)
     if bad:
         print("::error title=x402 paid routes need Andrea::" + ", ".join(bad))

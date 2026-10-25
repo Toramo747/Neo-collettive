@@ -36,6 +36,8 @@ class X402McpToolsTest(unittest.TestCase):
                         self.assertEqual(r2.structured_content["sha256"], "a" * 64)
                         self.assertEqual(r2.meta["x402/payment-response"]["transaction"], "0x" + "1" * 64)
                         self.assertEqual(calls, ["verify", "settle"])
+                        self.assertEqual(cloud_mcp.AUTOPILOT_STATE["x402_paid"]["timestamp"]["mcp"], 1)  # survives restarts via checkpoint
+                        self.assertIn("x402_paid", cloud_mcp._state_payload())
                         bad = await c.call_tool("paid_timestamp", {"sha256": "nope"})  # unpaid: requirements first
                         self.assertTrue(bad.is_error)
                         self.assertIn("accepts", bad.structured_content)
