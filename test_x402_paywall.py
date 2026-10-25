@@ -294,8 +294,12 @@ class HighValueServicesTest(unittest.TestCase):
         self.assertTrue(mcp_audit.audit(good, "0" * 64)["changed_since_last_audit"])
 
     def test_prices_and_validators(self):
-        self.assertEqual(xs.SERVICES["mcp-audit"]["price_usd"], 2.0)
+        self.assertEqual(xs.SERVICES["mcp-audit"]["price_usd"], 0.80)
         self.assertEqual(xp.requirements(2.0, PAY_TO)["amount"], "2000000")
+        # 25/10: the official x402 client refuses more than $1 per payment by default; every service stays under it
+        for k, s in xs.SERVICES.items():
+            self.assertLessEqual(s["price_usd"], 1.0, k)
+        self.assertEqual(xs.SERVICES["mcp-audit"]["price_usd"], 0.80)
         self.assertTrue(xs.v_audit({"url": "http://a"}))
         self.assertIsNone(xs.v_proof({"url": "https://a.example"}))
 

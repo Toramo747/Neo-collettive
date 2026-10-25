@@ -11369,7 +11369,7 @@ async def _x402_mcp(name: str, body: dict, ctx: Context):
 _PAID_NOTE=" Paid per call via x402 (USDC on Base). Call without payment to get the requirements (isError result, 402 object in structuredContent); retry with the signed payment in _meta['x402/payment']. Result is signed by neo and logged."
 
 
-@mcp.tool(title="Paid: MCP server security audit (2.00 USDC)", description=x402_services.SERVICES["mcp-audit"]["description"]+_PAID_NOTE)
+@mcp.tool(title="Paid: MCP server security audit (0.80 USDC)", description=x402_services.SERVICES["mcp-audit"]["description"]+_PAID_NOTE)
 async def paid_mcp_audit(ctx: Context, url: str, previous_fingerprint: str = ""):
     return await _x402_mcp("mcp-audit",{"url":url,**({"previous_fingerprint":previous_fingerprint} if previous_fingerprint else {})},ctx)
 
