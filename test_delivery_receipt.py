@@ -69,6 +69,30 @@ class DeliveryReceiptTest(unittest.TestCase):
             if "changed_by" in v["expect"]:
                 self.assertEqual(res["changed_by"], v["expect"]["changed_by"], v["name"])
 
+    def test_missing_lint_is_a_note_not_silence(self):
+        # 25/10, skitter: without x402_lint.py beside the file the EIP-55 check must say it did not run
+        import json, tempfile
+        V = json.loads((Path(__file__).resolve().parent / "docs" / "spec" / "x402-delivery-receipt-v0.1-vectors.json").read_text())
+        v = next(x for x in V["vectors"] if x["name"] == "asset-non-checksum-spelling-is-a-note")
+        real = dr.__file__
+        with tempfile.TemporaryDirectory() as d:
+            dr.__file__ = str(Path(d) / "delivery_receipt.py")
+            try:
+                res = dr.verify(v["receipt"], V["test_key_public_b64"], v.get("buyer_body_sha256"), v.get("hop_pubs"))
+            finally:
+                dr.__file__ = real
+        self.assertTrue(res["ok"], res)
+        self.assertTrue(any("EIP-55 spelling was not checked" in n for n in res["notes"]), res["notes"])
+
+    def test_non_canonical_keeps_the_bytes_for_every_last_char(self):
+        # 25/10, skitter: signatures ending in Q, g or w used to fall back to "A" and change real bits
+        import base64
+        for last in "AQgw":
+            sig = "A" * 85 + last
+            bad = dr._non_canonical(sig)
+            self.assertNotEqual(bad, sig)
+            self.assertEqual(base64.urlsafe_b64decode(bad + "=="), base64.urlsafe_b64decode(sig + "=="), last)
+
     def test_body_header_disagreement_is_noted(self):
         r = copy.deepcopy(self.r)
         r["payment_required"]["header_x402_version"] = 1
