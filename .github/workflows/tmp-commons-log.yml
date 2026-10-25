@@ -1,4 +1,4 @@
-name: tmp listing test aftermath (read only)
+name: tmp live check after no-loss deploy (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,20 +7,30 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request
-          def rpc(m,p):
-              for u in ["https://base-rpc.publicnode.com","https://mainnet.base.org"]:
-                  try: return json.load(urllib.request.urlopen(urllib.request.Request(u,data=json.dumps({"jsonrpc":"2.0","id":1,"method":m,"params":p}).encode(),headers={"Content-Type":"application/json","User-Agent":"neo"}),timeout=20))["result"]
-                  except Exception: pass
-          bal=lambda a:int(rpc("eth_call",[{"to":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","data":"0x70a08231"+"0"*24+a[2:].lower()},"latest"]),16)/1e6
-          print(f"::notice title=balances::throwaway={bal('0x3FF796783a1E583cE73c74e5BEA7988eB4a1428a')} andrea_new={bal('0x6a5715db03888ca96904754b8b7932483b92dd97')}")
-          log=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/receipts/log",headers={"User-Agent":"neo"}),timeout=60))
-          e=log.get("entries") or log
-          print(f"::notice title=log::size={len(e)} last_seq={e[-1][0]}")
-          x=json.load(urllib.request.urlopen("https://neo-collettive.onrender.com/x402",timeout=60))
-          print("::notice title=paid::"+json.dumps(x.get("paid_since_launch"))+" "+json.dumps(x.get("counters_since_start")))
+          import json, base64, urllib.request, time
+          B="https://neo-collettive.onrender.com"
+          spec=json.load(urllib.request.urlopen(B+"/openapi.json",timeout=60)); bad=[]; payto=set()
+          for path,item in spec["paths"].items():
+              want=str(int(round(float(item["post"]["x-payment-info"]["price"]["amount"])*1e6)))
+              try: urllib.request.urlopen(urllib.request.Request(B+path,data=b"",method="POST"),timeout=60); bad.append(path)
+              except urllib.error.HTTPError as e:
+                  if e.code!=402: bad.append(f"{path}:{e.code}"); continue
+                  a=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]; payto.add(a["payTo"].lower())
+                  if a["amount"]!=want: bad.append(f"{path}:{a['amount']}")
+          x=json.load(urllib.request.urlopen(B+"/x402",timeout=60))
+          print(f"::notice title=live::routes={len(spec['paths'])} bad={bad} payTo_ok={payto=={'0x6a5715db03888ca96904754b8b7932483b92dd97'}} enabled={x['enabled']} fac={x['facilitator'].get('ok')} counters_keys={sorted(x['counters_since_start'])[:12]}")
+          print("::notice title=paid since launch::"+json.dumps({k:v['calls'] for k,v in (x.get('paid_since_launch') or {}).items()}))
+          base="https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources"; items=[]; off=0
+          while True:
+              try: d=json.load(urllib.request.urlopen(urllib.request.Request(f"{base}?limit=100&offset={off}",headers={"User-Agent":"neo"}),timeout=30))
+              except Exception: time.sleep(3); continue
+              it=d.get("items") or []; items+=it; t=(d.get("pagination") or {}).get("total")
+              if not it or len(items)>=t: break
+              off+=len(it)
+          ours=sorted(i["resource"].rsplit("/",1)[1] for i in items if "neo-collettive" in i.get("resource",""))
+          print(f"::notice title=bazaar::{len(ours)} listed: {ours}")
           PY
