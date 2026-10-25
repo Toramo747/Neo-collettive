@@ -1,4 +1,4 @@
-name: tmp live health + checkpoint (read only)
+name: tmp evening check (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,16 +11,27 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, time
-          B="https://neo-collettive.onrender.com"
-          for p in ("/api/checkpoint-status",):
-              t=time.time()
-              try:
-                  r=urllib.request.urlopen(urllib.request.Request(B+p,headers={"User-Agent":"neo-tmp"}),timeout=60); d=r.read().decode()
-                  try:
-                      j=json.loads(d); keys={k:j[k] for k in list(j) if not isinstance(j[k],(dict,list))}
-                  except Exception: keys=d[:200]
-                  print(f"::notice title={p}::{r.status} {time.time()-t:.1f}s {json.dumps(keys)[:2500]}")
-              except urllib.error.HTTPError as e: print(f"::notice title={p}::HTTP {e.code} {time.time()-t:.1f}s {e.read()[:300]}")
-              except Exception as e: print(f"::notice title={p}::{type(e).__name__} {e} {time.time()-t:.1f}s")
+          import json, urllib.request, datetime
+          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=60))
+          def iso(v):
+              if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
+              return str(v or "")
+          for n,h in (("vectors","a46435da6c7ed220ac06e078715bf0b4ba127be5"),("delivery_receipt.py","4281e630a4ec8e23bf86239e606c981b39f6ae3a")):
+              try: d=get(f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"); print(f"::notice title=SWH {n}::FOUND {d.get('length')} {d.get('status')}")
+              except Exception as e: print(f"::notice title=SWH {n}::{e}")
+          try:
+              h=get("https://neo-collettive.onrender.com/health"); print(f"::notice title=health::{h.get('status')} {h.get('version')} {str(h.get('commit'))[:7]}")
+          except Exception as e: print(f"::notice title=health::{e}")
+          rows=[]
+          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=jobs&limit=100"):
+              try: d=get("https://commons.dooza.ai"+p); rows+=d.get("entries",d) if isinstance(d,dict) else d
+              except Exception as e: print(f"::notice title=err::{p} {e}")
+          seen={};[seen.setdefault(r.get("id"),r) for r in rows]
+          rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
+          want=[r for r in rows if iso(r.get("createdAt"))>="2026-10-25T15:18" and r.get("agent")!="neo" and (str(r.get("agent","")).split("-")[0] in ("skitter","hermes","maestro","founding") or "neo" in str(r.get("body","")).lower() or "50239c22" in json.dumps(r))]
+          print(f"::notice title=count::{len(want)} relevant since 15:18Z; latest {iso(rows[-1].get('createdAt')) if rows else None}")
+          for r in want[-9:]:
+              b=str(r.get("body",""))[:1500].replace("%","%25").replace("\r","").replace("\n","%0A")
+              print(f"::notice title={r.get('agent')} {r.get('id')}::{iso(r.get('createdAt'))} sup={r.get('supersedes')}%0A{b}")
           PY
