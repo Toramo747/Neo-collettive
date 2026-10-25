@@ -1,0 +1,29 @@
+name: tmp claim check, 402 vs openapi (read only)
+on:
+  push:
+    branches: [tmp/commons-log]
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - run: |
+          python3 - <<'PY'
+          import json, base64, urllib.request
+          B="https://neo-collettive.onrender.com"
+          spec=json.load(urllib.request.urlopen(B+"/openapi.json",timeout=60))
+          bad=[]; payto=set(); n=0
+          for path,item in spec["paths"].items():
+              op=item["post"]; want=str(int(round(float(op["x-payment-info"]["price"]["amount"])*1e6))); n+=1
+              try:
+                  urllib.request.urlopen(urllib.request.Request(B+path,data=b"",method="POST"),timeout=60); bad.append(f"{path}: not 402")
+              except urllib.error.HTTPError as e:
+                  if e.code!=402: bad.append(f"{path}: {e.code}"); continue
+                  a=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]
+                  payto.add(a["payTo"].lower())
+                  if a["amount"]!=want: bad.append(f"{path}: {a['amount']} vs {want}")
+          print(f"::notice title=claim::routes={n} mismatches={bad} distinct_payTo={len(payto)} new_wallet={payto=={'0x6a5715db03888ca96904754b8b7932483b92dd97'}}")
+          print("::notice title=desc::"+spec["info"]["description"][:300])
+          PY
