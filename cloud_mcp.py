@@ -2812,6 +2812,25 @@ def _x402_record_paid(name: str, via: str) -> None:
     row["last_utc"]=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
 
 
+def _x402_after_paid(name: str, svc: dict, payload: dict, via: str) -> dict:
+    """25/10: after a paid (or unconfirmed) result, count it, sign it and log it. Nothing here may stop the result
+    from reaching the buyer: if signing or logging fails, the result goes out unsigned with a note."""
+    try:
+        _x402_record_paid(name,via)
+    except Exception:
+        pass
+    if RECEIPT_SIGNING_KEY is None:
+        return payload
+    try:
+        log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
+        signed=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])
+        # no await between position and append: the entry lands exactly where the receipt says
+        AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"receipt",receipt_log.item_hash(signed))
+        return signed
+    except Exception as e:
+        return {**payload,"receipt_note":f"result delivered unsigned: signing failed on our side ({type(e).__name__})"}
+
+
 def _x402_route(name: str):
     """24/10: one paid microservice over x402 (see x402_paywall.py / x402_services.py). Off until Andrea sets the env."""
     async def view(request: Request):
@@ -2826,14 +2845,10 @@ def _x402_route(name: str):
             url="https://"+url[len("http://"):]  # Render terminates TLS: the public resource is https
         async def run(b, payer):
             return await svc["run"](b, "x402:"+payer)  # per-payer rate limits, same buckets as the free tools
-        status,headers,payload=await x402_paywall.handle(svc,url,dict(request.headers),body,run,x402_paywall.config())
+        status,headers,payload=await x402_paywall.handle(svc,url,dict(request.headers),body,run,x402_paywall.config(),
+                                                          is_disconnected=request.is_disconnected)
         if status==200:
-            _x402_record_paid(name,"http")
-        if status==200 and RECEIPT_SIGNING_KEY is not None:
-            log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
-            payload=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])
-            # no await between position and append: the entry lands exactly where the receipt says
-            AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"receipt",receipt_log.item_hash(payload))
+            payload=_x402_after_paid(name,svc,payload,"http")
         return JSONResponse(payload,status_code=status,headers=headers)
     return view
 
@@ -11346,11 +11361,7 @@ async def _x402_mcp(name: str, body: dict, ctx: Context):
     if status!=200:
         return CallToolResult.model_validate({"content":[{"type":"text","text":json.dumps(payload)}],"structuredContent":payload,"isError":True})
     settle=payload.get("payment") or {}
-    _x402_record_paid(name,"mcp")
-    if RECEIPT_SIGNING_KEY is not None:
-        log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
-        payload=receipt_signing.sign_receipt(payload, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool=svc["tool"])
-        AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"receipt",receipt_log.item_hash(payload))
+    payload=_x402_after_paid(name,svc,payload,"mcp")
     return CallToolResult.model_validate({"content":[{"type":"text","text":json.dumps(payload,ensure_ascii=False)}],
                                           "structuredContent":payload,"isError":False,"_meta":{"x402/payment-response":settle}})
 
