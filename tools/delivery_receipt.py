@@ -190,9 +190,19 @@ def verify(r: dict, seller_pub: str, buyer_body_sha256: str | None = None, hop_p
             _s.loader.exec_module(_m)
             if _m.checksum(asset) != asset:  # 24/10, skitter: a note, compared case-insensitively, not a fail
                 notes.append(f"payment.asset fails EIP-55 (checksum spelling {_m.checksum(asset)}); addresses compare case-insensitively")
-        except Exception:
-            pass
+        except Exception:  # 25/10, skitter: never stay silent when the check could not run
+            notes.append("payment.asset uses mixed case but its EIP-55 spelling was not checked (x402_lint.py not available)")
     return {"ok": not fails, "fails": fails, "notes": notes, "changed_by": changed, "changed_by_unverified": unverified_change}
+
+
+_B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+
+def _non_canonical(sig: str) -> str:
+    """Same 64 bytes, different spelling: set one of the 4 padding bits of the last char (25/10, skitter:
+    the old fallback to "A" changed real bits for signatures ending in Q, g or w)."""
+    i = _B64URL.index(sig[-1])
+    return sig[:-1] + _B64URL[(i & ~0xF) | ((i & 0xF) ^ 1)]
 
 
 def vectors() -> dict:
@@ -227,8 +237,7 @@ def vectors() -> dict:
                     sign_seller(dict(base, buyer_request_id="some-other-request"), sk), "example-relay", sk,
                     b'{"symbol":"BTCUSDT","funding":"0.0001","token":"abc"}', b'{"symbol":"BTCUSDT","funding":"0.0001","token":"abc"}',
                     "2026-10-23T10:12:22Z")["hops"]), "hop_pubs": {"example-relay": spub}, "expect": {"ok": False}},
-                {"name": "non-canonical-signature", "receipt": dict(plain, signature=plain["signature"][:-1] + "BCDEFGHIJKLMNOPA"[
-                    "ABCDEFGHIJKLMNOP".index(plain["signature"][-1])] if plain["signature"][-1] in "ABCDEFGHIJKLMNOP" else plain["signature"][:-1] + "A"),
+                {"name": "non-canonical-signature", "receipt": dict(plain, signature=_non_canonical(plain["signature"])),
                  "expect": {"ok": False}},
                 {"name": "asset-non-checksum-spelling-is-a-note", "receipt": sign_seller(dict(base, payment=dict(
                     base["payment"], asset="0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913")), sk),
