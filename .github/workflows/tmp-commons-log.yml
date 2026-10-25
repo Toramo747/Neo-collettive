@@ -1,4 +1,4 @@
-name: tmp x402 listing test (one paid call per unlisted service, Andrea's OK 25/10)
+name: tmp listing test aftermath (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,25 +7,20 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: python -m pip install --quiet "x402[httpx,evm]" eth-account cryptography
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.MODEL_LABEL_REPO }}
-          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
-          path: private-labels
-      - name: Self-test (address published only after checks; then wait for 2.08 USDC and pay five calls)
-        run: |
-          git -C private-labels config user.name "NEO Ops Bot"; git -C private-labels config user.email "actions@users.noreply.github.com"
-          git -C private-labels rm -q --cached common/x402/selftest-address.txt 2>/dev/null || true
-          rm -f private-labels/common/x402/selftest-address.txt
-          python tools/x402_selftest.py private-labels/common/x402/selftest-address.txt private-labels/common/x402/selftest-report.json
-      - if: always()
-        run: |
-          rm -f "$RUNNER_TEMP/k"
-          git -C private-labels add common/x402 2>/dev/null; git -C private-labels commit -qm "ops: x402 self-test report (private)" || true
-          for i in 1 2 3; do git -C private-labels pull -q --rebase && git -C private-labels push -q && break; sleep 5; done
+      - run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          def rpc(m,p):
+              for u in ["https://base-rpc.publicnode.com","https://mainnet.base.org"]:
+                  try: return json.load(urllib.request.urlopen(urllib.request.Request(u,data=json.dumps({"jsonrpc":"2.0","id":1,"method":m,"params":p}).encode(),headers={"Content-Type":"application/json","User-Agent":"neo"}),timeout=20))["result"]
+                  except Exception: pass
+          bal=lambda a:int(rpc("eth_call",[{"to":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","data":"0x70a08231"+"0"*24+a[2:].lower()},"latest"]),16)/1e6
+          print(f"::notice title=balances::throwaway={bal('0x3FF796783a1E583cE73c74e5BEA7988eB4a1428a')} andrea_new={bal('0x6a5715db03888ca96904754b8b7932483b92dd97')}")
+          log=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/receipts/log",headers={"User-Agent":"neo"}),timeout=60))
+          e=log.get("entries") or log
+          print(f"::notice title=log::size={len(e)} last_seq={e[-1][0]}")
+          x=json.load(urllib.request.urlopen("https://neo-collettive.onrender.com/x402",timeout=60))
+          print("::notice title=paid::"+json.dumps(x.get("paid_since_launch"))+" "+json.dumps(x.get("counters_since_start")))
+          PY
