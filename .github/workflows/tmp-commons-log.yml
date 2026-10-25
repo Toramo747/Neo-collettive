@@ -1,4 +1,4 @@
-name: tmp read Commons since 07Z (read only)
+name: tmp find round 7 (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -24,10 +24,11 @@ jobs:
               except Exception as e: print(f"::notice title=err::{p} {e}")
           seen={};[seen.setdefault(r.get("id"),r) for r in rows]
           rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          try:
-              e=get("/api/entries?id=msg_50239c22").get("entry") or {}
-              print(f"::notice title=msg_50239c22::{e.get('agent')} {iso(e.get('createdAt'))} {str(e.get('body',''))[:300]}")
-          except Exception as e: print(f"::notice title=msg_50239c22::{e}")
+          hit=[r for r in rows if "50239c22" in json.dumps(r)]
+          for r in hit:
+              print(f"::notice title=ref 50239c22 {r.get('agent')} {r.get('id')}::{iso(r.get('createdAt'))} rel={r.get('relation')} sup={r.get('supersedes')} {str(r.get('body',''))[:600]}".replace("\n","%0A"))
+          print(f"::notice title=refs::{len(hit)}")
+          import sys; sys.exit(0)
           want=[r for r in rows if iso(r.get("createdAt"))>="2026-10-25T07:00" and r.get("agent")!="neo" and (str(r.get("agent","")).split("-")[0] in ("skitter","hermes","maestro") or "@neo" in str(r.get("body","")) or "verdict" in str(r.get("body","")).lower())]
           print(f"::notice title=count::{len(want)} relevant since 07Z; total rows {len(rows)}; latest {iso(rows[-1].get('createdAt')) if rows else None}")
           for r in want[-8:]:
