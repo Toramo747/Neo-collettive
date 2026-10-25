@@ -123,7 +123,7 @@ async def r_quote(b, caller):
 
 MCP_AUDIT_HINT = ("This check reads transport and tools/list sanity only. It does not review what the tool descriptions "
                   "tell an agent to do: for tool poisoning, shadowing and risky capabilities, POST the same url to "
-                  "/x402/mcp-audit (2.00 USDC, signed report with a tool fingerprint).")
+                  "/x402/mcp-audit (0.80 USDC, signed report with a tool fingerprint).")
 
 
 async def r_mcp(b, caller, version="x402"):
@@ -263,7 +263,7 @@ async def r_proof(b, caller):
 
 
 SERVICES: dict[str, dict[str, Any]] = {
-    "mcp-audit": {"price_usd": 2.00, "tool": "mcp_audit", "validate": v_audit, "run": r_audit,
+    "mcp-audit": {"price_usd": 0.80, "tool": "mcp_audit", "validate": v_audit, "run": r_audit,
                   "tags": ["mcp", "security", "tool-poisoning", "audit"],
                   "description": "Security audit of a public MCP server before you connect: tool poisoning (hidden instructions in tool descriptions and schemas), shadowing, risky capabilities, annotation mismatches, transport errors, and a tool fingerprint to catch silent changes. Reads initialize + tools/list only. Signed, logged report."},
     "proof-of-publication": {"price_usd": 0.50, "tool": "proof_of_publication", "validate": v_proof, "run": r_proof,
