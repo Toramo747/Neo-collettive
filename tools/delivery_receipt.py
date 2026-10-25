@@ -241,7 +241,9 @@ def vectors() -> dict:
                  "expect": {"ok": False}},
                 {"name": "asset-non-checksum-spelling-is-a-note", "receipt": sign_seller(dict(base, payment=dict(
                     base["payment"], asset="0x833589fCD6eDb6E08f4c7C32D4F71b54bdA02913")), sk),
-                 "expect": {"ok": True, "note_contains": "fails EIP-55"}}]}
+                 "expect": {"ok": True, "note_contains": "fails EIP-55"},
+                 # 25/10, skitter: without x402_lint.py this expect cannot be met, so say so in the vector
+                 "requires": "x402_lint.py"}]}
 
 
 def example() -> tuple[dict, dict]:

@@ -74,6 +74,7 @@ class DeliveryReceiptTest(unittest.TestCase):
         import json, tempfile
         V = json.loads((Path(__file__).resolve().parent / "docs" / "spec" / "x402-delivery-receipt-v0.1-vectors.json").read_text())
         v = next(x for x in V["vectors"] if x["name"] == "asset-non-checksum-spelling-is-a-note")
+        self.assertEqual(v.get("requires"), "x402_lint.py")  # tells a one-file self-check why the expect is unmet
         real = dr.__file__
         with tempfile.TemporaryDirectory() as d:
             dr.__file__ = str(Path(d) / "delivery_receipt.py")
