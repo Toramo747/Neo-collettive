@@ -15,7 +15,8 @@ import urllib.request
 from pathlib import Path
 
 URL = "https://neo-collettive.onrender.com/x402"
-ALARM = {"facilitator_http_error": 1, "settle_failed": 1, "our_failure_not_charged": 3}
+ALARM = {"facilitator_http_error": 1, "settle_failed": 1, "our_failure_not_charged": 3, "settle_uncertain_delivered": 1,
+         "client_gone_not_charged": 2}
 
 
 def check(now: dict, before: dict) -> list[str]:

@@ -35,7 +35,8 @@ MAX_TIMEOUT_SECONDS = 120
 
 # --- counters (public aggregates only: no payer, no amount per call) -------------------------------------------
 METRICS: dict[str, int] = {"asked_to_pay": 0, "bad_input": 0, "wrong_terms": 0, "payment_invalid": 0,
-                           "our_failure_not_charged": 0, "settle_failed": 0, "paid_and_served": 0, "facilitator_http_error": 0}
+                           "our_failure_not_charged": 0, "failed_result_not_charged": 0, "client_gone_not_charged": 0,
+                           "settle_uncertain_delivered": 0, "settle_failed": 0, "paid_and_served": 0, "facilitator_http_error": 0}
 
 
 BY_SERVICE: dict[str, dict[str, int]] = {}  # 24/10: the same counters per service, to see what is asked for
@@ -203,8 +204,15 @@ async def facilitator_check(cfg: dict | None, get=None) -> dict:
 
 # --- the whole flow, framework-free (the Starlette route only adapts request/response) -----------------------
 async def handle(service: dict, url: str, headers: dict, body: dict | None, run: Callable[[dict, str], Awaitable[dict]],
-                 cfg: dict | None, post=None) -> tuple[int, dict, dict]:
-    """Returns (status, response headers, JSON body)."""
+                 cfg: dict | None, post=None, is_disconnected: Callable[[], Awaitable[bool]] | None = None) -> tuple[int, dict, dict]:
+    """Returns (status, response headers, JSON body).
+
+    25/10 (Andrea: "gli utenti non devono perdere soldi"). The buyer is charged only when they get a result:
+    - nothing is settled unless the result is a real one (any ok=false result is free, ours or theirs);
+    - nothing is settled if the buyer has already hung up;
+    - if the settlement answer is lost (timeout, facilitator HTTP error) the money may have moved, so the result is
+      delivered anyway, marked unconfirmed: in doubt, neo gives the result away rather than keep the money;
+    - an explicit settlement failure means no money moved: 402, no result."""
     if cfg is None:
         return 503, {}, {"ok": False, "error": "x402_not_enabled"}
     req = requirements(service["price_usd"], cfg["pay_to"])
@@ -230,11 +238,33 @@ async def handle(service: dict, url: str, headers: dict, body: dict | None, run:
         _count("payment_invalid", service)
         h, b = payment_required(service, url, cfg["pay_to"], error=str(v.get("invalidReason") or v.get("errorReason") or "payment_invalid"))
         return 402, h, b
-    result = await run(body, str(v.get("payer") or "unknown"))  # computed, not released until settlement succeeds
-    if result.get("ok") is False and str(result.get("error") or "").startswith(tuple(service.get("no_charge_errors", ()))):
+    try:
+        result = await run(body, str(v.get("payer") or "unknown"))  # computed, not released until settlement succeeds
+    except Exception as e:  # a crash on our side: nothing is settled
         _count("our_failure_not_charged", service)
-        return 503, {}, {**result, "charged": False}  # our side failed (deadline, rate limit): do not settle
-    s = await facilitator(cfg, "settle", version, payload, req, post)
+        return 503, {}, {"ok": False, "error": f"internal_{type(e).__name__}", "charged": False}
+    if not isinstance(result, dict) or result.get("ok") is False:
+        ours = str((result or {}).get("error") or "").startswith(tuple(service.get("no_charge_errors", ()))) if isinstance(result, dict) else True
+        _count("our_failure_not_charged" if ours else "failed_result_not_charged", service)
+        out = result if isinstance(result, dict) else {"ok": False, "error": "internal_bad_result"}
+        return (503 if ours else 422), {}, {**out, "charged": False}  # no real result: do not settle
+    if is_disconnected is not None:
+        try:
+            gone = await is_disconnected()
+        except Exception:
+            gone = False
+        if gone:  # the buyer hung up while we worked: they would pay for nothing
+            _count("client_gone_not_charged", service)
+            return 499, {}, {"ok": False, "error": "client_disconnected", "charged": False}
+    try:
+        s = await facilitator(cfg, "settle", version, payload, req, post)
+    except Exception as e:
+        s = {"_http": None, "success": False, "errorReason": f"settle_exception_{type(e).__name__}"}
+    if not s.get("success") and ("_http" in s):  # no answer we can trust: the transfer may have happened
+        _count("settle_uncertain_delivered", service)
+        settle = {"success": None, "status": "unconfirmed", "network": NETWORK, "reason": str(s.get("errorReason"))[:80],
+                  "note": "we could not confirm the settlement; the result is delivered anyway"}
+        return 200, {}, {**result, "payment": settle}
     if not s.get("success"):
         _count("settle_failed", service)
         h, b = payment_required(service, url, cfg["pay_to"], error=str(s.get("errorReason") or "settlement_failed"))

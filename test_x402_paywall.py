@@ -45,10 +45,10 @@ def run(coro):
 
 
 class PaywallTest(unittest.TestCase):
-    def handle(self, headers, body=BODY, fac=None, cfg=CFG, runner=None):
+    def handle(self, headers, body=BODY, fac=None, cfg=CFG, runner=None, gone=None):
         async def default(b, payer):
             return {"ok": True, "sha256": b["sha256"]}
-        return run(xp.handle(SVC, URL, headers, body, runner or default, cfg, post=fac or Fac()))
+        return run(xp.handle(SVC, URL, headers, body, runner or default, cfg, post=fac or Fac(), is_disconnected=gone))
 
     def test_off_until_env_is_set(self):
         self.assertIsNone(xp.config({}))
@@ -141,6 +141,63 @@ class PaywallTest(unittest.TestCase):
             return {"ok": False, "error": "verification_deadline_exceeded"}
         st, h, b = self.handle(pay_header(xp.requirements(0.01, PAY_TO)), fac=fac, runner=slow)
         self.assertEqual((st, b["charged"], [c[0] for c in fac.calls]), (503, False, ["verify"]))
+
+    # --- 25/10: the buyer never pays without getting a result -------------------------------------------------
+    def paid(self, **kw):
+        return self.handle(pay_header(xp.requirements(0.01, PAY_TO)), **kw)
+
+    def test_failed_result_is_free(self):
+        fac = Fac()
+        async def unreachable(b, payer):
+            return {"ok": False, "error": "endpoint_unreachable"}
+        st, h, b = self.paid(fac=fac, runner=unreachable)
+        self.assertEqual((st, b["charged"], [c[0] for c in fac.calls]), (422, False, ["verify"]))
+
+    def test_crash_is_free(self):
+        fac = Fac()
+        async def boom(b, payer):
+            raise RuntimeError("x")
+        st, h, b = self.paid(fac=fac, runner=boom)
+        self.assertEqual((st, b["charged"], [c[0] for c in fac.calls]), (503, False, ["verify"]))
+
+    def test_buyer_gone_is_not_settled(self):
+        fac = Fac()
+        async def gone():
+            return True
+        st, h, b = self.paid(fac=fac, gone=gone)
+        self.assertEqual((st, b["charged"], [c[0] for c in fac.calls]), (499, False, ["verify"]))
+        async def here():
+            return False
+        self.assertEqual(self.paid(fac=Fac(), gone=here)[0], 200)
+
+    def test_lost_settlement_answer_still_delivers(self):
+        class HttpErr(Fac):
+            async def __call__(self, url, headers, body):
+                self.calls.append((url.rsplit("/", 1)[1], headers, body))
+                return (200, self.verify) if url.endswith("/verify") else (504, {})
+        st, h, b = self.paid(fac=HttpErr())
+        self.assertEqual((st, b["sha256"], b["payment"]["status"]), (200, "a" * 64, "unconfirmed"))
+        class Raises(Fac):
+            async def __call__(self, url, headers, body):
+                if url.endswith("/settle"):
+                    raise TimeoutError()
+                return 200, self.verify
+        st, h, b = self.paid(fac=Raises())
+        self.assertEqual((st, b["sha256"], b["payment"]["status"]), (200, "a" * 64, "unconfirmed"))
+
+    def test_every_service_has_a_price_and_settles_only_after_run(self):
+        for k, svc in xs.SERVICES.items():
+            order = []
+            fac = Fac()
+            async def r(b, payer):
+                order.append("run")
+                return {"ok": True}
+            async def post(url, headers, body):
+                order.append(url.rsplit("/", 1)[1])
+                return await fac(url, headers, body)
+            req = xp.requirements(svc["price_usd"], PAY_TO)
+            st, h, b = run(xp.handle({**svc, "validate": None}, URL, pay_header(req), {}, r, CFG, post=post))
+            self.assertEqual((st, order), (200, ["verify", "run", "settle"]), k)
 
     def test_facilitator_check(self):
         xp._SUPPORTED_CACHE.clear()
@@ -252,6 +309,7 @@ class HealthTest(unittest.TestCase):
         self.assertFalse(h.check({"counters_since_start": {"our_failure_not_charged": 3}}, a))   # +2 only
         self.assertTrue(h.check({"counters_since_start": {"our_failure_not_charged": 4}}, a))
         self.assertFalse(h.check({"counters_since_start": {"our_failure_not_charged": 0}}, a))   # restarted, 0 new
+        self.assertTrue(h.check({"counters_since_start": {"our_failure_not_charged": 1, "settle_uncertain_delivered": 1}}, a))
 
     def test_counters_move(self):
         before = dict(xp.METRICS)
