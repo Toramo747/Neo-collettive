@@ -1,4 +1,4 @@
-name: tmp live check after no-loss deploy (read only)
+name: tmp SWH check of 25/10 SWHIDs (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,24 +7,19 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - run: |
           python3 - <<'PY'
-          import json, base64, urllib.request, time
-          B="https://neo-collettive.onrender.com"
-          spec=json.load(urllib.request.urlopen(B+"/openapi.json",timeout=60)); bad=[]; payto=set()
-          for path,item in spec["paths"].items():
-              want=str(int(round(float(item["post"]["x-payment-info"]["price"]["amount"])*1e6)))
-              try: urllib.request.urlopen(urllib.request.Request(B+path,data=b"",method="POST"),timeout=60); bad.append(path)
+          import json, urllib.request
+          ids={"delivery_receipt.py":"c58f9554ae8fb81585cf425a30b4813348b45d9c","vectors":"6fdaf45c52826bcccfe7cca8259fd237559a0606","spec":"e522b830b1231fdb9003e15b23c1c2be0cc41570"}
+          for name,h in ids.items():
+              u=f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"
+              try:
+                  d=json.load(urllib.request.urlopen(u,timeout=60))
+                  print(f"::notice title=SWH {name}::FOUND length={d.get('length')} status={d.get('status')} sha1_git_ok={d.get('checksums',{}).get('sha1_git')==h}")
               except urllib.error.HTTPError as e:
-                  if e.code!=402: bad.append(f"{path}:{e.code}"); continue
-                  a=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]; payto.add(a["payTo"].lower())
-                  if a["amount"]!=want: bad.append(f"{path}:{a['amount']}")
-          x=json.load(urllib.request.urlopen(B+"/x402",timeout=60))
-          print(f"::notice title=live::routes={len(spec['paths'])} bad={bad} payTo_ok={payto=={'0x6a5715db03888ca96904754b8b7932483b92dd97'}} enabled={x['enabled']} fac={x['facilitator'].get('ok')} counters_keys={sorted(x['counters_since_start'])[:12]}")
-          print("::notice title=paid since launch::"+json.dumps({k:v['calls'] for k,v in (x.get('paid_since_launch') or {}).items()}))
-          a=json.loads(base64.b64decode(urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"",method="POST"),timeout=60).headers.get("x","") or "e30=")) if False else None
-          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"",method="POST"),timeout=60)
-          except urllib.error.HTTPError as e: print("::notice title=audit 402::amount="+json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]["amount"])
+                  print(f"::notice title=SWH {name}::HTTP {e.code}")
+              except Exception as e:
+                  print(f"::notice title=SWH {name}::ERR {type(e).__name__}")
           PY
