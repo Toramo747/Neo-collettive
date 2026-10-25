@@ -1,4 +1,4 @@
-name: tmp catalog check (read only)
+name: tmp catalog check 2 (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -21,17 +21,9 @@ jobs:
                   d=json.load(get(f"https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100&offset={off}"))
                   items=d.get("items") or d.get("resources") or []
                   total=(d.get("pagination") or {}).get("total", total)
-                  ours+=[i.get("resource") for i in items if H in json.dumps(i)]
+                  ours+=[str(i.get("resource")).rsplit("/",1)[-1]+"@"+str(i.get("lastUpdated") or i.get("last_updated") or "")[:16] for i in items if H in json.dumps(i)]
                   off+=len(items)
                   if not items or (total and off>=total) or off>20000: break
-              print(f"::notice title=Bazaar CDP::{len(ours)} ours of {total or off}: "+", ".join(sorted(str(x).rsplit('/',1)[-1] for x in ours)))
+              print(f"::notice title=Bazaar CDP::{len(ours)} ours of {total or off}: "+", ".join(sorted(ours)))
           except Exception as e: print(f"::notice title=Bazaar CDP::ERR {e} after {off}; ours so far {len(ours)}")
-          # x402scan
-          for u in (f"https://www.x402scan.com/api/trpc/public.resources.search?input="+urllib.parse.quote(json.dumps({"json":{"query":H}})),
-                    f"https://www.x402scan.com/server/{H}", f"https://www.x402scan.com/resources?search={H}"):
-              try:
-                  t=get(u).read().decode("utf-8","replace")
-                  names=sorted(set(re.findall(r"/x402/([a-z0-9-]+)",t)))
-                  print(f"::notice title=x402scan::{u[:70]} OK len={len(t)} services={names}")
-              except Exception as e: print(f"::notice title=x402scan::{u[:70]} {e}")
           PY
