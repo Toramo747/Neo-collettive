@@ -1,0 +1,39 @@
+name: MCP watch pilot (7 days, aggregates only)
+on:
+  schedule:
+    - cron: "37 7 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mcp-watch-pilot
+  cancel-in-progress: false
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Stop after the pilot window
+        id: win
+        run: |
+          if [ "$(date -u +%Y%m%d)" -gt 20261103 ]; then echo "over=1" >> "$GITHUB_OUTPUT"; echo "::notice title=mcp watch pilot::window over"; fi
+      - uses: actions/checkout@v4
+        if: steps.win.outputs.over != '1'
+      - uses: actions/setup-python@v5
+        if: steps.win.outputs.over != '1'
+        with: {python-version: "3.12", cache: pip}
+      - if: steps.win.outputs.over != '1'
+        run: python -m pip install -q -r requirements.txt
+      - uses: actions/cache/restore@v4
+        if: steps.win.outputs.over != '1'
+        with:
+          path: mcp-watch-state.json
+          key: mcp-watch-state-${{ github.run_id }}
+          restore-keys: mcp-watch-state-
+      - if: steps.win.outputs.over != '1'
+        run: PYTHONPATH=. python tools/mcp_watch_pilot.py mcp-watch-state.json
+      - uses: actions/cache/save@v4
+        if: steps.win.outputs.over != '1'
+        with:
+          path: mcp-watch-state.json
+          key: mcp-watch-state-${{ github.run_id }}
