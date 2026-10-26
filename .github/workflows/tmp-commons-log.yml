@@ -1,4 +1,4 @@
-name: tmp SWH save + wait for requires-field files
+name: tmp post-deploy health + SWH (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,23 +7,19 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, time
-          A="https://archive.softwareheritage.org/api/1/"
-          try:
-              r=json.load(urllib.request.urlopen(urllib.request.Request(A+"origin/save/git/url/https://github.com/Toramo747/Neo-collettive/",method="POST",headers={"User-Agent":"neo"}),timeout=60))
-              print(f"::notice title=save::{r.get('save_request_status')} {r.get('save_task_status')}")
-          except Exception as e: print(f"::notice title=save::ERR {e}")
-          want={"vectors":"a46435da6c7ed220ac06e078715bf0b4ba127be5","delivery_receipt.py":"4281e630a4ec8e23bf86239e606c981b39f6ae3a"}; t0=time.time()
-          while want and time.time()-t0<2400:
-              for n,h in list(want.items()):
-                  try:
-                      d=json.load(urllib.request.urlopen(urllib.request.Request(A+f"content/sha1_git:{h}/",headers={"User-Agent":"neo"}),timeout=60))
-                      print(f"::notice title=SWH {n}::FOUND after {int(time.time()-t0)}s length={d.get('length')} status={d.get('status')}"); want.pop(n)
-                  except urllib.error.HTTPError: pass
-              if want: time.sleep(60)
-          for n in want: print(f"::notice title=SWH {n}::NOT YET after 40 min")
+          import json, urllib.request, base64
+          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
+          B="https://neo-collettive.onrender.com"
+          h=get(B+"/health"); print(f"::notice title=health::{h.get('status')} {h.get('version')} {str(h.get('commit'))[:7]}")
+          x=get(B+"/x402"); print(f"::notice title=x402::enabled={x.get('enabled')} fac={(x.get('facilitator') or {}).get('ok')}")
+          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"{}",method="POST",headers={"Content-Type":"application/json"}),timeout=90)
+          except urllib.error.HTTPError as e: print(f"::notice title=402::{e.code} amount={json.loads(base64.b64decode(e.headers['PAYMENT-REQUIRED']))['accepts'][0]['amount'] if e.code==402 else ''}")
+          for n,hh in (("vectors","a46435da6c7ed220ac06e078715bf0b4ba127be5"),("delivery_receipt.py","4281e630a4ec8e23bf86239e606c981b39f6ae3a")):
+              try: d=get(f"https://archive.softwareheritage.org/api/1/content/sha1_git:{hh}/"); print(f"::notice title=SWH {n}::FOUND {d.get('length')} {d.get('status')}")
+              except Exception as e: print(f"::notice title=SWH {n}::{e}")
           PY
