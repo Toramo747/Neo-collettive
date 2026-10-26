@@ -1,4 +1,4 @@
-name: tmp traffic read (read only)
+name: tmp find failing CI test
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,15 +7,20 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 25
+    strategy:
+      matrix:
+        attempt: [1, 2, 3]
     steps:
+      - uses: actions/checkout@v4
+        with: {ref: main}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
       - run: |
-          python3 - <<'PY'
-          import json, urllib.request
-          x=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/x402",headers={"User-Agent":"neo-tmp"}),timeout=90))
-          print("::notice title=paid since launch::"+json.dumps({k:[v.get('calls'),v.get('usd'),v.get('last_utc')] for k,v in (x.get('paid_since_launch') or {}).items()}))
-          print("::notice title=since restart::"+json.dumps({k:v for k,v in (x.get('counters_since_start') or {}).items() if v}))
-          print("::notice title=by service::"+json.dumps({k:{kk:vv for kk,vv in v.items() if vv} for k,v in (x.get('counters_by_service') or {}).items()}))
-          h=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/health",headers={"User-Agent":"neo-tmp"}),timeout=90))
-          print(f"::notice title=health::{h.get('status')} {h.get('version')} {str(h.get('commit'))[:7]} uptime={h.get('uptime_seconds') or h.get('uptime')}")
-          PY
+          python -m pip install -q -r requirements.txt PyYAML==6.0.3
+          python -m unittest discover -v > /tmp/ut.txt 2>&1 || true
+          grep -E "^(FAIL|ERROR):" /tmp/ut.txt | sort -u | while read -r l; do echo "::notice title=attempt ${{ matrix.attempt }}::$l"; done
+          for t in $(grep -E "^(FAIL|ERROR):" /tmp/ut.txt | sed -E 's/^(FAIL|ERROR): ([a-z_]+) \(([a-zA-Z0-9_.]+)\).*/\3.\2/' | sort -u | head -3); do
+            awk -v t="$t" 'index($0,t){f=1} f&&/^(Traceback|AssertionError|[A-Za-z]+Error)/{print; n++} n>=4{exit}' /tmp/ut.txt | head -4 | sed 's/%/%25/g' | tr '\n' '|' | sed "s/^/::notice title=detail ${t##*.}::/"; echo
+          done
+          tail -3 /tmp/ut.txt | tr '\n' ' ' | sed 's/^/::notice title=summary ${{ matrix.attempt }}::/'; echo
