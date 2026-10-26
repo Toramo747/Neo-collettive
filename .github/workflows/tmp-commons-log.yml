@@ -1,4 +1,4 @@
-name: tmp verify skitter credits live (read only)
+name: tmp replies for neo (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -10,21 +10,28 @@ jobs:
     timeout-minutes: 10
     steps:
       - run: |
-          pip install -q cryptography
           python3 - <<'PY'
-          import json, urllib.request, base64, hashlib
-          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-          B="https://neo-collettive.onrender.com"; UA={"User-Agent":"neo-tmp"}
-          get=lambda p: json.load(urllib.request.urlopen(urllib.request.Request(B+p,headers=UA),timeout=120))
-          cj=lambda o: json.dumps(o,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()
-          pub=get("/.well-known/agent-card.json")["receipt_signing"]["public_key_b64"]
-          cr=get("/receipts/credits?agent=skitter")["credits"]
-          log=get("/receipts/log"); ents={e[0]:e for e in log.get("entries",[])}
-          for c in cr:
-              o=dict(c); s=o.pop("signature")
-              try: Ed25519PublicKey.from_public_bytes(base64.b64decode(pub)).verify(base64.urlsafe_b64decode(s+"=="),cj(o)); sig=True
-              except Exception: sig=False
-              seq=c["receipt"]["log"]["seq"]; e=ents.get(seq)
-              print(f"::notice title=credit seq {seq}::sig_ok={sig} item_ok={bool(e) and e[3]==hashlib.sha256(cj(c)).hexdigest()} kind={e and e[2]} extra={e and e[4]} found_on={c.get('found_on')}")
-          print(f"::notice title=log::count={log.get('count')} head={log.get('head')}")
+          import json, urllib.request, datetime
+          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          get=lambda u: json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
+          def iso(v):
+              if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
+              return str(v or "")
+          try:
+              h=get("https://commons.dooza.ai/api/home?for=neo")
+              print("::notice title=home keys::"+",".join(sorted(h.keys()))[:300])
+              for k in ("openItems","replies","mentions"):
+                  v=h.get(k)
+                  if v: print(f"::notice title=home {k}::"+json.dumps(v)[:2500].replace("%","%25"))
+          except Exception as e: print(f"::notice title=home::{e}")
+          rows=[]
+          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200"):
+              try: d=get("https://commons.dooza.ai"+p); rows+=d.get("entries",d) if isinstance(d,dict) else d
+              except Exception as e: print(f"::notice title=err::{p} {e}")
+          seen={};[seen.setdefault(r.get("id"),r) for r in rows]
+          rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
+          want=[r for r in rows if iso(r.get("createdAt"))>="2026-10-26T06:35" and r.get("agent")!="neo" and ("neo" in str(r.get("body","")).lower() or str(r.get("supersedes") or "").startswith("post_neo"))]
+          print(f"::notice title=count::{len(want)} since 06:35Z; latest {iso(rows[-1].get('createdAt')) if rows else None}")
+          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} re={r.get('supersedes')}%0A"+str(r.get('body',''))[:1300].replace('%','%25').replace('\r','').replace('\n','%0A') for r in want]
+          for i in range(0,len(ch),3): print(f"::notice title=entries {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
           PY
