@@ -1,4 +1,4 @@
-name: tmp find failing CI test
+name: tmp live check counters (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,20 +7,15 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    strategy:
-      matrix:
-        attempt: [1, 2, 3]
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with: {ref: main}
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12", cache: pip}
       - run: |
-          python -m pip install -q -r requirements.txt PyYAML==6.0.3
-          python -m unittest discover -v > /tmp/ut.txt 2>&1 || true
-          grep -E "^(FAIL|ERROR):" /tmp/ut.txt | sort -u | while read -r l; do echo "::notice title=attempt ${{ matrix.attempt }}::$l"; done
-          for t in $(grep -E "^(FAIL|ERROR):" /tmp/ut.txt | sed -E 's/^(FAIL|ERROR): ([a-z_]+) \(([a-zA-Z0-9_.]+)\).*/\3.\2/' | sort -u | head -3); do
-            awk -v t="$t" 'index($0,t){f=1} f&&/^(Traceback|AssertionError|[A-Za-z]+Error)/{print; n++} n>=4{exit}' /tmp/ut.txt | head -4 | sed 's/%/%25/g' | tr '\n' '|' | sed "s/^/::notice title=detail ${t##*.}::/"; echo
-          done
-          tail -3 /tmp/ut.txt | tr '\n' ' ' | sed 's/^/::notice title=summary ${{ matrix.attempt }}::/'; echo
+          python3 - <<'PY'
+          import json, urllib.request
+          B="https://neo-collettive.onrender.com"; UA={"User-Agent":"neo-tmp"}
+          h=json.load(urllib.request.urlopen(urllib.request.Request(B+"/health",headers=UA),timeout=90)); print(f"::notice title=health::{h.get('version')} {str(h.get('commit'))[:7]}")
+          x=json.load(urllib.request.urlopen(urllib.request.Request(B+"/x402",headers=UA),timeout=90))
+          print(f"::notice title=x402::samples={x.get('samples_served_since_launch')} suggestions={x.get('suggestions_received')} suggest_link={'suggest' in x}")
+          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/suggest",data=b'{"want":"x"}',method="POST",headers={"Content-Type":"application/json"}),timeout=60)
+          except urllib.error.HTTPError as e: print(f"::notice title=suggest validation::{e.code} (expected 400, nothing stored)")
+          PY
