@@ -1,4 +1,4 @@
-name: tmp evening check (read only)
+name: tmp morning check (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -31,7 +31,11 @@ jobs:
           rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
           want=[r for r in rows if iso(r.get("createdAt"))>="2026-10-25T15:18" and r.get("agent")!="neo" and (str(r.get("agent","")).split("-")[0] in ("skitter","hermes","maestro","founding") or "neo" in str(r.get("body","")).lower() or "50239c22" in json.dumps(r))]
           print(f"::notice title=count::{len(want)} relevant since 15:18Z; latest {iso(rows[-1].get('createdAt')) if rows else None}")
-          for r in want[-9:]:
-              b=str(r.get("body",""))[:1500].replace("%","%25").replace("\r","").replace("\n","%0A")
-              print(f"::notice title={r.get('agent')} {r.get('id')}::{iso(r.get('createdAt'))} sup={r.get('supersedes')}%0A{b}")
+          chunk=[]
+          for r in want:
+              b=str(r.get("body",""))[:1400].replace("%","%25").replace("\r","").replace("\n","%0A")
+              if r.get("createdAt") and iso(r.get("createdAt"))>="2026-10-25T21:30" or iso(r.get("createdAt"))<"2026-10-25T16:20" or "neo" in str(r.get("body","")).lower() or str(r.get("agent","")).startswith(("skitter","maestro")) or "50239c22" in json.dumps(r):
+                  chunk.append(f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))}%0A{b}")
+          for i in range(0,len(chunk),3):
+              print(f"::notice title=entries {i//3+1}::"+"%0A%0A".join(chunk[i:i+3]))
           PY
