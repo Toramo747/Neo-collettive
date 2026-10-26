@@ -1,4 +1,4 @@
-name: tmp SWH save status (read only)
+name: tmp SWH retry save (one request)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,19 +7,26 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request
-          A="https://archive.softwareheritage.org/api/1/"; UA={"User-Agent":"neo"}
-          def get(u):
-              try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=60))
-              except urllib.error.HTTPError as e: return {"_http":e.code,"_body":e.read()[:200].decode("utf-8","replace")}
-          for o in ("https://github.com/Toramo747/Neo-collettive","https://github.com/Toramo747/Neo-collettive/"):
-              s=get(A+f"origin/save/git/url/{o}/") if not o.endswith("/") else get(A+f"origin/save/git/url/{o}")
-              rows=s if isinstance(s,list) else [s]
-              print(f"::notice title=save requests {o[-20:]}::"+" | ".join(f"{r.get('save_request_date','')[:16]} req={r.get('save_request_status')} task={r.get('save_task_status')} visit={r.get('visit_status')} visit_date={str(r.get('visit_date'))[:16]} note={str(r.get('note') or '')[:80]}" for r in rows[:6]) if rows and not rows[0].get('_http') else f"::notice title=save requests::{rows}")
-              v=get(A+f"origin/{o}/visit/latest/")
-              print(f"::notice title=latest visit {o[-20:]}::status={v.get('status')} date={str(v.get('date'))[:19]} snapshot={str(v.get('snapshot'))[:12]} {v.get('_http','')}")
+          import json, urllib.request, time
+          A="https://archive.softwareheritage.org/api/1/"; UA={"User-Agent":"neo"}; O="https://github.com/Toramo747/Neo-collettive"
+          try:
+              r=json.load(urllib.request.urlopen(urllib.request.Request(A+f"origin/save/git/url/{O}/",method="POST",headers=UA),timeout=60))
+              rid=r.get("id"); print(f"::notice title=save::id={rid} {r.get('save_request_status')} {r.get('save_task_status')}")
+          except urllib.error.HTTPError as e:
+              print(f"::notice title=save::HTTP {e.code} {e.read()[:200]!r}"); raise SystemExit(0)
+          t0=time.time(); last=None
+          while time.time()-t0<3300:
+              rows=json.load(urllib.request.urlopen(urllib.request.Request(A+f"origin/save/git/url/{O}/",headers=UA),timeout=60))
+              cur=[x for x in rows if x.get("id")==rid] or rows[:1]; c=cur[0]
+              st=(c.get("save_task_status"),c.get("visit_status"))
+              if st!=last: print(f"::notice title=status {int(time.time()-t0)}s::task={st[0]} visit={st[1]}"); last=st
+              if st[0] in ("succeeded","failed"): break
+              time.sleep(60)
+          for n,h in (("vectors","a46435da6c7ed220ac06e078715bf0b4ba127be5"),("delivery_receipt.py","4281e630a4ec8e23bf86239e606c981b39f6ae3a")):
+              try: d=json.load(urllib.request.urlopen(urllib.request.Request(A+f"content/sha1_git:{h}/",headers=UA),timeout=60)); print(f"::notice title=SWH {n}::FOUND {d.get('length')}")
+              except Exception as e: print(f"::notice title=SWH {n}::{e}")
           PY
