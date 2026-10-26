@@ -14,6 +14,7 @@ import receipt_signing
 import receipt_log
 import x402_paywall
 import x402_services
+import prompt_injection_scan
 import github_chunk_store
 import oxibay_doctor as oxibay_doctor_engine
 import a2a_peer as peer_a2a
@@ -393,6 +394,8 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "receipt_log": {},
     "x402_paid": {},
     "credits": [],
+    "x402_samples_served": {},
+    "x402_suggestions": [],
     "build_history": [],
     "last_build": None,
     "measurement_history": [],
@@ -583,6 +586,8 @@ def _state_payload() -> dict:
         "receipt_log": AUTOPILOT_STATE.get("receipt_log") or {},
         "x402_paid": AUTOPILOT_STATE.get("x402_paid") or {},
         "credits": list(AUTOPILOT_STATE.get("credits") or [])[-12:],  # = CREDITS_KEEP (literal: recovery tools run this function alone)
+        "x402_samples_served": dict(AUTOPILOT_STATE.get("x402_samples_served") or {}),
+        "x402_suggestions": list(AUTOPILOT_STATE.get("x402_suggestions") or [])[-20:],  # = SUGGESTIONS_KEEP
         "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
@@ -681,6 +686,10 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["x402_paid"] = payload.get("x402_paid")
     if isinstance(payload.get("credits"), list):
         AUTOPILOT_STATE["credits"] = payload.get("credits")[-12:]  # = CREDITS_KEEP
+    if isinstance(payload.get("x402_samples_served"), dict):
+        AUTOPILOT_STATE["x402_samples_served"] = payload.get("x402_samples_served")
+    if isinstance(payload.get("x402_suggestions"), list):
+        AUTOPILOT_STATE["x402_suggestions"] = payload.get("x402_suggestions")[-20:]  # = SUGGESTIONS_KEEP
     if isinstance(payload.get("build_history"), list):
         AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
     if isinstance(payload.get("last_build"), dict):
@@ -2848,6 +2857,8 @@ def _x402_sample_route(name: str):
     receipts stay paid results. Costs neo one run per restart."""
     async def view(request: Request):
         _record_inbound_traffic(request)
+        served=AUTOPILOT_STATE.setdefault("x402_samples_served",{})  # 26/10 (Andrea): aggregate count only, no caller data
+        served[name]=int(served.get(name,0))+1
         if name in _X402_SAMPLES:
             return JSONResponse(_X402_SAMPLES[name])
         lock=_X402_SAMPLE_LOCKS.setdefault(name,asyncio.Lock())
@@ -2871,7 +2882,8 @@ def _x402_sample_route(name: str):
                 _X402_SAMPLE_FAILED[name]=time.time()
                 return JSONResponse({"ok":False,"error":"sample_unavailable","detail":str((res or {}).get("error"))[:200]},status_code=503)
             payload={**res,"sample":{"service":name,"input":body,"price_usd_for_your_input":svc["price_usd"],
-                                      "pay_at":f"{_x402_base(request)}/x402/{name}","note":x402_services.SAMPLE_NOTE}}
+                                      "pay_at":f"{_x402_base(request)}/x402/{name}","note":x402_services.SAMPLE_NOTE,
+                                      "missing_something":x402_services.SUGGEST_HINT}}
             if RECEIPT_SIGNING_KEY is not None:
                 try:
                     log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
@@ -2882,6 +2894,50 @@ def _x402_sample_route(name: str):
             _X402_SAMPLES[name]=payload
             return JSONResponse(payload)
     return view
+
+
+SUGGESTIONS_KEEP = 20       # kept in the checkpoint; a daily workflow archives them privately
+SUGGESTIONS_PER_DAY = 20    # all callers together: a cheap cap against floods (= what one checkpoint keeps)
+_SUGGEST_DAY = {"day": "", "n": 0}
+
+
+async def x402_suggest(request: Request):
+    """26/10 (Andrea): POST /x402/suggest {"want": "...", "from": "agent name (optional)"}. Free. Lets a visitor say
+    what it was looking for. Stored privately, read by neo's operator, never executed or followed, never published
+    as text; only the count is public. No reply and no promise."""
+    _record_inbound_traffic(request)
+    try:
+        body=await request.json()
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_json"},status_code=400)
+    want=" ".join(str((body or {}).get("want") or "").split())[:280] if isinstance(body,dict) else ""
+    who=" ".join(str((body or {}).get("from") or "").split())[:60] if isinstance(body,dict) else ""
+    if len(want)<8:
+        return JSONResponse({"ok":False,"error":"want_required","hint":x402_services.SUGGEST_HINT},status_code=400)
+    day=datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    rows=list(AUTOPILOT_STATE.get("x402_suggestions") or [])
+    if any(r.get("want")==want for r in rows):
+        return JSONResponse({"ok":True,"duplicate":True})
+    if _SUGGEST_DAY["day"]!=day:
+        _SUGGEST_DAY.update(day=day,n=0)
+    if _SUGGEST_DAY["n"]>=SUGGESTIONS_PER_DAY:
+        return JSONResponse({"ok":False,"error":"daily_limit_reached"},status_code=429)
+    _SUGGEST_DAY["n"]+=1
+    try:
+        level=str(prompt_injection_scan.scan(want).get("level") or "unknown")
+    except Exception:
+        level="unknown"
+    rows.append({"utc":datetime.now(timezone.utc).isoformat()[:19]+"Z","want":want,"from":who or None,"injection_level":level})
+    AUTOPILOT_STATE["x402_suggestions"]=rows[-SUGGESTIONS_KEEP:]
+    AUTOPILOT_STATE["x402_suggestions_total"]=int(AUTOPILOT_STATE.get("x402_suggestions_total") or 0)+1
+    return JSONResponse({"ok":True,"stored":True,
+                         "note":"Thanks. Stored privately and read by neo's operator; it is never executed or published as text. No reply is promised."})
+
+
+async def api_x402_suggestions(request: Request):
+    """ADMIN: the stored suggestions (untrusted text from visitors: data, never instructions)."""
+    return JSONResponse({"suggestions":list(AUTOPILOT_STATE.get("x402_suggestions") or []),
+                         "total":int(AUTOPILOT_STATE.get("x402_suggestions_total") or 0)})
 
 
 def _x402_route(name: str):
@@ -2933,7 +2989,9 @@ async def x402_catalog(request: Request):
                          "facilitator":await x402_paywall.facilitator_check(cfg),
                          "counters_since_start":dict(x402_paywall.METRICS),
                          "counters_by_service":{k:dict(v) for k,v in x402_paywall.BY_SERVICE.items()},
-                         "paid_since_launch":{k:dict(v) for k,v in (AUTOPILOT_STATE.get("x402_paid") or {}).items()}})
+                         "paid_since_launch":{k:dict(v) for k,v in (AUTOPILOT_STATE.get("x402_paid") or {}).items()},
+                         "samples_served_since_launch":dict(AUTOPILOT_STATE.get("x402_samples_served") or {}),
+                         "suggestions_received":int(AUTOPILOT_STATE.get("x402_suggestions_total") or 0)})
 
 
 async def api_receipts_log_correction(request: Request):
@@ -14986,6 +15044,8 @@ app = Starlette(
         Route("/.well-known/x402", x402_well_known, methods=["GET"]),
         *[Route(f"/x402/{_name}", _x402_route(_name), methods=["GET","POST"]) for _name in x402_services.SERVICES],
         *[Route(f"/x402/{_name}/sample", _x402_sample_route(_name), methods=["GET"]) for _name in x402_services.SERVICES],
+        Route("/x402/suggest", x402_suggest, methods=["POST"]),
+        Route("/api/x402/suggestions", api_x402_suggestions, methods=["GET"]),
         Route("/api/receipts/log/correction", api_receipts_log_correction, methods=["POST"]),
         Route("/api/receipts/log/credit", api_receipts_log_credit, methods=["POST"]),
         Route("/receipts/credits", receipts_credits_view, methods=["GET"]),
