@@ -1,4 +1,4 @@
-name: tmp index pilot rerun with method fallback (unpaid reads, aggregates only)
+name: tmp traffic read (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,84 +7,15 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, random, time, collections, statistics, sys, importlib.util, socket
-          from urllib.parse import urlparse
-          sys.path.insert(0,".")
-          spec=importlib.util.spec_from_file_location("x402_lint","tools/x402_lint.py"); lint=importlib.util.module_from_spec(spec); spec.loader.exec_module(lint)
-          import prompt_injection_scan as pis
-          UA="neo-index/0.1 (pilot; one unpaid read per service; +https://neo-collettive.onrender.com)"
-          items=[]; off=0; total=None
-          while True:
-              d=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100&offset={off}",headers={"User-Agent":UA}),timeout=60))
-              it=d.get("items") or d.get("resources") or []; total=(d.get("pagination") or {}).get("total",total); items+=it; off+=len(it)
-              if not it or (total and off>=total) or off>90000: break
-          byhost=collections.defaultdict(list)
-          for i in items:
-              h=urlparse(str(i.get("resource",""))).netloc
-              if h and "neo-collettive" not in h: byhost[h].append(i)
-          random.seed(20261026); hosts=random.sample(sorted(byhost),100)
-          class NoRedir(urllib.request.HTTPRedirectHandler):
-              def redirect_request(self,*a,**k): return None
-          op=urllib.request.build_opener(NoRedir)
-          res=collections.Counter(); lat=[]; inj=collections.Counter(); lint_codes=collections.Counter(); price_mismatch=0; fresh=0
-          for h in hosts:
-              i=random.choice(byhost[h]); url=str(i.get("resource")); acc=(i.get("accepts") or [{}])[0]
-              if str(i.get("lastUpdated",""))>="2026-10-12": fresh+=1
-              meta=" ".join([str(acc.get("description","")), json.dumps(i.get("metadata") or {})])[:20000]
-              s=pis.scan(meta); lvl=s.get("level")
-              inj[lvl]+=1
-              method="GET"
-              try:
-                  m=(((i.get("metadata") or {}).get("input") or {}).get("method") or (((acc.get("outputSchema") or {}).get("input") or {}).get("method")))
-                  if m: method=str(m).upper()
-              except Exception: pass
-              t=time.time()
-              try:
-                  req=urllib.request.Request(url,method=method,headers={"User-Agent":UA,"Accept":"application/json","Content-Type":"application/json"},data=b"{}" if method=="POST" else None)
-                  try:
-                      r=op.open(req,timeout=15); st,body,hd=r.status,r.read(200000).decode("utf-8","replace"),dict(r.headers)
-                  except urllib.error.HTTPError as e:
-                      st,body,hd=e.code,e.read(200000).decode("utf-8","replace"),dict(e.headers)
-                  if st==405:  # 26/10: the listing's method was a guess; try the other one once
-                      method="POST" if method=="GET" else "GET"
-                      res["retried_after_405"]+=1
-                      req=urllib.request.Request(url,method=method,headers={"User-Agent":UA,"Accept":"application/json","Content-Type":"application/json"},data=b"{}" if method=="POST" else None)
-                      try:
-                          r=op.open(req,timeout=15); st,body,hd=r.status,r.read(200000).decode("utf-8","replace"),dict(r.headers)
-                      except urllib.error.HTTPError as e:
-                          st,body,hd=e.code,e.read(200000).decode("utf-8","replace"),dict(e.headers)
-                  lat.append(time.time()-t)
-              except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError, OSError) as e:
-                  res["unreachable"]+=1; continue
-              if st==402:
-                  f=lint.lint(st,body,hd,url,method); errs=[x for x in f if x.get("level")=="error"]
-                  for x in f: lint_codes[f"{x.get('level')}:{x.get('code')}"]+=1
-                  res["402_clean" if not errs else "402_with_errors"]+=1
-                  want=str(acc.get("maxAmountRequired") or acc.get("amount") or "")
-                  got=""
-                  try:
-                      import base64
-                      pr=hd.get("PAYMENT-REQUIRED") or hd.get("payment-required")
-                      if pr: got=str((json.loads(base64.b64decode(pr)).get("accepts") or [{}])[0].get("amount",""))
-                      else: got=str((json.loads(body).get("accepts") or [{}])[0].get("maxAmountRequired",""))
-                  except Exception: pass
-                  if want and got and want!=got: price_mismatch+=1
-              elif 200<=st<300: res["2xx_no_payment_asked"]+=1
-              elif st in (301,302,303,307,308): res["redirect"]+=1
-              elif st in (404,410): res["gone_404_410"]+=1
-              elif st in (401,403): res["auth_wall_401_403"]+=1
-              elif st==405: res["method_405"]+=1
-              elif st>=500: res["server_error_5xx"]+=1
-              else: res[f"other_{st}"]+=1
-          print(f"::notice title=catalog::{len(items)} resources, {len(byhost)} hosts (excluding neo); sampled 100 hosts, one resource each; settled in last 14 days: {fresh}/100")
-          print("::notice title=outcomes::"+json.dumps(dict(res.most_common())))
-          print(f"::notice title=price::402 price differs from catalog listing: {price_mismatch}")
-          print("::notice title=metadata injection scan::"+json.dumps(dict(inj)))
-          print("::notice title=lint findings (top)::"+json.dumps(dict(lint_codes.most_common(12))))
-          if lat: print(f"::notice title=latency::median {statistics.median(lat):.2f}s p90 {sorted(lat)[int(len(lat)*0.9)-1]:.2f}s n={len(lat)}")
+          import json, urllib.request
+          x=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/x402",headers={"User-Agent":"neo-tmp"}),timeout=90))
+          print("::notice title=paid since launch::"+json.dumps({k:[v.get('calls'),v.get('usd'),v.get('last_utc')] for k,v in (x.get('paid_since_launch') or {}).items()}))
+          print("::notice title=since restart::"+json.dumps({k:v for k,v in (x.get('counters_since_start') or {}).items() if v}))
+          print("::notice title=by service::"+json.dumps({k:{kk:vv for kk,vv in v.items() if vv} for k,v in (x.get('counters_by_service') or {}).items()}))
+          h=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/health",headers={"User-Agent":"neo-tmp"}),timeout=90))
+          print(f"::notice title=health::{h.get('status')} {h.get('version')} {str(h.get('commit'))[:7]} uptime={h.get('uptime_seconds') or h.get('uptime')}")
           PY
