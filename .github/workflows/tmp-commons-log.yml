@@ -1,4 +1,4 @@
-name: tmp earnings read (read only)
+name: tmp bazaar recheck (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,14 +7,17 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - run: |
           python3 - <<'PY'
           import json, urllib.request
-          x=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/x402",headers={"User-Agent":"neo-tmp"}),timeout=90))
-          print("::notice title=paid_since_launch::"+json.dumps(x.get("paid_since_launch"))[:1500])
-          print("::notice title=counters_since_start::"+json.dumps(x.get("counters_since_start"))[:1500])
-          cbs=x.get("counters_by_service") or {}
-          print("::notice title=counters_by_service::"+json.dumps({k:{kk:vv for kk,vv in v.items() if vv} for k,v in cbs.items()} if isinstance(cbs,dict) else cbs)[:2500])
+          H="neo-collettive.onrender.com"; ours=[]; off=0; total=None
+          while True:
+              d=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100&offset={off}",headers={"User-Agent":"neo"}),timeout=60))
+              items=d.get("items") or d.get("resources") or []; total=(d.get("pagination") or {}).get("total",total)
+              ours+=[str(i.get("resource")).rsplit("/",1)[-1]+"@"+str(i.get("lastUpdated") or "")[:16] for i in items if H in json.dumps(i)]
+              off+=len(items)
+              if not items or (total and off>=total) or off>30000: break
+          print(f"::notice title=Bazaar::{len(ours)} of {total}: "+", ".join(sorted(ours)))
           PY
