@@ -1,4 +1,4 @@
-name: tmp bazaar competition scan (read only)
+name: tmp live check of new features (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,39 +7,28 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - run: |
+          pip install -q cryptography
           python3 - <<'PY'
-          import json, urllib.request, re, statistics, collections
-          from urllib.parse import urlparse
-          items=[]; off=0; total=None
-          while True:
-              d=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100&offset={off}",headers={"User-Agent":"neo"}),timeout=60))
-              it=d.get("items") or d.get("resources") or []; total=(d.get("pagination") or {}).get("total",total); items+=it; off+=len(it)
-              if not it or (total and off>=total) or off>90000: break
-          def text(i):
-              acc=(i.get("accepts") or [{}])[0]
-              return (str(i.get("resource",""))+" "+str(acc.get("description",""))+" "+json.dumps(i.get("metadata") or {})).lower()
-          def price(i):
-              acc=(i.get("accepts") or [{}])[0]; a=acc.get("maxAmountRequired") or acc.get("amount")
-              try: return int(a)/1e6
-              except: return None
-          hosts=collections.Counter(urlparse(str(i.get("resource",""))).netloc for i in items)
-          print(f"::notice title=catalog::{len(items)} resources, {len(hosts)} distinct hosts; top hosts by resource count: "+", ".join(f"{h} {n}" for h,n in hosts.most_common(8)))
-          cats={
-           "injection-scan":r"prompt.?injection|jailbreak",
-           "mcp-audit/check":r"\bmcp\b.{0,40}(audit|scan|security|check|monitor|health)|tool.?poison",
-           "citation/quote":r"citation|quote.{0,20}verif|fact.?check|hallucinat",
-           "timestamp/proof":r"timestamp|notar|proof.?of|opentimestamps|attest",
-           "x402-lint":r"x402.{0,30}(lint|validat|audit|check|debug)",
-           "receipts":r"receipt",
-           "log-witness":r"transparency.?log|witness|hash.?chain|merkle"}
-          for c,rx in cats.items():
-              m=[i for i in items if re.search(rx,text(i)) and "neo-collettive" not in str(i.get("resource",""))]
-              ps=[p for p in (price(i) for i in m) if p is not None and p>0]
-              hs=collections.Counter(urlparse(str(i.get("resource",""))).netloc for i in m)
-              fresh=sum(1 for i in m if str(i.get("lastUpdated",""))>="2026-10-12")
-              med=f"{statistics.median(ps):.3f}" if ps else "-"
-              print(f"::notice title={c}::{len(m)} resources on {len(hs)} hosts (settled last 14d: {fresh}); price min {min(ps) if ps else '-'} median {med} max {max(ps) if ps else '-'}; top hosts: "+", ".join(f"{h}({n})" for h,n in hs.most_common(5)))
+          import json, urllib.request, base64
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+          B="https://neo-collettive.onrender.com"; UA={"User-Agent":"neo-tmp"}
+          def get(p):
+              try: r=urllib.request.urlopen(urllib.request.Request(B+p,headers=UA),timeout=120); return r.status, json.load(r)
+              except urllib.error.HTTPError as e: return e.code, {}
+          h=get("/health")[1]; print(f"::notice title=health::{h.get('version')} {str(h.get('commit'))[:7]}")
+          pub=get("/.well-known/agent-card.json")[1]["receipt_signing"]["public_key_b64"]
+          def ver(o):
+              o=dict(o); s=o.pop("signature"); 
+              try: Ed25519PublicKey.from_public_bytes(base64.b64decode(pub)).verify(base64.urlsafe_b64decode(s+"=="),json.dumps(o,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()); return True
+              except Exception: return False
+          print(f"::notice title=credits view::{get('/receipts/credits')[0]} count={get('/receipts/credits')[1].get('count')}")
+          for n in ("timestamp","delivery-receipt-verify","injection-scan"):
+              st,d=get(f"/x402/{n}/sample")
+              print(f"::notice title=sample {n}::{st} sig_ok={ver(d) if d.get('signature') else None} seq={(d.get('receipt') or {}).get('log',{}).get('seq')} scope={'scope' in d}")
+          st,d=get("/x402"); print(f"::notice title=catalog::sample_links={sum(1 for s in d.get('services',[]) if s.get('sample'))}")
+          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/timestamp",data=b"{}",method="POST",headers={"Content-Type":"application/json"}),timeout=60)
+          except urllib.error.HTTPError as e: print(f"::notice title=paid route::{e.code}")
           PY
