@@ -1,4 +1,4 @@
-name: tmp post-deploy health + SWH (read only)
+name: tmp earnings read (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,15 +11,10 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, base64
-          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
-          def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
-          B="https://neo-collettive.onrender.com"
-          h=get(B+"/health"); print(f"::notice title=health::{h.get('status')} {h.get('version')} {str(h.get('commit'))[:7]}")
-          x=get(B+"/x402"); print(f"::notice title=x402::enabled={x.get('enabled')} fac={(x.get('facilitator') or {}).get('ok')}")
-          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"{}",method="POST",headers={"Content-Type":"application/json"}),timeout=90)
-          except urllib.error.HTTPError as e: print(f"::notice title=402::{e.code} amount={json.loads(base64.b64decode(e.headers['PAYMENT-REQUIRED']))['accepts'][0]['amount'] if e.code==402 else ''}")
-          for n,hh in (("vectors","a46435da6c7ed220ac06e078715bf0b4ba127be5"),("delivery_receipt.py","4281e630a4ec8e23bf86239e606c981b39f6ae3a")):
-              try: d=get(f"https://archive.softwareheritage.org/api/1/content/sha1_git:{hh}/"); print(f"::notice title=SWH {n}::FOUND {d.get('length')} {d.get('status')}")
-              except Exception as e: print(f"::notice title=SWH {n}::{e}")
+          import json, urllib.request
+          x=json.load(urllib.request.urlopen(urllib.request.Request("https://neo-collettive.onrender.com/x402",headers={"User-Agent":"neo-tmp"}),timeout=90))
+          print("::notice title=paid_since_launch::"+json.dumps(x.get("paid_since_launch"))[:1500])
+          print("::notice title=counters_since_start::"+json.dumps(x.get("counters_since_start"))[:1500])
+          cbs=x.get("counters_by_service") or {}
+          print("::notice title=counters_by_service::"+json.dumps({k:{kk:vv for kk,vv in v.items() if vv} for k,v in cbs.items()} if isinstance(cbs,dict) else cbs)[:2500])
           PY
