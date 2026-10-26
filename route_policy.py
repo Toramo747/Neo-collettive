@@ -42,6 +42,7 @@ ROUTE_POLICY = {
     "/collective": PUBLIC,
     "/api/checkpoint-status": PUBLIC,
     "/receipts/log": PUBLIC,
+    "/receipts/credits": PUBLIC,
     # 24/10: paid microservices over x402 (payment is the access control; off until the env is set)
     "/x402": PUBLIC,
     "/openapi.json": PUBLIC,
@@ -56,6 +57,17 @@ ROUTE_POLICY = {
     "/x402/timestamp": PUBLIC,
     "/x402/log-witness": PUBLIC,
     "/x402/delivery-receipt-verify": PUBLIC,
+    # 26/10: free signed samples on fixed public inputs (one cached run per restart)
+    "/x402/mcp-audit/sample": PUBLIC,
+    "/x402/proof-of-publication/sample": PUBLIC,
+    "/x402/injection-scan/sample": PUBLIC,
+    "/x402/citation-check/sample": PUBLIC,
+    "/x402/verify-quote/sample": PUBLIC,
+    "/x402/mcp-check/sample": PUBLIC,
+    "/x402/x402-lint/sample": PUBLIC,
+    "/x402/timestamp/sample": PUBLIC,
+    "/x402/log-witness/sample": PUBLIC,
+    "/x402/delivery-receipt-verify/sample": PUBLIC,
 
     "/inbox": PUBLIC_PROJECTION,
     "/agent-chats": PUBLIC_PROJECTION,
@@ -66,6 +78,7 @@ ROUTE_POLICY = {
 
     "/api/autopilot/status": ADMIN,
     "/api/receipts/log/correction": ADMIN,
+    "/api/receipts/log/credit": ADMIN,
     "/api/render/errors": ADMIN,
     "/api/render/diagnostics": ADMIN,
     "/system": ADMIN,

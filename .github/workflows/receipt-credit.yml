@@ -1,0 +1,37 @@
+name: Receipt credit (emit one, Andrea's ok)
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "docs/credits/<name>.json"
+        required: true
+permissions:
+  contents: read
+jobs:
+  emit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Emit credit
+        env:
+          NEO_ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+          FILE: ${{ inputs.file }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.request, hashlib
+          f=os.environ["FILE"]
+          if not re.fullmatch(r"docs/credits/[a-z0-9._-]+\.json", f): sys.exit("file must be docs/credits/<name>.json")
+          body=json.load(open(f, encoding="utf-8"))
+          req=urllib.request.Request("https://neo-collettive.onrender.com/api/receipts/log/credit", data=json.dumps(body).encode(),
+              method="POST", headers={"Content-Type":"application/json","User-Agent":"neo-receipt-credit",
+                                      "Authorization":"Bearer "+os.environ["NEO_ADMIN_TOKEN"]})
+          try:
+              r=json.load(urllib.request.urlopen(req, timeout=90))
+          except urllib.error.HTTPError as e:
+              print(f"::error title=credit::HTTP {e.code} {e.read()[:300]!r}"); sys.exit(1)
+          if r.get("duplicate"):
+              print(f"::notice title=credit::already issued, seq {r.get('seq')}"); sys.exit(0)
+          c=r["credit"]; item=hashlib.sha256(json.dumps(c,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest()
+          print(f"::notice title=credit::{c['credited_to']} seq {r['seq']} head {r['head']} item {item}")
+          PY

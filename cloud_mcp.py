@@ -201,6 +201,7 @@ from starlette.routing import Mount, Route
 
 VERSION = "0.99.69"  # public append-only receipt log (0.99.68: stitched quotes)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
+CREDITS_KEEP = 12  # signed credit receipts kept in the checkpoint (~1.3 kB each; the checkpoint limit is 100 kB)
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
@@ -391,6 +392,7 @@ AUTOPILOT_STATE: dict[str, Any] = {
     "public_tool_usage": {},
     "receipt_log": {},
     "x402_paid": {},
+    "credits": [],
     "build_history": [],
     "last_build": None,
     "measurement_history": [],
@@ -580,6 +582,7 @@ def _state_payload() -> dict:
         "public_tool_usage": AUTOPILOT_STATE.get("public_tool_usage") or {},
         "receipt_log": AUTOPILOT_STATE.get("receipt_log") or {},
         "x402_paid": AUTOPILOT_STATE.get("x402_paid") or {},
+        "credits": list(AUTOPILOT_STATE.get("credits") or [])[-12:],  # = CREDITS_KEEP (literal: recovery tools run this function alone)
         "build_history": list(AUTOPILOT_STATE.get("build_history") or [])[-20:],
         "last_build": AUTOPILOT_STATE.get("last_build"),
         "measurement_history": list(AUTOPILOT_STATE.get("measurement_history") or [])[-30:],
@@ -676,6 +679,8 @@ def _merge_state_payload(payload: dict | None) -> bool:
         AUTOPILOT_STATE["receipt_log"] = payload.get("receipt_log")
     if isinstance(payload.get("x402_paid"), dict):
         AUTOPILOT_STATE["x402_paid"] = payload.get("x402_paid")
+    if isinstance(payload.get("credits"), list):
+        AUTOPILOT_STATE["credits"] = payload.get("credits")[-12:]  # = CREDITS_KEEP
     if isinstance(payload.get("build_history"), list):
         AUTOPILOT_STATE["build_history"] = payload.get("build_history")[-20:]
     if isinstance(payload.get("last_build"), dict):
@@ -2831,6 +2836,54 @@ def _x402_after_paid(name: str, svc: dict, payload: dict, via: str) -> dict:
         return {**payload,"receipt_note":f"result delivered unsigned: signing failed on our side ({type(e).__name__})"}
 
 
+_X402_SAMPLES: dict[str, dict] = {}   # name -> signed sample (memory only; recomputed once after a restart)
+_X402_SAMPLE_LOCKS: dict[str, asyncio.Lock] = {}
+_X402_SAMPLE_FAILED: dict[str, float] = {}  # name -> time of the last failed run (no retry for 10 min)
+X402_SAMPLE_RETRY_S = 600
+
+
+def _x402_sample_route(name: str):
+    """26/10 (Andrea): GET /x402/<name>/sample. A real, signed result on a fixed public input, computed once and
+    cached, so an agent can check the signature and the log entry before paying. Logged as a note, not a receipt:
+    receipts stay paid results. Costs neo one run per restart."""
+    async def view(request: Request):
+        _record_inbound_traffic(request)
+        if name in _X402_SAMPLES:
+            return JSONResponse(_X402_SAMPLES[name])
+        lock=_X402_SAMPLE_LOCKS.setdefault(name,asyncio.Lock())
+        async with lock:
+            if name in _X402_SAMPLES:
+                return JSONResponse(_X402_SAMPLES[name])
+            if time.time()-_X402_SAMPLE_FAILED.get(name,0.0) < X402_SAMPLE_RETRY_S:  # a failing sample is not a free trigger
+                return JSONResponse({"ok":False,"error":"sample_unavailable","retry_after_s":X402_SAMPLE_RETRY_S},status_code=503)
+            svc=x402_services.SERVICES[name]
+            body=x402_services.sample_input(name,_x402_base(request))
+            err=svc["validate"](body)
+            if err:
+                _X402_SAMPLE_FAILED[name]=time.time()
+                return JSONResponse({"ok":False,"error":"sample_unavailable","detail":str(err)[:200]},status_code=503)
+            try:
+                res=await svc["run"](body,"x402-sample")
+            except Exception as e:
+                _X402_SAMPLE_FAILED[name]=time.time()
+                return JSONResponse({"ok":False,"error":"sample_unavailable","detail":type(e).__name__},status_code=503)
+            if not isinstance(res,dict) or res.get("ok") is False:
+                _X402_SAMPLE_FAILED[name]=time.time()
+                return JSONResponse({"ok":False,"error":"sample_unavailable","detail":str((res or {}).get("error"))[:200]},status_code=503)
+            payload={**res,"sample":{"service":name,"input":body,"price_usd_for_your_input":svc["price_usd"],
+                                      "pay_at":f"{_x402_base(request)}/x402/{name}","note":x402_services.SAMPLE_NOTE}}
+            if RECEIPT_SIGNING_KEY is not None:
+                try:
+                    log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
+                    payload=receipt_signing.sign_receipt(payload,RECEIPT_SIGNING_KEY,log=receipt_log.next_position(log),tool=svc["tool"])
+                    AUTOPILOT_STATE["receipt_log"]=receipt_log.append(log,"note",receipt_log.item_hash(payload),{"type":"sample","service":name})
+                except Exception:
+                    pass
+            _X402_SAMPLES[name]=payload
+            return JSONResponse(payload)
+    return view
+
+
 def _x402_route(name: str):
     """24/10: one paid microservice over x402 (see x402_paywall.py / x402_services.py). Off until Andrea sets the env."""
     async def view(request: Request):
@@ -2899,6 +2952,66 @@ async def api_receipts_log_correction(request: Request):
     AUTOPILOT_STATE["receipt_log"]=log
     _save_local_state()
     return JSONResponse({"ok":True,"seq":log["count"],"head":log["head"]})
+
+
+def _credit_body(body: dict) -> dict | str:
+    """26/10 (Andrea): the shape of a credit receipt for an agent that found a real defect in neo's work.
+    Public facts only: an agent name, what it found, public entry ids, the public fix."""
+    name=str(body.get("credited_to") or "").strip()[:60]
+    found=str(body.get("found") or "").strip()[:500]
+    fixed=str(body.get("fixed") or "").strip()[:500]
+    evidence=[str(x)[:80] for x in (body.get("evidence") or []) if str(x).strip()][:6]
+    refs={str(k)[:20]:str(v)[:120] for k,v in dict(body.get("fix_refs") or {}).items()}
+    found_on=str(body.get("found_on") or "")[:10]
+    if not name or not re.fullmatch(r"[A-Za-z0-9._-]{1,60}",name):
+        return "credited_to must be an agent name (letters, digits, . _ -)"
+    if not found or not fixed or not evidence:
+        return "found, fixed and evidence are required"
+    if found_on and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",found_on):
+        return "found_on must be YYYY-MM-DD"
+    return {"type":"neo-credit","v":"0.1","credited_to":name,"found":found,"found_on":found_on or None,
+            "evidence":evidence,"fixed":fixed,"fix_refs":refs,
+            "meaning":"neo credits this agent in public for a real defect it found and neo fixed. "
+                      "No payment and no promise is attached."}
+
+
+async def api_receipts_log_credit(request: Request):
+    """ADMIN (26/10, Andrea): sign a credit receipt and append its fingerprint to the receipt log as a note.
+    Each credit is emitted on Andrea's explicit ok; the signed receipt is public at /receipts/credits."""
+    if RECEIPT_SIGNING_KEY is None:
+        return JSONResponse({"ok":False,"error":"signing_key_missing"},status_code=503)
+    try:
+        body=await request.json()
+    except Exception:
+        return JSONResponse({"ok":False,"error":"invalid_json"},status_code=400)
+    credit=_credit_body(body if isinstance(body,dict) else {})
+    if isinstance(credit,str):
+        return JSONResponse({"ok":False,"error":credit},status_code=400)
+    dup=[c for c in (AUTOPILOT_STATE.get("credits") or []) if c.get("credited_to")==credit["credited_to"]
+         and c.get("evidence")==credit["evidence"]]
+    if dup:  # the same credit twice would look like two findings
+        return JSONResponse({"ok":True,"duplicate":True,"seq":((dup[-1].get("receipt") or {}).get("log") or {}).get("seq")})
+    log=AUTOPILOT_STATE.get("receipt_log") or receipt_log.empty()
+    signed=receipt_signing.sign_receipt(credit, RECEIPT_SIGNING_KEY, log=receipt_log.next_position(log), tool="credit")
+    # no await between position and append: the entry lands exactly where the receipt says
+    log=receipt_log.append(log,"note",receipt_log.item_hash(signed),{"type":"credit","credited_to":credit["credited_to"]})
+    AUTOPILOT_STATE["receipt_log"]=log
+    AUTOPILOT_STATE["credits"]=(list(AUTOPILOT_STATE.get("credits") or [])+[signed])[-CREDITS_KEEP:]
+    _save_local_state()
+    return JSONResponse({"ok":True,"seq":log["count"],"head":log["head"],"credit":signed})
+
+
+async def receipts_credits_view(request: Request):
+    """Public: signed credit receipts (agent names and public entry ids only). Each one's sha256 of canonical JSON
+    is the item of a 'note' entry in GET /receipts/log at the seq written inside it."""
+    _record_inbound_traffic(request)
+    who=str(request.query_params.get("agent") or "")[:60]
+    rows=[c for c in (AUTOPILOT_STATE.get("credits") or []) if not who or c.get("credited_to")==who]
+    return JSONResponse({"credits":rows,"count":len(rows),
+                         "verify":"remove 'signature', canonical JSON (sorted keys, compact, UTF-8), Ed25519 verify with "
+                                  "the key in /.well-known/agent-card.json receipt_signing; sha256 of the full signed JSON "
+                                  "equals the item of the log entry at receipt.log.seq",
+                         "spec":"docs/receipts-log/CREDITS.md"})
 
 
 async def a2a_agent_json(request: Request):
@@ -14872,7 +14985,10 @@ app = Starlette(
         Route("/openapi.json", x402_openapi, methods=["GET"]),
         Route("/.well-known/x402", x402_well_known, methods=["GET"]),
         *[Route(f"/x402/{_name}", _x402_route(_name), methods=["GET","POST"]) for _name in x402_services.SERVICES],
+        *[Route(f"/x402/{_name}/sample", _x402_sample_route(_name), methods=["GET"]) for _name in x402_services.SERVICES],
         Route("/api/receipts/log/correction", api_receipts_log_correction, methods=["POST"]),
+        Route("/api/receipts/log/credit", api_receipts_log_credit, methods=["POST"]),
+        Route("/receipts/credits", receipts_credits_view, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_json, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),
         Route("/a2a", a2a_endpoint, methods=["POST"]),
