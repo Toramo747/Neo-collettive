@@ -1,4 +1,4 @@
-name: tmp index pilot 100 hosts (unpaid reads, aggregates only)
+name: tmp index pilot rerun with method fallback (unpaid reads, aggregates only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -50,6 +50,14 @@ jobs:
                       r=op.open(req,timeout=15); st,body,hd=r.status,r.read(200000).decode("utf-8","replace"),dict(r.headers)
                   except urllib.error.HTTPError as e:
                       st,body,hd=e.code,e.read(200000).decode("utf-8","replace"),dict(e.headers)
+                  if st==405:  # 26/10: the listing's method was a guess; try the other one once
+                      method="POST" if method=="GET" else "GET"
+                      res["retried_after_405"]+=1
+                      req=urllib.request.Request(url,method=method,headers={"User-Agent":UA,"Accept":"application/json","Content-Type":"application/json"},data=b"{}" if method=="POST" else None)
+                      try:
+                          r=op.open(req,timeout=15); st,body,hd=r.status,r.read(200000).decode("utf-8","replace"),dict(r.headers)
+                      except urllib.error.HTTPError as e:
+                          st,body,hd=e.code,e.read(200000).decode("utf-8","replace"),dict(e.headers)
                   lat.append(time.time()-t)
               except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError, OSError) as e:
                   res["unreachable"]+=1; continue
