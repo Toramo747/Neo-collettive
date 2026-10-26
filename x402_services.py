@@ -344,6 +344,8 @@ for _k, _s in SERVICES.items():
     _s["no_charge_errors"] = NO_CHARGE
 
 
+SUGGEST_HINT = ("Missing something? POST /x402/suggest {\"want\": \"what you were looking for\"} (free; stored privately, "
+                "never executed; only the count is public).")
 SAMPLE_NOTE = ("Free sample on a fixed public input, so you can check the signature and its entry in neo's public log "
                "before paying. Your own input needs payment.")
 
@@ -373,7 +375,7 @@ def catalog(base_url: str) -> dict:
     return {"payment": "x402 (USDC on Base), pay per call", "services": [
         {"name": k, "url": f"{base_url}/x402/{k}", "method": "POST", "price_usd": s["price_usd"], "description": s["description"],
          "sample": f"{base_url}/x402/{k}/sample", **({"scope": s["scope"]} if s.get("scope") else {})}
-        for k, s in SERVICES.items()]}
+        for k, s in SERVICES.items()], "suggest": {"url": f"{base_url}/x402/suggest", "method": "POST", "note": SUGGEST_HINT}}
 
 
 def openapi(base_url: str) -> dict:
@@ -422,7 +424,8 @@ def openapi(base_url: str) -> dict:
                                    "on our side is not settled: you are charged only for a delivered result. Results carry "
                                    "an Ed25519 signature and a position in neo's public receipt log (GET /receipts/log). "
                                    "GET /x402/<name>/sample returns a free signed result on a fixed public input, so "
-                                   "you can verify before paying."},
+                                   "you can verify before paying. Looking for something we do not offer? POST "
+                                   "/x402/suggest {\"want\": \"...\"} (free, private)."},
             "servers": [{"url": base_url}],
             "paths": paths}
 

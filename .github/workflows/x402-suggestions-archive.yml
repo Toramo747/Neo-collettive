@@ -1,0 +1,51 @@
+name: x402 suggestions archive (private)
+on:
+  schedule:
+    - cron: "11 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: x402-suggestions-archive
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-labels
+      - name: Archive suggestions privately (only counts are printed)
+        env:
+          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          tmp="$RUNNER_TEMP/s.json"
+          curl --fail --silent --max-time 60 -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            "https://neo-collettive.onrender.com/api/x402/suggestions" -o "$tmp" || { echo "::notice title=suggestions::endpoint not available yet"; exit 0; }
+          python3 - "$tmp" <<'PY'
+          import json, sys, hashlib, pathlib
+          d=json.load(open(sys.argv[1])); out=pathlib.Path("private-labels/common/x402/suggestions.jsonl"); out.parent.mkdir(parents=True,exist_ok=True)
+          have=set()
+          if out.exists():
+              for line in out.read_text().splitlines():
+                  try: have.add(json.loads(line)["id"])
+                  except Exception: pass
+          new=0
+          with out.open("a") as f:
+              for r in d.get("suggestions") or []:
+                  rid=hashlib.sha256((str(r.get("utc"))+str(r.get("want"))).encode()).hexdigest()[:16]
+                  if rid in have: continue
+                  f.write(json.dumps({"id":rid,**r},ensure_ascii=False)+"\n"); new+=1
+          print(f"::notice title=suggestions::new {new}, total received {d.get('total')}")
+          PY
+          rm -f "$tmp"
+          git -C private-labels config user.name "NEO Ops Bot"
+          git -C private-labels config user.email "actions@users.noreply.github.com"
+          git -C private-labels add common
+          git -C private-labels commit --quiet -m "ops: x402 suggestions" || exit 0
+          git -C private-labels pull --quiet --rebase
+          git -C private-labels push --quiet

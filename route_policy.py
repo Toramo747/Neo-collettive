@@ -57,6 +57,7 @@ ROUTE_POLICY = {
     "/x402/timestamp": PUBLIC,
     "/x402/log-witness": PUBLIC,
     "/x402/delivery-receipt-verify": PUBLIC,
+    "/x402/suggest": PUBLIC,
     # 26/10: free signed samples on fixed public inputs (one cached run per restart)
     "/x402/mcp-audit/sample": PUBLIC,
     "/x402/proof-of-publication/sample": PUBLIC,
@@ -79,6 +80,7 @@ ROUTE_POLICY = {
     "/api/autopilot/status": ADMIN,
     "/api/receipts/log/correction": ADMIN,
     "/api/receipts/log/credit": ADMIN,
+    "/api/x402/suggestions": ADMIN,
     "/api/render/errors": ADMIN,
     "/api/render/diagnostics": ADMIN,
     "/system": ADMIN,

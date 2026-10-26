@@ -97,5 +97,53 @@ class SampleRouteTest(unittest.TestCase):
         self.assertEqual(self.c.post("/x402/timestamp", json={"sha256": "d" * 64}).status_code, 402)
 
 
+class SampleCountAndSuggestTest(unittest.TestCase):
+    def setUp(self):
+        import cloud_mcp
+        from starlette.testclient import TestClient
+        self.m = cloud_mcp
+        self.saved = {k: cloud_mcp.AUTOPILOT_STATE.get(k) for k in ("x402_samples_served", "x402_suggestions", "x402_suggestions_total")}
+        self.saved_tok = cloud_mcp.NEO_ADMIN_TOKEN
+        for k in self.saved:
+            cloud_mcp.AUTOPILOT_STATE.pop(k, None)
+        cloud_mcp._SUGGEST_DAY.update(day="", n=0)
+        cloud_mcp.NEO_ADMIN_TOKEN = "t" * 32
+        self.c = TestClient(cloud_mcp.app)
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            self.m.AUTOPILOT_STATE[k] = v
+        self.m.NEO_ADMIN_TOKEN = self.saved_tok
+
+    def test_samples_are_counted_in_aggregate(self):
+        self.c.get("/x402/timestamp/sample")
+        self.c.get("/x402/timestamp/sample")
+        self.assertEqual(self.m.AUTOPILOT_STATE["x402_samples_served"]["timestamp"], 2)
+        self.assertEqual(self.c.get("/x402").json()["samples_served_since_launch"]["timestamp"], 2)
+        self.assertIn("x402_samples_served", self.m._state_payload())
+
+    def test_suggest_is_private_capped_and_deduplicated(self):
+        r = self.c.post("/x402/suggest", json={"want": "a check that MCP tool schemas did not change", "from": "agent-x"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(self.c.post("/x402/suggest", json={"want": "a check that MCP tool schemas did not change"}).json()["duplicate"])
+        self.assertEqual(self.c.post("/x402/suggest", json={"want": "hi"}).status_code, 400)
+        self.assertEqual(self.c.get("/x402").json()["suggestions_received"], 1)
+        self.assertNotIn("tool schemas", self.c.get("/x402").text)  # the text itself is never public
+        self.assertIn(self.c.get("/api/x402/suggestions").status_code, (401, 403))
+        rows = self.c.get("/api/x402/suggestions", headers={"Authorization": "Bearer " + "t" * 32}).json()["suggestions"]
+        self.assertEqual((rows[0]["from"], rows[0]["injection_level"]), ("agent-x", "none"))
+        self.assertIn("x402_suggestions", self.m._state_payload())
+
+    def test_daily_cap(self):
+        orig = self.m.SUGGESTIONS_PER_DAY
+        self.m.SUGGESTIONS_PER_DAY = 2
+        self.m._SUGGEST_DAY.update(day="", n=0)
+        try:
+            codes = [self.c.post("/x402/suggest", json={"want": f"suggestion number {i} please"}).status_code for i in range(3)]
+        finally:
+            self.m.SUGGESTIONS_PER_DAY = orig
+        self.assertEqual(codes, [200, 200, 429])
+
+
 if __name__ == "__main__":
     unittest.main()
