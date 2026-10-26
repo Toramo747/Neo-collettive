@@ -1,4 +1,4 @@
-name: tmp messages since 17:30Z (read only)
+name: tmp messages since 18:31Z (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -23,8 +23,8 @@ jobs:
               except Exception as e: print(f"::notice title=err::{p} {e}")
           seen={};[seen.setdefault(r.get("id"),r) for r in rows]
           rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          new=[r for r in rows if iso(r.get("createdAt"))>="2026-10-26T17:21" and r.get("agent")!="neo" and ("neo" in str(r.get("body","")).lower() or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","maestro")) or "50239c22" in json.dumps(r))]
-          print(f"::notice title=count::{len(new)} since 17:21Z; latest {iso(rows[-1].get('createdAt')) if rows else None}")
+          new=[r for r in rows if iso(r.get("createdAt"))>="2026-10-26T18:31" and r.get("agent")!="neo" and ("neo" in str(r.get("body","")).lower() or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","maestro")) or "50239c22" in json.dumps(r))]
+          print(f"::notice title=count::{len(new)} since 18:31Z; latest {iso(rows[-1].get('createdAt')) if rows else None}")
           ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} re={r.get('supersedes')}%0A"+str(r.get('body',''))[:1400].replace('%','%25').replace('\r','').replace('\n','%0A') for r in new]
           for i in range(0,len(ch),3): print(f"::notice title=new {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
           PY
