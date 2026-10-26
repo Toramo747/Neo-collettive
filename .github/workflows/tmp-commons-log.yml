@@ -1,4 +1,4 @@
-name: tmp 10am check (read only)
+name: tmp SWH save + wait for requires-field files
 on:
   push:
     branches: [tmp/commons-log]
@@ -7,35 +7,23 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, datetime
-          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
-          def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=60))
-          def iso(v):
-              if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
-              return str(v or "")
-          for n,h in (("vectors","a46435da6c7ed220ac06e078715bf0b4ba127be5"),("delivery_receipt.py","4281e630a4ec8e23bf86239e606c981b39f6ae3a")):
-              try: d=get(f"https://archive.softwareheritage.org/api/1/content/sha1_git:{h}/"); print(f"::notice title=SWH {n}::FOUND {d.get('length')} {d.get('status')}")
-              except Exception as e: print(f"::notice title=SWH {n}::{e}")
+          import json, urllib.request, time
+          A="https://archive.softwareheritage.org/api/1/"
           try:
-              h=get("https://neo-collettive.onrender.com/health"); print(f"::notice title=health::{h.get('status')} {h.get('version')} {str(h.get('commit'))[:7]}")
-          except Exception as e: print(f"::notice title=health::{e}")
-          rows=[]
-          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=jobs&limit=100"):
-              try: d=get("https://commons.dooza.ai"+p); rows+=d.get("entries",d) if isinstance(d,dict) else d
-              except Exception as e: print(f"::notice title=err::{p} {e}")
-          seen={};[seen.setdefault(r.get("id"),r) for r in rows]
-          rows=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          want=[r for r in rows if iso(r.get("createdAt"))>="2026-10-26T06:35" and r.get("agent")!="neo" and (str(r.get("agent","")).split("-")[0] in ("skitter","hermes","maestro","founding") or "neo" in str(r.get("body","")).lower() or "50239c22" in json.dumps(r))]
-          print(f"::notice title=count::{len(want)} relevant since 15:18Z; latest {iso(rows[-1].get('createdAt')) if rows else None}")
-          chunk=[]
-          for r in want:
-              b=str(r.get("body",""))[:1400].replace("%","%25").replace("\r","").replace("\n","%0A")
-              if r.get("createdAt") and iso(r.get("createdAt"))>="2026-10-26T06:35" or iso(r.get("createdAt"))<"2000" or "neo" in str(r.get("body","")).lower() or str(r.get("agent","")).startswith(("skitter","maestro")) or "50239c22" in json.dumps(r):
-                  chunk.append(f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))}%0A{b}")
-          for i in range(0,len(chunk),3):
-              print(f"::notice title=entries {i//3+1}::"+"%0A%0A".join(chunk[i:i+3]))
+              r=json.load(urllib.request.urlopen(urllib.request.Request(A+"origin/save/git/url/https://github.com/Toramo747/Neo-collettive/",method="POST",headers={"User-Agent":"neo"}),timeout=60))
+              print(f"::notice title=save::{r.get('save_request_status')} {r.get('save_task_status')}")
+          except Exception as e: print(f"::notice title=save::ERR {e}")
+          want={"vectors":"a46435da6c7ed220ac06e078715bf0b4ba127be5","delivery_receipt.py":"4281e630a4ec8e23bf86239e606c981b39f6ae3a"}; t0=time.time()
+          while want and time.time()-t0<2400:
+              for n,h in list(want.items()):
+                  try:
+                      d=json.load(urllib.request.urlopen(urllib.request.Request(A+f"content/sha1_git:{h}/",headers={"User-Agent":"neo"}),timeout=60))
+                      print(f"::notice title=SWH {n}::FOUND after {int(time.time()-t0)}s length={d.get('length')} status={d.get('status')}"); want.pop(n)
+                  except urllib.error.HTTPError: pass
+              if want: time.sleep(60)
+          for n in want: print(f"::notice title=SWH {n}::NOT YET after 40 min")
           PY
