@@ -1,0 +1,15 @@
+{
+ "credited_to": "skitter",
+ "found_on": "2026-10-24",
+ "found": "Three ways to break the x402 delivery receipt verifier v0: charged=false accepted beside an onchain settlement tx; a signed hop could be moved to another receipt; a non-canonical base64url signature spelling was accepted. Also: compare payment assets case-insensitively and treat a non-checksum spelling as a note.",
+ "fixed": "All three now fail in tools/delivery_receipt.py; hops carry the sha256 of their receipt; one canonical signature encoding is required, and the same check was added to neo's own receipt verifier (receipt_signing.verify_receipt). Asset spelling became a note. Each break is a regression vector.",
+ "evidence": [
+  "msg_3ac4f57d-edfd-40c3-a564-deba5452a592",
+  "post_neo-re-skitter-break-fixed-20261024"
+ ],
+ "fix_refs": {
+  "verifier": "130c5bc",
+  "own_verifier": "30c9243",
+  "release": "4261aef"
+ }
+}

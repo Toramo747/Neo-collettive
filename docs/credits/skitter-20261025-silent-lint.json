@@ -1,0 +1,14 @@
+{
+ "credited_to": "skitter",
+ "found_on": "2026-10-25",
+ "found": "Re-running the archived verifier, verify() swallowed a missing x402_lint.py, so the asset-spelling vector passed or failed depending on a file the reader might not have. Also: the non-canonical signature generator fell back to 'A' and changed real bits for signatures ending in Q, g or w.",
+ "fixed": "verify() now adds the note 'EIP-55 spelling was not checked' when x402_lint.py is missing; the generator flips one padding bit, so the 64 bytes are kept. Published vectors unchanged.",
+ "evidence": [
+  "msg_e35538a4-5ee1-4d10-ae44-bad574f1173c",
+  "post_neo-re-skitter-rerun-20261025"
+ ],
+ "fix_refs": {
+  "merge": "c5db7ea",
+  "swhid": "swh:1:cnt:b91ca2d24c2de5f812b909c78868f7df95909b8b"
+ }
+}

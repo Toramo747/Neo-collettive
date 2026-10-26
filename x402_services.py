@@ -294,15 +294,85 @@ SERVICES: dict[str, dict[str, Any]] = {
                                 "tags": ["x402", "receipts", "disputes", "verification"],
                                 "description": "Verify an x402 delivery receipt (v0.1): seller signature, settlement and refusal rules, hop chain naming who changed the bytes. Signed, logged verdict."},
 }
+# 26/10 (Andrea; skitter: "a check that states what it did not check"): every result of these services carries a
+# scope block, so a buyer reads what was checked and what was not, inside the signed result. Spec:
+# docs/spec/RESULT-SCOPE-v0.1.md. Static text that describes the code, never a promise about the input.
+SCOPE: dict[str, dict] = {
+    "injection-scan": {"v": "0.1", "checked": [
+        "deterministic rules for override phrases, fake chat roles, exfiltration asks, tool-abuse commands and payment asks",
+        "hidden text: zero-width and Unicode tag characters, bidi overrides, CSS-hidden HTML, instructions in comments",
+        "base64 blobs, decoded and rescanned once",
+        "text: the first 200,000 characters; url: the fetched page text (HTML, plain text, JSON, markdown), first 2 MB"],
+        "not_checked": [
+        {"what": "manipulation that matches no rule (paraphrased or new wording)", "why": "rule-based, no model"},
+        {"what": "images, PDFs and scripts the page runs", "why": "only fetched text is read"},
+        {"what": "intent", "why": "it reports evidence; an article about injection scores too"}]},
+    "citation-check": {"v": "0.1", "checked": [
+        "up to 8 quote + link pairs, given or extracted from the answer",
+        "whether each quote's words are on its page: verbatim, paraphrase, stitched, not_found or unreachable"],
+        "not_checked": [
+        {"what": "whether the claim is true", "why": "a quote on a page shows the page says it, not that it is right"},
+        {"what": "who wrote the page, or when", "why": "authorship and dates are not checked"},
+        {"what": "content behind logins, scripts, images or PDFs", "why": "only public text pages are fetched, first 2 MB"},
+        {"what": "citations after the first 8", "why": "limit per call"}]},
+    "timestamp": {"v": "0.1", "checked": [
+        "that neo received this sha256 at received_at_utc",
+        "the receipt's position in neo's public log, which is anchored daily (OpenTimestamps on Bitcoin, Software Heritage)"],
+        "not_checked": [
+        {"what": "what the hash is of", "why": "neo never sees the content"},
+        {"what": "that nobody had it earlier", "why": "it shows possession no later than this time, not first possession"},
+        {"what": "the Bitcoin anchor at delivery time", "why": "the anchor is made at the next daily run; until then neo's signature and log position stand alone"}]},
+}
+
+
+def _with_scope(run, scope):
+    async def scoped(b, caller, *a, **k):
+        res = await run(b, caller, *a, **k)
+        if isinstance(res, dict) and res.get("ok") is not False:  # a failed result is free and carries no scope
+            res = {**res, "scope": scope}
+        return res
+    return scoped
+
+
+for _k, _sc in SCOPE.items():
+    SERVICES[_k]["run"] = _with_scope(SERVICES[_k]["run"], _sc)
+    SERVICES[_k]["scope"] = _sc
+
 for _k, _s in SERVICES.items():
     _s["bazaar"] = BAZAAR.get(_k)
     _s["service_name"] = "neo " + _k
     _s["no_charge_errors"] = NO_CHARGE
 
 
+SAMPLE_NOTE = ("Free sample on a fixed public input, so you can check the signature and its entry in neo's public log "
+               "before paying. Your own input needs payment.")
+
+
+def sample_input(name: str, base_url: str) -> dict:
+    """26/10 (Andrea): the fixed public input behind GET /x402/<name>/sample. Inputs that really run: neo's own routes
+    and MCP endpoint, a published test vector, a public page; never anyone else's data."""
+    if name == "delivery-receipt-verify":
+        V = _tool("delivery_receipt").vectors()
+        g = next(v for v in V["vectors"] if v["name"] == "good-delivered")
+        return {"receipt": g["receipt"], "seller_public_key_b64": V["test_key_public_b64"],
+                **({"buyer_body_sha256": g["buyer_body_sha256"]} if g.get("buyer_body_sha256") else {}),
+                **({"hop_public_keys": g["hop_pubs"]} if g.get("hop_pubs") else {})}
+    fixed = {
+        "mcp-audit": {"url": f"{base_url}/mcp"},
+        "mcp-check": {"url": f"{base_url}/mcp"},
+        "x402-lint": {"url": f"{base_url}/x402/timestamp", "method": "POST"},
+        "timestamp": {"sha256": hashlib.sha256(b"neo x402 public sample").hexdigest(), "note": "public sample"},
+        "proof-of-publication": {"url": "https://example.org/"},
+    }
+    if name in fixed:
+        return fixed[name]
+    return dict(((BAZAAR.get(name) or {}).get("info") or {}).get("input", {}).get("body") or {})
+
+
 def catalog(base_url: str) -> dict:
     return {"payment": "x402 (USDC on Base), pay per call", "services": [
-        {"name": k, "url": f"{base_url}/x402/{k}", "method": "POST", "price_usd": s["price_usd"], "description": s["description"]}
+        {"name": k, "url": f"{base_url}/x402/{k}", "method": "POST", "price_usd": s["price_usd"], "description": s["description"],
+         "sample": f"{base_url}/x402/{k}/sample", **({"scope": s["scope"]} if s.get("scope") else {})}
         for k, s in SERVICES.items()]}
 
 
@@ -324,6 +394,7 @@ def openapi(base_url: str) -> dict:
             "summary": s["description"].split(":")[0].split(".")[0][:120],
             "description": s["description"],
             "tags": s.get("tags", [])[:5],
+            "x-sample-url": f"{base_url}/x402/{k}/sample",
             "x-payment-info": {"price": {"mode": "fixed", "currency": "USD", "amount": price},
                                "protocols": [{"x402": {"network": "eip155:8453", "asset": "USDC", "scheme": "exact"}}]},
             "requestBody": {"required": True, "content": {"application/json": {
@@ -349,7 +420,9 @@ def openapi(base_url: str) -> dict:
                                    "header). Retry with the signed payment in PAYMENT-SIGNATURE (v2) or X-PAYMENT (v1). "
                                    "Invalid input with a payment is refused before the payment is verified, and a failure "
                                    "on our side is not settled: you are charged only for a delivered result. Results carry "
-                                   "an Ed25519 signature and a position in neo's public receipt log (GET /receipts/log)."},
+                                   "an Ed25519 signature and a position in neo's public receipt log (GET /receipts/log). "
+                                   "GET /x402/<name>/sample returns a free signed result on a fixed public input, so "
+                                   "you can verify before paying."},
             "servers": [{"url": base_url}],
             "paths": paths}
 
