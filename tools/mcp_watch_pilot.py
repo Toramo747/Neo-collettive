@@ -53,6 +53,15 @@ async def read_one(url: str, sem: asyncio.Semaphore) -> dict | None:
     return {"live": bool(v.get("live")), "tools": raw, "tools_n": norm}
 
 
+def already_ran_today(state: dict, now: datetime | None = None) -> bool:
+    """True when the last recorded row is from the same UTC date: the pilot counts calendar days, not launches."""
+    rows = state.get("days") or []
+    if not rows:
+        return False
+    today = (now or datetime.now(timezone.utc)).isoformat()[:10]
+    return str(rows[-1].get("utc") or "")[:10] == today
+
+
 async def main() -> None:
     async with httpx.AsyncClient(timeout=30, trust_env=False) as c:
         reg = await rh.fetch_complete_registry(c)
@@ -60,6 +69,10 @@ async def main() -> None:
     remote = [s for s in reg["servers"] if s["access_class"] == "remote" and not rh.is_opted_out(s, opt)]
     random.Random(SEED).shuffle(remote)
     state = json.loads(STATE.read_text()) if STATE.exists() else {"day": 0, "first": None, "prev": {}, "ever_changed": [], "days": []}
+    if already_ran_today(state):
+        # 27/10: two manual launches 13 minutes apart consumed "day 2" and "day 3". One row per UTC date from now on.
+        print(f"::notice title=mcp watch pilot::already ran today (day {state['day']}), nothing read")
+        return
     sample = remote[:SAMPLE] if not state["prev"] else [s for s in remote if hashlib.sha256(s["name"].encode()).hexdigest()[:16] in state["prev"]] or remote[:SAMPLE]
     sem = asyncio.Semaphore(8)
     reads = await asyncio.gather(*[read_one(s["remotes"][0]["url"], sem) for s in sample])
