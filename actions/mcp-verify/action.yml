@@ -55,10 +55,11 @@ runs:
         if res.get("error"):
             lines.append(f"- error: `{res['error']}`")
         for name, c in checks.items():
-            if isinstance(c, dict):
+            if isinstance(c, dict) and not c.get("informational"):
                 lines.append(f"- {name}: {'pass' if c.get('ok') else 'fail'}" + (f" ({c.get('error')})" if c.get('error') else ""))
-        if res.get("tool_count") is not None:
-            lines.append(f"- tools listed: {res.get('tool_count')}")
+        tl = checks.get("tools_list") if isinstance(checks.get("tools_list"), dict) else {}
+        if tl.get("tool_count") is not None:
+            lines.append(f"- tools listed: {tl.get('tool_count')} (invalid input schemas: {tl.get('invalid_input_schemas', 0)})")
         lines += ["", "What this did not check: tool descriptions and input schemas (tool poisoning), authentication, or any remote tool call. "
                   "This free check is not signed. A signed, publicly logged report that covers descriptions and schemas is a separate paid x402 service (`/x402/mcp-audit`); a free signed sample is at `/x402/mcp-audit/sample`."]
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
