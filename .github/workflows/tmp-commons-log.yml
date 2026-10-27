@@ -1,4 +1,4 @@
-name: tmp payment chain check (read only, no payment)
+name: tmp directories listing check (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,23 +11,14 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, base64
-          B="https://neo-collettive.onrender.com"; UA={"User-Agent":"neo-tmp"}; W="0x6a5715db03888ca96904754b8b7932483b92dd97"
-          spec=json.load(urllib.request.urlopen(urllib.request.Request(B+"/openapi.json",headers=UA),timeout=90))
-          bad=[]; payto=set(); nets=set(); assets=set()
-          for path,item in spec["paths"].items():
-              want=str(int(round(float(item["post"]["x-payment-info"]["price"]["amount"])*1e6)))
-              try: urllib.request.urlopen(urllib.request.Request(B+path,data=b"{}",method="POST",headers={"Content-Type":"application/json","User-Agent":"neo-tmp"}),timeout=60); bad.append(path+":200")
-              except urllib.error.HTTPError as e:
-                  if e.code!=402: bad.append(f"{path}:{e.code}"); continue
-                  a=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0]
-                  payto.add(a["payTo"].lower()); nets.add(a["network"]); assets.add(a["asset"].lower())
-                  if a["amount"]!=want: bad.append(f"{path}:amount {a['amount']}!={want}")
-          print(f"::notice title=402 on all routes::routes={len(spec['paths'])} problems={bad} payTo_is_wallet={payto=={W}} network={nets} asset_is_USDC={assets=={'0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'}}")
-          x=json.load(urllib.request.urlopen(urllib.request.Request(B+"/x402",headers=UA),timeout=90))
-          print(f"::notice title=x402 status::enabled={x.get('enabled')} facilitator={json.dumps(x.get('facilitator'))[:300]}")
-          c=x.get("counters_since_start") or {}
-          print("::notice title=failure counters since restart::"+json.dumps({k:v for k,v in c.items() if k!='asked_to_pay'}))
-          r=urllib.request.Request("https://mainnet.base.org",data=json.dumps({"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"0x833589fcd6edb6e08f4c7c32d4f71b54bda02913","data":"0x70a08231"+"0"*24+W[2:]},"latest"]}).encode(),headers={"Content-Type":"application/json","User-Agent":"neo"})
-          print(f"::notice title=wallet USDC::{int(json.load(urllib.request.urlopen(r,timeout=60))['result'],16)/1e6}")
+          import urllib.request, re, html
+          UA={"User-Agent":"Mozilla/5.0 (neo directory check)"}
+          for u in ("https://x402-list.com","https://pay.sh","https://app.ampersend.ai/discover","https://glama.ai/mcp/servers?query=neo-collettive","https://www.pulsemcp.com/servers?q=neo-collettive","https://smithery.ai/search?q=neo-collettive"):
+              try:
+                  t=urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=40).read().decode("utf-8","replace")
+                  txt=html.unescape(re.sub(r"<[^>]+>"," ",t))
+                  hits=sorted(set(m.group(0).strip()[:90] for m in re.finditer(r"[^.\n]{0,40}(submit|add your|list your|get listed|register your|claim)[^.\n]{0,40}",txt,re.I)))[:5]
+                  links=sorted(set(re.findall(r'href="([^"]*(?:submit|add|list|register|claim)[^"]*)"',t,re.I)))[:6]
+                  print(f"::notice title={u[:45]}::len={len(t)} neo={'neo-collettive' in t.lower()} hits={hits} links={links}")
+              except Exception as e: print(f"::notice title={u[:45]}::{type(e).__name__} {str(e)[:80]}")
           PY
