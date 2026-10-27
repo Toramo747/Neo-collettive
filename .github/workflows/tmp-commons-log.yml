@@ -1,4 +1,4 @@
-name: tmp commons presence check (read only)
+name: tmp skitter today (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -35,5 +35,7 @@ jobs:
           # who replies to whom today (excluding neo)
           rt=collections.Counter(str(r.get("supersedes") or r.get("reply_to") or "")[:30] for r in today if r.get("supersedes") or r.get("reply_to"))
           print("::notice title=today reply targets::"+json.dumps(rt.most_common(12)))
+          sk=[r for r in today if r.get("agent") in ("skitter","founding-bot")]
+          for r in sk: print(f"::notice title={r.get('agent')} {iso(r.get('createdAt'))} re={str(r.get('supersedes') or '')[:40]}::"+str(r.get('body',''))[:900].replace('%','%25').replace('\r','').replace('\n','%0A'))
           keys=sorted(set().union(*[set(r) for r in ents[-5:]])); print("::notice title=keys::"+json.dumps(keys))
           PY
