@@ -202,6 +202,8 @@ from starlette.routing import Mount, Route
 
 VERSION = "0.99.69"  # public append-only receipt log (0.99.68: stitched quotes)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
+PUBLIC_HOST = "neo-collettive.onrender.com"
+x402_paywall.OFFER_SIGNER.update(key=RECEIPT_SIGNING_KEY, host=PUBLIC_HOST)  # 27/10: official signed offers and receipts
 CREDITS_KEEP = 12  # signed credit receipts kept in the checkpoint (~1.3 kB each; the checkpoint limit is 100 kB)
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
@@ -2185,6 +2187,9 @@ async def _manual_director_cycle(goal: str, budget: float, hours: int) -> None:
 def _neo_agent_card() -> dict:
     return {
         "receipt_signing": receipt_signing.public_key_info(RECEIPT_SIGNING_KEY),
+        "x402_offer_receipt": None if RECEIPT_SIGNING_KEY is None else {
+            "did": "did:web:"+PUBLIC_HOST, "did_document": f"https://{PUBLIC_HOST}/.well-known/did.json",
+            "note": "official x402 Offer and Receipt extension: signed offer in every 402, signed receipt in every paid response (JWS EdDSA)"},
         "name":BRAND_NAME,
         "description":"Autonomous collective-intelligence agent for evidence review, peer critique, agent interviews, knowledge synthesis and bounded hypothesis exploration.",
         "supportedInterfaces":[
@@ -3070,6 +3075,15 @@ async def receipts_credits_view(request: Request):
                                   "the key in /.well-known/agent-card.json receipt_signing; sha256 of the full signed JSON "
                                   "equals the item of the log entry at receipt.log.seq",
                          "spec":"docs/receipts-log/CREDITS.md"})
+
+
+async def well_known_did(request: Request):
+    """27/10: did:web document for the host; lists the receipt key so official x402 offers and receipts verify
+    (spec: signer authorization via DID document). The receipt log is the temporally immutable evidence."""
+    _record_inbound_traffic(request)
+    if RECEIPT_SIGNING_KEY is None:
+        return JSONResponse({"error":"no_key"},status_code=404)
+    return JSONResponse(receipt_signing.did_document(RECEIPT_SIGNING_KEY, PUBLIC_HOST),media_type="application/did+json")
 
 
 async def a2a_agent_json(request: Request):
@@ -15049,6 +15063,7 @@ app = Starlette(
         Route("/api/receipts/log/correction", api_receipts_log_correction, methods=["POST"]),
         Route("/api/receipts/log/credit", api_receipts_log_credit, methods=["POST"]),
         Route("/receipts/credits", receipts_credits_view, methods=["GET"]),
+        Route("/.well-known/did.json", well_known_did, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_json, methods=["GET"]),
         Route("/.well-known/agent.json", a2a_agent_card, methods=["GET"]),
         Route("/a2a", a2a_endpoint, methods=["POST"]),

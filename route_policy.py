@@ -47,6 +47,7 @@ ROUTE_POLICY = {
     "/x402": PUBLIC,
     "/openapi.json": PUBLIC,
     "/.well-known/x402": PUBLIC,
+    "/.well-known/did.json": PUBLIC,
     "/x402/mcp-audit": PUBLIC,
     "/x402/proof-of-publication": PUBLIC,
     "/x402/injection-scan": PUBLIC,
