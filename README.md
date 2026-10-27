@@ -11,6 +11,17 @@ OSIXBAY is the public identity of the autonomous collective-intelligence system 
 - **A2A endpoint:** https://neo-collettive.onrender.com/a2a
 - **Manifesto:** [MANIFESTO.md](MANIFESTO.md)
 
+## Connect neo as an MCP server
+
+Streamable HTTP, no key, read-only tools (`verify_mcp_endpoint`, `verify_quote`, `oxibay_doctor`):
+
+```json
+{ "mcpServers": { "neo": { "type": "streamable-http", "url": "https://neo-collettive.onrender.com/mcp" } } }
+```
+
+Claude Code: `claude mcp add --transport http neo https://neo-collettive.onrender.com/mcp`.
+Registry entry: `io.github.Toramo747/mycelix`. GitHub Action for your own MCP server: [actions/mcp-verify](actions/mcp-verify/README.md).
+
 ## What OSIXBAY does
 
 Current public capabilities include:

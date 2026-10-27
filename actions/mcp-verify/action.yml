@@ -1,0 +1,70 @@
+name: "neo mcp-verify"
+description: "Read-only check of your public MCP server (DNS/SSRF safety, TLS, initialize, tools/list, latency) through neo's free, keyless verifier. Fails the job when the check does not pass."
+author: "neo (OSIXBAY)"
+branding:
+  icon: "shield"
+  color: "green"
+inputs:
+  url:
+    description: "Public https URL of the MCP server to check (streamable-http or SSE endpoint)."
+    required: true
+  fail-on:
+    description: "When to fail the job: 'not-ok' (default) or 'never' (report only)."
+    required: false
+    default: "not-ok"
+  verifier:
+    description: "neo MCP endpoint (JSON-RPC, streamable-http)."
+    required: false
+    default: "https://neo-collettive.onrender.com/mcp"
+outputs:
+  ok:
+    description: "true when the check passed"
+    value: ${{ steps.check.outputs.ok }}
+  result:
+    description: "Path of the JSON result file"
+    value: ${{ steps.check.outputs.result }}
+runs:
+  using: "composite"
+  steps:
+    - id: check
+      shell: bash
+      env:
+        MCP_URL: ${{ inputs.url }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        VERIFIER: ${{ inputs.verifier }}
+      run: |
+        set -euo pipefail
+        out="$RUNNER_TEMP/neo-mcp-verify.json"
+        body=$(python3 -c 'import json,os;print(json.dumps({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"verify_mcp_endpoint","arguments":{"url":os.environ["MCP_URL"]}}}))')
+        curl --silent --show-error --max-time 120 -X POST "$VERIFIER" \
+          -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
+          -H "User-Agent: neo-mcp-verify-action/0.1" -H "X-Client: neo-mcp-verify-action/0.1" \
+          --data "$body" -o "$out"
+        python3 - "$out" <<'PY'
+        import json, os, sys
+        raw = open(sys.argv[1], encoding="utf-8").read().strip()
+        if raw.startswith("event:") or raw.startswith("data:"):
+            raw = "\n".join(l[5:].strip() for l in raw.splitlines() if l.startswith("data:"))
+        rpc = json.loads(raw)
+        content = ((rpc.get("result") or {}).get("content") or [{}])[0].get("text") or "{}"
+        res = json.loads(content)
+        ok = bool(res.get("ok"))
+        checks = res.get("checks") if isinstance(res.get("checks"), dict) else {}
+        lines = ["## neo mcp-verify", "", f"- server: `{os.environ['MCP_URL']}`", f"- ok: **{str(ok).lower()}**"]
+        if res.get("error"):
+            lines.append(f"- error: `{res['error']}`")
+        for name, c in checks.items():
+            if isinstance(c, dict):
+                lines.append(f"- {name}: {'pass' if c.get('ok') else 'fail'}" + (f" ({c.get('error')})" if c.get('error') else ""))
+        if res.get("tool_count") is not None:
+            lines.append(f"- tools listed: {res.get('tool_count')}")
+        lines += ["", "What this did not check: tool descriptions and input schemas (tool poisoning), authentication, or any remote tool call. "
+                  "This free check is not signed. A signed, publicly logged report that covers descriptions and schemas is a separate paid x402 service (`/x402/mcp-audit`); a free signed sample is at `/x402/mcp-audit/sample`."]
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            fh.write(f"ok={str(ok).lower()}\nresult={sys.argv[1]}\n")
+        print("\n".join(lines))
+        if not ok and os.environ.get("FAIL_ON", "not-ok") != "never":
+            sys.exit(1)
+        PY
