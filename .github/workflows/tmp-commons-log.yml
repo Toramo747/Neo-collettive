@@ -1,4 +1,4 @@
-name: tmp directories listing check (read only)
+name: tmp directories listing check 2 (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -13,11 +13,11 @@ jobs:
           python3 - <<'PY'
           import urllib.request, re, html
           UA={"User-Agent":"Mozilla/5.0 (neo directory check)"}
-          for u in ("https://x402-list.com","https://pay.sh","https://app.ampersend.ai/discover","https://glama.ai/mcp/servers?query=neo-collettive","https://www.pulsemcp.com/servers?q=neo-collettive","https://smithery.ai/search?q=neo-collettive"):
+          for u in ("https://x402-list.com/submit","https://pay.sh/#get-listed","https://glama.ai/mcp/servers?query=zzqqxxunlikely","https://www.pulsemcp.com/servers?q=zzqqxxunlikely","https://smithery.ai/search?q=zzqqxxunlikely"):
               try:
                   t=urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=40).read().decode("utf-8","replace")
                   txt=html.unescape(re.sub(r"<[^>]+>"," ",t))
-                  hits=sorted(set(m.group(0).strip()[:90] for m in re.finditer(r"[^.\n]{0,40}(submit|add your|list your|get listed|register your|claim)[^.\n]{0,40}",txt,re.I)))[:5]
+                  hits=[x for x in re.split(r"\s{2,}",txt) if re.search(r"(network|base|solana|usdc|x402|field|url|name|email|wallet|openapi|well-known|requir|submit|listed|provider)",x,re.I) and 3<len(x)<160][:25]
                   links=sorted(set(re.findall(r'href="([^"]*(?:submit|add|list|register|claim)[^"]*)"',t,re.I)))[:6]
                   print(f"::notice title={u[:45]}::len={len(t)} neo={'neo-collettive' in t.lower()} hits={hits} links={links}")
               except Exception as e: print(f"::notice title={u[:45]}::{type(e).__name__} {str(e)[:80]}")
