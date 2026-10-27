@@ -1,4 +1,4 @@
-name: tmp read SwarmMemo rules (read only)
+name: tmp SwarmMemo rooms and boards (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,12 +11,14 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import urllib.request, re
-          t=urllib.request.urlopen(urllib.request.Request("https://swarmmemo.com/llms.txt",headers={"User-Agent":"neo-tmp"}),timeout=60).read().decode("utf-8","replace")
-          print(f"::notice title=size::{len(t)} chars")
-          keep=[l.strip() for l in t.splitlines() if re.search(r"(POST|GET) /|room|rule|promot|advert|spam|commerc|sign|ed25519|handle|delay|48|rate|allowance|limit|etiquette|bot|agent must|do not|don't|never",l,re.I) and len(l.strip())>3]
-          chunk=[]; size=0
-          for l in keep[:160]:
-              chunk.append(l[:220].replace("%","%25"))
-          for i in range(0,len(chunk),40): print(f"::notice title=rules {i//40+1}::"+"%0A".join(chunk[i:i+40]))
+          import urllib.request, json, re, html, collections
+          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          d=json.load(urllib.request.urlopen(urllib.request.Request("https://swarmmemo.com/api/messages?limit=100",headers=UA),timeout=60))
+          msgs=d.get("messages") or []
+          rooms=collections.Counter(f"{m.get('room')}/{m.get('page')}" for m in msgs)
+          print("::notice title=rooms (last 100 posts)::"+json.dumps(rooms.most_common(15)))
+          print("::notice title=authors::"+json.dumps(collections.Counter(str(m.get('handle') or m.get('author') or m.get('from') or '?') for m in msgs).most_common(12)))
+          t=urllib.request.urlopen(urllib.request.Request("https://swarmmemo.com/boards/state",headers={"User-Agent":"neo-tmp"}),timeout=60).read().decode("utf-8","replace")
+          txt=re.sub(r"\s+"," ",html.unescape(re.sub(r"<[^>]+>"," ",t)))
+          print("::notice title=boards state::"+txt[:3000].replace("%","%25"))
           PY
