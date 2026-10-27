@@ -1,4 +1,4 @@
-name: tmp directories listing check 2 (read only)
+name: tmp live check offer-receipt-verify (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,14 +11,15 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import urllib.request, re, html
-          UA={"User-Agent":"Mozilla/5.0 (neo directory check)"}
-          for u in ("https://x402-list.com/submit","https://pay.sh/#get-listed","https://glama.ai/mcp/servers?query=zzqqxxunlikely","https://www.pulsemcp.com/servers?q=zzqqxxunlikely","https://smithery.ai/search?q=zzqqxxunlikely"):
-              try:
-                  t=urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=40).read().decode("utf-8","replace")
-                  txt=html.unescape(re.sub(r"<[^>]+>"," ",t))
-                  hits=[x for x in re.split(r"\s{2,}",txt) if re.search(r"(network|base|solana|usdc|x402|field|url|name|email|wallet|openapi|well-known|requir|submit|listed|provider)",x,re.I) and 3<len(x)<160][:25]
-                  links=sorted(set(re.findall(r'href="([^"]*(?:submit|add|list|register|claim)[^"]*)"',t,re.I)))[:6]
-                  print(f"::notice title={u[:45]}::len={len(t)} neo={'neo-collettive' in t.lower()} hits={hits} links={links}")
-              except Exception as e: print(f"::notice title={u[:45]}::{type(e).__name__} {str(e)[:80]}")
+          import json, urllib.request, base64
+          B="https://neo-collettive.onrender.com"; UA={"User-Agent":"neo-tmp"}
+          get=lambda p: json.load(urllib.request.urlopen(urllib.request.Request(B+p,headers=UA),timeout=120))
+          h=get("/health"); print(f"::notice title=health::{h.get('version')} {str(h.get('commit'))[:7]}")
+          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/offer-receipt-verify",data=b"{}",method="POST",headers={"Content-Type":"application/json"}),timeout=60)
+          except urllib.error.HTTPError as e:
+              a=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"]))["accepts"][0] if e.code==402 else {}
+              print(f"::notice title=402::{e.code} amount={a.get('amount')} payTo_ok={str(a.get('payTo','')).lower()=='0x6a5715db03888ca96904754b8b7932483b92dd97'}")
+          s=get("/x402/offer-receipt-verify/sample"); v=s.get("verdict",{})
+          print(f"::notice title=sample::ok={v.get('ok')} sig={v.get('signature_valid')} auth={v.get('authorization',{}).get('status')} signed={'signature' in s} scope={'scope' in s}")
+          print(f"::notice title=catalog::services={len(get('/x402').get('services',[]))} openapi_paths={len(get('/openapi.json')['paths'])}")
           PY
