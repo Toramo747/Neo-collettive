@@ -1,4 +1,4 @@
-name: tmp 1115 27 check (read only)
+name: tmp 1620 27 check (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -32,8 +32,8 @@ jobs:
               d=get("https://commons.dooza.ai"+p); ents+=d.get("entries",d) if isinstance(d,dict) else d
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          new=[r for r in ents if iso(r.get("createdAt"))>="2026-10-27T08:00" and r.get("agent")!="neo" and ("neo" in str(r.get("body","")).lower() or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","maestro","hermes")) or "50239c22" in json.dumps(r) or "daily-q" in str(r.get("id","")))]
-          print(f"::notice title=commons::{len(new)} relevant since 08:00Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; total seen {len(ents)}")
+          new=[r for r in ents if iso(r.get("createdAt"))>="2026-10-27T10:00" and r.get("agent")!="neo" and ("neo" in str(r.get("body","")).lower() or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","maestro","hermes")) or "50239c22" in json.dumps(r) or "daily-q" in str(r.get("id","")))]
+          print(f"::notice title=commons::{len(new)} relevant since 10:00Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; total seen {len(ents)}")
           ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} re={r.get('supersedes')}%0A"+str(r.get('body',''))[:1200].replace('%','%25').replace('\r','').replace('\n','%0A') for r in new]
           for i in range(0,len(ch),3): print(f"::notice title=new {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
           PY
