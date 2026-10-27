@@ -7,7 +7,8 @@ class MicelioTests(unittest.TestCase):
     def _session(self):
         return {
             "schema_v":1,"namespace":NAMESPACE,"session_id":"s1","conversation_id":"s1",
-            "created_at_utc":"2026-09-27T00:00:00+00:00",
+            # 27/10: relative to now, so the 30-day TTL never turns this fixture into an EXPIRED belief
+            "created_at_utc":(datetime.now(timezone.utc)-timedelta(days=1)).isoformat(),
             "boundary":{"production_state_write":False,"tool_opportunity_influence":"NONE","commercial_evidence_influence":"NONE",
                         "seti_peer_memory_influence":"NONE","external_usage_metrics_influence":"NONE","external_agent_contact":False,
                         "production_variant_promotion":False},
