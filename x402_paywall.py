@@ -71,6 +71,9 @@ def requirements(price_usd: float, pay_to: str) -> dict:
             "payTo": pay_to, "maxTimeoutSeconds": MAX_TIMEOUT_SECONDS, "extra": {"name": "USD Coin", "version": "2"}}
 
 
+OFFER_SIGNER = {"key": None, "host": None}  # set by the app at startup (27/10): signed offers and receipts, official extension
+
+
 def payment_required(service: dict, url: str, pay_to: str, error: str = "payment required") -> tuple[dict, dict]:
     """Returns (headers, v1 body). The v2 object goes in PAYMENT-REQUIRED; the body repeats it in v1 form."""
     req = requirements(service["price_usd"], pay_to)
@@ -79,6 +82,13 @@ def payment_required(service: dict, url: str, pay_to: str, error: str = "payment
     v2 = {"x402Version": 2, "error": error, "resource": resource, "accepts": [req]}
     if service.get("bazaar"):
         v2["extensions"] = {"bazaar": service["bazaar"]}
+    if OFFER_SIGNER["key"] is not None and url.startswith("https://"):
+        try:  # official Offer and Receipt extension: a signed commitment to these exact terms
+            import receipt_signing as _rs
+            v2.setdefault("extensions", {})["offer-receipt"] = {"info": {"offers": [
+                _rs.official_offer(OFFER_SIGNER["key"], OFFER_SIGNER["host"], url, req)]}}
+        except Exception:
+            pass
     v1 = {"x402Version": 1, "error": error, "accepts": [{
         "scheme": "exact", "network": "base", "maxAmountRequired": req["amount"], "resource": url,
         "description": service["description"], "mimeType": "application/json", "payTo": pay_to,
@@ -271,5 +281,13 @@ async def handle(service: dict, url: str, headers: dict, body: dict | None, run:
         return 402, h, {**b, "charged": False}
     _count("paid_and_served", service)
     settle = {"success": True, "transaction": s.get("transaction"), "network": s.get("network") or NETWORK, "payer": s.get("payer")}
+    if OFFER_SIGNER["key"] is not None and url.startswith("https://"):
+        try:  # official Offer and Receipt extension: signed receipt, returned only on success
+            import receipt_signing as _rs
+            settle["extensions"] = {"offer-receipt": {"info": {"receipt": _rs.official_receipt(
+                OFFER_SIGNER["key"], OFFER_SIGNER["host"], url, settle["network"], settle.get("payer") or v.get("payer") or "",
+                settle.get("transaction"))}}}
+        except Exception:
+            pass
     return 200, {"PAYMENT-RESPONSE": base64.b64encode(json.dumps(settle, separators=(",", ":")).encode()).decode()}, \
         {**result, "payment": settle}
