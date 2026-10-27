@@ -951,5 +951,134 @@
     "input"
    ]
   }
+ },
+ "offer-receipt-verify": {
+  "info": {
+   "input": {
+    "type": "http",
+    "bodyType": "json",
+    "body": {
+     "kind": "offer",
+     "artifact": {
+      "format": "eip712",
+      "payload": {
+       "version": 1,
+       "resourceUrl": "https://api.example.com/premium-data",
+       "scheme": "exact",
+       "network": "eip155:8453",
+       "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+       "payTo": "0x...",
+       "amount": "10000",
+       "validUntil": 1703123516
+      },
+      "signature": "0x..."
+     }
+    },
+    "method": "POST"
+   },
+   "output": {
+    "type": "json",
+    "example": {
+     "ok": true,
+     "verdict": {
+      "ok": true,
+      "signature_valid": true,
+      "signer": "0x...",
+      "authorization": {
+       "status": "established",
+       "how": "signer is the payTo address"
+      },
+      "fails": [],
+      "notes": []
+     },
+     "signature": "..."
+    }
+   }
+  },
+  "schema": {
+   "$schema": "https://json-schema.org/draft/2020-12/schema",
+   "type": "object",
+   "properties": {
+    "input": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string",
+       "const": "http"
+      },
+      "method": {
+       "type": "string",
+       "enum": [
+        "POST",
+        "PUT",
+        "PATCH"
+       ]
+      },
+      "bodyType": {
+       "type": "string",
+       "enum": [
+        "json",
+        "form-data",
+        "text"
+       ]
+      },
+      "body": {
+       "properties": {
+        "kind": {
+         "type": "string",
+         "enum": [
+          "offer",
+          "receipt"
+         ]
+        },
+        "artifact": {
+         "type": "object"
+        },
+        "accepts": {
+         "type": "object"
+        },
+        "pay_to": {
+         "type": "string"
+        },
+        "transaction": {
+         "type": "string"
+        },
+        "did_document": {
+         "type": "object"
+        }
+       },
+       "required": [
+        "kind",
+        "artifact"
+       ]
+      }
+     },
+     "required": [
+      "type",
+      "method",
+      "bodyType",
+      "body"
+     ],
+     "additionalProperties": false
+    },
+    "output": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string"
+      },
+      "example": {
+       "type": "object"
+      }
+     },
+     "required": [
+      "type"
+     ]
+    }
+   },
+   "required": [
+    "input"
+   ]
+  }
  }
 }
