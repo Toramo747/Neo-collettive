@@ -57,6 +57,7 @@ ROUTE_POLICY = {
     "/x402/timestamp": PUBLIC,
     "/x402/log-witness": PUBLIC,
     "/x402/delivery-receipt-verify": PUBLIC,
+    "/x402/offer-receipt-verify": PUBLIC,
     "/x402/suggest": PUBLIC,
     # 26/10: free signed samples on fixed public inputs (one cached run per restart)
     "/x402/mcp-audit/sample": PUBLIC,
@@ -69,6 +70,7 @@ ROUTE_POLICY = {
     "/x402/timestamp/sample": PUBLIC,
     "/x402/log-witness/sample": PUBLIC,
     "/x402/delivery-receipt-verify/sample": PUBLIC,
+    "/x402/offer-receipt-verify/sample": PUBLIC,
 
     "/inbox": PUBLIC_PROJECTION,
     "/agent-chats": PUBLIC_PROJECTION,

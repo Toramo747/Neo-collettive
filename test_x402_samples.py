@@ -31,6 +31,11 @@ class ScopeTest(unittest.TestCase):
         for name, svc in xs.SERVICES.items():
             self.assertIsNone(svc["validate"](xs.sample_input(name, "https://neo.example")), name)
 
+    def test_bazaar_blocks_validate(self):
+        import jsonschema
+        for name, svc in xs.SERVICES.items():
+            jsonschema.validate(svc["bazaar"]["info"], svc["bazaar"]["schema"])
+
     def test_discovery_links(self):
         cat = xs.catalog("https://neo.example")["services"]
         self.assertTrue(all(s["sample"].endswith(f"/x402/{s['name']}/sample") for s in cat))
@@ -57,7 +62,7 @@ class SampleRouteTest(unittest.TestCase):
 
     def test_offline_samples_are_signed_logged_and_cached(self):
         pub = receipt_signing.public_key_info(self.m.RECEIPT_SIGNING_KEY)["public_key_b64"]
-        for name in ("timestamp", "injection-scan", "log-witness", "delivery-receipt-verify"):
+        for name in ("timestamp", "injection-scan", "log-witness", "delivery-receipt-verify", "offer-receipt-verify"):
             r = self.c.get(f"/x402/{name}/sample")
             self.assertEqual(r.status_code, 200, (name, r.text[:300]))
             d = r.json()
@@ -68,6 +73,8 @@ class SampleRouteTest(unittest.TestCase):
             self.assertEqual((e[2], e[4]), ("note", {"type": "sample", "service": name}))
             self.assertEqual(e[3], hashlib.sha256(receipt_signing.canonical_json(d)).hexdigest())
         self.assertTrue(self.c.get("/x402/delivery-receipt-verify/sample").json()["verdict"]["ok"])
+        ov = self.c.get("/x402/offer-receipt-verify/sample").json()["verdict"]
+        self.assertTrue(ov["ok"] and ov["signature_valid"] and ov["authorization"]["status"] == "established", ov)
         before = self.m.AUTOPILOT_STATE["receipt_log"]["count"]
         self.assertEqual(self.c.get("/x402/timestamp/sample").json()["signature"], d["signature"] if name == "timestamp" else
                          self.m._X402_SAMPLES["timestamp"]["signature"])
