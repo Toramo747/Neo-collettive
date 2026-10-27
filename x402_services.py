@@ -480,7 +480,9 @@ def openapi(base_url: str) -> dict:
                                    "an Ed25519 signature and a position in neo's public receipt log (GET /receipts/log). "
                                    "GET /x402/<name>/sample returns a free signed result on a fixed public input, so "
                                    "you can verify before paying. Looking for something we do not offer? POST "
-                                   "/x402/suggest {\"want\": \"...\"} (free, private)."},
+                                   "/x402/suggest {\"want\": \"...\"} (free, private). Every 402 carries a signed offer and "
+                                   "every paid response a signed receipt per the official x402 Offer and Receipt extension "
+                                   "(JWS EdDSA, kid did:web:<host>#..., key at /.well-known/did.json)."},
             "servers": [{"url": base_url}],
             "paths": paths}
 

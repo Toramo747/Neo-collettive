@@ -80,3 +80,48 @@ def verify_receipt(obj: dict, public_key_b64: str) -> bool:
         return True
     except (InvalidSignature, ValueError, TypeError, KeyError, binascii.Error, UnicodeError):
         return False
+
+
+# --- 27/10: the official x402 "Offer and Receipt" extension (JWS, EdDSA) ----------------------------------------
+def _b64u(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+
+def did_web(host: str) -> str:
+    """did:web for the service host (spec: signer authorization via a DID document at /.well-known/did.json)."""
+    return "did:web:" + host.replace(":", "%3A")
+
+
+def did_document(key, host: str) -> dict:
+    pub = key.public_key()
+    raw = pub.public_bytes(Encoding.Raw, PublicFormat.Raw)
+    did = did_web(host)
+    vm = {"id": f"{did}#{key_id(pub)}", "type": "JsonWebKey2020", "controller": did,
+          "publicKeyJwk": {"kty": "OKP", "crv": "Ed25519", "x": _b64u(raw)}}
+    return {"@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/jws-2020/v1"], "id": did,
+            "verificationMethod": [vm], "assertionMethod": [vm["id"]],
+            "service": [{"id": f"{did}#receipt-log", "type": "TransparencyLog",
+                         "serviceEndpoint": f"https://{host}/receipts/log"}]}
+
+
+def offer_receipt_jws(payload: dict, key, host: str) -> str:
+    """JWS compact (EdDSA) over an offer or receipt payload, kid = the did:web key URL."""
+    header = {"alg": "EdDSA", "kid": f"{did_web(host)}#{key_id(key.public_key())}", "typ": "JWT"}
+    signing = _b64u(canonical_json(header)) + "." + _b64u(canonical_json(payload))
+    return signing + "." + _b64u(key.sign(signing.encode("ascii")))
+
+
+def official_offer(key, host: str, resource_url: str, req: dict, valid_until: int = 0) -> dict:
+    payload = {"version": 1, "resourceUrl": resource_url, "scheme": req["scheme"], "network": req["network"],
+               "asset": req["asset"], "payTo": req["payTo"], "amount": str(req["amount"]), "validUntil": int(valid_until)}
+    return {"format": "jws", "acceptIndex": 0, "signature": offer_receipt_jws(payload, key, host)}
+
+
+def official_receipt(key, host: str, resource_url: str, network: str, payer: str, transaction: str | None,
+                     issued_at: int | None = None) -> dict:
+    import time as _t
+    payload = {"version": 1, "network": network, "resourceUrl": resource_url, "payer": str(payer or ""),
+               "issuedAt": int(issued_at if issued_at is not None else _t.time())}
+    if transaction:
+        payload["transaction"] = str(transaction)
+    return {"format": "jws", "signature": offer_receipt_jws(payload, key, host)}
