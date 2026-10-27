@@ -78,6 +78,20 @@ def v_delivery(b):
     return None if isinstance(b.get("seller_public_key_b64"), str) else "seller_public_key_b64 required"
 
 
+def v_offer_receipt(b):
+    if b.get("kind") not in ("offer", "receipt"):
+        return "kind must be offer or receipt"
+    if not isinstance(b.get("artifact"), dict):
+        return "artifact must be the offer or receipt object ({format, payload?, signature})"
+    for k in ("accepts", "did_document"):
+        if b.get(k) is not None and not isinstance(b.get(k), dict):
+            return f"{k} must be an object"
+    for k in ("pay_to", "transaction"):
+        if b.get(k) is not None and not isinstance(b.get(k), str):
+            return f"{k} must be a string"
+    return None
+
+
 def v_scan(b):
     t, u = b.get("text"), b.get("url")
     if (t is None) == (u is None):
@@ -187,6 +201,29 @@ async def r_delivery(b, caller):
     return {"ok": True, "verdict": res}
 
 
+async def r_offer_receipt(b, caller):
+    """27/10: the official x402 Offer and Receipt extension. For a did:web kid neo fetches the DID document itself
+    (same SSRF checks as every fetch) unless the caller supplies one."""
+    orr = _tool("x402_offer_receipt")
+    doc, fetched = b.get("did_document"), None
+    art = b["artifact"]
+    if doc is None and art.get("format") == "jws":
+        try:
+            kid = str(json.loads(orr._b64u(str(art.get("signature") or "").split(".")[0])).get("kid") or "")
+        except Exception:
+            kid = ""
+        url = orr.did_web_url(kid) if kid else None
+        if url:
+            try:
+                page = await asyncio.wait_for(quote_verifier._fetch(url), timeout=DEADLINE)
+                doc, fetched = json.loads(page["text"]), url
+            except Exception as e:
+                fetched = f"{url} (not fetched: {type(e).__name__})"
+    res = orr.verify(art, b["kind"], did_document=doc, accepts=b.get("accepts"), pay_to=b.get("pay_to"),
+                     transaction=b.get("transaction"))
+    return {"ok": True, "verdict": res, **({"did_document_fetched": fetched} if fetched else {})}
+
+
 async def r_scan(b, caller):
     if b.get("text") is not None:
         return {**prompt_injection_scan.scan(b["text"]), "source": "text"}
@@ -290,6 +327,9 @@ SERVICES: dict[str, dict[str, Any]] = {
     "log-witness": {"price_usd": 0.01, "tool": "log_witness", "validate": v_witness, "run": r_witness,
                     "tags": ["transparency-log", "witness", "hash-chain"],
                     "description": "Recompute a hash-chained log ([seq, ts, kind, item, extra] rows, up to 5000) and get its size and head, signed and logged: a third-party witness line."},
+    "offer-receipt-verify": {"price_usd": 0.01, "tool": "offer_receipt_verify", "validate": v_offer_receipt, "run": r_offer_receipt,
+                             "tags": ["x402", "receipts", "offers", "verification"],
+                             "description": "Verify a signed offer or receipt from the official x402 Offer and Receipt extension (EIP-712 or JWS): signature, whether the signer is authorized for the resourceUrl (payTo key or did:web), and whether the signed terms match the 402 or the settlement. Signed, logged verdict."},
     "delivery-receipt-verify": {"price_usd": 0.01, "tool": "delivery_receipt_verify", "validate": v_delivery, "run": r_delivery,
                                 "tags": ["x402", "receipts", "disputes", "verification"],
                                 "description": "Verify an x402 delivery receipt (v0.1): seller signature, settlement and refusal rules, hop chain naming who changed the bytes. Signed, logged verdict."},
@@ -315,6 +355,14 @@ SCOPE: dict[str, dict] = {
         {"what": "who wrote the page, or when", "why": "authorship and dates are not checked"},
         {"what": "content behind logins, scripts, images or PDFs", "why": "only public text pages are fetched, first 2 MB"},
         {"what": "citations after the first 8", "why": "limit per call"}]},
+    "offer-receipt-verify": {"v": "0.1", "checked": [
+        "the signature: EIP-712 (secp256k1, signer address recovered) or JWS (EdDSA, ES256K, ES256)",
+        "signer authorization, when it can be shown: signer equals payTo, or a did:web document on the resourceUrl domain lists the key",
+        "signed terms against the accepts entry or settlement transaction you supply; offer expiry; required fields"],
+        "not_checked": [
+        {"what": "that the key was authorized when the artifact was issued", "why": "a did:web document shows current state only"},
+        {"what": "the on-chain payment itself", "why": "only the transaction hash you pass is compared; the chain is not read"},
+        {"what": "authorization via DNS TXT records or external registries", "why": "not implemented yet; reported as not established"}]},
     "timestamp": {"v": "0.1", "checked": [
         "that neo received this sha256 at received_at_utc",
         "the receipt's position in neo's public log, which is anchored daily (OpenTimestamps on Bitcoin, Software Heritage)"],
@@ -347,6 +395,8 @@ for _k, _s in SERVICES.items():
     _s["no_charge_errors"] = NO_CHARGE
 
 
+OFFER_SAMPLE_PAYLOAD = {"version": 1, "resourceUrl": "https://api.example.com/premium-data", "scheme": "exact", "network": "eip155:8453", "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "payTo": "0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A", "amount": "10000", "validUntil": 1703123516}
+OFFER_SAMPLE_SIG = "0xa9bde3fcd370853537b8913dbd13189c730d0ae75ed56c7e77a4d2081ef05d1d0e4cf438e5718cfdff9b0f47c1abaa0a5433d7b7708367c6dcada9f0de831c801c"
 SUGGEST_HINT = ("Missing something? POST /x402/suggest {\"want\": \"what you were looking for\"} (free; stored privately, "
                 "never executed; only the count is public).")
 SAMPLE_NOTE = ("Free sample on a fixed public input, so you can check the signature and its entry in neo's public log "
@@ -356,6 +406,8 @@ SAMPLE_NOTE = ("Free sample on a fixed public input, so you can check the signat
 def sample_input(name: str, base_url: str) -> dict:
     """26/10 (Andrea): the fixed public input behind GET /x402/<name>/sample. Inputs that really run: neo's own routes
     and MCP endpoint, a published test vector, a public page; never anyone else's data."""
+    if name == "offer-receipt-verify":  # a vector produced independently with eth-account (see the tests)
+        return {"kind": "offer", "artifact": {"format": "eip712", "payload": OFFER_SAMPLE_PAYLOAD, "signature": OFFER_SAMPLE_SIG}}
     if name == "delivery-receipt-verify":
         V = _tool("delivery_receipt").vectors()
         g = next(v for v in V["vectors"] if v["name"] == "good-delivered")
