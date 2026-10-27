@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-10-27T09:07:48.247473+00:00",
+  "captured_at_utc": "2026-10-27T09:08:18.885517+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.69",
   "runtime_profile": {
@@ -17,60 +17,60 @@
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 158.497916,
+    "last_started_age_seconds": 189.700129,
     "cycles_completed": 7545,
     "last_started_utc": "2026-10-27T09:05:07.440129+00:00",
     "last_finished_utc": "2026-10-27T09:05:34.533548+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-10-27T09:07:47.943212+00:00",
+    "captured_at_utc": "2026-10-27T09:08:18.713513+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-10-27T09:07:45.219Z",
+        "timestamp_utc": "2026-10-27T09:08:16.302Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 285.98,
+        "latency_ms": 624.25,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-27T09:07:45.519Z",
+        "timestamp_utc": "2026-10-27T09:08:16.601Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 257.82,
+        "latency_ms": 268.46,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-27T09:07:47.626Z",
+        "timestamp_utc": "2026-10-27T09:08:18.311Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 277.26,
+        "latency_ms": 184.11,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-10-27T09:07:47.923Z",
+        "timestamp_utc": "2026-10-27T09:08:18.699Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 254.19,
+        "latency_ms": 358.67,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "249e08966d09347cb87ec9e365b3626ce14c19f3",
+    "source_commit": "038023940c6c419803706c11cc2ce3cd5df7d24b",
     "runtime_contract_verified": true,
     "hidden_control": {
       "required": true,
@@ -91,7 +91,7 @@
       "codec_offthread": false,
       "first_autopilot_cycle_completed": true,
       "first_autopilot_cycle_number": 7515,
-      "event_loop_stalls": 72,
+      "event_loop_stalls": 73,
       "event_loop_max_lag_ms": 12202.825,
       "slowest_phases": [
         {
@@ -109,8 +109,8 @@
         {
           "phase": "checkpoint",
           "max_duration_ms": 23498.464,
-          "last_duration_ms": 22772.293,
-          "last_process_cpu_ms": 1781.777
+          "last_duration_ms": 15630.201,
+          "last_process_cpu_ms": 1316.865
         },
         {
           "phase": "seti",
@@ -401,19 +401,19 @@
     "inbound_traffic_summary": {
       "schema_v": 2,
       "official_counting_since_utc": "2026-09-28T07:07:09+00:00",
-      "events_total": 66629,
-      "logical_messages_total": 66624,
-      "technical_evidence_total": 66629,
+      "events_total": 66634,
+      "logical_messages_total": 66629,
+      "technical_evidence_total": 66634,
       "dedup_window_seconds": 300,
       "first_real_contact_utc": "2026-10-08T03:22:16.562626+00:00",
       "last_real_contact_utc": "2026-10-27T08:28:31.410635+00:00",
-      "events_in_buffer": 1070,
+      "events_in_buffer": 1075,
       "cumulative_counting": "buffer_plus_evicted",
       "cumulative_since_utc": "2026-10-11T17:15:11.824537+00:00",
       "counts": {
         "total": {
           "crawler_probe": 31966,
-          "self_traffic": 3387,
+          "self_traffic": 3392,
           "real_contact_pending": 43,
           "real_contact": 1113,
           "legacy_unattributable": 57,
@@ -422,7 +422,7 @@
         },
         "last_24h": {
           "crawler_probe": 326,
-          "self_traffic": 46,
+          "self_traffic": 51,
           "real_contact_pending": 0,
           "real_contact": 19,
           "legacy_unattributable": 0,
@@ -431,7 +431,7 @@
         },
         "last_7d": {
           "crawler_probe": 326,
-          "self_traffic": 46,
+          "self_traffic": 51,
           "real_contact_pending": 0,
           "real_contact": 19,
           "legacy_unattributable": 0,
@@ -441,31 +441,6 @@
       }
     },
     "inbound_traffic_events": [
-      {
-        "timestamp_utc": "2026-10-27T07:41:32.776940+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-10-27T07:45:17.458674+00:00",
-        "category": "crawler_probe",
-        "reason": "health_fetch"
-      },
-      {
-        "timestamp_utc": "2026-10-27T07:46:09.614275+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-10-27T07:46:47.036734+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-10-27T07:46:47.170894+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
       {
         "timestamp_utc": "2026-10-27T07:46:47.349096+00:00",
         "category": "crawler_probe",
@@ -2446,6 +2421,31 @@
         "timestamp_utc": "2026-10-27T09:07:45.846013+00:00",
         "category": "self_traffic",
         "reason": "verified_mycelix_self_proof"
+      },
+      {
+        "timestamp_utc": "2026-10-27T09:07:47.464149+00:00",
+        "category": "self_traffic",
+        "reason": "verified_mycelix_self_proof"
+      },
+      {
+        "timestamp_utc": "2026-10-27T09:07:47.789568+00:00",
+        "category": "self_traffic",
+        "reason": "verified_mycelix_self_proof"
+      },
+      {
+        "timestamp_utc": "2026-10-27T09:08:16.048312+00:00",
+        "category": "self_traffic",
+        "reason": "verified_mycelix_self_proof"
+      },
+      {
+        "timestamp_utc": "2026-10-27T09:08:16.450620+00:00",
+        "category": "self_traffic",
+        "reason": "verified_mycelix_self_proof"
+      },
+      {
+        "timestamp_utc": "2026-10-27T09:08:17.069730+00:00",
+        "category": "self_traffic",
+        "reason": "verified_mycelix_self_proof"
       }
     ],
     "inbound_security_events": [
@@ -2543,15 +2543,15 @@
     "last_checkpoint": {
       "ok": true,
       "status": 200,
-      "raw_bytes": 500745,
-      "stored_bytes": 67521,
+      "raw_bytes": 500970,
+      "stored_bytes": 67317,
       "limit_bytes": 100000,
       "compaction": {
         "applied": true,
-        "before_raw_bytes": 1395087,
-        "before_encoded_bytes": 169267,
-        "after_raw_bytes": 499697,
-        "after_encoded_bytes": 76043,
+        "before_raw_bytes": 1412834,
+        "before_encoded_bytes": 170107,
+        "after_raw_bytes": 499922,
+        "after_encoded_bytes": 75763,
         "target_bytes": 55000,
         "trigger_bytes": 75000,
         "limit_bytes": 100000,
