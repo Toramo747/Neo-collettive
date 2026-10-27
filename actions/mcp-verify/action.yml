@@ -39,6 +39,7 @@ runs:
         curl --silent --show-error --max-time 120 -X POST "$VERIFIER" \
           -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
           -H "User-Agent: neo-mcp-verify-action/0.1" -H "X-Client: neo-mcp-verify-action/0.1" \
+          ${NEO_SELF_TRAFFIC:+-H "X-MYCELIX-Self-Traffic: $NEO_SELF_TRAFFIC" -H "X-MYCELIX-Self-Traffic-Proof: $NEO_SELF_TRAFFIC_PROOF"} \
           --data "$body" -o "$out"
         python3 - "$out" <<'PY'
         import json, os, sys
