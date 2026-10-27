@@ -1,4 +1,4 @@
-name: tmp funnel counters (read only, aggregates)
+name: tmp test mcp-verify action (self traffic)
 on:
   push:
     branches: [tmp/commons-log]
@@ -9,17 +9,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - env:
-          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
-        run: |
-          curl --fail --silent --max-time 90 -H "Authorization: Bearer ${ADMIN_TOKEN}" -H "X-MYCELIX-Self-Traffic: manual" https://neo-collettive.onrender.com/api/autopilot/status -o "$RUNNER_TEMP/s.json" || echo '{}' > "$RUNNER_TEMP/s.json"
-          python3 - "$RUNNER_TEMP/s.json" <<'PY'
-          import json, sys
-          d=json.load(open(sys.argv[1])); a=d.get("autopilot") or {}; u=a.get("public_tool_usage") or {}; print("::notice title=top::ok="+str(d.get("ok"))+" keys="+json.dumps(sorted(a))[:1500])
-          keep=("calls","distinct_origins","returning_origins","first_utc","last_utc","by_category")
-          agg={k:{x:v.get(x) for x in keep if x in v} for k,v in u.items() if isinstance(v,dict)}
-          print("::notice title=public_tool_usage::"+json.dumps(agg)[:3500])
-          ex=next((v for v in u.values() if isinstance(v,dict)),{}); print("::notice title=keys::"+json.dumps(sorted(ex))[:800])
-          print("::notice title=x402::"+json.dumps({k:a.get(k) for k in a if k.startswith("x402")})[:1500])
-          PY
-          rm -f "$RUNNER_TEMP/s.json"
+      - uses: actions/checkout@v4
+        with: {ref: main}
+      - id: sign
+        env: {HEARTBEAT_TOKEN: "${{ secrets.NEO_HEARTBEAT_TOKEN }}"}
+        run: echo "proof=$(NEO_HEARTBEAT_TOKEN="$HEARTBEAT_TOKEN" python3 self_traffic_auth.py sign-url https://neo-collettive.onrender.com/mcp --marker github-actions-mcp-verify-test)" >> "$GITHUB_OUTPUT"
+      - uses: Toramo747/Neo-collettive/actions/mcp-verify@feat/registry-metadata-and-action
+        id: v
+        env:
+          NEO_SELF_TRAFFIC: github-actions-mcp-verify-test
+          NEO_SELF_TRAFFIC_PROOF: ${{ steps.sign.outputs.proof }}
+        with:
+          url: https://neo-collettive.onrender.com/mcp
+          fail-on: never
+      - run: echo "::notice title=action::ok=${{ steps.v.outputs.ok }}"; head -c 1500 "${{ steps.v.outputs.result }}" | sed 's/^/::notice title=raw::/'
