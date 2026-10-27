@@ -339,6 +339,9 @@ for _k, _sc in SCOPE.items():
     SERVICES[_k]["scope"] = _sc
 
 for _k, _s in SERVICES.items():
+    # 27/10 (Andrea): the 402 and the Bazaar listing are what visitors read, so the free sample is named there.
+    # No HTTP method in the text: x402-lint flags a description that names a method other than the route's.
+    _s["description"] = _s["description"].rstrip() + f" Free signed sample: /x402/{_k}/sample."
     _s["bazaar"] = BAZAAR.get(_k)
     _s["service_name"] = "neo " + _k
     _s["no_charge_errors"] = NO_CHARGE
