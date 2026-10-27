@@ -9,6 +9,7 @@ import asyncio
 import hashlib
 import json
 import random
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,12 +24,19 @@ SEED = 20261026
 STATE = Path(sys.argv[1] if len(sys.argv) > 1 else "mcp-watch-state.json")
 
 
-def tool_hashes(tools: list[dict]) -> dict[str, str]:
-    out = {}
+def _norm(text: str) -> str:
+    """27/10 (skitter's idea): digits to #, whitespace collapsed, so dates, versions and counters do not count as change."""
+    return re.sub(r"\s+", " ", re.sub(r"\d+", "#", text)).strip()
+
+
+def tool_hashes(tools: list[dict]) -> tuple[dict[str, str], dict[str, str]]:
+    raw, norm = {}, {}
     for t in tools:
         canon = json.dumps({"d": t.get("description"), "s": t.get("input_schema")}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        out[hashlib.sha256(str(t.get("name")).encode()).hexdigest()[:16]] = hashlib.sha256(canon.encode()).hexdigest()[:16]
-    return out
+        k = hashlib.sha256(str(t.get("name")).encode()).hexdigest()[:16]
+        raw[k] = hashlib.sha256(canon.encode()).hexdigest()[:16]
+        norm[k] = hashlib.sha256(_norm(canon).encode()).hexdigest()[:16]
+    return raw, norm
 
 
 async def read_one(url: str, sem: asyncio.Semaphore) -> dict | None:
@@ -39,7 +47,10 @@ async def read_one(url: str, sem: asyncio.Semaphore) -> dict | None:
         except Exception:
             return None
     tools = ((v.get("checks") or {}).get("tools_list") or {}).get("full_tools") or []
-    return {"live": bool(v.get("live")), "tools": tool_hashes(tools)} if tools else {"live": bool(v.get("live")), "tools": None}
+    if not tools:
+        return {"live": bool(v.get("live")), "tools": None, "tools_n": None}
+    raw, norm = tool_hashes(tools)
+    return {"live": bool(v.get("live")), "tools": raw, "tools_n": norm}
 
 
 async def main() -> None:
@@ -58,6 +69,7 @@ async def main() -> None:
     prev = state["prev"]
     with_tools = [k for k, r in today.items() if r and r["tools"]]
     changed = added = removed = edited = 0
+    content_changed = numbers_only = norm_compared = 0
     for k in with_tools:
         p = (prev.get(k) or {}).get("tools")
         if not p:
@@ -70,12 +82,20 @@ async def main() -> None:
             added += len(set(t) - set(p))
             removed += len(set(p) - set(t))
             edited += sum(1 for n in set(t) & set(p) if t[n] != p[n])
+            pn, tn = (prev.get(k) or {}).get("tools_n"), today[k].get("tools_n")
+            if pn and tn:
+                norm_compared += 1
+                if tn != pn:
+                    content_changed += 1
+                else:
+                    numbers_only += 1
     went_dark = sum(1 for k, r in today.items() if (prev.get(k) or {}).get("tools") and not (r and r["tools"]))
     state["day"] += 1
     state["first"] = state["first"] or datetime.now(timezone.utc).isoformat()[:16]
     row = {"day": state["day"], "utc": datetime.now(timezone.utc).isoformat()[:16], "sampled": len(sample), "answered_with_tools": len(with_tools),
            "compared": sum(1 for k in with_tools if (prev.get(k) or {}).get("tools")), "changed": changed, "tools_added": added,
-           "tools_removed": removed, "tools_edited": edited, "went_dark": went_dark, "ever_changed": len(state["ever_changed"])}
+           "tools_removed": removed, "tools_edited": edited,
+           "changed_content": content_changed, "changed_numbers_only": numbers_only, "norm_compared_changes": norm_compared, "went_dark": went_dark, "ever_changed": len(state["ever_changed"])}
     state["days"].append(row)
     state["prev"] = {k: r for k, r in today.items() if r}
     STATE.write_text(json.dumps(state))
