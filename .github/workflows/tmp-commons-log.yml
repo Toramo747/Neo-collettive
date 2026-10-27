@@ -1,4 +1,4 @@
-name: tmp live check descriptions (read only)
+name: tmp commons presence check (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,14 +11,29 @@ jobs:
     steps:
       - run: |
           python3 - <<'PY'
-          import json, urllib.request, base64
-          B="https://neo-collettive.onrender.com"; UA={"User-Agent":"neo-tmp"}
-          get=lambda p: json.load(urllib.request.urlopen(urllib.request.Request(B+p,headers=UA),timeout=120))
-          h=get("/health"); print(f"::notice title=health::{h.get('version')} {str(h.get('commit'))[:7]}")
-          o=get("/openapi.json"); d={p.split('/')[2]:(v.get('post') or {}).get('description','')[:60] for p,v in o['paths'].items() if p.startswith('/x402/') and not p.endswith('/sample')}
-          print("::notice title=openapi::"+json.dumps(d))
-          try: urllib.request.urlopen(urllib.request.Request(B+"/x402/mcp-audit",data=b"{}",method="POST",headers={"Content-Type":"application/json"}),timeout=60)
-          except urllib.error.HTTPError as e:
-              pr=json.loads(base64.b64decode(e.headers["PAYMENT-REQUIRED"])); a=pr["accepts"][0]
-              print(f"::notice title=402 mcp-audit::price={a.get('amount') or a.get('maxAmountRequired')} desc={a.get('description','')[:90]} bazaar={'bazaar' in pr.get('extensions',{})}")
+          import json, urllib.request, datetime, collections
+          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          def get(u):
+              try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
+              except Exception as e: return {"_err":str(e)[:120]}
+          def iso(v):
+              if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()[:16]
+              return str(v or "")[:16]
+          ents=[]
+          for p in ("/api/entries?limit=300","/api/entries?channel=general&limit=300","/api/entries?channel=jobs&limit=100"):
+              d=get("https://commons.dooza.ai"+p); ents+=d.get("entries",d) if isinstance(d,dict) else d
+          seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
+          ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
+          print(f"::notice title=range::{len(ents)} entries, {iso(ents[0].get('createdAt'))} .. {iso(ents[-1].get('createdAt'))}")
+          today=[r for r in ents if iso(r.get("createdAt"))>="2026-10-27"]
+          print("::notice title=today by agent::"+json.dumps(collections.Counter(r.get("agent") for r in today).most_common()))
+          ours=[r for r in ents if r.get("agent")=="neo"]
+          print("::notice title=neo posts visible::"+json.dumps([(r.get("id"),iso(r.get("createdAt"))) for r in ours[-8:]]))
+          ids={r.get("id") for r in ours}
+          rep=[r for r in ents if r.get("agent")!="neo" and iso(r.get("createdAt"))>="2026-10-26" and (str(r.get("supersedes") or r.get("reply_to") or "") in ids or "@neo" in str(r.get("body","")).lower() or "neo" in str(r.get("body","")).lower())]
+          print("::notice title=replies/mentions since 26/10::"+json.dumps([(r.get("agent"),r.get("id"),iso(r.get("createdAt")),str(r.get("supersedes") or r.get("reply_to") or "")[:40]) for r in rep]))
+          # who replies to whom today (excluding neo)
+          rt=collections.Counter(str(r.get("supersedes") or r.get("reply_to") or "")[:30] for r in today if r.get("supersedes") or r.get("reply_to"))
+          print("::notice title=today reply targets::"+json.dumps(rt.most_common(12)))
+          keys=sorted(set().union(*[set(r) for r in ents[-5:]])); print("::notice title=keys::"+json.dumps(keys))
           PY
