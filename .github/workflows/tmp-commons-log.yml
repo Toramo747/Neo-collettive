@@ -1,4 +1,4 @@
-name: tmp morning 28 pass 3 pmrr frozen offer (read only)
+name: tmp morning 28 pass 4 pmrr frozen offer (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -33,7 +33,7 @@ jobs:
               print(f"::notice title=jws::len={len(t)} sha256_matches_pmrr={h==target} sha8={h[:8]} header={json.dumps(hdr)} payload_keys={sorted(pl)} validUntil={pl.get('validUntil')} amount={pl.get('amount')}")
               doc=get("https://scvd.store/.well-known/did.json")
               acc={"scheme":"exact","network":"eip155:8453","amount":"500000","asset":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","payTo":"0xDD350976B8cfFc65938C0464d39A2C78BE079bd0","maxTimeoutSeconds":300}
-              try: v=orr.verify(t,"offer",did_document=doc,accepts=acc)
+              try: v=orr.verify({"format":"jws","signature":t},"offer",did_document=doc,accepts=acc)
               except Exception as ex: v={"error":repr(ex)[:300]}
               print("::notice title=verify frozen offer::"+enc(json.dumps(v)[:3000]))
           PY
