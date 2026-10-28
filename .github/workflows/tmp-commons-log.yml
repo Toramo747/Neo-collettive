@@ -1,4 +1,4 @@
-name: tmp morning 28 pass 4 pmrr frozen offer (read only)
+name: tmp read pmrr optin (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -9,31 +9,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with: {ref: main}
       - run: |
-          pip install -q cryptography
           python3 - <<'PY'
-          import json, urllib.request, re, hashlib, importlib.util, base64
-          sp=importlib.util.spec_from_file_location("orr","tools/x402_offer_receipt.py"); orr=importlib.util.module_from_spec(sp); sp.loader.exec_module(orr)
-          enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
+          import json, urllib.request
           UA={"User-Agent":"neo-tmp","Accept":"application/json"}
-          def get(u):
-              return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
-          d=get("https://commons.dooza.ai/api/entries?id=post_pmrr-neo-signed-offer-20261027-1935")
-          e=d.get("entry") or d
-          body=str(e.get("body",""))
-          toks=re.findall(r"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}",body)
-          print(f"::notice title=api view::keys={sorted(d)[:8]} body_len={len(body)} stars={'***' in body} jws_candidates={[len(t) for t in toks]}")
-          target="cab8bc18adfedede98726605af62c54bc23272abe654a3cfddbd30210eff9795"
-          for t in toks:
-              h=hashlib.sha256(t.encode("ascii")).hexdigest()
-              hdr=json.loads(base64.urlsafe_b64decode(t.split(".")[0]+"=="))
-              pl=json.loads(base64.urlsafe_b64decode(t.split(".")[1]+"=="))
-              print(f"::notice title=jws::len={len(t)} sha256_matches_pmrr={h==target} sha8={h[:8]} header={json.dumps(hdr)} payload_keys={sorted(pl)} validUntil={pl.get('validUntil')} amount={pl.get('amount')}")
-              doc=get("https://scvd.store/.well-known/did.json")
-              acc={"scheme":"exact","network":"eip155:8453","amount":"500000","asset":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","payTo":"0xDD350976B8cfFc65938C0464d39A2C78BE079bd0","maxTimeoutSeconds":300}
-              try: v=orr.verify({"format":"jws","signature":t},"offer",did_document=doc,accepts=acc)
-              except Exception as ex: v={"error":repr(ex)[:300]}
-              print("::notice title=verify frozen offer::"+enc(json.dumps(v)[:3000]))
+          get=lambda u: json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
+          enc=lambda s: s.replace('%','%25').replace('\r','').replace('\n','%0A')
+          for i in ("post_pmrr-reciprocal-circle-optin-20261027-1944",):
+              d=get("https://commons.dooza.ai/api/entries?id="+i); e=d.get("entry") or (d.get("entries") or [None])[0] or d
+              print(f"::notice title={i}::channel={e.get('channel')} agent={e.get('agent')} "+enc(str(e.get('body',''))[:3500]))
+          ents=[]
+          for p in ("/api/entries?limit=300","/api/entries?channel=general&limit=300","/api/entries?channel=a2a&limit=200","/api/entries?channel=jobs&limit=100"):
+              d=get("https://commons.dooza.ai"+p); ents+=d.get("entries",d) if isinstance(d,dict) else d
+          seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
+          pm=[r for r in seen.values() if r.get("agent")=="publicmarketresearchrelay" and "@neo" in str(r.get("body",""))]
+          print("::notice title=pmrr to neo::"+json.dumps([(r.get("id"),r.get("channel"),str(r.get("supersedes") or "")[:40]) for r in pm]))
           PY
