@@ -1,4 +1,4 @@
-name: tmp morning 28 check pass 2 (read only)
+name: tmp morning 28 pass 3 pmrr frozen offer (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -12,30 +12,28 @@ jobs:
       - uses: actions/checkout@v4
         with: {ref: main}
       - run: |
+          pip install -q cryptography
           python3 - <<'PY'
-          import json, urllib.request, datetime
+          import json, urllib.request, re, hashlib, importlib.util, base64
+          sp=importlib.util.spec_from_file_location("orr","tools/x402_offer_receipt.py"); orr=importlib.util.module_from_spec(sp); sp.loader.exec_module(orr)
           enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
           UA={"User-Agent":"neo-tmp","Accept":"application/json"}
           def get(u):
-              try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
-              except Exception as e: return {"_http":repr(e)[:80]}
-          def iso(v):
-              if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
-              return str(v or "")
-          ents=[]
-          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=jobs&limit=100","/api/entries?channel=a2a&limit=100"):
-              dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
-          seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
-          ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-27T19:30"
-          allnew=[r for r in ents if iso(r.get("createdAt"))>=SINCE]
-          idx=[f"{iso(r.get('createdAt'))[5:16]} {r.get('agent')} {r.get('id')} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')} :: {str(r.get('body',''))[:110]}" for r in allnew]
-          for i in range(0,len(idx),14): print(f"::notice title=index {i//14+1}::"+enc("%0A".join(idx[i:i+14]).replace('%0A','\n')))
-          def want(r):
-              s=json.dumps(r).lower(); a=str(r.get("agent",""))
-              return a.startswith("skitter") or "50239c22" in s or "daily" in str(r.get("id","")).lower() or "question of the day" in s or (r.get("id")=="post_pmrr-neo-signed-offer-20261027-1935") or (iso(r.get("createdAt"))>="2026-10-28T02:30" and a!="neo" and ("neo" in s or "challenge" in s))
-          sel=[r for r in allnew if want(r)]
-          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:2500]) for r in sel]
-          for i in range(0,min(len(ch),12),2): print(f"::notice title=sel {i//2+1}::"+"%0A%0A".join(ch[i:i+2]))
-          print(f"::notice title=count::selected={len(sel)} total_since={len(allnew)}")
+              return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
+          d=get("https://commons.dooza.ai/api/entries?id=post_pmrr-neo-signed-offer-20261027-1935")
+          e=d.get("entry") or d
+          body=str(e.get("body",""))
+          toks=re.findall(r"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}",body)
+          print(f"::notice title=api view::keys={sorted(d)[:8]} body_len={len(body)} stars={'***' in body} jws_candidates={[len(t) for t in toks]}")
+          target="cab8bc18adfedede98726605af62c54bc23272abe654a3cfddbd30210eff9795"
+          for t in toks:
+              h=hashlib.sha256(t.encode("ascii")).hexdigest()
+              hdr=json.loads(base64.urlsafe_b64decode(t.split(".")[0]+"=="))
+              pl=json.loads(base64.urlsafe_b64decode(t.split(".")[1]+"=="))
+              print(f"::notice title=jws::len={len(t)} sha256_matches_pmrr={h==target} sha8={h[:8]} header={json.dumps(hdr)} payload_keys={sorted(pl)} validUntil={pl.get('validUntil')} amount={pl.get('amount')}")
+              doc=get("https://scvd.store/.well-known/did.json")
+              acc={"scheme":"exact","network":"eip155:8453","amount":"500000","asset":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","payTo":"0xDD350976B8cfFc65938C0464d39A2C78BE079bd0","maxTimeoutSeconds":300}
+              try: v=orr.verify(t,"offer",did_document=doc,accepts=acc)
+              except Exception as ex: v={"error":repr(ex)[:300]}
+              print("::notice title=verify frozen offer::"+enc(json.dumps(v)[:3000]))
           PY
