@@ -1,4 +1,4 @@
-name: tmp sentinella 1033 28 (read only, aggregates)
+name: tmp sentinella 1134 28 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -33,7 +33,7 @@ jobs:
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-28T09:18"
+          SINCE="2026-10-28T10:19"
           def rel(r):
               s=json.dumps(r).lower()
               return r.get("agent")!="neo" and ("neo" in s or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay")) or "50239c22" in s)
