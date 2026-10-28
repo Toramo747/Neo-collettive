@@ -1,4 +1,4 @@
-name: tmp morning 28 check (read only, aggregates)
+name: tmp morning 28 check pass 2 (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,33 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {ref: main}
-      - env:
-          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
-          NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
-        run: |
-          B=https://neo-collettive.onrender.com
-          for p in /x402 /health /api/autopilot/status; do
-            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker morning-check)
-            AUTH=""; [ "$p" = "/api/autopilot/status" ] && AUTH="Authorization: Bearer ${ADMIN_TOKEN}"
-            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: morning-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
-          done
-          python3 - "$RUNNER_TEMP" <<'PY'
-          import json, sys, urllib.request, datetime, os
-          T=sys.argv[1]
-          def load(n):
-              try: return json.load(open(os.path.join(T,n)))
-              except Exception as e: return {"_err":repr(e)[:100]}
+      - run: |
+          python3 - <<'PY'
+          import json, urllib.request, datetime
           enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
-          x=load("x402.json")
-          print("::notice title=paid::"+json.dumps({k:[v.get('calls'),v.get('usd'),v.get('last_utc')] for k,v in (x.get('paid_since_launch') or {}).items()})[:3000])
-          print(f"::notice title=vetrina::samples={x.get('samples_served_since_launch')} samples_by={json.dumps(x.get('samples_by_service') or x.get('samples_served_by_service'))[:600]} suggestions={x.get('suggestions_received')} counters_since_start={json.dumps(x.get('counters_since_start'))[:800]} counters_by_service={json.dumps(x.get('counters_by_service'))[:1200]}")
-          h=load("health.json")
-          print("::notice title=health::"+enc(json.dumps({k:h.get(k) for k in ("ok","version","status","uptime_seconds","started_utc") if k in h})[:600]))
-          d=load("status.json"); a=d.get("autopilot") or {}; u=a.get("public_tool_usage") or {}
-          keep=("calls","distinct_origins","returning_origins","first_utc","last_utc","by_category")
-          agg={k:{z:v.get(z) for z in keep if z in v} for k,v in u.items() if isinstance(v,dict) and k in ("verify_mcp_endpoint","verify_quote")}
-          print("::notice title=public_tool_usage::ok="+str(d.get("ok"))+" "+json.dumps(agg)[:3000])
-          print("::notice title=x402 admin::"+json.dumps({k:a.get(k) for k in a if k.startswith("x402")})[:1500])
           UA={"User-Agent":"neo-tmp","Accept":"application/json"}
           def get(u):
               try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
@@ -45,22 +22,20 @@ jobs:
           def iso(v):
               if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
               return str(v or "")
-          t=get("https://swarmmemo.com/api/thread/eca93b445de668d1464b93219c5b7ad3?limit=25")
-          msgs=t.get('replies') or t.get('messages') or t.get('posts') or []
-          print(f"::notice title=swarmmemo thread::n={len(msgs)} keys={sorted(t)[:10]} "+enc(json.dumps([{k:str(m.get(k))[:200] for k in ('id','author','agent','created_at','createdAt','body','text','content') if k in m} for m in msgs if isinstance(m,dict)])[:2500]))
           ents=[]
-          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=jobs&limit=100"):
+          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=jobs&limit=100","/api/entries?channel=a2a&limit=100"):
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
           SINCE="2026-10-27T19:30"
-          def rel(r):
-              s=json.dumps(r).lower()
-              return r.get("agent")!="neo" and ("neo" in s or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","maestro","hermes","markedet")) or "50239c22" in s or "daily-q" in str(r.get("id","")) or "challenge" in s)
-          new=[r for r in ents if iso(r.get("createdAt"))>=SINCE and rel(r)]
           allnew=[r for r in ents if iso(r.get("createdAt"))>=SINCE]
-          print(f"::notice title=commons::{len(new)} relevant / {len(allnew)} total since {SINCE}Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; agents={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:600]}")
-          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:1200]) for r in new]
-          for i in range(0,min(len(ch),12),3): print(f"::notice title=new {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
+          idx=[f"{iso(r.get('createdAt'))[5:16]} {r.get('agent')} {r.get('id')} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')} :: {str(r.get('body',''))[:110]}" for r in allnew]
+          for i in range(0,len(idx),14): print(f"::notice title=index {i//14+1}::"+enc("%0A".join(idx[i:i+14]).replace('%0A','\n')))
+          def want(r):
+              s=json.dumps(r).lower(); a=str(r.get("agent",""))
+              return a.startswith("skitter") or "50239c22" in s or "daily" in str(r.get("id","")).lower() or "question of the day" in s or (r.get("id")=="post_pmrr-neo-signed-offer-20261027-1935") or (iso(r.get("createdAt"))>="2026-10-28T02:30" and a!="neo" and ("neo" in s or "challenge" in s))
+          sel=[r for r in allnew if want(r)]
+          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:2500]) for r in sel]
+          for i in range(0,min(len(ch),12),2): print(f"::notice title=sel {i//2+1}::"+"%0A%0A".join(ch[i:i+2]))
+          print(f"::notice title=count::selected={len(sel)} total_since={len(allnew)}")
           PY
-          rm -f "$RUNNER_TEMP"/*.json
