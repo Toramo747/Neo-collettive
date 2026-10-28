@@ -1,4 +1,4 @@
-name: tmp risposte per neo (read only, aggregates)
+name: tmp sentinella 1240 28 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -9,9 +9,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - run: |
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           python3 - <<'PY'
-          import json, urllib.request, datetime
+          import json, urllib.request, urllib.error, datetime, os
           UA={"User-Agent":"neo-tmp","Accept":"application/json"}
           def get(u):
               try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
@@ -20,21 +22,30 @@ jobs:
               if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
               return str(v or "")
           enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
+          x=get("https://neo-collettive.onrender.com/x402")
+          print("::notice title=paid::"+json.dumps({k:[v.get('calls'),v.get('usd'),v.get('last_utc')] for k,v in (x.get('paid_since_launch') or {}).items()})[:3000])
+          print(f"::notice title=vetrina::samples={x.get('samples_served_since_launch')} samples_by={json.dumps(x.get('samples_by_service') or x.get('samples_served_by_service'))[:600]} suggestions={x.get('suggestions_received')} counters_since_start={json.dumps(x.get('counters_since_start'))[:800]}")
           t=get("https://swarmmemo.com/api/thread/eca93b445de668d1464b93219c5b7ad3?limit=25")
           msgs=t.get('replies') or t.get('messages') or t.get('posts') or []
-          print(f"::notice title=swarmmemo::n={len(msgs)} "+enc(json.dumps([{k:str(m.get(k))[:300] for k in ('id','author','created_at','text') if k in m} for m in msgs[1:] if isinstance(m,dict)])[:3000]))
+          print(f"::notice title=swarmmemo thread::n={len(msgs)} keys={sorted(t)[:10]} "+enc(json.dumps([{k:str(m.get(k))[:200] for k in ('id','author','agent','created_at','createdAt','body','text','content') if k in m} for m in msgs if isinstance(m,dict)])[:2500]))
           ents=[]
           for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=a2a&limit=100","/api/entries?channel=jobs&limit=100"):
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-28T09:30"
+          SINCE="2026-10-28T11:25"
           def rel(r):
               s=json.dumps(r).lower()
-              return r.get("agent")!="neo" and ("neo" in s or "osixbay" in s or str(r.get("supersedes") or r.get("reply_to") or "").startswith("post_neo"))
+              return r.get("agent")!="neo" and ("neo" in s or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay")) or "50239c22" in s)
           new=[r for r in ents if iso(r.get("createdAt"))>=SINCE and rel(r)]
           allnew=[r for r in ents if iso(r.get("createdAt"))>=SINCE]
-          print(f"::notice title=commons::{len(new)} per neo / {len(allnew)} totali dalle {SINCE}Z; ultima {iso(ents[-1].get('createdAt')) if ents else None}; agenti={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:600]}")
-          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:3000]) for r in new]
-          for i,c in enumerate(ch[:10]): print(f"::notice title=per neo {i+1}::"+c)
+          print(f"::notice title=commons::{len(new)} relevant / {len(allnew)} total since {SINCE}Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; agents={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:600]}")
+          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:1200]) for r in new]
+          for i in range(0,min(len(ch),12),3): print(f"::notice title=new {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
+          H={"User-Agent":"neo-tmp","Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ["GH_TOKEN"]}
+          for wf in ("x402-health.yml","wallet-watch.yml"):
+              try:
+                  rr=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.github.com/repos/Toramo747/neo-collettive/actions/workflows/{wf}/runs?per_page=6&created=>{SINCE}Z",headers=H),timeout=90))
+                  print(f"::notice title=runs {wf}::"+json.dumps([(r.get('created_at'),r.get('status'),r.get('conclusion'),r.get('id')) for r in rr.get('workflow_runs',[])]))
+              except Exception as e: print(f"::notice title=runs {wf}::err {repr(e)[:120]}")
           PY
