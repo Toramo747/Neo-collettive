@@ -1,4 +1,4 @@
-name: tmp verify pmrr offer (read only)
+name: tmp live verify scvd offer (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -14,30 +14,33 @@ jobs:
       - run: |
           pip install -q cryptography
           python3 - <<'PY'
-          import json, urllib.request, re, importlib.util
-          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
-          def get(u):
-              return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
-          ents=[]
-          for p in ("/api/entries?limit=300","/api/entries?channel=general&limit=300"):
-              d=get("https://commons.dooza.ai"+p); ents+=d.get("entries",d) if isinstance(d,dict) else d
-          e=next((r for r in ents if r.get("id")=="post_pmrr-neo-signed-offer-20261027-1935"),None)
-          body=str((e or {}).get("body",""))
-          enc=lambda s: s.replace('%','%25').replace('\r','').replace('\n','%0A')
-          for i in range(0,len(body),1800): print(f"::notice title=body {i//1800+1}::"+enc(body[i:i+1800]))
-          jws=re.search(r"\b(eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b",body)
-          m=re.search(r"(\{\"scheme\".*?\})\s*(?:\n|$)",body,re.S)
+          import json, urllib.request, base64, importlib.util, datetime
           sp=importlib.util.spec_from_file_location("orr","tools/x402_offer_receipt.py"); orr=importlib.util.module_from_spec(sp); sp.loader.exec_module(orr)
-          if jws:
-              acc=None
-              if m:
-                  try: acc=json.loads(m.group(1))
-                  except Exception as ex: print("::notice title=accept parse::"+str(ex)[:200])
-              try:
-                  v=orr.verify(jws.group(1),"offer",accepts=acc)
-                  print("::notice title=verify offer::"+enc(json.dumps(v)[:3500]))
-              except Exception as ex:
-                  print("::notice title=verify error::"+enc(repr(ex)[:500]))
-          else:
-              print("::notice title=jws::not found in body")
+          enc=lambda s: s.replace('%','%25').replace('\r','').replace('\n','%0A')
+          UA={"User-Agent":"neo-tmp (neo-collettive.onrender.com)"}
+          now=datetime.datetime.utcnow().isoformat()[:19]+"Z"
+          try:
+              urllib.request.urlopen(urllib.request.Request("https://scvd.store/api/buy/hello",headers=UA),timeout=60); print("::notice title=402::no 402, got 200")
+          except urllib.error.HTTPError as e:
+              hdr=e.headers.get("PAYMENT-REQUIRED"); raw=e.read()
+              print(f"::notice title=402 at {now}::status={e.code} header={'yes' if hdr else 'no'} body_bytes={len(raw)}")
+              pr=json.loads(base64.b64decode(hdr)) if hdr else json.loads(raw)
+              acc=pr.get("accepts") or []; ext=(pr.get("extensions") or {}).get("offer-receipt") or {}
+              offers=(ext.get("info") or {}).get("offers") or []
+              print("::notice title=accepts::"+enc(json.dumps([{k:a.get(k) for k in ("scheme","network","amount","asset","payTo")} for a in acc])[:1500]))
+              print(f"::notice title=offers::n={len(offers)} first_type={type(offers[0]).__name__ if offers else None} ext_keys={sorted(ext)} info_keys={sorted(ext.get('info') or {})}")
+              doc=json.load(urllib.request.urlopen(urllib.request.Request("https://scvd.store/.well-known/did.json",headers=UA),timeout=60))
+              vm=doc.get("verificationMethod") or []
+              print("::notice title=did::"+enc(json.dumps({"id":doc.get("id"),"keys":[(m.get("id"),(m.get("publicKeyJwk") or {}).get("x")) for m in vm]})[:800]))
+              if offers:
+                  off=offers[0]
+                  try:
+                      v=orr.verify(off,"offer",did_document=doc,accepts=acc[0] if acc else None)
+                  except Exception as ex:
+                      v={"error":repr(ex)[:300]}
+                  print("::notice title=verify offer[0]::"+enc(json.dumps(v)[:3500]))
+                  if isinstance(off,dict):
+                      s=off.get("jws") or off.get("signature") or ""
+                  else: s=str(off)
+                  print("::notice title=jws head::"+enc(str(s)[:120]))
           PY
