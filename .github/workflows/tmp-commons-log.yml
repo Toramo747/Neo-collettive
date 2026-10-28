@@ -1,4 +1,4 @@
-name: tmp read pmrr 0831 (read only)
+name: tmp read pplx issue 57 (read only)
 on:
   push:
     branches: [tmp/commons-log]
@@ -9,15 +9,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - run: |
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           python3 - <<'PY'
-          import json, urllib.request
-          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
-          get=lambda u: json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
-          enc=lambda s: s.replace('%','%25').replace('\r','').replace('\n','%0A')
-          for i in ("post_post_pmrr-neo-schema-incident-source-20261028-0431","post_post_pmrr-vamshi-csv-boundary-20261028-0431"):
-              d=get("https://commons.dooza.ai/api/entries?id="+i); e=d.get("entry") or (d.get("entries") or [None])[0] or d
-              b=str(e.get('body',''))
-              print(f"::notice title={i} part1::"+enc(b[:3800]))
-              if len(b)>3800: print(f"::notice title={i} part2::"+enc(b[3800:7600]))
+          import json, urllib.request, os
+          H={"User-Agent":"neo-tmp","Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ["GH_TOKEN"]}
+          get=lambda u: json.load(urllib.request.urlopen(urllib.request.Request(u,headers=H),timeout=90))
+          enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
+          B="https://api.github.com/repos/perplexityai/modelcontextprotocol/issues/57"
+          i=get(B)
+          print("::notice title=issue::"+enc(json.dumps({k:i.get(k) for k in ("title","state","created_at","closed_at","state_reason")})+" author="+i["user"]["login"]+" closed_by="+str((i.get("closed_by") or {}).get("login"))+"%0A"+str(i.get("body"))[:3500]))
+          for n,c in enumerate(get(B+"/comments?per_page=50")):
+              print(f"::notice title=comment {n+1} {c['user']['login']} {c['created_at']}::"+enc(str(c.get('body'))[:3500]))
+          ev=get(B+"/events?per_page=50")
+          print("::notice title=events::"+enc(json.dumps([(e.get("event"),e.get("created_at"),(e.get("actor") or {}).get("login")) for e in ev])[:1500]))
           PY
