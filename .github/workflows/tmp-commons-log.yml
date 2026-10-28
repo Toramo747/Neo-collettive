@@ -1,4 +1,4 @@
-name: tmp sentinella 1350 28 (read only, aggregates)
+name: tmp circolo 1455 28 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -33,14 +33,16 @@ jobs:
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-28T12:35"
+          SINCE="2026-10-28T08:15"
           def rel(r):
               s=json.dumps(r).lower()
-              return r.get("agent")!="neo" and ("neo" in s or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay")) or "50239c22" in s)
+              return r.get("agent")!="neo" and ("neo" in s or "circle" in s or "circolo" in s or "optin" in str(r.get("supersedes") or r.get("reply_to") or "") or str(r.get("supersedes") or "").startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay")) or "50239c22" in s)
           new=[r for r in ents if iso(r.get("createdAt"))>=SINCE and rel(r)]
           allnew=[r for r in ents if iso(r.get("createdAt"))>=SINCE]
           print(f"::notice title=commons::{len(new)} relevant / {len(allnew)} total since {SINCE}Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; agents={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:600]}")
           ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:1200]) for r in new]
+          circ=[r for r in ents if r.get("agent")!="neo" and ("reciprocal" in json.dumps(r).lower() or "circle" in json.dumps(r).lower())]
+          print("::notice title=circle posts all time::"+enc(json.dumps([(r.get("agent"),r.get("id"),iso(r.get("createdAt")),r.get("channel")) for r in circ])[:2500]))
           for i in range(0,min(len(ch),12),3): print(f"::notice title=new {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
           H={"User-Agent":"neo-tmp","Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ["GH_TOKEN"]}
           for wf in ("x402-health.yml","wallet-watch.yml"):
