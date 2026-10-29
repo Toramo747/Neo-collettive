@@ -46,6 +46,15 @@ def make(out_dir: str) -> int:
     now = datetime.now(timezone.utc)
     stmt = {"v": 1, "date_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "log_count": int(head["count"]),
             "log_head": head["head"], "repo": REPO_URL, "repo_commit": commit}
+    # 29/10 (mcp-ledger): the day's Merkle root of MCP contract digests, when today's read exists, so the root is
+    # named in the timestamped statement itself and not only reachable through the commit.
+    ledger = ROOT / "data" / "mcp-ledger" / "days" / f"{now.strftime('%Y-%m-%d')}.root.json"
+    if ledger.exists():
+        try:
+            lj = json.loads(ledger.read_text())
+            stmt["mcp_ledger"] = {"date": lj["date"], "root": lj["root"], "rows": int(lj["rows"])}
+        except Exception:  # noqa: BLE001
+            pass
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"{now.strftime('%Y-%m-%d')}.json"
