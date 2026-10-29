@@ -52,7 +52,7 @@ MAX_TOOLS = 500
 PER_SERVER_TIMEOUT = 25.0
 VOLATILE_CHANGES_7D = 3
 CHANGE_DATES_KEPT = 30
-OUTCOMES = ("ok", "no_tools", "init_failed", "unreachable", "refused", "timeout", "opted_out", "error")
+OUTCOMES = ("ok", "no_tools", "init_failed", "unreachable", "refused", "timeout", "opted_out", "invalid_url", "error")
 
 
 # ----------------------------------------------------------------------------- canonical forms and digests
@@ -61,7 +61,10 @@ def canonical_url(url: str) -> str:
     """scheme and host lower-case, default port dropped, fragment dropped; path and query kept as given."""
     p = urlsplit(str(url).strip())
     host = (p.hostname or "").lower()
-    port = p.port
+    try:
+        port = p.port
+    except ValueError:  # registry entries such as "https://host:{HAPI_PORT}/mcp": kept verbatim, read as invalid
+        return str(url).strip().split("#", 1)[0]
     scheme = (p.scheme or "https").lower()
     if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
         host = f"{host}:{port}"
@@ -336,6 +339,8 @@ async def run_read(args) -> int:
             url = canonical_url(s["remotes"][0]["url"])
             key = server_key(url)
             host = (urlsplit(url).hostname or "").lower()
+            if not host or not url.startswith("https://") or any(ch in url for ch in "{}<> "):
+                return key, {"outcome": "invalid_url", "tools": None}
             lock = wk_locks.setdefault(host, asyncio.Lock())
             async with lock:  # one well-known check per host per day, however many servers share the host
                 cached = wk_cache.get(host)

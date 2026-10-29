@@ -218,3 +218,10 @@ class TestPurge(unittest.TestCase):
             self.assertTrue((priv / L.PRIVATE_SUBDIR / "bb" / ("b" * 64 + ".json.gz")).exists())
             self.assertTrue(state["gone"]["opted_out"])
             self.assertEqual(L.purge_opted_out(state, [], priv), 0)
+
+
+class TestInvalidUrl(unittest.TestCase):
+    def test_placeholder_port_does_not_crash(self):
+        u = "https://host.example:{HAPI_PORT}/mcp#x"
+        self.assertEqual(L.canonical_url(u), "https://host.example:{HAPI_PORT}/mcp")
+        self.assertEqual(len(L.server_key(u)), 32)
