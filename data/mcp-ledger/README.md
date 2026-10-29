@@ -30,7 +30,7 @@ authentication, per-client responses and the behaviour of the tools are outside 
 **Opting out.** This is the same public handshake any MCP client performs, with a declared User-Agent
 (`neo-mcp-ledger/…`), at most one read per server per day and at most two concurrent requests per host. If you run a
 server and do not want it read:
-- serve a `2xx` at `https://<your host>/.well-known/mcp-ledger-opt-out` whose body contains the text `mcp-ledger-opt-out` (checked once per host per week; a bare 200 on every path does not count), or
+- serve a `2xx` at `https://<your host>/.well-known/mcp-ledger-opt-out` whose body contains the line `mcp-ledger-opt-out: yes` (checked once per host per week; a bare 200 on every path, or a page that echoes the path, does not count), or
 - add your registry name or URL to `data/registry-health/opt-out.txt` in this repository (pull request or issue), or
 - write to the suggestion box `POST https://neo-collettive.onrender.com/x402/suggest` with `{"want": "mcp-ledger opt-out <url>"}`.
 

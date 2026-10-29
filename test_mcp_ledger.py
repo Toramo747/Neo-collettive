@@ -235,5 +235,6 @@ class TestWellKnown(unittest.TestCase):
             def __init__(self, r): self.r = r
             async def get(self, *a, **k): return self.r
         self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(200, "<html>catch-all</html>")))))
-        self.assertTrue(asyncio.run(L.well_known_opt_out("h", C(R(200, "MCP-Ledger-Opt-Out: yes")))))
+        self.assertTrue(asyncio.run(L.well_known_opt_out("h", C(R(200, "MCP-Ledger-Opt-Out:   yes\n")))))
+        self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(200, '{"error":"no route /.well-known/mcp-ledger-opt-out"}')))))
         self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(404, "mcp-ledger-opt-out")))))
