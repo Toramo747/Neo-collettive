@@ -1,0 +1,74 @@
+name: mcp-ledger daily read (public digests, private contracts)
+# 29/10/2026 (Andrea's ok): once a day read the public handshake of every remote server in the official MCP
+# registry (opt-out honored), commit per-server digests and the day's Merkle root to this repository, and the
+# full contract texts to the private archive only. Nothing is published with a server name. The daily receipt-log
+# anchor then fixes the commit on Bitcoin and in Software Heritage. First week: measurement (max_servers), the
+# formula in public stays "N servers read per day" until the full read has real numbers.
+on:
+  schedule:
+    - cron: "19 2 * * *"
+  workflow_dispatch:
+    inputs:
+      max_servers:
+        description: "read at most N servers (0 = whole registry). Scheduled runs use the repository variable MCP_LEDGER_MAX (default 2000 until the measurement week is done)"
+        default: "2000"
+      concurrency:
+        description: "parallel reads (per host max 2)"
+        default: "32"
+      commit:
+        description: "commit the results (set false for a dry run that only prints aggregates)"
+        default: "true"
+permissions:
+  contents: write
+concurrency:
+  group: mcp-ledger-daily
+  cancel-in-progress: false
+jobs:
+  read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MODEL_LABEL_REPO }}
+          token: ${{ secrets.MODEL_LABEL_REPO_TOKEN }}
+          path: private-archive
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install -q -r requirements.txt
+      - name: Daily read
+        env:
+          MAX: ${{ inputs.max_servers || vars.MCP_LEDGER_MAX || '2000' }}
+          CONC: ${{ inputs.concurrency || '32' }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python tools/mcp_ledger.py read --max "$MAX" --concurrency "$CONC" \
+            --state data/mcp-ledger --private private-archive
+      - name: Commit public digests and root
+        if: ${{ inputs.commit != 'false' }}
+        run: |
+          set -euo pipefail
+          git config user.name "NEO Ops Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/mcp-ledger
+          git diff --cached --quiet && { echo "::notice title=mcp-ledger::nothing to commit"; exit 0; }
+          day=$(date -u +%Y-%m-%d)
+          git commit -q -m "mcp-ledger: $day digests and root [skip ci] [skip render]"
+          for i in 1 2 3; do git pull --rebase --quiet && git push --quiet && exit 0; sleep 7; done
+          exit 1
+      - name: Commit private contract texts
+        if: ${{ inputs.commit != 'false' }}
+        run: |
+          set -euo pipefail
+          cd private-archive
+          git config user.name "NEO Ops Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add mcp-ledger
+          git diff --cached --quiet && { echo "::notice title=mcp-ledger::no new contract texts"; exit 0; }
+          n=$(git diff --cached --name-only | wc -l)
+          git commit -q -m "mcp-ledger: $n new contract texts"
+          for i in 1 2 3; do git pull --rebase --quiet && git push --quiet && exit 0; sleep 7; done
+          exit 1
