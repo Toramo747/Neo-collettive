@@ -1,4 +1,4 @@
-name: tmp sentinella 2333 29 (read only, aggregates)
+name: tmp sentinella 2333b 29 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -20,7 +20,8 @@ jobs:
           for p in /x402 /health /api/autopilot/status; do
             PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker sentinel-check)
             AUTH=""; [ "$p" = "/api/autopilot/status" ] && AUTH="Authorization: Bearer ${ADMIN_TOKEN}"
-            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: sentinel-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
+            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: sentinel-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" -w "::notice title=http $p::code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
+            echo "::notice title=body $p::$(head -c 300 "$RUNNER_TEMP/$(basename $p).json" | tr -d '\n' | sed 's/%/%25/g')"
           done
           python3 - "$RUNNER_TEMP" <<'PY'
           import json, sys, urllib.request, datetime, os
