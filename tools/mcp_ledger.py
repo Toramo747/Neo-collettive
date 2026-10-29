@@ -336,6 +336,9 @@ async def run_read(args) -> int:
     wk_checked = 0
     wk_sem = asyncio.Semaphore(int(args.concurrency))
     wk_locks: dict[str, asyncio.Lock] = {}
+    # 29/10, day 1: with 2,000 tasks started at once the per-server timeout also counted the wait in the pacer queue
+    # (1,159 false timeouts). The timeout now starts when a read slot is held, so it measures the server, not the queue.
+    read_sem = asyncio.Semaphore(int(args.concurrency))
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=6.0), trust_env=False, follow_redirects=False) as client:
         async def one(s: dict) -> tuple[str, dict]:
@@ -353,12 +356,13 @@ async def run_read(args) -> int:
                     wk_cache[host] = [day, oo]
             if wk_cache[host][1]:
                 return key, {"outcome": "opted_out", "tools": None}
-            try:
-                return key, await asyncio.wait_for(read_contract(url, client, pacer), timeout=PER_SERVER_TIMEOUT)
-            except asyncio.TimeoutError:
-                return key, {"outcome": "timeout", "tools": None}
-            except Exception as exc:  # noqa: BLE001
-                return key, {"outcome": "error", "tools": None, "error": type(exc).__name__}
+            async with read_sem:
+                try:
+                    return key, await asyncio.wait_for(read_contract(url, client, pacer), timeout=PER_SERVER_TIMEOUT)
+                except asyncio.TimeoutError:
+                    return key, {"outcome": "timeout", "tools": None}
+                except Exception as exc:  # noqa: BLE001
+                    return key, {"outcome": "error", "tools": None, "error": type(exc).__name__}
 
         results = await asyncio.gather(*[one(s) for s in remote])
 

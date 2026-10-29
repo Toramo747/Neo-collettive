@@ -238,3 +238,28 @@ class TestWellKnown(unittest.TestCase):
         self.assertTrue(asyncio.run(L.well_known_opt_out("h", C(R(200, "MCP-Ledger-Opt-Out:   yes\n")))))
         self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(200, '{"error":"no route /.well-known/mcp-ledger-opt-out"}')))))
         self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(404, "mcp-ledger-opt-out")))))
+
+
+class TestQueueNotTimedOut(unittest.TestCase):
+    """Many slow servers, few slots: a server waiting for a slot must not be reported as a timeout."""
+
+    def test_slow_reads_with_small_concurrency(self):
+        import registry_health as rh
+        servers = [{"name": f"s{i}", "access_class": "remote", "remotes": [{"url": f"https://s{i}.example.com/mcp"}]} for i in range(12)]
+
+        async def fake_registry(client):
+            return {"servers": servers}
+
+        async def slow_read(url, client, pacer):
+            await asyncio.sleep(0.05)
+            return {"outcome": "ok", "tools": [{"name": "t", "inputSchema": {}}], "latency_ms": 50, "pages": 1}
+
+        async def no(host, client):
+            return False
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(rh, "fetch_complete_registry", fake_registry), \
+             mock.patch.object(rh, "read_opt_out", lambda: set()), mock.patch.object(L, "read_contract", slow_read), \
+             mock.patch.object(L, "well_known_opt_out", no), mock.patch.object(L, "PER_SERVER_TIMEOUT", 0.08):
+            self.assertEqual(L.main(["read", "--state", d, "--concurrency", "2"]), 0)
+            s = json.loads(next((Path(d) / "days").glob("*.root.json")).read_text())
+            self.assertEqual(s["outcomes"], {"ok": 12})
