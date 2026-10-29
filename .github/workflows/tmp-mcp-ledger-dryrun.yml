@@ -1,0 +1,33 @@
+name: tmp mcp-ledger dry run (branch only, aggregates only, no commit)
+on:
+  push:
+    branches: [feat/mcp-ledger]
+permissions:
+  contents: read
+concurrency:
+  group: tmp-mcp-ledger-dryrun
+  cancel-in-progress: true
+jobs:
+  dryrun:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install -q -r requirements.txt
+      - run: python -m unittest test_mcp_ledger test_receipt_log test_receipt_signing 2>&1 | tail -3
+      - name: Live read (300 servers, digests only, nothing committed)
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. python tools/mcp_ledger.py read --max "${MCP_LEDGER_DRYRUN_MAX:-300}" --concurrency 32 --state "$RUNNER_TEMP/ledger"
+          echo "::notice title=sizes::$(du -sh "$RUNNER_TEMP/ledger"/* | tr '\n' ' ')"
+          python - "$RUNNER_TEMP/ledger" <<'PY'
+          import json, sys, gzip, pathlib
+          d = pathlib.Path(sys.argv[1]) / "days"
+          for f in sorted(d.glob("*.json.gz")):
+              j = json.load(gzip.open(f, "rt")); rows = j["rows"]
+              import collections
+              print("::notice title=outcomes::" + json.dumps(collections.Counter(r[2] for r in rows)))
+              print("::notice title=check::names in public rows: " + str(any("://" in json.dumps(r) for r in rows)))
+          PY
