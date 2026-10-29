@@ -225,3 +225,15 @@ class TestInvalidUrl(unittest.TestCase):
         u = "https://host.example:{HAPI_PORT}/mcp#x"
         self.assertEqual(L.canonical_url(u), "https://host.example:{HAPI_PORT}/mcp")
         self.assertEqual(len(L.server_key(u)), 32)
+
+
+class TestWellKnown(unittest.TestCase):
+    def test_bare_200_is_not_an_opt_out(self):
+        class R:
+            def __init__(self, code, text): self.status_code, self.text = code, text
+        class C:
+            def __init__(self, r): self.r = r
+            async def get(self, *a, **k): return self.r
+        self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(200, "<html>catch-all</html>")))))
+        self.assertTrue(asyncio.run(L.well_known_opt_out("h", C(R(200, "MCP-Ledger-Opt-Out: yes")))))
+        self.assertFalse(asyncio.run(L.well_known_opt_out("h", C(R(404, "mcp-ledger-opt-out")))))

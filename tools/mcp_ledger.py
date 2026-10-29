@@ -217,10 +217,11 @@ async def read_contract(url: str, client, pacer) -> dict:
 
 
 async def well_known_opt_out(host: str, client) -> bool:
-    """A server operator can refuse the daily read by serving any 2xx at /.well-known/mcp-ledger-opt-out."""
+    """A server operator refuses the daily read by serving a 2xx at /.well-known/mcp-ledger-opt-out whose body
+    contains the words "mcp-ledger-opt-out" (a bare 2xx is not enough: many hosts answer 200 to any path)."""
     try:
         r = await client.get(f"https://{host}{OPT_OUT_WELL_KNOWN}", timeout=6, headers={"User-Agent": USER_AGENT}, follow_redirects=False)
-        return 200 <= r.status_code < 300
+        return 200 <= r.status_code < 300 and "mcp-ledger-opt-out" in r.text[:4096].lower()
     except Exception:  # noqa: BLE001
         return False
 
