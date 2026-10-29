@@ -20,7 +20,15 @@ jobs:
       - name: Live read (300 servers, digests only, nothing committed)
         run: |
           set -euo pipefail
-          PYTHONPATH=. python tools/mcp_ledger.py read --max "${MCP_LEDGER_DRYRUN_MAX:-300}" --concurrency 32 --state "$RUNNER_TEMP/ledger"
+          set +e
+          PYTHONPATH=. python tools/mcp_ledger.py read --max "${MCP_LEDGER_DRYRUN_MAX:-300}" --concurrency 32 --state "$RUNNER_TEMP/ledger" > "$RUNNER_TEMP/out.log" 2> "$RUNNER_TEMP/err.log"
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/out.log"
+          if [ $rc -ne 0 ]; then
+            tail -c 1200 "$RUNNER_TEMP/err.log" | tr '\n' ' ' | sed 's/^/::error title=mcp-ledger stderr::/'; echo
+            exit $rc
+          fi
           echo "::notice title=sizes::$(du -sh "$RUNNER_TEMP/ledger"/* | tr '\n' ' ')"
           python - "$RUNNER_TEMP/ledger" <<'PY'
           import json, sys, gzip, pathlib
