@@ -1,4 +1,4 @@
-name: tmp sentinella 1833 29 (read only, aggregates)
+name: tmp sentinella 1933 29 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -53,7 +53,7 @@ jobs:
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-29T17:18"
+          SINCE="2026-10-29T18:18"
           def rel(r):
               s=json.dumps(r).lower()
               ref=str(r.get("supersedes") or r.get("reply_to") or "")
@@ -68,7 +68,7 @@ jobs:
           H={"User-Agent":"neo-tmp","Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ["GH_TOKEN"]}
           for wf in ("x402-health.yml","wallet-watch.yml","mcp-watch-pilot.yml","neo-render-deploy.yml"):
               try:
-                  rr=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.github.com/repos/Toramo747/neo-collettive/actions/workflows/{wf}/runs?per_page=8&created=>2026-10-29T17:18Z",headers=H),timeout=90))
+                  rr=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.github.com/repos/Toramo747/neo-collettive/actions/workflows/{wf}/runs?per_page=8&created=>2026-10-29T18:18Z",headers=H),timeout=90))
                   print(f"::notice title=runs {wf}::"+json.dumps([(r.get('created_at'),r.get('status'),r.get('conclusion'),r.get('id')) for r in rr.get('workflow_runs',[])]))
               except Exception as e: print(f"::notice title=runs {wf}::err {repr(e)[:120]}")
           PY
