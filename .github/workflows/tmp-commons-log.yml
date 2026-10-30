@@ -1,4 +1,4 @@
-name: tmp sentinella 0733 30 (read only, aggregates)
+name: tmp controllo mattino 0755 30 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -11,66 +11,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {ref: main}
-      - env:
-          ADMIN_TOKEN: ${{ secrets.NEO_ADMIN_TOKEN }}
+      - name: neo health (service suspended?)
+        env:
           NEO_HEARTBEAT_TOKEN: ${{ secrets.NEO_HEARTBEAT_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           B=https://neo-collettive.onrender.com
-          for p in /x402 /health /api/autopilot/status; do
-            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker sentinel-check)
-            AUTH=""; [ "$p" = "/api/autopilot/status" ] && AUTH="Authorization: Bearer ${ADMIN_TOKEN}"
-            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: sentinel-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" -w "::notice title=http $p::code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
-            echo "::notice title=body $p::$(head -c 300 "$RUNNER_TEMP/$(basename $p).json" | tr -d '\n' | sed 's/%/%25/g')"
+          for p in /health /x402; do
+            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker morning-check)
+            curl --silent --max-time 60 -H "X-MYCELIX-Self-Traffic: morning-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" "$B$p" -o "$RUNNER_TEMP/r.json" -w "::notice title=http $p::code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || true
+            echo "::notice title=body $p::$(head -c 200 "$RUNNER_TEMP/r.json" | tr -d '\n' | sed 's/%/%25/g')"
           done
-          python3 - "$RUNNER_TEMP" <<'PY'
-          import json, sys, urllib.request, datetime, os
-          T=sys.argv[1]
-          def load(n):
-              try: return json.load(open(os.path.join(T,n)))
-              except Exception as e: return {"_err":repr(e)[:100]}
-          enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
-          x=load("x402.json")
-          print("::notice title=paid::"+json.dumps({k:[v.get('calls'),v.get('usd'),v.get('last_utc')] for k,v in (x.get('paid_since_launch') or {}).items()})[:3000])
-          print(f"::notice title=vetrina::samples={x.get('samples_served_since_launch')} samples_by={json.dumps(x.get('samples_by_service') or x.get('samples_served_by_service'))[:600]} suggestions={x.get('suggestions_received')} counters_since_start={json.dumps(x.get('counters_since_start'))[:800]} counters_by_service={json.dumps(x.get('counters_by_service'))[:1200]}")
-          h=load("health.json")
-          print("::notice title=health::"+enc(json.dumps({k:h.get(k) for k in ("ok","version","status","uptime_seconds","started_utc") if k in h})[:600]))
-          d=load("status.json"); a=d.get("autopilot") or {}; u=a.get("public_tool_usage") or {}
-          keep=("calls","distinct_origins","returning_origins","first_utc","last_utc","by_category","by_client","clients","last_client")
-          agg={k:{z:v.get(z) for z in keep if z in v} for k,v in u.items() if isinstance(v,dict) and k in ("verify_mcp_endpoint","verify_quote")}
-          print("::notice title=public_tool_usage::ok="+str(d.get("ok"))+" keys="+json.dumps(sorted(u.get("verify_quote",{}).keys()) if isinstance(u.get("verify_quote"),dict) else [])[:400]+" "+json.dumps(agg)[:3000])
+          rm -f "$RUNNER_TEMP"/r.json
+      - name: swarmmemo
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
           UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
+          def get(u):
+              try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
+              except Exception as e: return {"_http":repr(e)[:80]}
+          t=get("https://swarmmemo.com/api/thread/eca93b445de668d1464b93219c5b7ad3?limit=25")
+          msgs=t.get('replies') or t.get('messages') or t.get('posts') or []
+          print(f"::notice title=swarmmemo thread::n={len(msgs)} keys={sorted(t)[:10]} "+enc(json.dumps([{k:str(m.get(k))[:200] for k in ('id','author','agent','created_at','createdAt','body','text','content') if k in m} for m in msgs if isinstance(m,dict)])[:2500]))
+          PY
+      - name: commons
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, datetime
+          UA={"User-Agent":"neo-tmp","Accept":"application/json"}
+          enc=lambda s: str(s).replace('%','%25').replace('\r','').replace('\n','%0A')
           def get(u):
               try: return json.load(urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=90))
               except Exception as e: return {"_http":repr(e)[:80]}
           def iso(v):
               if isinstance(v,(int,float)): return datetime.datetime.utcfromtimestamp(v/1000 if v>1e11 else v).isoformat()
               return str(v or "")
-          t=get("https://swarmmemo.com/api/thread/eca93b445de668d1464b93219c5b7ad3?limit=25")
-          msgs=t.get('replies') or t.get('messages') or t.get('posts') or []
-          print(f"::notice title=swarmmemo thread::n={len(msgs)} keys={sorted(t)[:10]} "+enc(json.dumps([{k:str(m.get(k))[:200] for k in ('id','author','agent','created_at','createdAt','body','text','content') if k in m} for m in msgs if isinstance(m,dict)])[:2500]))
           ents=[]
-          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=a2a&limit=100","/api/entries?channel=jobs&limit=100"):
+          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=a2a&limit=100","/api/entries?channel=jobs&limit=100","/api/entries?channel=knowledge&limit=100"):
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-30T06:18"
+          SINCE="2026-10-29T19:43"
           def rel(r):
               s=json.dumps(r).lower()
               ref=str(r.get("supersedes") or r.get("reply_to") or "")
-              return r.get("agent")!="neo" and ("neo" in s or "circle" in s or "circolo" in s or ref.startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay","maestro")) or "50239c22" in s or "daily-q" in str(r.get("id","")) or "challenge" in s)
+              return r.get("agent")!="neo" and ("neo" in s or "circle" in s or "circolo" in s or ref.startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay","pmrr","maestro")) or "50239c22" in s or "daily-q" in str(r.get("id","")) or "challenge" in s or "question of the day" in s or "qotd" in s)
           new=[r for r in ents if iso(r.get("createdAt"))>=SINCE and rel(r)]
           allnew=[r for r in ents if iso(r.get("createdAt"))>=SINCE]
-          print(f"::notice title=commons::{len(new)} relevant / {len(allnew)} total since {SINCE}Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; agents={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:600]}")
+          direct=[r.get("id") for r in allnew if "neo" in json.dumps(r).lower() and r.get("agent")!="neo"]
+          print(f"::notice title=commons::{len(new)} relevant / {len(allnew)} total since {SINCE}Z; latest {iso(ents[-1].get('createdAt')) if ents else None}; direct-neo={json.dumps(direct)[:400]}; agents={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:500]}")
           neo=[(r.get("id"),iso(r.get("createdAt")),r.get("channel")) for r in ents if r.get("agent")=="neo" and iso(r.get("createdAt"))>=SINCE]
-          print("::notice title=neo posts today::"+json.dumps(neo)[:1500])
-          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:900]) for r in new]
+          print("::notice title=neo posts::"+json.dumps(neo)[:800])
+          ch=[f"## {r.get('agent')} {r.get('id')} {iso(r.get('createdAt'))} ch={r.get('channel')} re={r.get('supersedes') or r.get('reply_to')}%0A"+enc(str(r.get('body',''))[:700]) for r in new]
           for i in range(0,min(len(ch),24),3): print(f"::notice title=new {i//3+1}::"+"%0A%0A".join(ch[i:i+3]))
-          H={"User-Agent":"neo-tmp","Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ["GH_TOKEN"]}
-          for wf in ("x402-health.yml","wallet-watch.yml","mcp-watch-pilot.yml","neo-render-deploy.yml"):
-              try:
-                  rr=json.load(urllib.request.urlopen(urllib.request.Request(f"https://api.github.com/repos/Toramo747/neo-collettive/actions/workflows/{wf}/runs?per_page=8&created=>2026-10-30T06:18Z",headers=H),timeout=90))
-                  print(f"::notice title=runs {wf}::"+json.dumps([(r.get('created_at'),r.get('status'),r.get('conclusion'),r.get('id')) for r in rr.get('workflow_runs',[])]))
-              except Exception as e: print(f"::notice title=runs {wf}::err {repr(e)[:120]}")
           PY
-          rm -f "$RUNNER_TEMP"/*.json
