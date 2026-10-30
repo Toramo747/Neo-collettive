@@ -34,7 +34,7 @@ import time  # noqa: E402
 
 RETENTION_SECONDS = 21 * 86400  # evidence_memory_guard default
 
-API = "https://api.render.com/v1"
+API = (os.getenv("RENDER_API_BASE") or "https://api.render.com/v1").rstrip("/")
 SERVICE = os.getenv("RENDER_SERVICE_ID", "").strip()
 TOKEN = os.getenv("RENDER_API_KEY", "").strip()
 

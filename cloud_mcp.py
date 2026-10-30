@@ -202,7 +202,13 @@ from starlette.routing import Mount, Route
 
 VERSION = "0.99.69"  # public append-only receipt log (0.99.68: stitched quotes)
 RECEIPT_SIGNING_KEY = receipt_signing.load_key()
-PUBLIC_HOST = "neo-collettive.onrender.com"
+DEFAULT_PUBLIC_BASE_URL = "https://neo-collettive.onrender.com"
+# The public host binds the signed offers/receipts and did:web. Set NEO_PUBLIC_BASE_URL
+# (or MYCELIX_PUBLIC_BASE_URL) when the service moves (30/10: migration off Render).
+PUBLIC_HOST = (
+    urlparse((os.getenv("MYCELIX_PUBLIC_BASE_URL") or os.getenv("NEO_PUBLIC_BASE_URL") or DEFAULT_PUBLIC_BASE_URL).strip()).hostname
+    or urlparse(DEFAULT_PUBLIC_BASE_URL).hostname
+)
 x402_paywall.OFFER_SIGNER.update(key=RECEIPT_SIGNING_KEY, host=PUBLIC_HOST)  # 27/10: official signed offers and receipts
 CREDITS_KEEP = 12  # signed credit receipts kept in the checkpoint (~1.3 kB each; the checkpoint limit is 100 kB)
 DEPLOY_COMMIT = (os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT") or "").strip()
@@ -210,7 +216,8 @@ MCP_REGISTRY = "https://registry.modelcontextprotocol.io"
 GLOBAL_A2A_REGISTRY = "https://api.a2a-registry.org"
 COMMUNITY_A2A_REGISTRY = "https://a2aregistry.org"
 TIZA_MCP = "https://tiza.cc/mcp"
-RENDER_API_BASE = "https://api.render.com/v1"
+# Render REST API, or a compatible store (ops/hetzner/envstore) when self-hosted.
+RENDER_API_BASE = (os.getenv("RENDER_API_BASE") or "https://api.render.com/v1").strip().rstrip("/")
 TIMEOUT = float(os.getenv("NEO_TIMEOUT", "25"))
 MAX_AGENTS = int(os.getenv("NEO_MAX_AGENTS", "4"))
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
@@ -358,7 +365,7 @@ RUNTIME_IDENTITY = runtime_identity()
 PUBLIC_BASE_URL = (
     os.getenv("MYCELIX_PUBLIC_BASE_URL")
     or os.getenv("NEO_PUBLIC_BASE_URL")
-    or "https://neo-collettive.onrender.com"
+    or DEFAULT_PUBLIC_BASE_URL
 ).strip().rstrip("/")
 A2A_MAX_MESSAGE_CHARS = max(
     1000,

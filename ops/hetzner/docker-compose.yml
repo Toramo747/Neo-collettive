@@ -1,0 +1,85 @@
+# NEO / OSIXBAY on a single Hetzner VPS.
+#   neo       the service (same Dockerfile as on Render), port 10000 inside the network only
+#   jarvis    the advisory sidecar that used to be jarvis-23lu.onrender.com
+#   envstore  Render-API-compatible state store on the persistent disk (see envstore/app.py)
+#   caddy     HTTPS with automatic Let's Encrypt certificates, reverse proxy
+# Secrets live in /srv/neo/.env (never in this file, never in git).
+name: neo
+
+services:
+  envstore:
+    build: ./envstore
+    restart: unless-stopped
+    environment:
+      ENVSTORE_DATA_DIR: /data
+      ENVSTORE_SERVICE_ID: neo
+      ENVSTORE_SERVICE_NAME: neo-collective-cloud
+      ENVSTORE_PUBLIC_URL: https://${NEO_DOMAIN:?set NEO_DOMAIN in .env}
+      ENVSTORE_TOKEN: ${ENVSTORE_TOKEN:?set ENVSTORE_TOKEN in .env}
+      ENVSTORE_DEPLOY_HOOK: ${ENVSTORE_DEPLOY_HOOK:-}
+      ENVSTORE_DEPLOY_COMMAND: /app/deploy.sh
+      REPO_DIR: /srv/neo/repo
+    volumes:
+      - /srv/neo/state:/data
+      - /srv/neo/repo:/srv/neo/repo
+      - /srv/neo/repo/ops/hetzner/deploy.sh:/app/deploy.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  neo:
+    build:
+      context: /srv/neo/repo
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: /srv/neo/.env
+    environment:
+      PORT: "10000"
+      RENDER_API_BASE: http://envstore:8000/v1
+      RENDER_SERVICE_ID: neo
+      RENDER_API_KEY: ${ENVSTORE_TOKEN}
+      JARVIS_URL: http://jarvis:10000
+      NEO_STATE_SNAPSHOT_PATH: /var/lib/neo/neo-autopilot-state.json
+    volumes:
+      - /srv/neo/neo-local:/var/lib/neo
+    depends_on:
+      envstore:
+        condition: service_healthy
+      jarvis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:10000/livez',timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+
+  jarvis:
+    build:
+      context: /srv/neo/repo/jarvis_service
+    restart: unless-stopped
+    env_file: /srv/neo/jarvis.env
+    environment:
+      PORT: "10000"
+
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      NEO_DOMAIN: ${NEO_DOMAIN}
+      JARVIS_DOMAIN: ${JARVIS_DOMAIN:-jarvis.${NEO_DOMAIN}}
+      STATE_DOMAIN: ${STATE_DOMAIN:-state.${NEO_DOMAIN}}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/neo/caddy-data:/data
+      - /srv/neo/caddy-config:/config
+    depends_on:
+      - neo

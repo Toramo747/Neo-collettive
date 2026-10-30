@@ -23,7 +23,7 @@ import zlib
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from state_codec import decode_checkpoint
 
-API = "https://api.render.com/v1"
+API = (os.getenv("RENDER_API_BASE") or "https://api.render.com/v1").rstrip("/")
 ORIGIN = "https://neo-collettive.onrender.com"
 SERVICE = os.getenv("RENDER_SERVICE_ID", "srv-dampj8bm8hqs73ac0an0").strip()
 RENDER_TOKEN = os.environ["RENDER_API_KEY"].strip()

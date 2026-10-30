@@ -1,0 +1,33 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# Public service: same routes as on Render (/x402, /mcp, /health, /openapi.json, ...)
+{$NEO_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy neo:10000 {
+		header_up X-Forwarded-Proto https
+		transport http {
+			read_timeout 120s
+		}
+	}
+	log {
+		output file /data/access-neo.log {
+			roll_size 20mb
+			roll_keep 3
+		}
+		format json
+	}
+}
+
+# Jarvis advisory sidecar (was jarvis-23lu.onrender.com). Keeps its own API key.
+{$JARVIS_DOMAIN} {
+	reverse_proxy jarvis:10000
+}
+
+# State store for the GitHub workflows that back up / recover the checkpoint
+# (memory-repair-backup, checkpoint-private-recovery). Bearer token required;
+# the deploy hook lives here too: https://state.<domain>/deploy/<ENVSTORE_DEPLOY_HOOK>?ref=<sha>
+{$STATE_DOMAIN} {
+	reverse_proxy envstore:8000
+}

@@ -77,7 +77,7 @@ def stage(folder):
     payload=decode_checkpoint(value)
     if not isinstance(payload,dict) or not value.startswith('zlib64:') or len(value)>120000:
         raise ValueError('invalid_staged_state')
-    base='https://api.render.com/v1/services/'+SERVICE+'/env-vars/NEO_STATE_JSON'
+    base=(os.getenv('RENDER_API_BASE') or 'https://api.render.com/v1').rstrip('/')+'/services/'+SERVICE+'/env-vars/NEO_STATE_JSON'
     request(base,token,method='PUT',body={'value':value})
     stored=request(base,token)
     if stored.get('value')!=value:
