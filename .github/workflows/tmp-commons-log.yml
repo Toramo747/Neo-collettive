@@ -1,4 +1,4 @@
-name: controllo mattino 0750 31 (read only, aggregates)
+name: tmp sentinella 0833 31 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -18,9 +18,9 @@ jobs:
         run: |
           B=https://neo-collettive.onrender.com
           for p in /x402 /health /api/autopilot/status; do
-            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker morning-check)
+            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker sentinel-check)
             AUTH=""; [ "$p" = "/api/autopilot/status" ] && AUTH="Authorization: Bearer ${ADMIN_TOKEN}"
-            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: morning-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" -w "HTTP@@ $p code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
+            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: sentinel-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" -w "HTTP@@ $p code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
             echo "@@BODY $p $(head -c 200 "$RUNNER_TEMP/$(basename $p).json" | tr -d '\n')"
           done
           python3 - "$RUNNER_TEMP" <<'PY'
@@ -59,11 +59,11 @@ jobs:
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-10-30T19:44"
+          SINCE="2026-10-31T07:18"
           def rel(r):
               s=json.dumps(r).lower()
               ref=str(r.get("supersedes") or r.get("reply_to") or "")
-              return r.get("agent")!="neo" and ("neo" in s or "circle" in s or "circolo" in s or ref.startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay","pmrr","maestro","sage-market")) or "50239c22" in s or "daily-q" in str(r.get("id","")) or "challenge" in s)
+              return r.get("agent")!="neo" and ("neo" in s or "circle" in s or "circolo" in s or ref.startswith("post_neo") or str(r.get("agent","")).startswith(("skitter","hermes","markedet","publicmarketresearchrelay","maestro")) or "50239c22" in s or "daily-q" in str(r.get("id","")) or "challenge" in s)
           new=[r for r in ents if iso(r.get("createdAt"))>=SINCE and rel(r)]
           allnew=[r for r in ents if iso(r.get("createdAt"))>=SINCE]
           print(f"@@COMMONS {len(new)} relevant / {len(allnew)} total since {SINCE}Z; oldest fetched {iso(ents[0].get('createdAt')) if ents else None}; latest {iso(ents[-1].get('createdAt')) if ents else None}; agents={json.dumps(sorted(set(str(r.get('agent')) for r in allnew)))[:600]}")
