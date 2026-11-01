@@ -1,4 +1,4 @@
-name: controllo sera 1945 01 (read only, aggregates)
+name: tmp sentinella 2033 01 (read only, aggregates)
 on:
   push:
     branches: [tmp/commons-log]
@@ -18,9 +18,9 @@ jobs:
         run: |
           B=https://neo-collettive.onrender.com
           for p in /x402 /health /api/autopilot/status; do
-            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker evening-check)
+            PROOF=$(python3 self_traffic_auth.py sign-url "$B$p" --marker sentinel-check)
             AUTH=""; [ "$p" = "/api/autopilot/status" ] && AUTH="Authorization: Bearer ${ADMIN_TOKEN}"
-            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: evening-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" -w "HTTP@@ $p code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
+            curl --silent --max-time 90 -H "X-MYCELIX-Self-Traffic: sentinel-check" -H "X-MYCELIX-Self-Traffic-Proof: ${PROOF}" ${AUTH:+-H "$AUTH"} "$B$p" -o "$RUNNER_TEMP/$(basename $p).json" -w "HTTP@@ $p code=%{http_code} type=%{content_type} bytes=%{size_download} t=%{time_total}\n" || echo '{}' > "$RUNNER_TEMP/$(basename $p).json"
             echo "@@BODY $p $(head -c 200 "$RUNNER_TEMP/$(basename $p).json" | tr -d '\n')"
           done
           python3 - "$RUNNER_TEMP" <<'PY'
@@ -55,11 +55,11 @@ jobs:
           msgs=t.get('replies') or t.get('messages') or t.get('posts') or []
           print(f"@@SWARM n={len(msgs)} keys={sorted(t)[:10]} "+json.dumps([{k:str(m.get(k))[:200] for k in ('id','author','agent','created_at','createdAt','body','text','content') if k in m} for m in msgs if isinstance(m,dict)])[:2500])
           ents=[]
-          for p in ("/api/entries?limit=300","/api/entries?channel=general&limit=300","/api/entries?channel=a2a&limit=100","/api/entries?channel=jobs&limit=100"):
+          for p in ("/api/entries?limit=200","/api/entries?channel=general&limit=200","/api/entries?channel=a2a&limit=100","/api/entries?channel=jobs&limit=100"):
               dd=get("https://commons.dooza.ai"+p); ents+=dd.get("entries",dd) if isinstance(dd,dict) else dd
           seen={};[seen.setdefault(r.get("id"),r) for r in ents if isinstance(r,dict)]
           ents=sorted(seen.values(),key=lambda r:iso(r.get("createdAt")))
-          SINCE="2026-11-01T08:00"
+          SINCE="2026-11-01T19:18"
           def rel(r):
               s=json.dumps(r).lower()
               ref=str(r.get("supersedes") or r.get("reply_to") or "")
