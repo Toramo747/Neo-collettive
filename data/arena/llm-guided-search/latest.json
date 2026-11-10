@@ -6,213 +6,360 @@
   "mode": "iterative_baseline_plus_single_llm_mutation",
   "mutation_mode": "substitution_only",
   "mutation_stats": {
-    "attempted": 192,
-    "used": 110,
-    "rejected_invalid": 17,
-    "rejected_too_long": 55,
-    "rejected_topic_drift": 10
+    "attempted": 288,
+    "used": 169,
+    "rejected_invalid": 19,
+    "rejected_too_long": 79,
+    "rejected_topic_drift": 21
   },
-  "captured_at_utc": "2026-11-09T16:51:40.734178+00:00",
+  "captured_at_utc": "2026-11-10T15:15:49.108951+00:00",
   "model": "qwen2.5:3b-instruct-q4_K_M",
   "provider": "local_ollama",
   "search_provider": "hn_algolia_public_read_only",
-  "baseline_champion": "g110-5",
+  "baseline_champion": "g111-elite-2",
   "baseline_metrics": {
-    "fitness": 47.2554,
-    "base_fitness": 47.2554,
+    "fitness": 51.0606,
+    "base_fitness": 51.0606,
     "support_factor": 1.0,
-    "total_hits": 45,
-    "relevant_hits": 23,
-    "signal_hits": 6,
-    "unique_signal_threads": 5,
-    "buyer_hits": 13,
-    "first_person_buyer_hits": 12,
-    "family_hits": 13,
-    "family_match_rate": 0.5652,
-    "buyer_rate": 0.5652,
-    "first_person_buyer_rate": 0.5217,
-    "precision": 0.2609,
-    "absolute_signal_score": 0.5,
-    "absolute_thread_score": 0.625,
-    "evidence_volume_score": 45.0,
+    "total_hits": 62,
+    "relevant_hits": 33,
+    "signal_hits": 7,
+    "unique_signal_threads": 6,
+    "buyer_hits": 16,
+    "first_person_buyer_hits": 15,
+    "family_hits": 21,
+    "family_match_rate": 0.6364,
+    "buyer_rate": 0.4848,
+    "first_person_buyer_rate": 0.4545,
+    "precision": 0.2121,
+    "absolute_signal_score": 0.5833,
+    "absolute_thread_score": 0.75,
+    "evidence_volume_score": 53.0,
     "vendor_rejected": 0,
     "supply_rejected": 0
   },
   "final_metrics": {
-    "fitness": 47.2554,
-    "base_fitness": 47.2554,
+    "fitness": 53.9461,
+    "base_fitness": 53.9461,
     "support_factor": 1.0,
-    "total_hits": 45,
-    "relevant_hits": 23,
-    "signal_hits": 6,
-    "unique_signal_threads": 5,
-    "buyer_hits": 13,
-    "first_person_buyer_hits": 12,
-    "family_hits": 13,
-    "family_match_rate": 0.5652,
-    "buyer_rate": 0.5652,
-    "first_person_buyer_rate": 0.5217,
-    "precision": 0.2609,
-    "absolute_signal_score": 0.5,
-    "absolute_thread_score": 0.625,
-    "evidence_volume_score": 45.0,
+    "total_hits": 65,
+    "relevant_hits": 34,
+    "signal_hits": 8,
+    "unique_signal_threads": 6,
+    "buyer_hits": 17,
+    "first_person_buyer_hits": 16,
+    "family_hits": 22,
+    "family_match_rate": 0.6471,
+    "buyer_rate": 0.5,
+    "first_person_buyer_rate": 0.4706,
+    "precision": 0.2353,
+    "absolute_signal_score": 0.6667,
+    "absolute_thread_score": 0.75,
+    "evidence_volume_score": 58.0,
     "vendor_rejected": 0,
     "supply_rejected": 0
   },
-  "final_genome": "baseline",
-  "generations_run": 3,
+  "final_genome": "buyer_swap",
+  "generations_run": 6,
   "plateau_patience": 3,
   "max_generations": 8,
   "history": [
     {
       "generation": 1,
-      "parent_fitness": 47.2554,
+      "parent_fitness": 51.0606,
       "winner_genome": "buyer_swap",
-      "winner_fitness": 57.6066,
+      "winner_fitness": 54.7639,
       "improved": false,
       "ranked": [
         {
           "genome": "buyer_swap",
-          "fitness": 57.6066,
-          "accepted": false
-        },
-        {
-          "genome": "burden_swap",
-          "fitness": 51.25,
-          "accepted": true
-        },
-        {
-          "genome": "precision_pain",
-          "fitness": 32.125,
-          "accepted": false
-        },
-        {
-          "genome": "drop_word",
-          "fitness": 26.3194,
-          "accepted": false
-        },
-        {
-          "genome": "colloquial_rewrite",
-          "fitness": 22.5962,
+          "fitness": 54.7639,
           "accepted": false
         },
         {
           "genome": "signal_synonym",
-          "fitness": 21.875,
+          "fitness": 53.9583,
+          "accepted": true
+        },
+        {
+          "genome": "burden_swap",
+          "fitness": 38.625,
           "accepted": false
         },
         {
-          "genome": "pain_swap",
-          "fitness": 16.656,
+          "genome": "drop_word",
+          "fitness": 36.0038,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 30.4076,
           "accepted": false
         },
         {
           "genome": "topic_colloquial",
-          "fitness": 14.1389,
+          "fitness": 22.6511,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 21.4382,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 15.6944,
           "accepted": false
         }
       ]
     },
     {
       "generation": 2,
-      "parent_fitness": 47.2554,
+      "parent_fitness": 51.0606,
       "winner_genome": "burden_swap",
-      "winner_fitness": 47.2554,
+      "winner_fitness": 51.0606,
       "improved": false,
       "ranked": [
         {
           "genome": "burden_swap",
-          "fitness": 47.2554,
+          "fitness": 51.0606,
           "accepted": false
         },
         {
           "genome": "buyer_swap",
-          "fitness": 47.2554,
-          "accepted": false
-        },
-        {
-          "genome": "pain_swap",
-          "fitness": 30.0,
-          "accepted": false
-        },
-        {
-          "genome": "drop_word",
-          "fitness": 16.2337,
-          "accepted": false
-        },
-        {
-          "genome": "signal_synonym",
-          "fitness": 16.2337,
+          "fitness": 51.0606,
           "accepted": false
         },
         {
           "genome": "precision_pain",
-          "fitness": 16.1432,
+          "fitness": 38.8889,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 26.5278,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 15.496,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 15.496,
           "accepted": false
         },
         {
           "genome": "topic_colloquial",
-          "fitness": 15.7383,
+          "fitness": 15.151,
           "accepted": false
         },
         {
           "genome": "colloquial_rewrite",
-          "fitness": 14.2814,
+          "fitness": 13.9087,
           "accepted": false
         }
       ]
     },
     {
       "generation": 3,
-      "parent_fitness": 47.2554,
-      "winner_genome": "burden_swap",
-      "winner_fitness": 47.2554,
-      "improved": false,
+      "parent_fitness": 51.0606,
+      "winner_genome": "buyer_swap",
+      "winner_fitness": 53.9461,
+      "improved": true,
       "ranked": [
         {
-          "genome": "burden_swap",
-          "fitness": 47.2554,
-          "accepted": false
+          "genome": "buyer_swap",
+          "fitness": 53.9461,
+          "accepted": true
         },
         {
-          "genome": "buyer_swap",
-          "fitness": 47.2554,
+          "genome": "burden_swap",
+          "fitness": 51.0606,
           "accepted": false
         },
         {
           "genome": "precision_pain",
-          "fitness": 40.8477,
+          "fitness": 38.8889,
           "accepted": false
         },
         {
           "genome": "pain_swap",
-          "fitness": 30.0,
-          "accepted": false
-        },
-        {
-          "genome": "drop_word",
-          "fitness": 16.2337,
+          "fitness": 38.6458,
           "accepted": false
         },
         {
           "genome": "signal_synonym",
-          "fitness": 16.2337,
+          "fitness": 24.8106,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 15.496,
           "accepted": false
         },
         {
           "genome": "topic_colloquial",
-          "fitness": 15.7383,
+          "fitness": 15.151,
           "accepted": false
         },
         {
           "genome": "colloquial_rewrite",
-          "fitness": 14.2814,
+          "fitness": 13.9087,
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "generation": 4,
+      "parent_fitness": 53.9461,
+      "winner_genome": "burden_swap",
+      "winner_fitness": 51.0606,
+      "improved": false,
+      "ranked": [
+        {
+          "genome": "burden_swap",
+          "fitness": 51.0606,
+          "accepted": false
+        },
+        {
+          "genome": "buyer_swap",
+          "fitness": 51.0606,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 44.8818,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 26.5278,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 15.496,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 15.496,
+          "accepted": false
+        },
+        {
+          "genome": "topic_colloquial",
+          "fitness": 15.151,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 13.9087,
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "generation": 5,
+      "parent_fitness": 53.9461,
+      "winner_genome": "burden_swap",
+      "winner_fitness": 53.9461,
+      "improved": false,
+      "ranked": [
+        {
+          "genome": "burden_swap",
+          "fitness": 53.9461,
+          "accepted": false
+        },
+        {
+          "genome": "buyer_swap",
+          "fitness": 51.0606,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 38.8889,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 26.5278,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 24.8106,
+          "accepted": false
+        },
+        {
+          "genome": "topic_colloquial",
+          "fitness": 24.3056,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 15.496,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 13.9087,
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "generation": 6,
+      "parent_fitness": 53.9461,
+      "winner_genome": "burden_swap",
+      "winner_fitness": 51.0606,
+      "improved": false,
+      "ranked": [
+        {
+          "genome": "burden_swap",
+          "fitness": 51.0606,
+          "accepted": false
+        },
+        {
+          "genome": "buyer_swap",
+          "fitness": 51.0606,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 38.8889,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 38.6458,
+          "accepted": false
+        },
+        {
+          "genome": "topic_colloquial",
+          "fitness": 24.3056,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 15.496,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 15.496,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 13.9087,
           "accepted": false
         }
       ]
     }
   ],
-  "candidate_better_than_baseline": false,
+  "candidate_better_than_baseline": true,
   "production_promoted": false,
   "boundary": {
     "production_state_write": false,
