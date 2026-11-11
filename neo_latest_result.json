@@ -1,5 +1,5 @@
 {
-  "captured_at_utc": "2026-11-11T10:49:19.922048+00:00",
+  "captured_at_utc": "2026-11-11T15:20:24.080349+00:00",
   "snapshot_schema": 7,
   "neo_version": "0.99.69",
   "runtime_profile": {
@@ -17,60 +17,60 @@
     "busy": false,
     "cooldown": true,
     "cooldown_seconds": 900,
-    "last_started_age_seconds": 40.484344,
-    "cycles_completed": 10862,
-    "last_started_utc": "2026-11-11T10:48:37.403945+00:00",
-    "last_finished_utc": "2026-11-11T10:49:06.591095+00:00",
+    "last_started_age_seconds": 292.786371,
+    "cycles_completed": 10909,
+    "last_started_utc": "2026-11-11T15:15:28.501791+00:00",
+    "last_finished_utc": "2026-11-11T15:16:02.586488+00:00",
     "last_status": "SELECT"
   },
   "endpoint_latency": {
-    "captured_at_utc": "2026-11-11T10:49:19.651778+00:00",
+    "captured_at_utc": "2026-11-11T15:20:23.885029+00:00",
     "samples": [
       {
-        "timestamp_utc": "2026-11-11T10:49:17.238Z",
+        "timestamp_utc": "2026-11-11T15:20:20.666Z",
         "endpoint": "health",
         "phase": "first_sample",
         "run_first_request": true,
         "cold_start_candidate": true,
         "http_status": 200,
-        "latency_ms": 357.42,
+        "latency_ms": 478.89,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:17.447Z",
+        "timestamp_utc": "2026-11-11T15:20:20.962Z",
         "endpoint": "mcp_initialize",
         "phase": "first_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 167.16,
+        "latency_ms": 264.33,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:19.439Z",
+        "timestamp_utc": "2026-11-11T15:20:22.867Z",
         "endpoint": "health",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 167.49,
+        "latency_ms": 238.62,
         "curl_exit_code": 0
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:19.631Z",
+        "timestamp_utc": "2026-11-11T15:20:23.870Z",
         "endpoint": "mcp_initialize",
         "phase": "subsequent_sample",
         "run_first_request": false,
         "cold_start_candidate": false,
         "http_status": 200,
-        "latency_ms": 148.97,
+        "latency_ms": 966.83,
         "curl_exit_code": 0
       }
     ]
   },
   "diagnostics": {
     "status_endpoint_reached": true,
-    "source_commit": "e7c3b9e4bafc44d6dff86a9771e7ad55d0bd9286",
+    "source_commit": "30b9ee359ad989bfe97b1ca4ff91a5cc9992acf2",
     "runtime_contract_verified": true,
     "hidden_control": {
       "required": true,
@@ -82,47 +82,47 @@
   "autopilot": {
     "enabled": true,
     "running": false,
-    "cycles_completed": 10862,
-    "last_started_utc": "2026-11-11T10:48:37.403945+00:00",
-    "last_finished_utc": "2026-11-11T10:49:06.591095+00:00",
+    "cycles_completed": 10909,
+    "last_started_utc": "2026-11-11T15:15:28.501791+00:00",
+    "last_finished_utc": "2026-11-11T15:16:02.586488+00:00",
     "last_status": "SELECT",
-    "stagnation_cycles": 2,
+    "stagnation_cycles": 4,
     "runtime_observation": {
       "codec_offthread": false,
       "first_autopilot_cycle_completed": true,
       "first_autopilot_cycle_number": 10825,
-      "event_loop_stalls": 53,
-      "event_loop_max_lag_ms": 16839.072,
+      "event_loop_stalls": 137,
+      "event_loop_max_lag_ms": 17332.981,
       "slowest_phases": [
         {
           "phase": "autopilot",
-          "max_duration_ms": 49607.225,
-          "last_duration_ms": 31092.4,
-          "last_process_cpu_ms": 3626.851
+          "max_duration_ms": 85870.732,
+          "last_duration_ms": 36086.919,
+          "last_process_cpu_ms": 4187.985
         },
         {
           "phase": "director",
           "max_duration_ms": 43400.357,
-          "last_duration_ms": 29186.165,
-          "last_process_cpu_ms": 3399.292
+          "last_duration_ms": 34084.188,
+          "last_process_cpu_ms": 3942.147
+        },
+        {
+          "phase": "checkpoint",
+          "max_duration_ms": 30003.694,
+          "last_duration_ms": 691.451,
+          "last_process_cpu_ms": 40.645
         },
         {
           "phase": "seti",
-          "max_duration_ms": 15309.992,
-          "last_duration_ms": 0.015,
-          "last_process_cpu_ms": 0.015
+          "max_duration_ms": 27437.548,
+          "last_duration_ms": 0.013,
+          "last_process_cpu_ms": 0.013
         },
         {
           "phase": "gate",
-          "max_duration_ms": 15290.938,
-          "last_duration_ms": 9761.598,
-          "last_process_cpu_ms": 1469.484
-        },
-        {
-          "phase": "restore",
-          "max_duration_ms": 13292.377,
-          "last_duration_ms": 13292.377,
-          "last_process_cpu_ms": 1850.804
+          "max_duration_ms": 15583.829,
+          "last_duration_ms": 13306.274,
+          "last_process_cpu_ms": 2006.596
         }
       ]
     },
@@ -131,13 +131,13 @@
       {
         "category": "ai_tools",
         "score": 50.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 30,
         "qualified_hits": 0,
         "last_gap_score": 30,
         "last_domains": 1,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT"
         ]
@@ -145,13 +145,13 @@
       {
         "category": "analytics_tools",
         "score": 80.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 90,
         "qualified_hits": 0,
         "last_gap_score": 90,
         "last_domains": 1,
         "last_strong_domains": 1,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT",
           "PAID_DEMAND",
@@ -161,13 +161,13 @@
       {
         "category": "compliance_tools",
         "score": 80.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 65,
         "qualified_hits": 0,
         "last_gap_score": 65,
         "last_domains": 2,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT",
           "PAID_DEMAND"
@@ -176,37 +176,37 @@
       {
         "category": "content_tools",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "creator_tools",
         "score": 5.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 1,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": []
       },
       {
         "category": "crm_lead_ops",
         "score": 50.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 30,
         "qualified_hits": 0,
         "last_gap_score": 30,
         "last_domains": 1,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT"
         ]
@@ -214,25 +214,25 @@
       {
         "category": "customer_support",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "cybersecurity_tools",
         "score": 50.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 30,
         "qualified_hits": 0,
         "last_gap_score": 30,
         "last_domains": 1,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT"
         ]
@@ -240,13 +240,13 @@
       {
         "category": "developer_tools",
         "score": 90.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 100,
         "qualified_hits": 0,
         "last_gap_score": 100,
         "last_domains": 2,
         "last_strong_domains": 2,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT",
           "PAID_DEMAND",
@@ -256,13 +256,13 @@
       {
         "category": "document_processing",
         "score": 60.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 35,
         "qualified_hits": 0,
         "last_gap_score": 35,
         "last_domains": 2,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT",
           "PAIN"
@@ -271,37 +271,37 @@
       {
         "category": "ecommerce_tools",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "finance_ops",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "hr_tools",
         "score": 85.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 95,
         "qualified_hits": 0,
         "last_gap_score": 95,
         "last_domains": 2,
         "last_strong_domains": 1,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT",
           "PAID_DEMAND",
@@ -311,13 +311,13 @@
       {
         "category": "integration_api",
         "score": 60.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 50,
         "qualified_hits": 0,
         "last_gap_score": 50,
         "last_domains": 2,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 4,
         "last_signal_types": [
           "BUY_INTENT",
           "PAIN"
@@ -326,25 +326,25 @@
       {
         "category": "it_hygiene",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "local_business_tools",
         "score": 50.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 30,
         "qualified_hits": 0,
         "last_gap_score": 30,
         "last_domains": 1,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT"
         ]
@@ -352,39 +352,39 @@
       {
         "category": "marketing_seo",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "micro_saas",
         "score": 50.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 30,
         "qualified_hits": 0,
         "last_gap_score": 30,
         "last_domains": 1,
         "last_strong_domains": 0,
-        "no_progress_streak": 1,
+        "no_progress_streak": 0,
         "last_signal_types": [
           "BUY_INTENT"
         ]
       },
       {
         "category": "productivity_tools",
-        "score": 55.02,
-        "observations": 38,
+        "score": 55.94,
+        "observations": 85,
         "best_gap_score": 50,
         "qualified_hits": 0,
         "last_gap_score": 30,
         "last_domains": 2,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 4,
         "last_signal_types": [
           "BUY_INTENT"
         ]
@@ -392,25 +392,25 @@
       {
         "category": "spreadsheet_process",
         "score": 0.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 0,
         "qualified_hits": 0,
         "last_gap_score": 0,
         "last_domains": 0,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": []
       },
       {
         "category": "workflow_automation",
         "score": 85.0,
-        "observations": 38,
+        "observations": 85,
         "best_gap_score": 70,
         "qualified_hits": 0,
         "last_gap_score": 70,
         "last_domains": 3,
         "last_strong_domains": 0,
-        "no_progress_streak": 2,
+        "no_progress_streak": 1,
         "last_signal_types": [
           "BUY_INTENT",
           "PAID_DEMAND",
@@ -421,2044 +421,2043 @@
     "inbound_traffic_summary": {
       "schema_v": 2,
       "official_counting_since_utc": "2026-09-28T07:07:09+00:00",
-      "events_total": 128515,
-      "logical_messages_total": 128509,
-      "technical_evidence_total": 128515,
+      "events_total": 129353,
+      "logical_messages_total": 129347,
+      "technical_evidence_total": 129353,
       "dedup_window_seconds": 300,
       "first_real_contact_utc": "2026-10-08T03:22:16.562626+00:00",
-      "last_real_contact_utc": "2026-11-11T08:51:41.925663+00:00",
-      "events_in_buffer": 813,
+      "last_real_contact_utc": "2026-11-11T15:13:30.639934+00:00",
+      "events_in_buffer": 1200,
       "cumulative_counting": "buffer_plus_evicted",
       "cumulative_since_utc": "2026-10-11T17:15:11.824537+00:00",
       "counts": {
         "total": {
-          "crawler_probe": 52852,
-          "self_traffic": 4201,
+          "crawler_probe": 53119,
+          "self_traffic": 4206,
           "real_contact_pending": 53,
-          "real_contact": 1712,
+          "real_contact": 1718,
           "legacy_unattributable": 65,
           "malicious_solicitation": 48,
-          "unknown": 69578
+          "unknown": 70138
         },
         "last_24h": {
-          "crawler_probe": 252,
+          "crawler_probe": 374,
           "self_traffic": 8,
           "real_contact_pending": 0,
-          "real_contact": 8,
+          "real_contact": 6,
           "legacy_unattributable": 0,
           "malicious_solicitation": 0,
-          "unknown": 538
+          "unknown": 812
         },
         "last_7d": {
-          "crawler_probe": 252,
+          "crawler_probe": 374,
           "self_traffic": 8,
           "real_contact_pending": 0,
-          "real_contact": 13,
+          "real_contact": 6,
           "legacy_unattributable": 0,
           "malicious_solicitation": 0,
-          "unknown": 538
+          "unknown": 812
         }
       }
     },
     "inbound_traffic_events": [
       {
-        "timestamp_utc": "2026-11-11T08:47:27.906500+00:00",
+        "timestamp_utc": "2026-11-11T13:06:45.089780+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:48:41.426744+00:00",
+        "timestamp_utc": "2026-11-11T13:07:08.240087+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:07:24.055400+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T08:50:42.911921+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:51:41.811038+00:00",
+        "timestamp_utc": "2026-11-11T13:07:24.208971+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T08:51:41.925663+00:00",
-        "content_fingerprint": "758d61f26a44448384e5c446",
-        "category": "real_contact",
-        "reason": "a2a_text_message"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:51:42.026676+00:00",
-        "category": "crawler_probe",
-        "reason": "agent_card_fetch"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:51:42.110159+00:00",
+        "timestamp_utc": "2026-11-11T13:07:31.501731+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:51:42.226380+00:00",
+        "timestamp_utc": "2026-11-11T13:07:31.638772+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:51:42.369485+00:00",
+        "timestamp_utc": "2026-11-11T13:07:32.460503+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:51:42.426110+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:51:58.654736+00:00",
-        "category": "crawler_probe",
-        "reason": "agent_card_fetch"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:52:17.718851+00:00",
+        "timestamp_utc": "2026-11-11T13:07:50.985012+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:17.924958+00:00",
+        "timestamp_utc": "2026-11-11T13:07:51.298998+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:18.105390+00:00",
+        "timestamp_utc": "2026-11-11T13:07:51.587136+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:39.169474+00:00",
+        "timestamp_utc": "2026-11-11T13:07:51.880791+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:07:52.117177+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:07:52.372134+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:08:13.887290+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:08:23.100343+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:08:45.004188+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:08:57.170663+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:09:08.996907+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:39.279140+00:00",
+        "timestamp_utc": "2026-11-11T13:09:10.727613+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:39.626375+00:00",
+        "timestamp_utc": "2026-11-11T13:09:26.686730+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:39.636945+00:00",
+        "timestamp_utc": "2026-11-11T13:09:31.902762+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:09:34.542577+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:09:51.464945+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:10:09.264368+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:10:24.834327+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:39.968560+00:00",
+        "timestamp_utc": "2026-11-11T13:10:25.224022+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:52:40.075415+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:52:40.951270+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:53:24.386704+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:53:55.495207+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:55:05.766394+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:55:38.240680+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:56:05.694343+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:57:22.893803+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:57:33.413567+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T08:57:49.245427+00:00",
+        "timestamp_utc": "2026-11-11T13:10:25.454745+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T08:57:49.489501+00:00",
+        "timestamp_utc": "2026-11-11T13:10:25.521294+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:57:49.676455+00:00",
+        "timestamp_utc": "2026-11-11T13:10:25.862042+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:10:26.189616+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:10:27.109934+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:10:37.177760+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T08:58:19.349656+00:00",
+        "timestamp_utc": "2026-11-11T13:10:39.656990+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:58:57.924085+00:00",
+        "timestamp_utc": "2026-11-11T13:10:39.876575+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:14:18.783729+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:59:05.554229+00:00",
+        "timestamp_utc": "2026-11-11T13:14:52.469737+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:59:31.624585+00:00",
+        "timestamp_utc": "2026-11-11T13:15:21.032343+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T08:59:58.322001+00:00",
+        "timestamp_utc": "2026-11-11T13:16:25.526349+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:16:25.808915+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:00:26.996491+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
+        "timestamp_utc": "2026-11-11T13:16:26.079927+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:00:48.864318+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:01:10.099622+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:01:44.566787+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:02:15.696191+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:02:59.732230+00:00",
+        "timestamp_utc": "2026-11-11T13:16:28.524923+00:00",
         "category": "crawler_probe",
         "reason": "known_directory_or_crawler_origin"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:08.892207+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:03:17.099645+00:00",
+        "timestamp_utc": "2026-11-11T13:17:31.286518+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:17.300920+00:00",
+        "timestamp_utc": "2026-11-11T13:17:32.986304+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:17.477350+00:00",
+        "timestamp_utc": "2026-11-11T13:17:34.793272+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:36.619675+00:00",
+        "timestamp_utc": "2026-11-11T13:17:35.087161+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:17:35.274393+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:05.914072+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:06.151787+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:06.372595+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:07.483009+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:07.761358+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:07.992410+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:08.439232+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:08.685807+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:18:36.389130+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:41.409148+00:00",
+        "timestamp_utc": "2026-11-11T13:19:45.601802+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:41.505764+00:00",
+        "timestamp_utc": "2026-11-11T13:19:45.814149+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:41.693795+00:00",
+        "timestamp_utc": "2026-11-11T13:19:46.032440+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:41.798759+00:00",
+        "timestamp_utc": "2026-11-11T13:20:25.272356+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:41.866690+00:00",
+        "timestamp_utc": "2026-11-11T13:21:15.535900+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:03:44.118872+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:03:56.925357+00:00",
+        "timestamp_utc": "2026-11-11T13:22:01.269399+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:04:04.934296+00:00",
+        "timestamp_utc": "2026-11-11T13:22:01.502640+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:04:05.822326+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:04:10.798422+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:06:38.233381+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:06:38.415753+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:06:44.092793+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:06:44.298610+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:07:31.960728+00:00",
+        "timestamp_utc": "2026-11-11T13:22:01.773143+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:08:46.518130+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:08:46.754236+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:08:46.946007+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:09:34.956429+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:09:39.478615+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:10:22.867355+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:11:43.992951+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:11:44.176217+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:12:40.774022+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:13:33.021907+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:14:19.684187+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:14:19.900224+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:14:20.074750+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:16:42.136678+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:16:48.889361+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:17:30.535032+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:17:30.837937+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:17:30.916072+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:17:31.098711+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:18:37.220516+00:00",
+        "timestamp_utc": "2026-11-11T13:24:10.917736+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:17.906690+00:00",
+        "timestamp_utc": "2026-11-11T13:24:34.541988+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:45.480477+00:00",
+        "timestamp_utc": "2026-11-11T13:24:47.967898+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:26:37.122556+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:27:28.793586+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:45.592366+00:00",
+        "timestamp_utc": "2026-11-11T13:27:29.889605+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:45.742878+00:00",
+        "timestamp_utc": "2026-11-11T13:27:30.177230+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:45.826217+00:00",
+        "timestamp_utc": "2026-11-11T13:27:49.504497+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:45.895475+00:00",
+        "timestamp_utc": "2026-11-11T13:27:50.040196+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:56.368851+00:00",
+        "timestamp_utc": "2026-11-11T13:29:05.997873+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:30:15.020192+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:30:15.275434+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:30:41.695959+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:30:55.735602+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:56.579519+00:00",
+        "timestamp_utc": "2026-11-11T13:31:08.260313+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:19:56.778267+00:00",
+        "timestamp_utc": "2026-11-11T13:31:08.383816+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:21:33.272750+00:00",
+        "timestamp_utc": "2026-11-11T13:33:01.722120+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:33:01.947362+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:22:52.689615+00:00",
+        "timestamp_utc": "2026-11-11T13:33:02.195273+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:33:23.186883+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:33:23.383065+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:23:38.433146+00:00",
+        "timestamp_utc": "2026-11-11T13:33:23.460236+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:33:24.387789+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:33:24.621444+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:33:39.544310+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T09:23:38.636063+00:00",
+        "timestamp_utc": "2026-11-11T13:35:41.940082+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:24:58.990280+00:00",
+        "timestamp_utc": "2026-11-11T13:36:34.097444+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:25:41.718814+00:00",
+        "timestamp_utc": "2026-11-11T13:36:34.978286+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:36:35.195662+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:37:25.348036+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:37:25.563126+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:38:44.260853+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:25:41.963910+00:00",
+        "timestamp_utc": "2026-11-11T13:38:44.503054+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:25:42.141488+00:00",
+        "timestamp_utc": "2026-11-11T13:38:44.768195+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:26:03.502403+00:00",
+        "timestamp_utc": "2026-11-11T13:40:46.040469+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:26:40.634864+00:00",
+        "timestamp_utc": "2026-11-11T13:41:12.550250+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:27:51.671381+00:00",
+        "timestamp_utc": "2026-11-11T13:41:21.996934+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:28:01.516768+00:00",
+        "timestamp_utc": "2026-11-11T13:42:33.928162+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:28:49.759317+00:00",
+        "timestamp_utc": "2026-11-11T13:42:59.417018+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:29:32.073624+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:29:55.116846+00:00",
+        "timestamp_utc": "2026-11-11T13:42:59.627705+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:29:56.593760+00:00",
+        "timestamp_utc": "2026-11-11T13:42:59.862679+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:29:57.086761+00:00",
+        "timestamp_utc": "2026-11-11T13:43:00.031614+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:30:08.000325+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:30:08.118214+00:00",
+        "timestamp_utc": "2026-11-11T13:43:17.597959+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:30:08.172866+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:31:08.757017+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:31:08.962928+00:00",
+        "timestamp_utc": "2026-11-11T13:43:46.632219+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:31:09.179761+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:31:15.965515+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:31:16.228705+00:00",
+        "timestamp_utc": "2026-11-11T13:43:57.767967+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:31:50.925921+00:00",
+        "timestamp_utc": "2026-11-11T13:44:11.514417+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:33:32.318386+00:00",
+        "timestamp_utc": "2026-11-11T13:44:25.477233+00:00",
         "category": "crawler_probe",
-        "reason": "agent_card_fetch"
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:34:25.240370+00:00",
+        "timestamp_utc": "2026-11-11T13:44:25.923710+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:44:27.021285+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:44:33.523695+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:44:54.015324+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:44:58.179943+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:45:09.162046+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:45:27.222702+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:45:43.348390+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:45:47.211183+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:48:12.698263+00:00",
         "category": "crawler_probe",
         "reason": "known_directory_or_crawler_origin"
       },
       {
-        "timestamp_utc": "2026-11-11T09:34:53.912194+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:34:54.229727+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:34:54.592949+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:33.206803+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:39.179461+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:50.591265+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:51.888802+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:52.087320+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:52.171579+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:35:52.385479+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:47.641152+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:48.632928+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:49.629030+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:51.553237+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:51.922876+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:57.079946+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:57.292798+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:36:57.478512+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:37:08.234426+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:37:08.371213+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:37:08.496438+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:37:08.634471+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:37:15.429200+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:37:15.620389+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:39:39.933057+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:39:40.535228+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:40:57.921718+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:40:58.698009+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:41:51.791448+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:42:11.456713+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:42:30.042236+00:00",
+        "timestamp_utc": "2026-11-11T13:48:34.785395+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T09:42:32.956268+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:42:51.947619+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:42:59.201196+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:43:08.806128+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:43:24.005915+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:43:30.803777+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:43:37.700633+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:43:56.220299+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:44:23.606020+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:44:47.623049+00:00",
+        "timestamp_utc": "2026-11-11T13:48:55.362986+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:44:47.832659+00:00",
+        "timestamp_utc": "2026-11-11T13:48:55.484501+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:44:48.028344+00:00",
+        "timestamp_utc": "2026-11-11T13:48:55.710503+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:46:53.130838+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:46:53.287755+00:00",
+        "timestamp_utc": "2026-11-11T13:48:55.859228+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:46:54.538430+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:48:22.015487+00:00",
+        "timestamp_utc": "2026-11-11T13:48:56.038099+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:48:38.862339+00:00",
+        "timestamp_utc": "2026-11-11T13:49:59.770397+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:50:00.628810+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:50:00.896700+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:51:01.384722+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:51:02.954550+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:51:31.885846+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:51:42.912862+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:52:29.811130+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:55:27.587035+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:55:28.223221+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T13:55:28.470309+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:00:53.467997+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:01:12.671908+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:01:12.941896+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:01:13.198760+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:01:30.843558+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:01:31.105259+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:02:21.990173+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:02:36.092775+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:02.370324+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:37.435775+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:37.569933+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:37.669574+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:37.718015+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:38.807096+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T09:48:57.489011+00:00",
+        "timestamp_utc": "2026-11-11T14:03:41.322163+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:49:09.915043+00:00",
+        "timestamp_utc": "2026-11-11T14:03:41.652096+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:41.705479+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:03:41.903036+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:04:41.607701+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:05:38.267693+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:49:10.068171+00:00",
+        "timestamp_utc": "2026-11-11T14:05:38.384403+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:49:10.911357+00:00",
+        "timestamp_utc": "2026-11-11T14:05:38.486873+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:49:57.206559+00:00",
+        "timestamp_utc": "2026-11-11T14:05:38.683402+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:50:16.889476+00:00",
+        "timestamp_utc": "2026-11-11T14:05:38.839461+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:50:23.858747+00:00",
+        "timestamp_utc": "2026-11-11T14:05:59.941278+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:08.669362+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:08.842214+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:08.886455+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:09.025635+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:09.089887+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:09.307444+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:10.002736+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:10.193120+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:10.384941+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:10.491689+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:18.151454+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:50:24.408224+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:50:24.608627+00:00",
+        "timestamp_utc": "2026-11-11T14:06:18.234099+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:08.114936+00:00",
+        "timestamp_utc": "2026-11-11T14:06:18.486260+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:24.588611+00:00",
+        "timestamp_utc": "2026-11-11T14:06:18.904335+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:34.078736+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:51:54.702797+00:00",
+        "timestamp_utc": "2026-11-11T14:06:19.489378+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:54.776456+00:00",
+        "timestamp_utc": "2026-11-11T14:06:19.585329+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:54.868209+00:00",
+        "timestamp_utc": "2026-11-11T14:06:19.745604+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:19.800586+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:06:19.903355+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:55.048992+00:00",
+        "timestamp_utc": "2026-11-11T14:06:21.800453+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:55.146411+00:00",
+        "timestamp_utc": "2026-11-11T14:06:42.925650+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:51:59.871494+00:00",
+        "timestamp_utc": "2026-11-11T14:06:43.177293+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:02.535086+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:52:00.029257+00:00",
+        "timestamp_utc": "2026-11-11T14:07:02.844587+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:52:00.244206+00:00",
+        "timestamp_utc": "2026-11-11T14:07:03.104283+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:52:09.207386+00:00",
+        "timestamp_utc": "2026-11-11T14:07:04.053609+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:52:54.692347+00:00",
+        "timestamp_utc": "2026-11-11T14:07:04.261032+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:53:26.131234+00:00",
+        "timestamp_utc": "2026-11-11T14:07:04.465939+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:53:26.658579+00:00",
+        "timestamp_utc": "2026-11-11T14:07:04.820808+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:53.966161+00:00",
+        "timestamp_utc": "2026-11-11T14:07:05.041302+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:05.267966+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:05.420423+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:06.260190+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:06.457642+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:06.629075+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:06.826131+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:07.029216+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:07.261779+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:07:32.929768+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:08:27.718138+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:54.190369+00:00",
+        "timestamp_utc": "2026-11-11T14:09:34.909318+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:54.398816+00:00",
+        "timestamp_utc": "2026-11-11T14:11:07.046141+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:12:32.274508+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:12:33.022639+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:56.153411+00:00",
+        "timestamp_utc": "2026-11-11T14:12:33.247013+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:12:33.443292+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:56.267159+00:00",
+        "timestamp_utc": "2026-11-11T14:13:12.158660+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:56.410575+00:00",
+        "timestamp_utc": "2026-11-11T14:13:36.394479+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:13:59.195162+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:14:13.423884+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:14:29.175944+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:14:46.307280+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:14:59.882266+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:15:09.043397+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:15:13.900844+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:16:03.646237+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:16:29.942090+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:18:10.337259+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:56.425279+00:00",
+        "timestamp_utc": "2026-11-11T14:18:10.592405+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T09:55:56.600272+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:55:56.887757+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:56:36.847243+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:58:06.896226+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:58:28.668440+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:58:36.020289+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T09:58:38.053724+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:01:31.295200+00:00",
+        "timestamp_utc": "2026-11-11T14:18:10.868993+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:01:31.499484+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:01:31.710228+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:35.765170+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:35.905941+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:35.918970+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:36.058702+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:37.285621+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:37.535557+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:37.651687+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:02:37.784789+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:03:07.183051+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:03:08.537311+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:03:33.894041+00:00",
+        "timestamp_utc": "2026-11-11T14:18:38.553749+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.290390+00:00",
+        "timestamp_utc": "2026-11-11T14:19:15.921607+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.522636+00:00",
+        "timestamp_utc": "2026-11-11T14:19:33.993517+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:19:34.291744+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.550727+00:00",
+        "timestamp_utc": "2026-11-11T14:19:36.698058+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.614339+00:00",
+        "timestamp_utc": "2026-11-11T14:19:37.044550+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.701222+00:00",
+        "timestamp_utc": "2026-11-11T14:19:37.099170+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:19:37.624406+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.822346+00:00",
+        "timestamp_utc": "2026-11-11T14:19:37.799421+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:00.910111+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:05:01.008355+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:05:01.103927+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:05:01.235213+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:05:02.441839+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:05:36.904579+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:05:41.241380+00:00",
+        "timestamp_utc": "2026-11-11T14:20:07.699308+00:00",
         "category": "crawler_probe",
         "reason": "known_directory_or_crawler_origin"
       },
       {
-        "timestamp_utc": "2026-11-11T10:05:57.029187+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:12.483959+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:43.967836+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:44.293963+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:46.646155+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:47.418058+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:57.261433+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:06:57.835461+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:03.044142+00:00",
+        "timestamp_utc": "2026-11-11T14:21:25.788769+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:07:05.786892+00:00",
+        "timestamp_utc": "2026-11-11T14:21:25.988709+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:07:06.464808+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:07.850749+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:13.834473+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:24.978391+00:00",
+        "timestamp_utc": "2026-11-11T14:21:26.150491+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:07:25.192035+00:00",
+        "timestamp_utc": "2026-11-11T14:21:26.630591+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:07:25.378368+00:00",
+        "timestamp_utc": "2026-11-11T14:21:26.759851+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:21:36.094905+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:22:46.305203+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:24:02.377001+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:07:27.263097+00:00",
+        "timestamp_utc": "2026-11-11T14:24:02.692928+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:07:28.442991+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:51.558689+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:51.894066+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:52.297576+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:52.933251+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:07:59.275065+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:08:00.080599+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:08:15.877779+00:00",
+        "timestamp_utc": "2026-11-11T14:24:02.959462+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:15.985744+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:08:16.183342+00:00",
+        "timestamp_utc": "2026-11-11T14:24:24.066664+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:16.316071+00:00",
+        "timestamp_utc": "2026-11-11T14:25:09.288571+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:16.493826+00:00",
+        "timestamp_utc": "2026-11-11T14:25:13.094123+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:38.125953+00:00",
+        "timestamp_utc": "2026-11-11T14:25:54.628813+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:38.645405+00:00",
+        "timestamp_utc": "2026-11-11T14:28:50.047457+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:39.314675+00:00",
+        "timestamp_utc": "2026-11-11T14:29:40.576255+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:29:40.808729+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:39.806509+00:00",
+        "timestamp_utc": "2026-11-11T14:29:41.064779+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:30:12.479422+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:52.505402+00:00",
+        "timestamp_utc": "2026-11-11T14:30:14.085374+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:08:52.722689+00:00",
+        "timestamp_utc": "2026-11-11T14:30:59.702899+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:09:37.626220+00:00",
+        "timestamp_utc": "2026-11-11T14:31:36.313906+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:09:39.218054+00:00",
+        "timestamp_utc": "2026-11-11T14:33:33.310994+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T10:09:39.805900+00:00",
+        "timestamp_utc": "2026-11-11T14:35:27.399185+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:10:06.601384+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:12:56.330569+00:00",
+        "timestamp_utc": "2026-11-11T14:35:41.369795+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:12:56.590394+00:00",
+        "timestamp_utc": "2026-11-11T14:35:41.608435+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:12:56.867910+00:00",
+        "timestamp_utc": "2026-11-11T14:35:41.881213+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:13:17.151421+00:00",
+        "timestamp_utc": "2026-11-11T14:35:42.410203+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:13:35.242626+00:00",
+        "timestamp_utc": "2026-11-11T14:36:36.792312+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:13:35.673211+00:00",
+        "timestamp_utc": "2026-11-11T14:36:37.792747+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:15:42.802011+00:00",
+        "timestamp_utc": "2026-11-11T14:36:51.214187+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:16:01.807304+00:00",
+        "timestamp_utc": "2026-11-11T14:36:51.423017+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:37:31.447017+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:16:01.892429+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:16:54.695819+00:00",
+        "timestamp_utc": "2026-11-11T14:37:31.557663+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:16:56.018071+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:17:52.754373+00:00",
+        "timestamp_utc": "2026-11-11T14:37:31.650422+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:17:52.812493+00:00",
+        "timestamp_utc": "2026-11-11T14:37:31.874336+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:17:52.921979+00:00",
+        "timestamp_utc": "2026-11-11T14:37:32.069788+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:17:52.934656+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:17:53.328844+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:17:53.385971+00:00",
+        "timestamp_utc": "2026-11-11T14:37:54.738617+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:17:53.678426+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:17:53.727519+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:18:31.438007+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:18:31.644175+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:18:31.822297+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:18:33.993697+00:00",
+        "timestamp_utc": "2026-11-11T14:38:16.685129+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T10:21:06.893581+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:22:30.638500+00:00",
+        "timestamp_utc": "2026-11-11T14:38:48.839942+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:22:30.800741+00:00",
+        "timestamp_utc": "2026-11-11T14:38:49.771944+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:22:31.035315+00:00",
+        "timestamp_utc": "2026-11-11T14:38:50.756574+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:23:36.177934+00:00",
+        "timestamp_utc": "2026-11-11T14:40:07.484368+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:23:38.543762+00:00",
+        "timestamp_utc": "2026-11-11T14:41:16.625015+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:24:09.562911+00:00",
+        "timestamp_utc": "2026-11-11T14:41:17.009984+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:41:17.750416+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:24:09.672481+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:24:10.471157+00:00",
+        "timestamp_utc": "2026-11-11T14:41:17.976153+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:24:10.552277+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:24:10.744437+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:24:15.525426+00:00",
+        "timestamp_utc": "2026-11-11T14:41:32.075237+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:24:27.472626+00:00",
+        "timestamp_utc": "2026-11-11T14:41:32.298452+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:41:32.882438+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:24:27.680695+00:00",
+        "timestamp_utc": "2026-11-11T14:42:35.264688+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:24:27.867981+00:00",
+        "timestamp_utc": "2026-11-11T14:42:35.431180+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:25:21.966102+00:00",
+        "timestamp_utc": "2026-11-11T14:42:35.607103+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:26:41.298773+00:00",
+        "timestamp_utc": "2026-11-11T14:42:35.757906+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:26:42.787708+00:00",
+        "timestamp_utc": "2026-11-11T14:42:38.031471+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:43:24.557269+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:43:57.972927+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:44:25.464639+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:44:47.162073+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:45:07.827899+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:45:29.133865+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:45:47.635764+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:46:01.879132+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:46:15.744265+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:46:17.875509+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:46:31.598575+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:46:31.853574+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:28:22.848594+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:29:54.162409+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:29:54.622215+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:30:04.283186+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:30:04.740614+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:30:14.836290+00:00",
+        "timestamp_utc": "2026-11-11T14:46:57.790608+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:15.078123+00:00",
+        "timestamp_utc": "2026-11-11T14:46:58.080734+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:15.259691+00:00",
+        "timestamp_utc": "2026-11-11T14:46:58.278584+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:26.160145+00:00",
+        "timestamp_utc": "2026-11-11T14:47:11.256341+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:27.234660+00:00",
+        "timestamp_utc": "2026-11-11T14:47:54.494657+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:29.949146+00:00",
+        "timestamp_utc": "2026-11-11T14:47:56.794507+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:30.555878+00:00",
+        "timestamp_utc": "2026-11-11T14:47:59.332462+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:30:44.463956+00:00",
+        "timestamp_utc": "2026-11-11T14:47:59.489465+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:31:54.887226+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:31:57.321184+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:31:57.614367+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:31:58.611498+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:33:32.882973+00:00",
+        "timestamp_utc": "2026-11-11T14:48:34.366210+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T10:34:35.778866+00:00",
+        "timestamp_utc": "2026-11-11T14:49:02.431578+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:34:36.488442+00:00",
+        "timestamp_utc": "2026-11-11T14:49:03.801926+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:34:42.131520+00:00",
+        "timestamp_utc": "2026-11-11T14:49:10.136631+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:35:37.877772+00:00",
+        "timestamp_utc": "2026-11-11T14:49:10.511668+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:35:59.654596+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:35:59.881182+00:00",
+        "timestamp_utc": "2026-11-11T14:49:11.422366+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:36:00.065672+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:36:31.634964+00:00",
+        "timestamp_utc": "2026-11-11T14:49:27.117641+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:36:31.875822+00:00",
+        "timestamp_utc": "2026-11-11T14:49:27.791217+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:36:32.510209+00:00",
+        "timestamp_utc": "2026-11-11T14:50:34.792313+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:36:32.790364+00:00",
+        "timestamp_utc": "2026-11-11T14:51:53.102009+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:36:32.987907+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:37:07.457758+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:37:09.153850+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:37:12.832624+00:00",
+        "timestamp_utc": "2026-11-11T14:52:04.422185+00:00",
         "category": "crawler_probe",
         "reason": "known_directory_or_crawler_origin"
       },
       {
-        "timestamp_utc": "2026-11-11T10:38:25.051677+00:00",
+        "timestamp_utc": "2026-11-11T14:52:33.635003+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:38:33.769809+00:00",
+        "timestamp_utc": "2026-11-11T14:52:33.917486+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:38:35.374173+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:38:36.790853+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:38:37.704510+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:38:42.755104+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:38:43.456797+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:14.213745+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:15.006906+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:22.538018+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:23.074672+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:37.518034+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:38.407777+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:44.668969+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:46.014886+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:59.746553+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:39:59.834801+00:00",
+        "timestamp_utc": "2026-11-11T14:52:34.187245+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:39:59.946177+00:00",
+        "timestamp_utc": "2026-11-11T14:52:48.375093+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:53:31.997187+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:00.133499+00:00",
+        "timestamp_utc": "2026-11-11T14:53:36.202025+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:53:36.487193+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:00.235889+00:00",
+        "timestamp_utc": "2026-11-11T14:53:36.724211+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:53:36.987743+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:54:38.829412+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:00.369139+00:00",
+        "timestamp_utc": "2026-11-11T14:55:48.268594+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:00.537328+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:40:01.367868+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:40:15.821148+00:00",
+        "timestamp_utc": "2026-11-11T14:55:48.571196+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:15.971645+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:40:16.136566+00:00",
+        "timestamp_utc": "2026-11-11T14:55:48.869640+00:00",
         "category": "crawler_probe",
         "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:16.287495+00:00",
+        "timestamp_utc": "2026-11-11T14:56:00.438195+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:16.548090+00:00",
+        "timestamp_utc": "2026-11-11T14:56:01.096163+00:00",
         "category": "unknown",
         "reason": "no_contact_or_probe_rule_matched"
       },
       {
-        "timestamp_utc": "2026-11-11T10:40:40.778709+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:40:57.273474+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:41:27.312869+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:41:27.529285+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:41:27.773460+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:41:35.991711+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:41:41.831451+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:42:04.324642+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:42:29.304701+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:42:43.583613+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:42:52.019924+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:42:52.969513+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:43:17.428324+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:43:40.351270+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:43:43.838964+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:44:11.553355+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:44:32.249685+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:44:33.003600+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:46:07.288451+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:46:58.347279+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:46:58.586735+00:00",
-        "category": "unknown",
-        "reason": "no_contact_or_probe_rule_matched"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:46:58.868985+00:00",
-        "category": "crawler_probe",
-        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
-      },
-      {
-        "timestamp_utc": "2026-11-11T10:48:34.650946+00:00",
+        "timestamp_utc": "2026-11-11T14:57:14.270755+00:00",
         "category": "crawler_probe",
         "reason": "agent_card_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:05.053006+00:00",
+        "timestamp_utc": "2026-11-11T14:58:07.366599+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:58:07.596053+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:58:07.876746+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:58:12.822192+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T14:58:36.280429+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:00:10.355345+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:00:10.895983+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:00:12.044653+00:00",
+        "category": "crawler_probe",
+        "reason": "agent_card_fetch"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:01:39.766889+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:37.854113+00:00",
+        "category": "crawler_probe",
+        "reason": "agent_card_fetch"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:48.348359+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:48.391914+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:48.606311+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:48.707884+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:48.859214+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:48.989753+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:03:49.091661+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:06:05.884083+00:00",
         "category": "crawler_probe",
         "reason": "health_fetch"
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:17.167254+00:00",
+        "timestamp_utc": "2026-11-11T15:06:06.442268+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:06:29.153991+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:06:29.364916+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:06:36.308024+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:06:45.647847+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:06:45.890464+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:08:02.294489+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:08:02.631716+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:15.611928+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:15.785694+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:16.025244+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:16.185891+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:16.369613+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:18.995842+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:19.285422+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:19.569243+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:09:35.310175+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:10:09.801283+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:10:25.479032+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:11:29.570980+00:00",
+        "category": "crawler_probe",
+        "reason": "agent_card_fetch"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:12:29.573694+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:12:34.376482+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:07.867832+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:30.345894+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:30.387773+00:00",
+        "category": "real_contact",
+        "reason": "mcp_session_progressed_to_tools_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:30.535828+00:00",
+        "category": "real_contact",
+        "reason": "mcp_session_progressed_to_tools_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:30.639934+00:00",
+        "category": "real_contact",
+        "reason": "mcp_tools_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:30.746610+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:30.885039+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:31.034420+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:31.131314+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:31.326062+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:13:36.560103+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:01.606493+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:21.614085+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:36.795632+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:51.887725+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:52.210414+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:52.286803+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:14:52.415391+00:00",
+        "category": "crawler_probe",
+        "reason": "mcp_handshake_or_discovery_without_observed_tool_call"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:15:04.433392+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:15:15.832349+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:16:40.492846+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:18:03.101808+00:00",
+        "category": "unknown",
+        "reason": "no_contact_or_probe_rule_matched"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:18:38.688865+00:00",
+        "category": "crawler_probe",
+        "reason": "agent_card_fetch"
+      },
+      {
+        "timestamp_utc": "2026-11-11T15:20:20.569252+00:00",
         "category": "self_traffic",
         "reason": "verified_mycelix_self_proof"
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:17.381495+00:00",
+        "timestamp_utc": "2026-11-11T15:20:20.826640+00:00",
         "category": "self_traffic",
         "reason": "verified_mycelix_self_proof"
       },
       {
-        "timestamp_utc": "2026-11-11T10:49:17.842153+00:00",
+        "timestamp_utc": "2026-11-11T15:20:21.194185+00:00",
         "category": "self_traffic",
         "reason": "verified_mycelix_self_proof"
       }
@@ -2485,7 +2484,7 @@
       "enabled": true,
       "mode": "bounded_active",
       "every_cycles": 6,
-      "last_scan_utc": "2026-11-11T10:38:00.083916+00:00",
+      "last_scan_utc": "2026-11-11T15:10:22.566948+00:00",
       "signal_memory_count": 80
     },
     "model_shadow": {
@@ -2537,8 +2536,8 @@
       }
     },
     "evidence_memory": {
-      "evidence_in": 547,
-      "evidence_out": 547,
+      "evidence_in": 548,
+      "evidence_out": 548,
       "dropped_retention": 0,
       "archived": 0,
       "merged_duplicate": 0,
@@ -2549,9 +2548,9 @@
     },
     "evidence_store_status": {
       "status": "degraded",
-      "active_count": 547,
+      "active_count": 548,
       "expected_active_count": 0,
-      "pending_count": 572,
+      "pending_count": 613,
       "pending_overflow_count": 0,
       "archive_count": 0
     },
@@ -2589,19 +2588,45 @@
         "min_age_days": 60
       },
       "funnel": {
-        "collected": 93,
-        "routed": 17,
+        "collected": 90,
+        "routed": 22,
         "independent_requesters": 5,
-        "age_qualified": 3,
-        "workarounds": 4,
-        "feasibility_checked": 17,
+        "age_qualified": 2,
+        "workarounds": 11,
+        "feasibility_checked": 22,
         "ready": 0
       },
       "candidate_counts": {
-        "observed": 296,
+        "observed": 289,
         "ready": 0
       },
       "candidates": [
+        {
+          "candidate_id": "430db49e39bb8309",
+          "evidence_fingerprint": "720434f40c649765",
+          "id_key_version": "v1",
+          "score": 65,
+          "source_count": 2,
+          "independent_domain_count": 1,
+          "independent_requester_count": 1,
+          "age_days": 68,
+          "workaround_count": 2,
+          "feasibility_code": "unknown",
+          "reward_signal_count": 0,
+          "raw_gate_pass": false,
+          "stable_gate_pass": false,
+          "pass_streak": 0,
+          "fail_streak": 6,
+          "missing_codes": [
+            "three_independent_requesters",
+            "two_independent_domains"
+          ],
+          "cycle": 10909,
+          "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
+          "first_cycle_after_deploy": false,
+          "tagger_version": "1",
+          "seconds_since_first_raw_pass": null
+        },
         {
           "candidate_id": "6f430fa86aeef76f",
           "evidence_fingerprint": "51559f4fe6772600",
@@ -2610,71 +2635,45 @@
           "source_count": 1,
           "independent_domain_count": 1,
           "independent_requester_count": 1,
-          "age_days": 84,
+          "age_days": 85,
           "workaround_count": 1,
           "feasibility_code": "unknown",
           "reward_signal_count": 0,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 1751,
+          "fail_streak": 1798,
           "missing_codes": [
             "three_independent_requesters",
             "two_independent_domains"
           ],
-          "cycle": 10862,
+          "cycle": 10909,
           "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
           "first_cycle_after_deploy": false,
           "tagger_version": "1",
           "seconds_since_first_raw_pass": null
         },
         {
-          "candidate_id": "ce1d52d96cd04a42",
-          "evidence_fingerprint": "a5adf2b39e68c1b2",
+          "candidate_id": "f4aaae7fc59a940d",
+          "evidence_fingerprint": "5bc6fb5e0cb9d3fa",
           "id_key_version": "v1",
           "score": 65,
           "source_count": 1,
           "independent_domain_count": 1,
           "independent_requester_count": 1,
-          "age_days": 688,
+          "age_days": 2305,
           "workaround_count": 1,
           "feasibility_code": "unknown",
           "reward_signal_count": 0,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 3,
+          "fail_streak": 1,
           "missing_codes": [
             "three_independent_requesters",
             "two_independent_domains"
           ],
-          "cycle": 10862,
-          "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
-          "first_cycle_after_deploy": false,
-          "tagger_version": "1",
-          "seconds_since_first_raw_pass": null
-        },
-        {
-          "candidate_id": "2f5681a860f1c1d7",
-          "evidence_fingerprint": "1dc1f6f5347de43a",
-          "id_key_version": "v1",
-          "score": 65,
-          "source_count": 1,
-          "independent_domain_count": 1,
-          "independent_requester_count": 1,
-          "age_days": 259,
-          "workaround_count": 1,
-          "feasibility_code": "unknown",
-          "reward_signal_count": 0,
-          "raw_gate_pass": false,
-          "stable_gate_pass": false,
-          "pass_streak": 0,
-          "fail_streak": 8,
-          "missing_codes": [
-            "three_independent_requesters",
-            "two_independent_domains"
-          ],
-          "cycle": 10862,
+          "cycle": 10909,
           "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
           "first_cycle_after_deploy": false,
           "tagger_version": "1",
@@ -2686,20 +2685,20 @@
       "status": "SELECT",
       "ingestion_enabled": true,
       "raw_results": 180,
-      "relevance_pass": 119,
+      "relevance_pass": 154,
       "useful_results": 0,
-      "persistent_evidence_items": 547,
+      "persistent_evidence_items": 548,
       "quarantined_evidence_items": 344,
       "rejected_current_count": 40,
       "new_signal_rows": 0,
-      "problem_cluster_count": 54,
+      "problem_cluster_count": 53,
       "qualified_problem_count": 0,
       "configured_categories": 9,
-      "evidenced_candidates": 5,
-      "gate_eligible_candidates": 5,
+      "evidenced_candidates": 6,
+      "gate_eligible_candidates": 6,
       "qualified_candidates": 0,
       "top_gate_pass": false,
-      "top_monetization_score": 55,
+      "top_monetization_score": 40,
       "post_deploy_pass_ignored": 0,
       "top_missing": [
         "two_competitors_with_real_price",
@@ -2708,46 +2707,20 @@
       "candidates": [
         {
           "candidate_id": "af6f6d5978c65d0c",
-          "evidence_fingerprint": "e4b360d6f53cf1aa",
+          "evidence_fingerprint": "ac44fc7bcf21d464",
           "id_key_version": "v1",
-          "score": 55,
-          "source_count": 16,
-          "independent_domain_count": 10,
-          "raw_gate_pass": false,
-          "stable_gate_pass": false,
-          "pass_streak": 0,
-          "fail_streak": 7413,
-          "missing_codes": [
-            "two_competitors_with_real_price",
-            "monetization_score_60"
-          ],
-          "cycle": 10862,
-          "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
-          "first_cycle_after_deploy": false,
-          "post_deploy_pass_ignored": false,
-          "tagger_version": "3",
-          "seconds_since_first_raw_pass": null,
-          "new_domains_since_first_pass": 0,
-          "tolerated_fail_cycles": 0,
-          "pass_ratio_in_window_ppm": 0,
-          "confirmation_blockers": []
-        },
-        {
-          "candidate_id": "a7acc16db0254913",
-          "evidence_fingerprint": "e37bc60bcaf22af4",
-          "id_key_version": "v1",
-          "score": 55,
+          "score": 40,
           "source_count": 14,
-          "independent_domain_count": 12,
+          "independent_domain_count": 13,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 3827,
+          "fail_streak": 7460,
           "missing_codes": [
             "two_competitors_with_real_price",
             "monetization_score_60"
           ],
-          "cycle": 10862,
+          "cycle": 10909,
           "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
           "first_cycle_after_deploy": false,
           "post_deploy_pass_ignored": false,
@@ -2759,21 +2732,47 @@
           "confirmation_blockers": []
         },
         {
-          "candidate_id": "1cccbce253ede4f8",
-          "evidence_fingerprint": "358ea51b73232c2e",
+          "candidate_id": "fcd986b2d09b3548",
+          "evidence_fingerprint": "1117e0f0404de66a",
           "id_key_version": "v1",
           "score": 25,
-          "source_count": 9,
-          "independent_domain_count": 6,
+          "source_count": 16,
+          "independent_domain_count": 14,
           "raw_gate_pass": false,
           "stable_gate_pass": false,
           "pass_streak": 0,
-          "fail_streak": 3899,
+          "fail_streak": 3797,
           "missing_codes": [
             "two_competitors_with_real_price",
             "monetization_score_60"
           ],
-          "cycle": 10862,
+          "cycle": 10909,
+          "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
+          "first_cycle_after_deploy": false,
+          "post_deploy_pass_ignored": false,
+          "tagger_version": "3",
+          "seconds_since_first_raw_pass": null,
+          "new_domains_since_first_pass": 0,
+          "tolerated_fail_cycles": 0,
+          "pass_ratio_in_window_ppm": 0,
+          "confirmation_blockers": []
+        },
+        {
+          "candidate_id": "4e737d2b22b03589",
+          "evidence_fingerprint": "9726cd5e631e3efb",
+          "id_key_version": "v1",
+          "score": 25,
+          "source_count": 8,
+          "independent_domain_count": 7,
+          "raw_gate_pass": false,
+          "stable_gate_pass": false,
+          "pass_streak": 0,
+          "fail_streak": 3985,
+          "missing_codes": [
+            "two_competitors_with_real_price",
+            "monetization_score_60"
+          ],
+          "cycle": 10909,
           "commit": "0c767632d4303201b1e8ec2861026d8ca9f2302c",
           "first_cycle_after_deploy": false,
           "post_deploy_pass_ignored": false,
@@ -2799,12 +2798,8 @@
             "new_rejected": 6,
             "rejections": [
               {
-                "reason_code": 10,
-                "count": 5
-              },
-              {
-                "reason_code": 7,
-                "count": 1
+                "reason_code": 13,
+                "count": 6
               }
             ]
           },
@@ -2815,90 +2810,6 @@
             "relevance_pass": 10,
             "useful": 0,
             "new_signal_row": 0,
-            "duplicate_memory": 1,
-            "new_rejected": 9,
-            "rejections": [
-              {
-                "reason_code": 5,
-                "count": 10
-              }
-            ]
-          },
-          {
-            "query_slot": 2,
-            "provider_code": 1,
-            "raw_results": 6,
-            "relevance_pass": 1,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 6,
-            "rejections": [
-              {
-                "reason_code": 10,
-                "count": 1
-              },
-              {
-                "reason_code": 3,
-                "count": 5
-              }
-            ]
-          },
-          {
-            "query_slot": 2,
-            "provider_code": 4,
-            "raw_results": 10,
-            "relevance_pass": 7,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 10,
-            "rejections": [
-              {
-                "reason_code": 10,
-                "count": 1
-              },
-              {
-                "reason_code": 11,
-                "count": 4
-              },
-              {
-                "reason_code": 3,
-                "count": 3
-              },
-              {
-                "reason_code": 5,
-                "count": 2
-              }
-            ]
-          },
-          {
-            "query_slot": 3,
-            "provider_code": 1,
-            "raw_results": 6,
-            "relevance_pass": 6,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 6,
-            "rejections": [
-              {
-                "reason_code": 10,
-                "count": 5
-              },
-              {
-                "reason_code": 7,
-                "count": 1
-              }
-            ]
-          },
-          {
-            "query_slot": 3,
-            "provider_code": 4,
-            "raw_results": 10,
-            "relevance_pass": 10,
-            "useful": 0,
-            "new_signal_row": 0,
             "duplicate_memory": 0,
             "new_rejected": 10,
             "rejections": [
@@ -2909,7 +2820,7 @@
             ]
           },
           {
-            "query_slot": 4,
+            "query_slot": 2,
             "provider_code": 1,
             "raw_results": 6,
             "relevance_pass": 6,
@@ -2933,7 +2844,7 @@
             ]
           },
           {
-            "query_slot": 4,
+            "query_slot": 2,
             "provider_code": 4,
             "raw_results": 10,
             "relevance_pass": 10,
@@ -2949,7 +2860,7 @@
             ]
           },
           {
-            "query_slot": 5,
+            "query_slot": 3,
             "provider_code": 1,
             "raw_results": 6,
             "relevance_pass": 6,
@@ -2969,7 +2880,7 @@
             ]
           },
           {
-            "query_slot": 5,
+            "query_slot": 3,
             "provider_code": 4,
             "raw_results": 10,
             "relevance_pass": 4,
@@ -2989,7 +2900,7 @@
             ]
           },
           {
-            "query_slot": 6,
+            "query_slot": 4,
             "provider_code": 1,
             "raw_results": 6,
             "relevance_pass": 6,
@@ -2999,8 +2910,12 @@
             "new_rejected": 6,
             "rejections": [
               {
-                "reason_code": 13,
-                "count": 5
+                "reason_code": 10,
+                "count": 4
+              },
+              {
+                "reason_code": 11,
+                "count": 1
               },
               {
                 "reason_code": 7,
@@ -3009,79 +2924,7 @@
             ]
           },
           {
-            "query_slot": 6,
-            "provider_code": 4,
-            "raw_results": 10,
-            "relevance_pass": 0,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 10,
-            "rejections": [
-              {
-                "reason_code": 3,
-                "count": 10
-              }
-            ]
-          },
-          {
-            "query_slot": 7,
-            "provider_code": 1,
-            "raw_results": 6,
-            "relevance_pass": 6,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 6,
-            "rejections": [
-              {
-                "reason_code": 13,
-                "count": 5
-              },
-              {
-                "reason_code": 7,
-                "count": 1
-              }
-            ]
-          },
-          {
-            "query_slot": 7,
-            "provider_code": 4,
-            "raw_results": 10,
-            "relevance_pass": 0,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 10,
-            "rejections": [
-              {
-                "reason_code": 3,
-                "count": 10
-              }
-            ]
-          },
-          {
-            "query_slot": 8,
-            "provider_code": 1,
-            "raw_results": 6,
-            "relevance_pass": 6,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 6,
-            "rejections": [
-              {
-                "reason_code": 13,
-                "count": 5
-              },
-              {
-                "reason_code": 7,
-                "count": 1
-              }
-            ]
-          },
-          {
-            "query_slot": 8,
+            "query_slot": 4,
             "provider_code": 4,
             "raw_results": 10,
             "relevance_pass": 6,
@@ -3101,7 +2944,7 @@
             ]
           },
           {
-            "query_slot": 9,
+            "query_slot": 5,
             "provider_code": 1,
             "raw_results": 6,
             "relevance_pass": 6,
@@ -3112,24 +2955,16 @@
             "rejections": [
               {
                 "reason_code": 10,
-                "count": 2
-              },
-              {
-                "reason_code": 11,
-                "count": 2
-              },
-              {
-                "reason_code": 13,
-                "count": 1
+                "count": 4
               },
               {
                 "reason_code": 7,
-                "count": 1
+                "count": 2
               }
             ]
           },
           {
-            "query_slot": 9,
+            "query_slot": 5,
             "provider_code": 4,
             "raw_results": 10,
             "relevance_pass": 10,
@@ -3145,10 +2980,138 @@
             ]
           },
           {
-            "query_slot": 10,
+            "query_slot": 6,
             "provider_code": 1,
             "raw_results": 6,
-            "relevance_pass": 1,
+            "relevance_pass": 6,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 6,
+            "rejections": [
+              {
+                "reason_code": 11,
+                "count": 1
+              },
+              {
+                "reason_code": 13,
+                "count": 4
+              },
+              {
+                "reason_code": 7,
+                "count": 1
+              }
+            ]
+          },
+          {
+            "query_slot": 6,
+            "provider_code": 4,
+            "raw_results": 10,
+            "relevance_pass": 9,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 10,
+            "rejections": [
+              {
+                "reason_code": 3,
+                "count": 1
+              },
+              {
+                "reason_code": 5,
+                "count": 9
+              }
+            ]
+          },
+          {
+            "query_slot": 7,
+            "provider_code": 1,
+            "raw_results": 6,
+            "relevance_pass": 6,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 6,
+            "rejections": [
+              {
+                "reason_code": 11,
+                "count": 1
+              },
+              {
+                "reason_code": 13,
+                "count": 4
+              },
+              {
+                "reason_code": 7,
+                "count": 1
+              }
+            ]
+          },
+          {
+            "query_slot": 7,
+            "provider_code": 4,
+            "raw_results": 10,
+            "relevance_pass": 9,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 10,
+            "rejections": [
+              {
+                "reason_code": 3,
+                "count": 1
+              },
+              {
+                "reason_code": 5,
+                "count": 9
+              }
+            ]
+          },
+          {
+            "query_slot": 8,
+            "provider_code": 1,
+            "raw_results": 6,
+            "relevance_pass": 6,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 6,
+            "rejections": [
+              {
+                "reason_code": 11,
+                "count": 1
+              },
+              {
+                "reason_code": 13,
+                "count": 4
+              },
+              {
+                "reason_code": 7,
+                "count": 1
+              }
+            ]
+          },
+          {
+            "query_slot": 8,
+            "provider_code": 4,
+            "raw_results": 10,
+            "relevance_pass": 10,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 1,
+            "new_rejected": 9,
+            "rejections": [
+              {
+                "reason_code": 5,
+                "count": 10
+              }
+            ]
+          },
+          {
+            "query_slot": 9,
+            "provider_code": 1,
+            "raw_results": 6,
+            "relevance_pass": 6,
             "useful": 0,
             "new_signal_row": 0,
             "duplicate_memory": 0,
@@ -3156,11 +3119,51 @@
             "rejections": [
               {
                 "reason_code": 10,
+                "count": 5
+              },
+              {
+                "reason_code": 7,
+                "count": 1
+              }
+            ]
+          },
+          {
+            "query_slot": 9,
+            "provider_code": 4,
+            "raw_results": 10,
+            "relevance_pass": 10,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 10,
+            "rejections": [
+              {
+                "reason_code": 5,
+                "count": 10
+              }
+            ]
+          },
+          {
+            "query_slot": 10,
+            "provider_code": 1,
+            "raw_results": 6,
+            "relevance_pass": 6,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 6,
+            "rejections": [
+              {
+                "reason_code": 11,
                 "count": 1
               },
               {
-                "reason_code": 3,
-                "count": 5
+                "reason_code": 13,
+                "count": 3
+              },
+              {
+                "reason_code": 7,
+                "count": 2
               }
             ]
           },
@@ -3168,27 +3171,15 @@
             "query_slot": 10,
             "provider_code": 4,
             "raw_results": 10,
-            "relevance_pass": 7,
+            "relevance_pass": 10,
             "useful": 0,
             "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 10,
+            "duplicate_memory": 2,
+            "new_rejected": 8,
             "rejections": [
               {
-                "reason_code": 10,
-                "count": 1
-              },
-              {
-                "reason_code": 11,
-                "count": 4
-              },
-              {
-                "reason_code": 3,
-                "count": 3
-              },
-              {
                 "reason_code": 5,
-                "count": 2
+                "count": 10
               }
             ]
           },
@@ -3196,7 +3187,7 @@
             "query_slot": 11,
             "provider_code": 5,
             "raw_results": 4,
-            "relevance_pass": 2,
+            "relevance_pass": 1,
             "useful": 0,
             "new_signal_row": 0,
             "duplicate_memory": 0,
@@ -3204,15 +3195,15 @@
             "rejections": [
               {
                 "reason_code": 11,
-                "count": 2
+                "count": 1
               },
               {
-                "reason_code": 3,
+                "reason_code": 8,
                 "count": 1
               },
               {
                 "reason_code": 9,
-                "count": 1
+                "count": 2
               }
             ]
           },
@@ -3223,45 +3214,29 @@
             "relevance_pass": 2,
             "useful": 0,
             "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 4,
+            "duplicate_memory": 1,
+            "new_rejected": 3,
             "rejections": [
               {
                 "reason_code": 11,
-                "count": 2
-              },
-              {
-                "reason_code": 8,
                 "count": 1
               },
               {
-                "reason_code": 9,
+                "reason_code": 13,
+                "count": 1
+              },
+              {
+                "reason_code": 3,
+                "count": 1
+              },
+              {
+                "reason_code": 8,
                 "count": 1
               }
             ]
           },
           {
             "query_slot": 13,
-            "provider_code": 5,
-            "raw_results": 4,
-            "relevance_pass": 0,
-            "useful": 0,
-            "new_signal_row": 0,
-            "duplicate_memory": 0,
-            "new_rejected": 4,
-            "rejections": [
-              {
-                "reason_code": 3,
-                "count": 1
-              },
-              {
-                "reason_code": 9,
-                "count": 3
-              }
-            ]
-          },
-          {
-            "query_slot": 14,
             "provider_code": 5,
             "raw_results": 4,
             "relevance_pass": 1,
@@ -3275,16 +3250,32 @@
                 "count": 1
               },
               {
-                "reason_code": 3,
-                "count": 1
-              },
-              {
                 "reason_code": 8,
-                "count": 1
+                "count": 2
               },
               {
                 "reason_code": 9,
                 "count": 1
+              }
+            ]
+          },
+          {
+            "query_slot": 14,
+            "provider_code": 5,
+            "raw_results": 4,
+            "relevance_pass": 2,
+            "useful": 0,
+            "new_signal_row": 0,
+            "duplicate_memory": 0,
+            "new_rejected": 4,
+            "rejections": [
+              {
+                "reason_code": 13,
+                "count": 2
+              },
+              {
+                "reason_code": 9,
+                "count": 2
               }
             ]
           },
@@ -3315,31 +3306,31 @@
       "rejection_reasons": [
         {
           "reason": "no_demand_signal",
-          "count": 24
+          "count": 32
         },
         {
           "reason": "no_family",
-          "count": 16
-        },
-        {
-          "reason": "weak_family_relevance",
-          "count": 16
+          "count": 13
         },
         {
           "reason": "noise_domain",
+          "count": 12
+        },
+        {
+          "reason": "weak_family_relevance",
           "count": 9
         },
         {
           "reason": "github_no_buyer_problem_context",
-          "count": 8
+          "count": 7
         },
         {
           "reason": "github_noise",
-          "count": 4
+          "count": 6
         },
         {
           "reason": "query_irrelevant",
-          "count": 3
+          "count": 1
         }
       ],
       "search_sources": [
@@ -3349,7 +3340,7 @@
           "empty": 0,
           "errors": 0,
           "raw_results": 54,
-          "relevance_pass": 44
+          "relevance_pass": 54
         },
         {
           "source": "brave",
@@ -3365,7 +3356,7 @@
           "empty": 0,
           "errors": 0,
           "raw_results": 20,
-          "relevance_pass": 5
+          "relevance_pass": 6
         },
         {
           "source": "hn",
@@ -3373,7 +3364,7 @@
           "empty": 0,
           "errors": 0,
           "raw_results": 100,
-          "relevance_pass": 64
+          "relevance_pass": 88
         },
         {
           "source": "stackexchange",
@@ -3386,7 +3377,7 @@
       ],
       "buyer_voice_by_source": [
         {
-          "source": "bing-rss",
+          "source": "github",
           "count": 3
         }
       ],
@@ -3396,7 +3387,7 @@
         "provider_key_present": true,
         "fallback_used": true,
         "calls_cycle": 1,
-        "calls_day": 69,
+        "calls_day": 97,
         "errors": 0,
         "fallbacks": 9,
         "fallback_reasons": [
@@ -3433,39 +3424,39 @@
         ],
         "raw_received": 180,
         "deduped": 180,
-        "query_relevant": 119,
-        "family_matched": 40,
+        "query_relevant": 154,
+        "family_matched": 41,
         "buyer_voice": 3,
         "commercial_signal": 0,
         "persisted": 0,
         "discarded_by_reason": [
           {
             "reason": "no_demand_signal",
-            "count": 24
+            "count": 32
           },
           {
             "reason": "no_family",
-            "count": 16
-          },
-          {
-            "reason": "weak_family_relevance",
-            "count": 16
+            "count": 13
           },
           {
             "reason": "noise_domain",
+            "count": 12
+          },
+          {
+            "reason": "weak_family_relevance",
             "count": 9
           },
           {
             "reason": "github_no_buyer_problem_context",
-            "count": 8
+            "count": 7
           },
           {
             "reason": "github_noise",
-            "count": 4
+            "count": 6
           },
           {
             "reason": "query_irrelevant",
-            "count": 3
+            "count": 1
           }
         ],
         "monotonicity_warnings": []
