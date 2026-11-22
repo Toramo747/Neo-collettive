@@ -1,6 +1,176 @@
 {
-  "generation": 122,
+  "generation": 123,
   "population": [
+    {
+      "genome_id": "g123-elite-1",
+      "generation": 123,
+      "origin": "elite",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "concurrent",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "policy_enabled",
+        "ordering": "allagents_first"
+      }
+    },
+    {
+      "genome_id": "g123-elite-2",
+      "generation": 123,
+      "origin": "elite",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "concurrent",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "policy_enabled",
+        "ordering": "global_first"
+      }
+    },
+    {
+      "genome_id": "g123-3",
+      "generation": 123,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "sequential",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "policy_enabled",
+        "ordering": "allagents_first"
+      }
+    },
+    {
+      "genome_id": "g123-4",
+      "generation": 123,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "sequential",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "accepted_registry",
+        "ordering": "global_first"
+      }
+    },
+    {
+      "genome_id": "g123-5",
+      "generation": 123,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "concurrent",
+        "per_registry_timeout": 5,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "policy_enabled",
+        "ordering": "allagents_first"
+      }
+    },
+    {
+      "genome_id": "g123-6",
+      "generation": 123,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "sequential",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 10,
+        "registry_semantics": "policy_enabled",
+        "ordering": "global_first"
+      }
+    },
+    {
+      "genome_id": "g123-7",
+      "generation": 123,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "concurrent",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "accepted_registry",
+        "ordering": "global_first"
+      }
+    },
+    {
+      "genome_id": "g123-8",
+      "generation": 123,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "sequential",
+        "per_registry_timeout": 8,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "policy_enabled",
+        "ordering": "global_first"
+      }
+    }
+  ],
+  "last_ranked": [
+    {
+      "genome_id": "g122-4",
+      "generation": 122,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "concurrent",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "policy_enabled",
+        "ordering": "allagents_first"
+      },
+      "metrics": {
+        "fitness": 123.3,
+        "smoke_pass": 4,
+        "smoke_total": 4,
+        "final_pass": 4,
+        "final_total": 4,
+        "avg_finish_seconds": 3.4,
+        "false_positive": false,
+        "scenarios": [
+          {
+            "scenario": "all_fast",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 1.6,
+            "accepted": 2,
+            "false_positive": false
+          },
+          {
+            "scenario": "global_404_slow_community",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "community_timeout_allagents_ok",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "all_registries_slow",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 0,
+            "false_positive": false
+          },
+          {
+            "scenario": "policy_disabled",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 0.0,
+            "accepted": 0,
+            "false_positive": false
+          }
+        ]
+      }
+    },
     {
       "genome_id": "g122-elite-1",
       "generation": 122,
@@ -12,6 +182,57 @@
         "startup_grace_seconds": 1,
         "registry_semantics": "policy_enabled",
         "ordering": "global_first"
+      },
+      "metrics": {
+        "fitness": 123.3,
+        "smoke_pass": 4,
+        "smoke_total": 4,
+        "final_pass": 4,
+        "final_total": 4,
+        "avg_finish_seconds": 3.4,
+        "false_positive": false,
+        "scenarios": [
+          {
+            "scenario": "all_fast",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 1.6,
+            "accepted": 2,
+            "false_positive": false
+          },
+          {
+            "scenario": "global_404_slow_community",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "community_timeout_allagents_ok",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "all_registries_slow",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 0,
+            "false_positive": false
+          },
+          {
+            "scenario": "policy_disabled",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 0.0,
+            "accepted": 0,
+            "false_positive": false
+          }
+        ]
       }
     },
     {
@@ -25,71 +246,57 @@
         "startup_grace_seconds": 1,
         "registry_semantics": "policy_enabled",
         "ordering": "community_first"
-      }
-    },
-    {
-      "genome_id": "g122-3",
-      "generation": 122,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "accepted_registry",
-        "ordering": "community_first"
-      }
-    },
-    {
-      "genome_id": "g122-4",
-      "generation": 122,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "policy_enabled",
-        "ordering": "allagents_first"
-      }
-    },
-    {
-      "genome_id": "g122-5",
-      "generation": 122,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "sequential",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "accepted_registry",
-        "ordering": "global_first"
-      }
-    },
-    {
-      "genome_id": "g122-6",
-      "generation": 122,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "accepted_registry",
-        "ordering": "global_first"
-      }
-    },
-    {
-      "genome_id": "g122-7",
-      "generation": 122,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "sequential",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 2,
-        "registry_semantics": "policy_enabled",
-        "ordering": "allagents_first"
+      },
+      "metrics": {
+        "fitness": 123.3,
+        "smoke_pass": 4,
+        "smoke_total": 4,
+        "final_pass": 4,
+        "final_total": 4,
+        "avg_finish_seconds": 3.4,
+        "false_positive": false,
+        "scenarios": [
+          {
+            "scenario": "all_fast",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 1.6,
+            "accepted": 2,
+            "false_positive": false
+          },
+          {
+            "scenario": "global_404_slow_community",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "community_timeout_allagents_ok",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "all_registries_slow",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 0,
+            "false_positive": false
+          },
+          {
+            "scenario": "policy_disabled",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 0.0,
+            "accepted": 0,
+            "false_positive": false
+          }
+        ]
       }
     },
     {
@@ -103,149 +310,6 @@
         "startup_grace_seconds": 1,
         "registry_semantics": "policy_enabled",
         "ordering": "global_first"
-      }
-    }
-  ],
-  "last_ranked": [
-    {
-      "genome_id": "g121-elite-1",
-      "generation": 121,
-      "origin": "elite",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "policy_enabled",
-        "ordering": "global_first"
-      },
-      "metrics": {
-        "fitness": 123.3,
-        "smoke_pass": 4,
-        "smoke_total": 4,
-        "final_pass": 4,
-        "final_total": 4,
-        "avg_finish_seconds": 3.4,
-        "false_positive": false,
-        "scenarios": [
-          {
-            "scenario": "all_fast",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 1.6,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "global_404_slow_community",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 4.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "community_timeout_allagents_ok",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 4.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "all_registries_slow",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 4.0,
-            "accepted": 0,
-            "false_positive": false
-          },
-          {
-            "scenario": "policy_disabled",
-            "smoke_enabled": false,
-            "final_enabled": false,
-            "finish_seconds": 0.0,
-            "accepted": 0,
-            "false_positive": false
-          }
-        ]
-      }
-    },
-    {
-      "genome_id": "g121-elite-2",
-      "generation": 121,
-      "origin": "elite",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "policy_enabled",
-        "ordering": "community_first"
-      },
-      "metrics": {
-        "fitness": 123.3,
-        "smoke_pass": 4,
-        "smoke_total": 4,
-        "final_pass": 4,
-        "final_total": 4,
-        "avg_finish_seconds": 3.4,
-        "false_positive": false,
-        "scenarios": [
-          {
-            "scenario": "all_fast",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 1.6,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "global_404_slow_community",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 4.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "community_timeout_allagents_ok",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 4.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "all_registries_slow",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 4.0,
-            "accepted": 0,
-            "false_positive": false
-          },
-          {
-            "scenario": "policy_disabled",
-            "smoke_enabled": false,
-            "final_enabled": false,
-            "finish_seconds": 0.0,
-            "accepted": 0,
-            "false_positive": false
-          }
-        ]
-      }
-    },
-    {
-      "genome_id": "g121-3",
-      "generation": 121,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "sequential",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "policy_enabled",
-        "ordering": "global_first"
       },
       "metrics": {
         "fitness": 122.075,
@@ -300,31 +364,31 @@
       }
     },
     {
-      "genome_id": "g121-4",
-      "generation": 121,
+      "genome_id": "g122-7",
+      "generation": 122,
       "origin": "mutation",
       "genes": {
         "publish_state_early": true,
         "registry_mode": "sequential",
         "per_registry_timeout": 3,
-        "startup_grace_seconds": 1,
+        "startup_grace_seconds": 2,
         "registry_semantics": "policy_enabled",
         "ordering": "allagents_first"
       },
       "metrics": {
-        "fitness": 122.075,
+        "fitness": 121.575,
         "smoke_pass": 4,
         "smoke_total": 4,
         "final_pass": 4,
         "final_total": 4,
-        "avg_finish_seconds": 5.85,
+        "avg_finish_seconds": 6.85,
         "false_positive": false,
         "scenarios": [
           {
             "scenario": "all_fast",
             "smoke_enabled": true,
             "final_enabled": true,
-            "finish_seconds": 2.5,
+            "finish_seconds": 3.5,
             "accepted": 2,
             "false_positive": false
           },
@@ -332,7 +396,7 @@
             "scenario": "global_404_slow_community",
             "smoke_enabled": true,
             "final_enabled": true,
-            "finish_seconds": 5.3,
+            "finish_seconds": 6.3,
             "accepted": 1,
             "false_positive": false
           },
@@ -340,7 +404,7 @@
             "scenario": "community_timeout_allagents_ok",
             "smoke_enabled": true,
             "final_enabled": true,
-            "finish_seconds": 5.6,
+            "finish_seconds": 6.6,
             "accepted": 1,
             "false_positive": false
           },
@@ -348,7 +412,7 @@
             "scenario": "all_registries_slow",
             "smoke_enabled": true,
             "final_enabled": true,
-            "finish_seconds": 10.0,
+            "finish_seconds": 11.0,
             "accepted": 0,
             "false_positive": false
           },
@@ -364,200 +428,8 @@
       }
     },
     {
-      "genome_id": "g121-5",
-      "generation": 121,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 20,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "policy_enabled",
-        "ordering": "community_first"
-      },
-      "metrics": {
-        "fitness": 118.8,
-        "smoke_pass": 4,
-        "smoke_total": 4,
-        "final_pass": 4,
-        "final_total": 4,
-        "avg_finish_seconds": 12.4,
-        "false_positive": false,
-        "scenarios": [
-          {
-            "scenario": "all_fast",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 1.6,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "global_404_slow_community",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 8.0,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "community_timeout_allagents_ok",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 21.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "all_registries_slow",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 19.0,
-            "accepted": 0,
-            "false_positive": false
-          },
-          {
-            "scenario": "policy_disabled",
-            "smoke_enabled": false,
-            "final_enabled": false,
-            "finish_seconds": 0.0,
-            "accepted": 0,
-            "false_positive": false
-          }
-        ]
-      }
-    },
-    {
-      "genome_id": "g121-6",
-      "generation": 121,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "concurrent",
-        "per_registry_timeout": 3,
-        "startup_grace_seconds": 10,
-        "registry_semantics": "policy_enabled",
-        "ordering": "global_first"
-      },
-      "metrics": {
-        "fitness": 118.8,
-        "smoke_pass": 4,
-        "smoke_total": 4,
-        "final_pass": 4,
-        "final_total": 4,
-        "avg_finish_seconds": 12.4,
-        "false_positive": false,
-        "scenarios": [
-          {
-            "scenario": "all_fast",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 10.6,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "global_404_slow_community",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 13.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "community_timeout_allagents_ok",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 13.0,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "all_registries_slow",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 13.0,
-            "accepted": 0,
-            "false_positive": false
-          },
-          {
-            "scenario": "policy_disabled",
-            "smoke_enabled": false,
-            "final_enabled": false,
-            "finish_seconds": 0.0,
-            "accepted": 0,
-            "false_positive": false
-          }
-        ]
-      }
-    },
-    {
-      "genome_id": "g121-8",
-      "generation": 121,
-      "origin": "mutation",
-      "genes": {
-        "publish_state_early": true,
-        "registry_mode": "sequential",
-        "per_registry_timeout": 12,
-        "startup_grace_seconds": 1,
-        "registry_semantics": "policy_enabled",
-        "ordering": "global_first"
-      },
-      "metrics": {
-        "fitness": 117.075,
-        "smoke_pass": 4,
-        "smoke_total": 4,
-        "final_pass": 4,
-        "final_total": 4,
-        "avg_finish_seconds": 15.85,
-        "false_positive": false,
-        "scenarios": [
-          {
-            "scenario": "all_fast",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 2.5,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "global_404_slow_community",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 9.3,
-            "accepted": 2,
-            "false_positive": false
-          },
-          {
-            "scenario": "community_timeout_allagents_ok",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 14.6,
-            "accepted": 1,
-            "false_positive": false
-          },
-          {
-            "scenario": "all_registries_slow",
-            "smoke_enabled": true,
-            "final_enabled": true,
-            "finish_seconds": 37.0,
-            "accepted": 0,
-            "false_positive": false
-          },
-          {
-            "scenario": "policy_disabled",
-            "smoke_enabled": false,
-            "final_enabled": false,
-            "finish_seconds": 0.0,
-            "accepted": 0,
-            "false_positive": false
-          }
-        ]
-      }
-    },
-    {
-      "genome_id": "g121-7",
-      "generation": 121,
+      "genome_id": "g122-3",
+      "generation": 122,
       "origin": "mutation",
       "genes": {
         "publish_state_early": true,
@@ -618,17 +490,145 @@
           }
         ]
       }
+    },
+    {
+      "genome_id": "g122-6",
+      "generation": 122,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "concurrent",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "accepted_registry",
+        "ordering": "global_first"
+      },
+      "metrics": {
+        "fitness": 95.8,
+        "smoke_pass": 3,
+        "smoke_total": 4,
+        "final_pass": 3,
+        "final_total": 4,
+        "avg_finish_seconds": 3.4,
+        "false_positive": false,
+        "scenarios": [
+          {
+            "scenario": "all_fast",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 1.6,
+            "accepted": 2,
+            "false_positive": false
+          },
+          {
+            "scenario": "global_404_slow_community",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "community_timeout_allagents_ok",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 4.0,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "all_registries_slow",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 4.0,
+            "accepted": 0,
+            "false_positive": false
+          },
+          {
+            "scenario": "policy_disabled",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 0.0,
+            "accepted": 0,
+            "false_positive": false
+          }
+        ]
+      }
+    },
+    {
+      "genome_id": "g122-5",
+      "generation": 122,
+      "origin": "mutation",
+      "genes": {
+        "publish_state_early": true,
+        "registry_mode": "sequential",
+        "per_registry_timeout": 3,
+        "startup_grace_seconds": 1,
+        "registry_semantics": "accepted_registry",
+        "ordering": "global_first"
+      },
+      "metrics": {
+        "fitness": 94.575,
+        "smoke_pass": 3,
+        "smoke_total": 4,
+        "final_pass": 3,
+        "final_total": 4,
+        "avg_finish_seconds": 5.85,
+        "false_positive": false,
+        "scenarios": [
+          {
+            "scenario": "all_fast",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 2.5,
+            "accepted": 2,
+            "false_positive": false
+          },
+          {
+            "scenario": "global_404_slow_community",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 5.3,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "community_timeout_allagents_ok",
+            "smoke_enabled": true,
+            "final_enabled": true,
+            "finish_seconds": 5.6,
+            "accepted": 1,
+            "false_positive": false
+          },
+          {
+            "scenario": "all_registries_slow",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 10.0,
+            "accepted": 0,
+            "false_positive": false
+          },
+          {
+            "scenario": "policy_disabled",
+            "smoke_enabled": false,
+            "final_enabled": false,
+            "finish_seconds": 0.0,
+            "accepted": 0,
+            "false_positive": false
+          }
+        ]
+      }
     }
   ],
   "promotion_candidate": {
-    "genome_id": "g121-elite-1",
+    "genome_id": "g122-4",
     "genes": {
       "publish_state_early": true,
       "registry_mode": "concurrent",
       "per_registry_timeout": 3,
       "startup_grace_seconds": 1,
       "registry_semantics": "policy_enabled",
-      "ordering": "global_first"
+      "ordering": "allagents_first"
     },
     "fitness": 123.3,
     "manual_review_required": true,
