@@ -6,32 +6,32 @@
   "mode": "iterative_baseline_plus_single_llm_mutation",
   "mutation_mode": "substitution_only",
   "mutation_stats": {
-    "attempted": 192,
-    "used": 96,
-    "rejected_invalid": 28,
-    "rejected_too_long": 54,
-    "rejected_topic_drift": 14
+    "attempted": 224,
+    "used": 107,
+    "rejected_invalid": 31,
+    "rejected_too_long": 68,
+    "rejected_topic_drift": 18
   },
-  "captured_at_utc": "2026-11-22T14:57:14.543717+00:00",
+  "captured_at_utc": "2026-11-23T18:47:41.146185+00:00",
   "model": "qwen2.5:3b-instruct-q4_K_M",
   "provider": "local_ollama",
   "search_provider": "hn_algolia_public_read_only",
-  "baseline_champion": "g123-elite-1",
+  "baseline_champion": "g124-elite-1",
   "baseline_metrics": {
-    "fitness": 43.125,
-    "base_fitness": 43.125,
+    "fitness": 43.2765,
+    "base_fitness": 43.2765,
     "support_factor": 1.0,
-    "total_hits": 62,
-    "relevant_hits": 34,
+    "total_hits": 68,
+    "relevant_hits": 33,
     "signal_hits": 6,
     "unique_signal_threads": 5,
     "buyer_hits": 12,
     "first_person_buyer_hits": 10,
-    "family_hits": 22,
-    "family_match_rate": 0.6471,
-    "buyer_rate": 0.3529,
-    "first_person_buyer_rate": 0.2941,
-    "precision": 0.1765,
+    "family_hits": 21,
+    "family_match_rate": 0.6364,
+    "buyer_rate": 0.3636,
+    "first_person_buyer_rate": 0.303,
+    "precision": 0.1818,
     "absolute_signal_score": 0.5,
     "absolute_thread_score": 0.625,
     "evidence_volume_score": 45.0,
@@ -39,136 +39,43 @@
     "supply_rejected": 0
   },
   "final_metrics": {
-    "fitness": 43.125,
-    "base_fitness": 43.125,
+    "fitness": 47.5548,
+    "base_fitness": 47.5548,
     "support_factor": 1.0,
-    "total_hits": 62,
-    "relevant_hits": 34,
-    "signal_hits": 6,
+    "total_hits": 73,
+    "relevant_hits": 38,
+    "signal_hits": 8,
     "unique_signal_threads": 5,
     "buyer_hits": 12,
     "first_person_buyer_hits": 10,
-    "family_hits": 22,
-    "family_match_rate": 0.6471,
-    "buyer_rate": 0.3529,
-    "first_person_buyer_rate": 0.2941,
-    "precision": 0.1765,
-    "absolute_signal_score": 0.5,
+    "family_hits": 25,
+    "family_match_rate": 0.6579,
+    "buyer_rate": 0.3158,
+    "first_person_buyer_rate": 0.2632,
+    "precision": 0.2105,
+    "absolute_signal_score": 0.6667,
     "absolute_thread_score": 0.625,
-    "evidence_volume_score": 45.0,
+    "evidence_volume_score": 55.0,
     "vendor_rejected": 0,
     "supply_rejected": 0
   },
-  "final_genome": "baseline",
-  "generations_run": 3,
+  "final_genome": "pain_swap",
+  "generations_run": 4,
   "plateau_patience": 3,
   "max_generations": 8,
   "history": [
     {
       "generation": 1,
-      "parent_fitness": 43.125,
-      "winner_genome": "buyer_swap",
-      "winner_fitness": 43.125,
-      "improved": false,
+      "parent_fitness": 43.2765,
+      "winner_genome": "pain_swap",
+      "winner_fitness": 47.5548,
+      "improved": true,
       "ranked": [
-        {
-          "genome": "buyer_swap",
-          "fitness": 43.125,
-          "accepted": false
-        },
-        {
-          "genome": "signal_synonym",
-          "fitness": 30.9375,
-          "accepted": false
-        },
-        {
-          "genome": "drop_word",
-          "fitness": 29.625,
-          "accepted": false
-        },
         {
           "genome": "pain_swap",
-          "fitness": 25.9722,
-          "accepted": false
+          "fitness": 47.5548,
+          "accepted": true
         },
-        {
-          "genome": "colloquial_rewrite",
-          "fitness": 6.4583,
-          "accepted": false
-        },
-        {
-          "genome": "topic_colloquial",
-          "fitness": 5.3947,
-          "accepted": false
-        },
-        {
-          "genome": "burden_swap",
-          "fitness": 3.75,
-          "accepted": false
-        },
-        {
-          "genome": "precision_pain",
-          "fitness": 1.6667,
-          "accepted": false
-        }
-      ]
-    },
-    {
-      "generation": 2,
-      "parent_fitness": 43.125,
-      "winner_genome": "buyer_swap",
-      "winner_fitness": 43.125,
-      "improved": false,
-      "ranked": [
-        {
-          "genome": "buyer_swap",
-          "fitness": 43.125,
-          "accepted": false
-        },
-        {
-          "genome": "colloquial_rewrite",
-          "fitness": 43.125,
-          "accepted": false
-        },
-        {
-          "genome": "drop_word",
-          "fitness": 43.125,
-          "accepted": false
-        },
-        {
-          "genome": "pain_swap",
-          "fitness": 35.2083,
-          "accepted": false
-        },
-        {
-          "genome": "precision_pain",
-          "fitness": 31.6964,
-          "accepted": false
-        },
-        {
-          "genome": "burden_swap",
-          "fitness": 31.2917,
-          "accepted": false
-        },
-        {
-          "genome": "topic_colloquial",
-          "fitness": 29.6875,
-          "accepted": false
-        },
-        {
-          "genome": "signal_synonym",
-          "fitness": 27.5481,
-          "accepted": false
-        }
-      ]
-    },
-    {
-      "generation": 3,
-      "parent_fitness": 43.125,
-      "winner_genome": "burden_swap",
-      "winner_fitness": 43.2765,
-      "improved": false,
-      "ranked": [
         {
           "genome": "burden_swap",
           "fitness": 43.2765,
@@ -176,43 +83,185 @@
         },
         {
           "genome": "buyer_swap",
-          "fitness": 43.125,
-          "accepted": false
-        },
-        {
-          "genome": "colloquial_rewrite",
-          "fitness": 43.125,
-          "accepted": false
-        },
-        {
-          "genome": "drop_word",
-          "fitness": 43.125,
+          "fitness": 43.2765,
           "accepted": false
         },
         {
           "genome": "signal_synonym",
-          "fitness": 35.6333,
+          "fitness": 31.2917,
           "accepted": false
         },
         {
-          "genome": "pain_swap",
-          "fitness": 35.2083,
+          "genome": "drop_word",
+          "fitness": 28.9009,
           "accepted": false
         },
         {
-          "genome": "precision_pain",
-          "fitness": 31.6964,
+          "genome": "colloquial_rewrite",
+          "fitness": 6.5909,
           "accepted": false
         },
         {
           "genome": "topic_colloquial",
-          "fitness": 29.2361,
+          "fitness": 4.6429,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 0.0,
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "generation": 2,
+      "parent_fitness": 47.5548,
+      "winner_genome": "buyer_swap",
+      "winner_fitness": 47.5548,
+      "improved": false,
+      "ranked": [
+        {
+          "genome": "buyer_swap",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 41.8182,
+          "accepted": false
+        },
+        {
+          "genome": "burden_swap",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "topic_colloquial",
+          "fitness": 37.0471,
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "generation": 3,
+      "parent_fitness": 47.5548,
+      "winner_genome": "burden_swap",
+      "winner_fitness": 47.5548,
+      "improved": false,
+      "ranked": [
+        {
+          "genome": "burden_swap",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "buyer_swap",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 41.8182,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "topic_colloquial",
+          "fitness": 37.0471,
+          "accepted": false
+        }
+      ]
+    },
+    {
+      "generation": 4,
+      "parent_fitness": 47.5548,
+      "winner_genome": "burden_swap",
+      "winner_fitness": 47.5548,
+      "improved": false,
+      "ranked": [
+        {
+          "genome": "burden_swap",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "buyer_swap",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "drop_word",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "signal_synonym",
+          "fitness": 47.5548,
+          "accepted": false
+        },
+        {
+          "genome": "pain_swap",
+          "fitness": 41.8182,
+          "accepted": false
+        },
+        {
+          "genome": "colloquial_rewrite",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "precision_pain",
+          "fitness": 38.6667,
+          "accepted": false
+        },
+        {
+          "genome": "topic_colloquial",
+          "fitness": 37.0471,
           "accepted": false
         }
       ]
     }
   ],
-  "candidate_better_than_baseline": false,
+  "candidate_better_than_baseline": true,
   "production_promoted": false,
   "boundary": {
     "production_state_write": false,
